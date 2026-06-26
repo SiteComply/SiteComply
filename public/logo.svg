@@ -1,0 +1,6 @@
+<svg width="160" height="48" viewBox="0 0 160 48" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SiteComply">
+  <path d="M22 3 6 8.4v11.7C6 30.2 12.7 36.9 22 40.8 31.3 36.9 38 30.2 38 20.1V8.4L22 3Z" fill="#1E40AF"/>
+  <path d="M6 20.1h32c0 1.5-.14 3-.4 4.3H6.4c-.26-1.3-.4-2.8-.4-4.3Z" fill="#F5B20B"/>
+  <path d="m15 21.8 4.2 4.3 9.1-9.4" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="48" y="31" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="22" font-weight="700" fill="#0F172A">Site<tspan fill="#1D4ED8">Comply</tspan></text>
+</svg>

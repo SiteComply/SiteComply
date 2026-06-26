@@ -1,0 +1,27 @@
+# Dependencies
+/node_modules
+
+# Next.js build output
+/.next
+/out
+
+# Production
+/build
+
+# Environment & secrets — NEVER commit these
+.env
+.env.local
+.env.*.local
+
+# Prisma local database / generated client (generated client may be regenerated)
+/prisma/dev.db
+
+# Logs & OS files
+npm-debug.log*
+yarn-error.log*
+.DS_Store
+*.pem
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts

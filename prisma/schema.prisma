@@ -1,0 +1,205 @@
+// SiteComply — Prisma schema
+//
+// Target database: PostgreSQL (Azure Database for PostgreSQL Flexible Server).
+// Connection comes from the DATABASE_URL environment variable — never hard-coded.
+//
+// Conventions:
+//  - All timestamps are stored in UTC (Prisma DateTime). British formatting
+//    (DD/MM/YYYY, 24h, Europe/London) is applied only at the presentation edge.
+//  - Personal data is kept to the minimum needed for site compliance and is
+//    deletable to satisfy UK GDPR / Data Protection Act 2018 (see Stage 12).
+//  - IDs use cuid() — URL-safe, non-sequential, no information leakage.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// Enums
+// ----------------------------------------------------------------------------
+
+/// UK CSCS (Construction Skills Certification Scheme) card types, by colour.
+enum CscsCardType {
+  GREEN_LABOURER //         Green — Labourer
+  RED_TRAINEE //            Red — Trainee / Experienced Worker
+  BLUE_SKILLED //           Blue — Skilled Worker
+  GOLD_SUPERVISORY //       Gold — Advanced Craft / Supervisory
+  BLACK_MANAGER //          Black — Manager
+  WHITE_PROFESSIONAL //     White — Professionally / Academically Qualified Person
+}
+
+enum SiteStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+/// The kind of question presented on a digital induction checklist.
+enum ChecklistItemType {
+  ACKNOWLEDGEMENT //  Read-and-acknowledge statement (e.g. site rules, RAMS)
+  YES_NO //           Yes/No question (e.g. "Have you attended the toolbox talk?")
+  PPE_CONFIRM //      Confirm possession/wearing of a PPE item
+}
+
+enum SubmissionStatus {
+  COMPLIANT //   All required items completed
+  INCOMPLETE // Started but not all required items satisfied
+}
+
+enum AdminRole {
+  OWNER //   Full control, including admin management
+  ADMIN //   Manage sites, checklists and view submissions
+  VIEWER //  Read-only access to dashboards and reports
+}
+
+// ----------------------------------------------------------------------------
+// Models
+// ----------------------------------------------------------------------------
+
+/// A trade worker who checks in to sites. Identified by UK mobile number
+/// (stored in E.164 form, e.g. +447700900123) which is also their login factor.
+model Worker {
+  id             String        @id @default(cuid())
+  fullName       String
+  company        String
+  mobile         String        @unique // E.164, normalised from a UK 07… number
+  // Optional CSCS card details, captured where relevant.
+  cscsCardNumber String?
+  cscsCardType   CscsCardType?
+  cscsExpiry     DateTime? // Stored as date (UTC midnight); displayed DD/MM/YYYY
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  submissions Submission[]
+
+  @@index([company])
+}
+
+/// A construction site / job that workers induct onto and check in to.
+model JobSite {
+  id           String     @id @default(cuid())
+  name         String
+  addressLine1 String
+  addressLine2 String?
+  town         String
+  postcode     String // UK postcode (validated/normalised in the service layer)
+  jobReference String // Site/job reference shown to workers, e.g. "BNE-2026-014"
+  status       SiteStatus @default(ACTIVE)
+
+  // Free-text induction content shown before the checklist (site overview,
+  // welfare facilities, working hours, etc.).
+  inductionContent String @default("")
+
+  // Emergency information surfaced during induction and check-in.
+  fireAssemblyPoint String?
+  firstAiderName    String?
+  firstAiderNumber  String? // Contact number for the site first aider
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdByAdmin   Admin  @relation(fields: [createdByAdminId], references: [id])
+  createdByAdminId String
+
+  checklists  ComplianceChecklist[]
+  submissions Submission[]
+
+  @@index([status])
+}
+
+/// A versioned compliance checklist belonging to a site. Editing a checklist
+/// creates a NEW version (see Stage 9) so historic submissions always reference
+/// the exact content the worker agreed to. The (jobSiteId, version) pair is
+/// unique; the highest version is the one currently served to workers.
+model ComplianceChecklist {
+  id        String   @id @default(cuid())
+  jobSite   JobSite  @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+  title     String
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+
+  items ChecklistItem[]
+
+  @@unique([jobSiteId, version])
+}
+
+/// A single question/statement on a checklist.
+model ChecklistItem {
+  id          String              @id @default(cuid())
+  checklist   ComplianceChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  checklistId String
+  label       String
+  // Optional supporting detail / helper text shown under the label.
+  helpText    String?
+  type        ChecklistItemType
+  required    Boolean             @default(true)
+  order       Int // Display order within the checklist (ascending)
+
+  @@index([checklistId, order])
+}
+
+/// A worker's check-in to a site: the record that they completed the induction
+/// and the compliance acknowledgements. `answers` holds the per-item responses
+/// as JSON keyed by ChecklistItem id, capturing the checklist as it was at the
+/// recorded `checklistVersion`.
+model Submission {
+  id              String  @id @default(cuid())
+  worker          Worker  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  workerId        String
+  jobSite         JobSite @relation(fields: [jobSiteId], references: [id])
+  jobSiteId       String
+  checklistVersion Int // Version of the site checklist answered (for traceability)
+
+  answers Json @default("{}") // { [checklistItemId]: boolean | "yes" | "no" | ... }
+
+  // Top-level compliance gates, mirrored out of `answers` for easy querying.
+  ppeConfirmed      Boolean @default(false)
+  rulesAcknowledged Boolean @default(false)
+  safeWorkingAgreed Boolean @default(false)
+  gdprConsent       Boolean @default(false) // UK GDPR consent captured at check-in
+
+  status      SubmissionStatus @default(INCOMPLETE)
+  checkedInAt DateTime         @default(now())
+  checkedOutAt DateTime? // Set when the worker checks out / leaves site
+
+  @@index([jobSiteId, checkedInAt])
+  @@index([workerId])
+  @@index([status])
+}
+
+/// An administrator who signs in via Microsoft (Azure AD) SSO.
+model Admin {
+  id            String    @id @default(cuid())
+  azureObjectId String    @unique // Azure AD object id (oid claim)
+  email         String    @unique
+  displayName   String
+  role          AdminRole @default(ADMIN)
+  createdAt     DateTime  @default(now())
+  lastLoginAt   DateTime?
+
+  createdSites JobSite[]
+}
+
+/// A one-time passcode challenge for worker SMS MFA.
+///
+/// The code itself is never stored — only an HMAC hash — so a database leak does
+/// not expose live codes. Rows are short-lived (see OTP_TTL_SECONDS) and a row's
+/// `attempts` cap plus per-mobile request rate-limiting (queried over createdAt)
+/// guard against brute-force and SMS-pumping abuse. Expired/consumed rows can be
+/// pruned by a scheduled job (not required for v1).
+model OtpChallenge {
+  id         String    @id @default(cuid())
+  mobile     String // E.164, normalised from a UK 07… number
+  codeHash   String // HMAC-SHA256 of the code, keyed by the session secret
+  expiresAt  DateTime
+  attempts   Int       @default(0) // Failed verification attempts on this code
+  consumedAt DateTime? // Set once verified successfully (single-use)
+  createdAt  DateTime  @default(now())
+
+  @@index([mobile, createdAt])
+}
