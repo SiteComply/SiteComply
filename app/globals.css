@@ -34,6 +34,11 @@
   --safe-600: 46 154 63;
   --safe-700: 37 130 47;
 
+  /* Teal — secondary accent (e.g. dashboard "active sites" stat). Tuned to the
+     same subtlety as the safe-green / brand-blue accents. */
+  --teal-50: 240 253 250;
+  --teal-600: 13 148 136;
+
   /* Danger red — non-compliant / validation errors */
   --danger-50: 254 242 242;
   --danger-500: 239 68 68;

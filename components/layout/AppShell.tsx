@@ -30,8 +30,8 @@ export function AppShell({
         Skip to content
       </a>
       <header className="sticky top-0 z-20 border-b border-line bg-surface/90 backdrop-blur">
-        {/* Hi-vis brand stripe — a thin nod to construction site signage. */}
-        <div className="h-1 w-full bg-hivis-500" aria-hidden="true" />
+        {/* Thin brand stripe in the logo's light blue. */}
+        <div className="h-1 w-full bg-brand-500" aria-hidden="true" />
         <div
           className={cn(
             'mx-auto flex w-full items-center justify-between gap-3 px-4 py-3',

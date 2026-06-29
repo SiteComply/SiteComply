@@ -26,7 +26,7 @@ export function AdminShell({
         Skip to content
       </a>
       <header className="border-b border-line bg-surface">
-        <div className="h-1 w-full bg-hivis-500" aria-hidden="true" />
+        <div className="h-1 w-full bg-brand-500" aria-hidden="true" />
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-2">
             <Link href="/" aria-label="SiteComply home" className="inline-flex">

@@ -44,6 +44,10 @@ const config: Config = {
           600: withVar('--safe-600'),
           700: withVar('--safe-700'),
         },
+        teal: {
+          50: withVar('--teal-50'),
+          600: withVar('--teal-600'),
+        },
         danger: {
           50: withVar('--danger-50'),
           500: withVar('--danger-500'),
