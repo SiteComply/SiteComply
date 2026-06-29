@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
+import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/cn';
 
 export type BuilderItemType = 'ACKNOWLEDGEMENT' | 'YES_NO' | 'PPE_CONFIRM';
@@ -43,23 +44,20 @@ export function ChecklistBuilder({
   template: BuilderItemData[];
 }) {
   const router = useRouter();
+  const toast = useToast();
   const keyRef = useRef(0);
   const withKeys = (data: BuilderItemData[]): BuilderItem[] =>
     data.map((d) => ({ ...d, key: keyRef.current++ }));
 
   const [items, setItems] = useState<BuilderItem[]>(withKeys(initialItems));
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>();
-  const [saved, setSaved] = useState<string | undefined>();
 
   function update(key: number, patch: Partial<BuilderItemData>) {
-    setSaved(undefined);
     setItems((list) =>
       list.map((it) => (it.key === key ? { ...it, ...patch } : it)),
     );
   }
   function move(index: number, delta: number) {
-    setSaved(undefined);
     setItems((list) => {
       const next = [...list];
       const target = index + delta;
@@ -69,11 +67,9 @@ export function ChecklistBuilder({
     });
   }
   function remove(key: number) {
-    setSaved(undefined);
     setItems((list) => list.filter((it) => it.key !== key));
   }
   function add() {
-    setSaved(undefined);
     setItems((list) => [
       ...list,
       {
@@ -92,14 +88,11 @@ export function ChecklistBuilder({
     ) {
       return;
     }
-    setSaved(undefined);
     setItems(withKeys(template));
   }
 
   async function save() {
     setBusy(true);
-    setError(undefined);
-    setSaved(undefined);
     try {
       const res = await fetch(`/api/admin/sites/${siteId}/checklist`, {
         method: 'POST',
@@ -115,17 +108,17 @@ export function ChecklistBuilder({
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        setError(data.error ?? 'Could not save. Please try again.');
+        toast.error(data.error ?? 'Could not save. Please try again.');
         return;
       }
-      setSaved(
+      toast.success(
         data.newVersion
           ? `Saved as version ${data.version}. Existing check-ins keep their original version.`
           : `Saved (version ${data.version}).`,
       );
       router.refresh();
     } catch {
-      setError('Network problem. Please try again.');
+      toast.error('Network problem. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -252,20 +245,6 @@ export function ChecklistBuilder({
             </li>
           ))}
         </ol>
-      )}
-
-      {error && (
-        <p
-          role="alert"
-          className="rounded-xl border border-danger-500 bg-danger-50 px-4 py-3 text-sm font-medium text-danger-700"
-        >
-          {error}
-        </p>
-      )}
-      {saved && (
-        <p className="rounded-xl border border-safe-500 bg-safe-50 px-4 py-3 text-sm font-medium text-safe-700">
-          {saved}
-        </p>
       )}
 
       <div className="sticky bottom-0 flex gap-3 bg-surface-sunken py-3">

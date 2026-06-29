@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { appConfig } from '@/lib/config';
+import { ToastProvider } from '@/components/ui/Toast';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -27,7 +28,9 @@ export default function RootLayout({
   // formatting and spell-checking behaviour throughout the app.
   return (
     <html lang="en-GB">
-      <body>{children}</body>
+      <body>
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   );
 }

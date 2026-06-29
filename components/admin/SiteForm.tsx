@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { Textarea } from '@/components/ui/Textarea';
+import { useToast } from '@/components/ui/Toast';
 
 export interface SiteFormValues {
   name: string;
@@ -49,12 +50,12 @@ export function SiteForm({
   initial?: Partial<SiteFormValues>;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [values, setValues] = useState<SiteFormValues>({
     ...EMPTY,
     ...initial,
   });
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [formError, setFormError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
 
   function set<K extends keyof SiteFormValues>(key: K, value: string) {
@@ -64,7 +65,6 @@ export function SiteForm({
   async function submit() {
     setBusy(true);
     setErrors({});
-    setFormError(undefined);
     try {
       const res = await fetch(
         mode === 'create' ? '/api/admin/sites' : `/api/admin/sites/${siteId}`,
@@ -76,15 +76,19 @@ export function SiteForm({
       );
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        if (data.errors) setErrors(data.errors);
-        else
-          setFormError(data.error ?? 'Something went wrong. Please try again.');
+        if (data.errors) {
+          setErrors(data.errors);
+          toast.error('Please fix the highlighted fields and try again.');
+        } else {
+          toast.error(data.error ?? 'Something went wrong. Please try again.');
+        }
         return;
       }
+      toast.success(mode === 'create' ? 'Site created.' : 'Changes saved.');
       router.push('/admin/sites');
       router.refresh();
     } catch {
-      setFormError('Network problem. Please try again.');
+      toast.error('Network problem. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -98,15 +102,6 @@ export function SiteForm({
         if (!busy) submit();
       }}
     >
-      {formError && (
-        <p
-          role="alert"
-          className="rounded-xl border border-danger-500 bg-danger-50 px-4 py-3 text-sm font-medium text-danger-700"
-        >
-          {formError}
-        </p>
-      )}
-
       <Section title="Site details">
         <TextField
           label="Site name"

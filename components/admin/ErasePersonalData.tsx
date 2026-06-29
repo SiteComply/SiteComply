@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/components/ui/Toast';
 
 /**
  * Admin control to erase a worker's personal data (UK GDPR right to erasure).
@@ -16,8 +17,8 @@ export function ErasePersonalData({
   erased: boolean;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>();
 
   if (erased) {
     return (
@@ -37,39 +38,32 @@ export function ErasePersonalData({
       return;
     }
     setBusy(true);
-    setError(undefined);
     try {
       const res = await fetch(`/api/admin/workers/${workerId}/erase`, {
         method: 'POST',
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        setError(data.error ?? 'Could not erase. Please try again.');
+        toast.error(data.error ?? 'Could not erase. Please try again.');
         return;
       }
+      toast.success('Personal data erased.');
       router.refresh();
     } catch {
-      setError('Network problem. Please try again.');
+      toast.error('Network problem. Please try again.');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="space-y-2">
-      <button
-        type="button"
-        onClick={erase}
-        disabled={busy}
-        className="touch-target inline-flex items-center rounded-lg border border-danger-500/40 px-3 py-2 text-sm font-semibold text-danger-600 hover:bg-danger-50 disabled:opacity-50"
-      >
-        {busy ? 'Erasing…' : 'Erase personal data (UK GDPR)'}
-      </button>
-      {error && (
-        <p role="alert" className="text-sm font-medium text-danger-600">
-          {error}
-        </p>
-      )}
-    </div>
+    <button
+      type="button"
+      onClick={erase}
+      disabled={busy}
+      className="touch-target inline-flex items-center rounded-lg border border-danger-500/40 px-3 py-2 text-sm font-semibold text-danger-600 hover:bg-danger-50 disabled:opacity-50"
+    >
+      {busy ? 'Erasing…' : 'Erase personal data (UK GDPR)'}
+    </button>
   );
 }

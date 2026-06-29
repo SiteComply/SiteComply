@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useToast } from '@/components/ui/Toast';
 
 /**
  * "Check out" affordance shown on the confirmation screen while the worker is
@@ -11,12 +13,12 @@ import { Button } from '@/components/ui/Button';
  */
 export function CheckOutButton({ submissionId }: { submissionId: string }) {
   const router = useRouter();
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>();
+  const [confirming, setConfirming] = useState(false);
 
   async function checkOut() {
     setBusy(true);
-    setError(undefined);
     try {
       const res = await fetch('/api/worker/checkout', {
         method: 'POST',
@@ -25,33 +27,40 @@ export function CheckOutButton({ submissionId }: { submissionId: string }) {
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        setError(data.error ?? 'Could not check you out. Please try again.');
+        toast.error(data.error ?? 'Could not check you out. Please try again.');
         return;
       }
+      toast.success('You’ve checked out. Stay safe.');
+      setConfirming(false);
       router.refresh();
     } catch {
-      setError('Network problem. Check your signal and try again.');
+      toast.error('Network problem. Check your signal and try again.');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="space-y-2">
+    <>
       <Button
         variant="secondary"
         size="lg"
         fullWidth
-        onClick={checkOut}
-        disabled={busy}
+        onClick={() => setConfirming(true)}
       >
-        {busy ? 'Checking out…' : 'Check out (leaving site)'}
+        Check out
       </Button>
-      {error && (
-        <p role="alert" className="text-sm font-medium text-danger-600">
-          {error}
-        </p>
-      )}
-    </div>
+
+      <ConfirmDialog
+        open={confirming}
+        title="Are you sure you want to check out?"
+        message="This records that you’re leaving site."
+        confirmLabel={busy ? 'Checking out…' : 'Check out'}
+        cancelLabel="Cancel"
+        busy={busy}
+        onConfirm={checkOut}
+        onCancel={() => setConfirming(false)}
+      />
+    </>
   );
 }

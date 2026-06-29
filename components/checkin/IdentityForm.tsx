@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
+import { useToast } from '@/components/ui/Toast';
 import { CSCS_CARD_OPTIONS } from '@/lib/cscs';
 
 export interface IdentityInitial {
@@ -30,11 +31,11 @@ export function IdentityForm({
   recognised: boolean;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [form, setForm] = useState<IdentityInitial>(initial);
   const [showCscs, setShowCscs] = useState(
     Boolean(initial.cscsCardNumber || initial.cscsCardType),
   );
-  const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
 
   // Restore a local draft if the server didn't already recognise the worker.
@@ -69,7 +70,6 @@ export function IdentityForm({
   }
 
   async function submit() {
-    setError(undefined);
     setBusy(true);
     try {
       const res = await fetch('/api/worker/profile', {
@@ -79,12 +79,13 @@ export function IdentityForm({
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        setError(data.error ?? 'Something went wrong. Please try again.');
+        toast.error(data.error ?? 'Something went wrong. Please try again.');
         return;
       }
+      toast.success('Details saved.');
       router.push('/check-in/site');
     } catch {
-      setError('Network problem. Check your signal and try again.');
+      toast.error('Network problem. Check your signal and try again.');
     } finally {
       setBusy(false);
     }
@@ -121,7 +122,6 @@ export function IdentityForm({
         placeholder="Your employer or subcontractor"
         value={form.company}
         onChange={(e) => update('company', e.target.value)}
-        error={error}
       />
 
       <div className="rounded-xl border border-line bg-surface">

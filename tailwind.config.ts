@@ -81,6 +81,27 @@ const config: Config = {
       boxShadow: {
         card: '0 1px 2px rgb(15 23 42 / 0.04), 0 4px 16px rgb(15 23 42 / 0.06)',
       },
+      keyframes: {
+        // Gentle drop-in for notification toasts. Reduced-motion users have all
+        // animations neutralised globally (see globals.css).
+        'toast-in': {
+          '0%': { opacity: '0', transform: 'translateY(-0.5rem)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'fade-in': {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        'pop-in': {
+          '0%': { opacity: '0', transform: 'scale(0.96)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+      },
+      animation: {
+        'toast-in': 'toast-in 0.2s ease-out',
+        'fade-in': 'fade-in 0.15s ease-out',
+        'pop-in': 'pop-in 0.15s ease-out',
+      },
     },
   },
   plugins: [],

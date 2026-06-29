@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
+import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/cn';
 import {
   buildInductionSteps,
@@ -38,6 +39,7 @@ export function InductionWizard({
   items,
 }: InductionWizardProps) {
   const router = useRouter();
+  const toast = useToast();
   const steps = useMemo(() => buildInductionSteps(items), [items]);
   const storageKey = `sitecomply.induction.${siteId}`;
 
@@ -45,7 +47,6 @@ export function InductionWizard({
   const [gdprConsent, setGdprConsent] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [showError, setShowError] = useState(false);
-  const [submitError, setSubmitError] = useState<string | undefined>();
   const [hydrated, setHydrated] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -111,7 +112,6 @@ export function InductionWizard({
     }
     // Final step complete → record the check-in server-side (re-validated there).
     setBusy(true);
-    setSubmitError(undefined);
     try {
       const res = await fetch('/api/worker/submission', {
         method: 'POST',
@@ -120,7 +120,7 @@ export function InductionWizard({
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        setSubmitError(
+        toast.error(
           data.error ?? 'We couldn’t record your check-in. Please try again.',
         );
         return;
@@ -131,9 +131,10 @@ export function InductionWizard({
       } catch {
         /* non-fatal */
       }
+      toast.success('You’re checked in.');
       router.push(`/check-in/confirmation/${data.submissionId}`);
     } catch {
-      setSubmitError('Network problem. Check your signal and try again.');
+      toast.error('Network problem. Check your signal and try again.');
     } finally {
       setBusy(false);
     }
@@ -217,15 +218,6 @@ export function InductionWizard({
               : step.kind === 'gdpr'
                 ? 'Please give your consent to continue.'
                 : 'Please answer this to continue.'}
-          </p>
-        )}
-
-        {submitError && (
-          <p
-            role="alert"
-            className="mt-4 rounded-xl border border-danger-500 bg-danger-50 px-4 py-3 text-sm font-medium text-danger-700"
-          >
-            {submitError}
           </p>
         )}
       </div>
