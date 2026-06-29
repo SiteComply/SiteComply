@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import Link from 'next/link';
 import { Logo } from '@/components/brand/Logo';
 import { cn } from '@/lib/cn';
 
@@ -37,7 +38,9 @@ export function AppShell({
             width === 'narrow' ? 'max-w-xl' : 'max-w-6xl',
           )}
         >
-          <Logo />
+          <Link href="/" aria-label="SiteComply home" className="inline-flex">
+            <Logo />
+          </Link>
           {topBarRight}
         </div>
       </header>

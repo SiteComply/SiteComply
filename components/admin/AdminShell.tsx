@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import Link from 'next/link';
 import { Logo } from '@/components/brand/Logo';
 import { AdminNav } from '@/components/admin/AdminNav';
 
@@ -28,7 +29,9 @@ export function AdminShell({
         <div className="h-1 w-full bg-hivis-500" aria-hidden="true" />
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-2">
-            <Logo />
+            <Link href="/" aria-label="SiteComply home" className="inline-flex">
+              <Logo />
+            </Link>
             <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
               Admin
             </span>
