@@ -156,13 +156,6 @@ export default async function AdminDashboardPage() {
           </Link>
         ))}
       </div>
-
-      <div className="rounded-xl border border-dashed border-line bg-surface p-6 text-center">
-        <p className="text-sm text-ink-muted">
-          Job site management, the induction builder, the live on-site view and
-          reporting are added in the next build stages.
-        </p>
-      </div>
     </div>
   );
 }
