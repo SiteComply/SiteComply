@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { TextField } from '@/components/ui/TextField';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cn } from '@/lib/cn';
 
 export interface AdminSiteRow {
@@ -24,6 +25,7 @@ export function AdminSiteList({ sites }: { sites: AdminSiteRow[] }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [busyId, setBusyId] = useState<string | undefined>();
+  const [archivingId, setArchivingId] = useState<string | undefined>();
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -48,6 +50,12 @@ export function AdminSiteList({ sites }: { sites: AdminSiteRow[] }) {
     } finally {
       setBusyId(undefined);
     }
+  }
+
+  async function archiveConfirmed() {
+    if (!archivingId) return;
+    await setStatus(archivingId, 'ARCHIVED');
+    setArchivingId(undefined);
   }
 
   return (
@@ -100,10 +108,9 @@ export function AdminSiteList({ sites }: { sites: AdminSiteRow[] }) {
                   type="button"
                   disabled={busyId === site.id}
                   onClick={() =>
-                    setStatus(
-                      site.id,
-                      site.status === 'ACTIVE' ? 'ARCHIVED' : 'ACTIVE',
-                    )
+                    site.status === 'ACTIVE'
+                      ? setArchivingId(site.id)
+                      : setStatus(site.id, 'ACTIVE')
                   }
                   className="touch-target inline-flex items-center rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken disabled:opacity-50"
                 >
@@ -114,6 +121,16 @@ export function AdminSiteList({ sites }: { sites: AdminSiteRow[] }) {
           ))}
         </ul>
       )}
+
+      <ConfirmDialog
+        open={archivingId !== undefined}
+        title="Are you sure you want to archive this site?"
+        confirmLabel={busyId === archivingId ? 'Archiving…' : 'Archive'}
+        cancelLabel="Cancel"
+        busy={busyId === archivingId}
+        onConfirm={archiveConfirmed}
+        onCancel={() => setArchivingId(undefined)}
+      />
     </div>
   );
 }
