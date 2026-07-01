@@ -13,6 +13,7 @@ export const ADMIN_NAV = [
   { href: '/admin/sites', label: 'Job sites' },
   { href: '/admin/on-site', label: 'On site now' },
   { href: '/admin/submissions', label: 'Submissions' },
+  { href: '/admin/platform-users', label: 'Platform Users' },
 ] as const;
 
 export function AdminNav() {

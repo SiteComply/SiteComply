@@ -56,6 +56,25 @@ enum AdminRole {
   VIEWER //  Read-only access to dashboards and reports
 }
 
+/// Platform (office/management) user roles. The foundation for RBAC — permission
+/// mappings are added in a later stage; for now the role is captured per user.
+enum PlatformRole {
+  DIRECTOR
+  PROJECT_MANAGER
+  CLIENT
+  AUDITOR
+  ENGINEER
+  HS_CONSULTANT //         Health & Safety Consultant
+  PRINCIPAL_CONTRACTOR
+}
+
+/// Lifecycle status for a Platform User's access.
+enum PlatformUserStatus {
+  PENDING //   Added but awaiting approval — cannot sign in yet
+  ACTIVE //    Approved and enabled
+  DISABLED //  Access revoked / suspended
+}
+
 // ----------------------------------------------------------------------------
 // Models
 // ----------------------------------------------------------------------------
@@ -105,8 +124,9 @@ model JobSite {
   createdByAdmin   Admin  @relation(fields: [createdByAdminId], references: [id])
   createdByAdminId String
 
-  checklists  ComplianceChecklist[]
-  submissions Submission[]
+  checklists    ComplianceChecklist[]
+  submissions   Submission[]
+  platformUsers PlatformUser[]        @relation("PlatformUserSites")
 
   @@index([status])
 }
@@ -202,4 +222,28 @@ model OtpChallenge {
   createdAt  DateTime  @default(now())
 
   @@index([mobile, createdAt])
+}
+
+/// A platform (office/management) user who will sign in via Platform Login.
+///
+/// This is the foundation for RBAC and Platform Login access: it captures who a
+/// user is, their organisation, contact details, role and which sites they are
+/// assigned to. Authentication and permission enforcement are NOT implemented
+/// here yet — a `PENDING` user is created on add and approved to `ACTIVE`.
+model PlatformUser {
+  id        String             @id @default(cuid())
+  name      String
+  company   String
+  email     String             @unique // Login identifier (email method)
+  mobile    String? // E.164, normalised from a UK 07… number (login method)
+  role      PlatformRole
+  status    PlatformUserStatus @default(PENDING)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  // Sites this user is assigned to (scope for their future RBAC permissions).
+  assignedSites JobSite[] @relation("PlatformUserSites")
+
+  @@index([status])
+  @@index([company])
 }
