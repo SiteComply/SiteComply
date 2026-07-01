@@ -86,9 +86,6 @@ export default function PlatformDashboardPage() {
             A high-level view across your organisation’s sites and compliance.
           </p>
         </div>
-        <span className="rounded-md bg-hivis-400/20 px-2 py-0.5 text-xs font-semibold text-hivis-600">
-          Preview
-        </span>
       </header>
 
       <PreviewBanner />
@@ -109,9 +106,6 @@ export default function PlatformDashboardPage() {
               >
                 <PlatformIcon name={card.icon} />
               </span>
-              <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
-                Preview
-              </span>
             </div>
             <p className="mt-3 text-3xl font-bold tabular-nums tracking-tight text-ink">
               {card.value}
@@ -128,9 +122,6 @@ export default function PlatformDashboardPage() {
       <section className="mt-6 rounded-xl border border-line bg-surface shadow-card">
         <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
           <h2 className="text-base font-semibold text-ink">Recent activity</h2>
-          <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
-            Preview
-          </span>
         </div>
         <ul className="divide-y divide-line">
           {RECENT_ACTIVITY.map((row, i) => (

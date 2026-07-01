@@ -31,9 +31,6 @@ export function PlatformShell({ children }: { children: ReactNode }) {
             <span className="rounded-md bg-brand-500 px-2 py-0.5 text-xs font-semibold text-white">
               Platform
             </span>
-            <span className="rounded-md bg-hivis-400/20 px-2 py-0.5 text-xs font-semibold text-hivis-600">
-              Preview
-            </span>
           </div>
           <Link
             href="/"
