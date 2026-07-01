@@ -41,58 +41,31 @@ const CARDS: {
     chip: 'brand',
   },
   {
-    title: 'On Site Now',
+    title: 'Workers On Site',
     value: '37',
-    sub: 'workers checked in right now',
+    sub: 'checked in right now',
     cta: 'View check-ins',
     href: '/platform/dashboard/submissions',
     icon: 'hardhat',
     chip: 'safe',
   },
   {
-    title: 'Submissions',
-    value: '148',
-    sub: 'check-ins in the last 7 days',
-    cta: 'Browse submissions',
-    href: '/platform/dashboard/submissions',
-    icon: 'clipboard',
-    chip: 'brand',
-  },
-  {
-    title: 'Reports',
-    value: '6',
-    sub: 'scheduled reports',
-    cta: 'Open reports',
-    href: '/platform/dashboard/reports',
-    icon: 'chart',
-    chip: 'teal',
-  },
-  {
-    title: 'Documents',
-    value: '24',
-    sub: 'files in the library',
-    cta: 'View documents',
-    href: '/platform/dashboard/documents',
-    icon: 'doc',
-    chip: 'brand',
-  },
-  {
-    title: 'Audits',
-    value: '3',
-    sub: 'open audits to review',
-    cta: 'Review audits',
-    href: '/platform/dashboard/audits',
-    icon: 'shield',
-    chip: 'hivis',
-  },
-  {
-    title: 'Actions',
+    title: 'Open Actions',
     value: '5',
-    sub: 'actions awaiting you',
+    sub: 'awaiting your attention',
     cta: 'See actions',
     href: '/platform/dashboard/actions',
     icon: 'bolt',
     chip: 'danger',
+  },
+  {
+    title: 'Latest Reports',
+    value: '6',
+    sub: 'reports ready to view',
+    cta: 'Open reports',
+    href: '/platform/dashboard/reports',
+    icon: 'chart',
+    chip: 'teal',
   },
 ];
 
@@ -120,7 +93,7 @@ export default function PlatformDashboardPage() {
 
       <PreviewBanner />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {CARDS.map((card) => (
           <Link
             key={card.title}
