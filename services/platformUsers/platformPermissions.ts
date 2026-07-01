@@ -231,3 +231,51 @@ export function roleHasAllSites(role: PlatformRoleValue): boolean {
 export function canExport(role: PlatformRoleValue): boolean {
   return EXPORT_CAPABLE_ROLES.includes(role);
 }
+
+// ---------------------------------------------------------------------------
+// Phased rollout of enforcement.
+// ---------------------------------------------------------------------------
+
+/**
+ * Roles whose permissions are ENFORCED in the current phase. Every other role is
+ * left unchanged (treated as allowed) until its phase lands.
+ */
+export const RBAC_ENFORCED_ROLES: PlatformRoleValue[] = [
+  'DIRECTOR',
+  'PROJECT_MANAGER',
+  'CLIENT',
+];
+
+export function isRbacEnforced(role: PlatformRoleValue): boolean {
+  return RBAC_ENFORCED_ROLES.includes(role);
+}
+
+/**
+ * Effective permission check for the current rollout: enforced roles are gated
+ * by the matrix; any other role is unchanged (allowed) for now. Use this
+ * everywhere (nav, pages, buttons, API) so partial rollout is consistent.
+ */
+export function permits(
+  role: PlatformRoleValue,
+  module: PlatformModule,
+  verb: PermissionVerb,
+): boolean {
+  if (!isRbacEnforced(role)) return true;
+  return can(role, module, verb);
+}
+
+/**
+ * True when an enforced role can only view — no create/edit/export in any
+ * module (Client in v1). Used to surface a "Read-only" indicator.
+ */
+export function isReadOnlyRole(role: PlatformRoleValue): boolean {
+  if (!isRbacEnforced(role)) return false;
+  return PLATFORM_MODULES.every((m) => {
+    const verbs = PLATFORM_PERMISSIONS[role].modules[m];
+    return (
+      !verbs.includes('create') &&
+      !verbs.includes('edit') &&
+      !verbs.includes('export')
+    );
+  });
+}

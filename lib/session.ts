@@ -164,3 +164,50 @@ export function setAdminSessionCookie(token: string): void {
 export function clearAdminSessionCookie(): void {
   cookies().delete(ADMIN_COOKIE);
 }
+
+// --- Platform user session helpers ------------------------------------------
+
+const PLATFORM_COOKIE = 'sc_platform';
+const PLATFORM_TTL_SECONDS = 60 * 60 * 8; // 8 hours
+
+export interface PlatformSession {
+  typ: 'platform';
+  /** PlatformUser id — the source of truth is re-read from the DB each request. */
+  userId: string;
+  iat: number;
+  exp: number;
+}
+
+export function createPlatformSessionToken(input: { userId: string }): string {
+  const now = Math.floor(Date.now() / 1000);
+  const session: PlatformSession = {
+    typ: 'platform',
+    userId: input.userId,
+    iat: now,
+    exp: now + PLATFORM_TTL_SECONDS,
+  };
+  return signSession(session);
+}
+
+/** Read and validate the current platform session from cookies (or null). */
+export function getPlatformSession(): PlatformSession | null {
+  const token = cookies().get(PLATFORM_COOKIE)?.value;
+  const session = verifySession<PlatformSession>(token);
+  if (!session || session.typ !== 'platform') return null;
+  if (session.exp * 1000 < Date.now()) return null;
+  return session;
+}
+
+export function setPlatformSessionCookie(token: string): void {
+  cookies().set(PLATFORM_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: PLATFORM_TTL_SECONDS,
+  });
+}
+
+export function clearPlatformSessionCookie(): void {
+  cookies().delete(PLATFORM_COOKIE);
+}

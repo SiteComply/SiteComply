@@ -6,23 +6,40 @@ import { useRouter } from 'next/navigation';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
+import { cn } from '@/lib/cn';
 
 type Step = 'mobile' | 'code';
+type Notice = { tone: 'pending' | 'error'; text: string };
 
 /**
  * Platform Login — mobile method.
  *
- * Two-step verification-code flow, matching the email login screen and the
- * worker check-in development mode: enter your mobile, request a code, then
- * enter the code to continue.
- *
- * DEVELOPMENT / TESTING ONLY — there is no backend, so no SMS is sent. Use the
- * development number 07123456789; the development code is shown on screen
- * (exactly like the worker OTP dev flow) and entering it continues to the
- * Platform dashboard.
+ * Validates against Platform Users: "Send code" checks the account exists and is
+ * ACTIVE (Pending → awaiting approval, Disabled → access revoked). Active users
+ * continue with the development code (no real SMS is sent). Role and
+ * Assigned-Sites permissions are NOT enforced yet.
  */
-const DEV_MOBILE = '07123456789';
-const DEV_CODE = '123456';
+function noticeFor(reason: string): Notice {
+  switch (reason) {
+    case 'pending':
+      return {
+        tone: 'pending',
+        text: 'Your platform account is awaiting approval. You’ll be able to sign in once an administrator approves it.',
+      };
+    case 'disabled':
+      return {
+        tone: 'error',
+        text: 'Your access has been revoked. Please contact your administrator.',
+      };
+    case 'not_found':
+      return {
+        tone: 'error',
+        text: 'We couldn’t find an active platform account for that mobile number.',
+      };
+    default:
+      return { tone: 'error', text: 'Please enter a valid UK mobile number.' };
+  }
+}
 
 export default function PlatformMobileLoginPage() {
   const router = useRouter();
@@ -30,26 +47,60 @@ export default function PlatformMobileLoginPage() {
   const [mobile, setMobile] = useState('');
   const [code, setCode] = useState('');
   const [devCode, setDevCode] = useState<string | undefined>();
-  const [error, setError] = useState<string | undefined>();
+  const [notice, setNotice] = useState<Notice | undefined>();
+  const [codeError, setCodeError] = useState<string | undefined>();
+  const [busy, setBusy] = useState(false);
   const codeInputRef = useRef<HTMLInputElement>(null);
 
-  function sendCode(e: FormEvent) {
+  async function sendCode(e: FormEvent) {
     e.preventDefault();
-    // Dev mode: no SMS is sent — reveal the development code on screen.
-    setError(undefined);
-    setDevCode(DEV_CODE);
-    setCode('');
-    setStep('code');
-    setTimeout(() => codeInputRef.current?.focus(), 50);
+    setBusy(true);
+    setNotice(undefined);
+    try {
+      const res = await fetch('/api/platform/auth/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method: 'mobile', value: mobile }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setDevCode(data.code);
+        setCode('');
+        setCodeError(undefined);
+        setStep('code');
+        setTimeout(() => codeInputRef.current?.focus(), 50);
+      } else {
+        setNotice(noticeFor(data.reason));
+      }
+    } catch {
+      setNotice({ tone: 'error', text: 'Network problem. Please try again.' });
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function continueWithCode(e: FormEvent) {
+  async function continueWithCode(e: FormEvent) {
     e.preventDefault();
-    if (code !== DEV_CODE) {
-      setError('That code didn’t work. Please try again.');
-      return;
+    setBusy(true);
+    setCodeError(undefined);
+    try {
+      const res = await fetch('/api/platform/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method: 'mobile', value: mobile, code }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        router.push('/platform/dashboard');
+        router.refresh();
+      } else {
+        setCodeError(data.error ?? 'That code didn’t work. Please try again.');
+      }
+    } catch {
+      setCodeError('Network problem. Please try again.');
+    } finally {
+      setBusy(false);
     }
-    router.push('/platform/dashboard');
   }
 
   return (
@@ -64,6 +115,8 @@ export default function PlatformMobileLoginPage() {
               </p>
             </div>
 
+            {notice && <NoticeBox notice={notice} />}
+
             <form className="space-y-4" onSubmit={sendCode}>
               <TextField
                 label="Mobile number"
@@ -71,13 +124,19 @@ export default function PlatformMobileLoginPage() {
                 name="mobile"
                 autoComplete="tel"
                 inputMode="tel"
-                placeholder={DEV_MOBILE}
-                hint={`Development number: ${DEV_MOBILE}`}
+                placeholder="07700 900123"
+                hint="Use the mobile number registered to your platform account."
                 value={mobile}
                 onChange={(e) => setMobile(e.target.value)}
               />
-              <Button type="submit" size="lg" variant="brand" fullWidth>
-                Send code
+              <Button
+                type="submit"
+                size="lg"
+                variant="brand"
+                fullWidth
+                disabled={busy}
+              >
+                {busy ? 'Checking…' : 'Send code'}
               </Button>
             </form>
           </>
@@ -114,16 +173,16 @@ export default function PlatformMobileLoginPage() {
                 className="text-center text-3xl font-bold tracking-[0.5em]"
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                error={error}
+                error={codeError}
               />
               <Button
                 type="submit"
                 size="lg"
                 variant="brand"
                 fullWidth
-                disabled={code.length !== 6}
+                disabled={busy || code.length !== 6}
               >
-                Continue
+                {busy ? 'Signing in…' : 'Continue'}
               </Button>
             </form>
 
@@ -132,7 +191,7 @@ export default function PlatformMobileLoginPage() {
                 type="button"
                 onClick={() => {
                   setStep('mobile');
-                  setError(undefined);
+                  setCodeError(undefined);
                   setCode('');
                 }}
                 className="font-semibold text-brand-700"
@@ -143,11 +202,6 @@ export default function PlatformMobileLoginPage() {
           </>
         )}
 
-        <p className="rounded-xl border border-line bg-surface px-4 py-3 text-center text-xs text-ink-subtle">
-          Platform accounts aren’t active yet — this is a preview of the sign-in
-          screen.
-        </p>
-
         <p className="text-center text-xs text-ink-subtle">
           <Link href="/platform" className="font-semibold text-brand-700">
             ← Other sign-in options
@@ -155,5 +209,21 @@ export default function PlatformMobileLoginPage() {
         </p>
       </div>
     </AppShell>
+  );
+}
+
+function NoticeBox({ notice }: { notice: Notice }) {
+  return (
+    <p
+      role="alert"
+      className={cn(
+        'rounded-xl border px-4 py-3 text-sm',
+        notice.tone === 'pending'
+          ? 'border-hivis-500 bg-hivis-400/20 text-ink'
+          : 'border-danger-500 bg-danger-50 font-medium text-danger-700',
+      )}
+    >
+      {notice.text}
+    </p>
   );
 }

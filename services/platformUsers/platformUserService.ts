@@ -124,6 +124,18 @@ export function getPlatformUserById(id: string) {
   });
 }
 
+/** Look up a platform user by their login email (case-insensitive). */
+export function findPlatformUserByEmail(email: string) {
+  return prisma.platformUser.findUnique({
+    where: { email: email.trim().toLowerCase() },
+  });
+}
+
+/** Look up a platform user by their login mobile (E.164 form). */
+export function findPlatformUserByMobile(e164: string) {
+  return prisma.platformUser.findFirst({ where: { mobile: e164 } });
+}
+
 export function createPlatformUser(value: ValidatedPlatformUser) {
   const { assignedSiteIds, ...rest } = value;
   return prisma.platformUser.create({
