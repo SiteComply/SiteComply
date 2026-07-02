@@ -49,6 +49,7 @@ export default function PlatformEmailLoginPage() {
   const [devCode, setDevCode] = useState<string | undefined>();
   const [notice, setNotice] = useState<Notice | undefined>();
   const [codeError, setCodeError] = useState<string | undefined>();
+  const [requestHref, setRequestHref] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const codeInputRef = useRef<HTMLInputElement>(null);
 
@@ -56,6 +57,7 @@ export default function PlatformEmailLoginPage() {
     e.preventDefault();
     setBusy(true);
     setNotice(undefined);
+    setRequestHref(undefined);
     try {
       const res = await fetch('/api/platform/auth/start', {
         method: 'POST',
@@ -71,6 +73,11 @@ export default function PlatformEmailLoginPage() {
         setTimeout(() => codeInputRef.current?.focus(), 50);
       } else {
         setNotice(noticeFor(data.reason));
+        if (data.reason === 'not_found') {
+          setRequestHref(
+            `/platform/request-access?email=${encodeURIComponent(email)}`,
+          );
+        }
       }
     } catch {
       setNotice({ tone: 'error', text: 'Network problem. Please try again.' });
@@ -116,6 +123,14 @@ export default function PlatformEmailLoginPage() {
             </div>
 
             {notice && <NoticeBox notice={notice} />}
+            {requestHref && (
+              <Link
+                href={requestHref}
+                className="block rounded-xl border-2 border-brand-500 bg-surface px-4 py-3 text-center text-sm font-semibold text-brand-700 hover:bg-brand-50"
+              >
+                Request access →
+              </Link>
+            )}
 
             <form className="space-y-4" onSubmit={sendCode}>
               <TextField
