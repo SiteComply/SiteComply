@@ -62,11 +62,12 @@ export const REPORT_TYPES: ReportType[] = [
   {
     id: 'occupancy',
     title: 'On-Site Occupancy',
-    description: 'Live headcount now, plus peak and average occupancy per site.',
+    description: 'Live on-site headcount and check-in activity per site.',
     icon: 'hardhat',
     directorOnly: false,
-    personalData: false,
+    personalData: true,
     clientAggregateOnly: true,
+    built: true,
   },
   {
     id: 'workforce',
@@ -74,8 +75,9 @@ export const REPORT_TYPES: ReportType[] = [
     description: 'Attendance broken down by company / subcontractor.',
     icon: 'grid',
     directorOnly: false,
-    personalData: true,
-    clientAggregateOnly: true,
+    personalData: false,
+    clientAggregateOnly: false,
+    built: true,
   },
   {
     id: 'cscs',
@@ -88,14 +90,14 @@ export const REPORT_TYPES: ReportType[] = [
     exportRoles: CSCS_EXPORT_ROLES,
   },
   {
-    id: 'cscs-expiring',
-    title: 'Expiring CSCS Cards',
-    description: 'CSCS cards expiring within 30, 60 or 90 days (and already expired).',
-    icon: 'bolt',
+    id: 'scorecard',
+    title: 'Site Compliance Scorecard',
+    description:
+      'Per-site scorecard: attendance, compliance %, induction completion %, active workers, contractor breakdown, plus upcoming audit & action metrics.',
+    icon: 'chart',
     directorOnly: false,
-    personalData: true,
-    clientAggregateOnly: true,
-    exportRoles: CSCS_EXPORT_ROLES,
+    personalData: false,
+    clientAggregateOnly: false,
   },
   {
     id: 'org-overview',

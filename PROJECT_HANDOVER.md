@@ -75,7 +75,7 @@ The core worker + admin product is **live in production**. The Platform/RBAC lay
 **Reports module** (see `docs/REPORTS.md`):
 - **Phase 1** — Site Attendance + Compliance (CSV, Client aggregate-only, logged).
 - **Phase 2** — On-Site Occupancy + Workforce/Company.
-- **Phase 3** — CSCS/Competency + **Expiring CSCS Cards (30/60/90-day)**; export restricted to Director/PM/Site Manager/H&S; add `Worker.cscsExpiry` index.
+- **Phase 3** — CSCS/Competency + **Site Compliance Scorecard** (per-site attendance, compliance %, induction %, active workers, contractor breakdown, + upcoming audit/action metrics); CSCS detail export restricted to Director/PM/Site Manager/H&S; add `Worker.cscsExpiry` index.
 - **Phase 4** — Director Organisation Overview (org-wide rollup).
 - **Phase 5** — Hardening + **Admin-only** export-log viewer + tests.
 
@@ -333,13 +333,13 @@ All are Next.js route handlers (`runtime = 'nodejs'`, `dynamic = 'force-dynamic'
 ## 15. Reporting module (in progress)
 
 Design + phased plan: `docs/REPORTS.md`. **Phase 0 shipped** (`c13eb6e`):
-- **Registry** `services/reports/reportRegistry.ts` — 7 report types (Site Attendance, Compliance, On-Site Occupancy, Workforce & Company, CSCS/Competency, Expiring CSCS Cards, Organisation Overview [Director-only]) with metadata (`directorOnly`, `personalData`, `clientAggregateOnly`, `exportRoles`).
+- **Registry** `services/reports/reportRegistry.ts` — 7 report types (Site Attendance, Compliance, On-Site Occupancy, Workforce & Company, CSCS/Competency, Site Compliance Scorecard, Organisation Overview [Director-only]) with metadata (`directorOnly`, `personalData`, `clientAggregateOnly`, `exportRoles`, `built`).
 - **Access helpers** `services/reports/reportAccess.ts` — `canRunReport`, `canExportReport` (incl. CSCS restriction), `isAggregateOnly` (Client), `getVisibleReports`, `resolveReportScope` (requested ∩ accessible).
 - **Audit log** `services/reports/reportExportLog.ts` + `ReportExportLog` model — `logReportExport` (called by every export), `listReportExportLogs` (Admin-only view — later phase).
 - **CSV util** `lib/csv.ts` (now shared by the Sites/Check-ins export routes).
 - **Landing** `/platform/dashboard/reports` — catalogue filtered by role & scope (cards currently "Coming soon", not yet linked).
 
-**Locked decisions:** Client = aggregate-only (incl. CSCS); CSCS detail export = Director/PM/Site Mgr/H&S; export audit log = **Admin-only**; v1 = CSV first, **no** saved/scheduled/email/custom-builder; added **Expiring CSCS Cards (30/60/90-day)**.
+**Locked decisions:** Client = aggregate-only (incl. CSCS); CSCS detail export = Director/PM/Site Mgr/H&S; export audit log = **Admin-only**; v1 = CSV first, **no** saved/scheduled/email/custom-builder; **Site Compliance Scorecard** replaces the Expiring CSCS Cards report.
 
 **Next (Phase 1):** build Site Attendance + Compliance report pages + `/api/platform/reports/{attendance,compliance}/export` (scoped, gated, `logReportExport` wired, Client aggregate-only).
 
@@ -473,7 +473,7 @@ From `.env.example` (production values are Azure App Service application setting
 
 1. **Deploy Reports Phase 0** — run migration `add_report_export_log` on prod Postgres, then deploy `c13eb6e` (prebuilt zip → hard stop/start → verify).
 2. **Build Reports Phase 1** — Site Attendance + Compliance reports; scoped CSV export routes with `logReportExport`; Client aggregate-only. (Foundation already in place: `reportRegistry`, `reportAccess`, `lib/csv`, `ReportExportLog`.)
-3. **Continue Reports Phases 2–5** per `docs/REPORTS.md` (Occupancy/Workforce → CSCS + Expiring CSCS → Org Overview → hardening + Admin-only export-log view + tests).
+3. **Continue Reports Phases 2–5** per `docs/REPORTS.md` (Occupancy/Workforce → CSCS + Site Compliance Scorecard → Org Overview → hardening + Admin-only export-log view + tests).
 4. **Replace platform dev code with real OTP** — reuse the worker OTP pattern (`OtpChallenge`, HMAC) for platform email/SMS; register **Azure Communication Services** (needs subscription-scope provider registration) or an email provider.
 5. **Introduce automated testing + CI/CD** — start with the RBAC/scope helpers and export gating; wire GitHub Actions (build → migrate → deploy).
 6. **Harden infra** — Key Vault for secrets, Application Insights, confirm UK data residency, consolidate to a `main` deploy branch.

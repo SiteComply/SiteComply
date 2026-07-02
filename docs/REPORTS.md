@@ -25,7 +25,7 @@
 | 3 | **On-Site Occupancy** | Live headcount + peak/avg per site over a range | `Submission` (`checkedOutAt` null) | Aggregate |
 | 4 | **Workforce & Company** | Attendance by company/subcontractor; unique workers | `Submission`+`Worker.company` | Semi |
 | 5 | **CSCS / Competency** | Workers by card type; expired flagged | `Worker` | Yes |
-| 6 | **Expiring CSCS Cards** | Cards expiring within **30 / 60 / 90 days** (+ already expired) | `Worker.cscsExpiry` | Yes |
+| 6 | **Site Compliance Scorecard** | Per-site scorecard: attendance, compliance %, induction completion %, active workers, contractor breakdown, + upcoming audit/action metrics | `Submission`+`Worker`+`JobSite` | Aggregate |
 | 7 | **Organisation Overview** *(Director-only)* | Org totals, per-site comparison, org compliance rate, trend | all, org-wide | Aggregate |
 
 ## 3. Layout (one template, on-screen + future PDF)
@@ -37,8 +37,8 @@ note). Reuses existing SiteComply cards/tables/typography and British formatting
 ## 4. Filters
 Date range (Today / Last 7 / Last 30 / This month / Custom, Europe/London);
 Site(s) — multi-select **constrained to `viewer.siteIds`**; Company; Worker
-search; Status; CSCS card type; and the **30/60/90-day** window for Expiring
-CSCS. Applied server-side, always intersected with the assigned-sites boundary.
+search; Status; and CSCS card type. Applied server-side, always intersected with
+the assigned-sites boundary.
 
 ## 5. Exports
 - **CSV first** (PDF deferred). Reuses the shipped scoped-CSV route pattern.
@@ -87,7 +87,8 @@ users). Supports UK-GDPR accountability for worker-level exports.
 
 ## 10. Data-model additions (v1)
 - **`ReportExportLog`** — export audit log (Phase 0).
-- **`Worker.cscsExpiry` index** — efficient expiry-window queries (Phase 3).
+- **`Worker.cscsExpiry` index** — efficient expired-card queries for the
+  CSCS/Competency report (Phase 3).
 - *No `ReportDefinition`* — saved/scheduled reports are out of v1.
 
 ## 11. Deferred (post-v1)
@@ -100,10 +101,10 @@ builder · Audit & Document reports (need their modules) · charts.
   (`canRunReport`, `canExportReport` incl. CSCS override, `isAggregateOnly`,
   `resolveReportScope`); shared CSV util; `ReportExportLog` model + migration +
   `logReportExport`; reports landing page (catalogue filtered by role/scope).
-- **Phase 1 — Attendance + Compliance** (CSV, Client aggregate-only, logged).
-- **Phase 2 — Occupancy + Workforce/Company.**
-- **Phase 3 — CSCS/Competency + Expiring CSCS (30/60/90)**, export restricted to
-  Director/PM/SM/H&S; add `cscsExpiry` index.
+- **Phase 1 — Attendance + Compliance** (CSV, Client aggregate-only, logged). ✅ done.
+- **Phase 2 — Occupancy + Workforce/Company** (CSV, scoped, logged). ✅ done.
+- **Phase 3 — CSCS/Competency + Site Compliance Scorecard.** CSCS detail export
+  restricted to Director/PM/SM/H&S; add `cscsExpiry` index for CSCS/Competency.
 - **Phase 4 — Director Organisation Overview** (org-wide rollup).
 - **Phase 5 — Hardening + Admin-only export-log view + tests.**
 
@@ -112,4 +113,6 @@ builder · Audit & Document reports (need their modules) · charts.
 - CSCS detail export: Director, PM, Site Manager, H&S Consultant only.
 - Export audit logs: **Admin-only**.
 - v1 excludes saved/scheduled reports, email delivery, custom builder; CSV first.
-- Added **Expiring CSCS Cards** report with 30/60/90-day filters.
+- Replaced the Expiring CSCS Cards report with a **Site Compliance Scorecard**
+  (per-site attendance, compliance %, induction %, active workers, contractor
+  breakdown, and upcoming audit/action metrics).
