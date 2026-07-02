@@ -17,6 +17,7 @@ export interface AccessRequestRow {
   createdAt: string; // ISO
   reviewedAt: string | null; // ISO
   reviewedBy: string | null; // approving/rejecting admin's name
+  linkedUserId: string | null; // id of the Platform User created on approval
   linkedUserEmail: string | null; // Platform User created on approval
 }
 
@@ -89,22 +90,39 @@ export function AccessRequestList({ requests }: { requests: AccessRequestRow[] }
                   <span className="text-ink-subtle">Reason:</span> {r.reason}
                 </p>
               )}
-              <p className="mt-1 text-xs text-ink-subtle">
-                Requested {formatDateTimeUK(r.createdAt)}
-              </p>
-              {r.status !== 'PENDING' && r.reviewedAt && (
-                <p className="mt-1 text-xs text-ink-subtle">
-                  {r.status === 'APPROVED' ? 'Approved' : 'Rejected'}{' '}
-                  {formatDateTimeUK(r.reviewedAt)}
-                  {r.reviewedBy ? ` by ${r.reviewedBy}` : ''}
-                  {r.status === 'APPROVED' && r.linkedUserEmail
-                    ? ` · Platform user: ${r.linkedUserEmail}`
-                    : ''}
-                </p>
-              )}
+              <dl className="mt-2 grid gap-0.5 text-xs text-ink-subtle">
+                <div>
+                  <span className="font-medium text-ink-muted">Requested</span>{' '}
+                  {formatDateTimeUK(r.createdAt)}
+                </div>
+                {r.status !== 'PENDING' && r.reviewedAt && (
+                  <div>
+                    <span className="font-medium text-ink-muted">
+                      {r.status === 'APPROVED' ? 'Approved' : 'Rejected'}
+                    </span>{' '}
+                    {formatDateTimeUK(r.reviewedAt)}
+                  </div>
+                )}
+                {r.status !== 'PENDING' && r.reviewedBy && (
+                  <div>
+                    <span className="font-medium text-ink-muted">
+                      {r.status === 'APPROVED' ? 'Approved by' : 'Rejected by'}
+                    </span>{' '}
+                    {r.reviewedBy}
+                  </div>
+                )}
+                {r.status === 'APPROVED' && r.linkedUserEmail && (
+                  <div>
+                    <span className="font-medium text-ink-muted">
+                      Platform user
+                    </span>{' '}
+                    {r.linkedUserEmail}
+                  </div>
+                )}
+              </dl>
             </div>
 
-            <div className="flex shrink-0 gap-2">
+            <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
               {r.status === 'PENDING' ? (
                 <>
                   <Link
@@ -124,6 +142,14 @@ export function AccessRequestList({ requests }: { requests: AccessRequestRow[] }
                 </>
               ) : (
                 <>
+                  {r.status === 'APPROVED' && r.linkedUserId && (
+                    <Link
+                      href={`/admin/platform-users/${r.linkedUserId}`}
+                      className="touch-target inline-flex items-center rounded-lg border border-brand-500 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+                    >
+                      View Platform User
+                    </Link>
+                  )}
                   <button
                     type="button"
                     disabled={busy}

@@ -48,6 +48,7 @@ export default async function PlatformAccessRequestsPage({
     createdAt: r.createdAt.toISOString(),
     reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : null,
     reviewedBy: r.reviewedByAdmin?.displayName ?? null,
+    linkedUserId: r.createdPlatformUser?.id ?? null,
     linkedUserEmail: r.createdPlatformUser?.email ?? null,
   }));
 
