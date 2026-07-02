@@ -17,7 +17,11 @@ export const ADMIN_NAV = [
   { href: '/admin/platform-access-requests', label: 'Platform Access Requests' },
 ] as const;
 
-export function AdminNav() {
+export function AdminNav({
+  pendingAccessRequests = 0,
+}: {
+  pendingAccessRequests?: number;
+}) {
   const pathname = usePathname();
 
   return (
@@ -27,19 +31,32 @@ export function AdminNav() {
           item.href === '/admin'
             ? pathname === '/admin'
             : pathname.startsWith(item.href);
+        const showBadge =
+          item.href === '/admin/platform-access-requests' &&
+          pendingAccessRequests > 0;
         return (
           <Link
             key={item.href}
             href={item.href}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+              'inline-flex items-center whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors',
               active
                 ? 'bg-brand-50 text-brand-700'
                 : 'text-ink-muted hover:bg-surface-sunken hover:text-ink',
             )}
           >
             {item.label}
+            {showBadge && (
+              <span
+                className="ml-2 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-danger-600 px-1.5 py-0.5 text-xs font-bold leading-none text-white ring-2 ring-danger-600/20"
+                aria-label={`${pendingAccessRequests} pending ${
+                  pendingAccessRequests === 1 ? 'request' : 'requests'
+                } — action required`}
+              >
+                {pendingAccessRequests}
+              </span>
+            )}
           </Link>
         );
       })}

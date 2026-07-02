@@ -124,6 +124,13 @@ export async function accessRequestCounts(): Promise<
   return counts;
 }
 
+/** Number of PENDING requests — for the admin nav badge and dashboard alert. */
+export function countPendingAccessRequests(): Promise<number> {
+  return prisma.platformAccessRequest.count({
+    where: { status: AccessRequestStatus.PENDING },
+  });
+}
+
 export function getAccessRequestById(id: string) {
   return prisma.platformAccessRequest.findUnique({ where: { id } });
 }

@@ -11,10 +11,12 @@ import { AdminNav } from '@/components/admin/AdminNav';
 export function AdminShell({
   adminName,
   adminRole,
+  pendingAccessRequests = 0,
   children,
 }: {
   adminName: string;
   adminRole: string;
+  pendingAccessRequests?: number;
   children: ReactNode;
 }) {
   return (
@@ -55,7 +57,7 @@ export function AdminShell({
           </div>
         </div>
         <div className="mx-auto w-full max-w-6xl px-4 pb-2">
-          <AdminNav />
+          <AdminNav pendingAccessRequests={pendingAccessRequests} />
         </div>
       </header>
 

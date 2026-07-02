@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getAdminSession } from '@/lib/session';
 import { getDashboardStats } from '@/services/dashboard/dashboardStatsService';
+import { countPendingAccessRequests } from '@/services/accessRequests/accessRequestService';
 import { cn } from '@/lib/cn';
 
 export const dynamic = 'force-dynamic';
@@ -74,7 +75,10 @@ const CARDS = [
 export default async function AdminDashboardPage() {
   const session = getAdminSession();
   const firstName = session?.name?.split(' ')[0] ?? 'there';
-  const stats = await getDashboardStats();
+  const [stats, pendingAccessRequests] = await Promise.all([
+    getDashboardStats(),
+    countPendingAccessRequests(),
+  ]);
 
   const summary = [
     {
@@ -109,6 +113,50 @@ export default async function AdminDashboardPage() {
           job site, then workers can check in from their phones.
         </p>
       </header>
+
+      {pendingAccessRequests > 0 && (
+        <Link
+          href="/admin/platform-access-requests"
+          className="flex items-center justify-between gap-4 rounded-xl border border-danger-600 bg-danger-600 p-5 text-white shadow-card transition-colors hover:bg-danger-700"
+        >
+          <div className="flex items-center gap-4">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/15">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.75}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-6 w-6"
+                aria-hidden="true"
+              >
+                <path d="M12 9v4" />
+                <path d="M12 17h.01" />
+                <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+              </svg>
+            </span>
+            <div>
+              <h2 className="text-base font-bold">
+                Pending Platform Access Requests
+              </h2>
+              <p className="mt-0.5 text-sm text-white/85">
+                {pendingAccessRequests}{' '}
+                {pendingAccessRequests === 1 ? 'request is' : 'requests are'}{' '}
+                awaiting your review.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-4xl font-bold tabular-nums tracking-tight">
+              {pendingAccessRequests}
+            </span>
+            <span className="hidden text-sm font-semibold sm:inline">
+              Review →
+            </span>
+          </div>
+        </Link>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-3">
         {summary.map((stat) => (
