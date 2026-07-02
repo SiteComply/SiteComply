@@ -49,7 +49,7 @@ export function AdminNav({
             {item.label}
             {showBadge && (
               <span
-                className="ml-2 inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-md bg-danger-500 px-1.5 text-xs font-bold leading-none text-white"
+                className="ml-2 inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-danger-500 px-1.5 text-xs font-bold leading-none text-white"
                 aria-label={`${pendingAccessRequests} pending ${
                   pendingAccessRequests === 1 ? 'request' : 'requests'
                 } — action required`}
