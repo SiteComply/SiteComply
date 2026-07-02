@@ -106,7 +106,9 @@ builder · Audit & Document reports (need their modules) · charts.
 - **Phase 3 — CSCS/Competency + Site Compliance Scorecard** (CSV, scoped,
   logged). CSCS detail export restricted to Director/PM/SM/H&S; `cscsExpiry`
   index added. ✅ done.
-- **Phase 4 — Director Organisation Overview** (org-wide rollup).
+- **Phase 4 — Director Organisation Overview** (org-wide rollup: KPI totals,
+  attendance trend, contractor breakdown, site performance, + reusable
+  executive-dashboard components for future Documents/Audits/Actions). ✅ done.
 - **Phase 5 — Hardening + Admin-only export-log view + tests.**
 
 ## 13. Locked decisions

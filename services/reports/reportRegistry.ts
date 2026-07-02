@@ -109,6 +109,7 @@ export const REPORT_TYPES: ReportType[] = [
     directorOnly: true,
     personalData: false,
     clientAggregateOnly: false,
+    built: true,
   },
 ];
 
