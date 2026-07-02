@@ -88,6 +88,7 @@ export const REPORT_TYPES: ReportType[] = [
     personalData: true,
     clientAggregateOnly: true,
     exportRoles: CSCS_EXPORT_ROLES,
+    built: true,
   },
   {
     id: 'scorecard',
@@ -98,6 +99,7 @@ export const REPORT_TYPES: ReportType[] = [
     directorOnly: false,
     personalData: false,
     clientAggregateOnly: false,
+    built: true,
   },
   {
     id: 'org-overview',

@@ -97,6 +97,7 @@ model Worker {
   submissions Submission[]
 
   @@index([company])
+  @@index([cscsExpiry])
 }
 
 /// A construction site / job that workers induct onto and check in to.

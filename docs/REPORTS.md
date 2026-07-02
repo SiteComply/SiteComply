@@ -103,8 +103,9 @@ builder · Audit & Document reports (need their modules) · charts.
   `logReportExport`; reports landing page (catalogue filtered by role/scope).
 - **Phase 1 — Attendance + Compliance** (CSV, Client aggregate-only, logged). ✅ done.
 - **Phase 2 — Occupancy + Workforce/Company** (CSV, scoped, logged). ✅ done.
-- **Phase 3 — CSCS/Competency + Site Compliance Scorecard.** CSCS detail export
-  restricted to Director/PM/SM/H&S; add `cscsExpiry` index for CSCS/Competency.
+- **Phase 3 — CSCS/Competency + Site Compliance Scorecard** (CSV, scoped,
+  logged). CSCS detail export restricted to Director/PM/SM/H&S; `cscsExpiry`
+  index added. ✅ done.
 - **Phase 4 — Director Organisation Overview** (org-wide rollup).
 - **Phase 5 — Hardening + Admin-only export-log view + tests.**
 
