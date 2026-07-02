@@ -25,6 +25,8 @@ export interface ReportType {
    * the general reports-export permission). Used to restrict CSCS detail.
    */
   exportRoles?: PlatformRoleValue[];
+  /** Whether the report page is implemented (landing links it) or still upcoming. */
+  built?: boolean;
 }
 
 /** Roles allowed to export detailed CSCS data (tighter than the general set). */
@@ -44,6 +46,7 @@ export const REPORT_TYPES: ReportType[] = [
     directorOnly: false,
     personalData: true,
     clientAggregateOnly: true,
+    built: true,
   },
   {
     id: 'compliance',
@@ -54,6 +57,7 @@ export const REPORT_TYPES: ReportType[] = [
     directorOnly: false,
     personalData: true,
     clientAggregateOnly: true,
+    built: true,
   },
   {
     id: 'occupancy',
