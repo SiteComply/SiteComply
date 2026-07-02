@@ -211,7 +211,8 @@ model Admin {
   createdAt     DateTime  @default(now())
   lastLoginAt   DateTime?
 
-  createdSites JobSite[]
+  createdSites           JobSite[]
+  reviewedAccessRequests PlatformAccessRequest[]
 }
 
 /// A one-time passcode challenge for worker SMS MFA.
@@ -255,6 +256,9 @@ model PlatformUser {
 
   reportExports ReportExportLog[]
 
+  // The self-service access request this user was created from (if any).
+  accessRequest PlatformAccessRequest?
+
   @@index([status])
   @@index([company])
 }
@@ -280,8 +284,9 @@ model ReportExportLog {
 
 /// A self-service request for Platform access, submitted from the login screen
 /// when the entered email/mobile doesn't match an existing Platform User. Admins
-/// review these (Pending → Approved / Rejected); approval does not itself create
-/// a Platform User in this foundation.
+/// review these (Pending → Approved / Rejected). Approving a request runs the
+/// approval workflow, which creates and activates a Platform User and links it
+/// back here (createdPlatformUser) along with the approving admin + timestamp.
 model PlatformAccessRequest {
   id          String              @id @default(cuid())
   fullName    String
@@ -292,6 +297,14 @@ model PlatformAccessRequest {
   status      AccessRequestStatus @default(PENDING)
   createdAt   DateTime            @default(now())
   reviewedAt  DateTime? // set when moved out of PENDING
+
+  // Who reviewed it (the admin who approved/rejected), for accountability.
+  reviewedByAdmin   Admin?  @relation(fields: [reviewedByAdminId], references: [id])
+  reviewedByAdminId String?
+
+  // The Platform User created by approving this request (1-1). Null until approved.
+  createdPlatformUser   PlatformUser? @relation(fields: [createdPlatformUserId], references: [id])
+  createdPlatformUserId String?       @unique
 
   @@index([status, createdAt])
   @@index([email])

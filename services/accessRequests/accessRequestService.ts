@@ -1,6 +1,7 @@
-import { AccessRequestStatus } from '@prisma/client';
+import { AccessRequestStatus, Prisma, PlatformUserStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { normaliseUkMobile } from '@/lib/phone';
+import type { ValidatedPlatformUser } from '@/services/platformUsers/platformUserService';
 
 /**
  * Self-service Platform Access Requests. Submitted from the login screen when
@@ -100,6 +101,10 @@ export function listAccessRequests(status: AccessRequestStatus) {
   return prisma.platformAccessRequest.findMany({
     where: { status },
     orderBy: { createdAt: 'desc' },
+    include: {
+      reviewedByAdmin: { select: { displayName: true } },
+      createdPlatformUser: { select: { id: true, email: true } },
+    },
   });
 }
 
@@ -131,4 +136,62 @@ export function setAccessRequestStatus(id: string, status: AccessRequestStatus) 
       reviewedAt: status === AccessRequestStatus.PENDING ? null : new Date(),
     },
   });
+}
+
+/**
+ * Approve a request: create + activate the Platform User in one transaction and
+ * link it back to the request, recording the approving admin and timestamp. The
+ * new user is ACTIVE so they can sign in immediately. Only PENDING requests can
+ * be approved; a duplicate email (a user was created in the meantime) is
+ * surfaced as `email_taken` so the admin can adjust the address.
+ */
+export async function approveAccessRequest(
+  id: string,
+  value: ValidatedPlatformUser,
+  adminId: string,
+): Promise<
+  | { ok: true; userId: string }
+  | { ok: false; reason: 'not_pending' | 'email_taken' }
+> {
+  const existing = await prisma.platformAccessRequest.findUnique({
+    where: { id },
+    select: { status: true },
+  });
+  if (!existing || existing.status !== AccessRequestStatus.PENDING) {
+    return { ok: false, reason: 'not_pending' };
+  }
+
+  try {
+    const userId = await prisma.$transaction(async (tx) => {
+      const user = await tx.platformUser.create({
+        data: {
+          name: value.name,
+          company: value.company,
+          email: value.email,
+          mobile: value.mobile,
+          role: value.role,
+          status: PlatformUserStatus.ACTIVE, // approved → can sign in immediately
+          assignedSites: {
+            connect: value.assignedSiteIds.map((siteId) => ({ id: siteId })),
+          },
+        },
+      });
+      await tx.platformAccessRequest.update({
+        where: { id },
+        data: {
+          status: AccessRequestStatus.APPROVED,
+          reviewedAt: new Date(),
+          reviewedByAdminId: adminId,
+          createdPlatformUserId: user.id,
+        },
+      });
+      return user.id;
+    });
+    return { ok: true, userId };
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      return { ok: false, reason: 'email_taken' };
+    }
+    throw e;
+  }
 }

@@ -46,6 +46,9 @@ export default async function PlatformAccessRequestsPage({
     reason: r.reason,
     status: r.status,
     createdAt: r.createdAt.toISOString(),
+    reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : null,
+    reviewedBy: r.reviewedByAdmin?.displayName ?? null,
+    linkedUserEmail: r.createdPlatformUser?.email ?? null,
   }));
 
   return (
@@ -54,11 +57,12 @@ export default async function PlatformAccessRequestsPage({
         <h1 className="text-2xl font-bold text-ink">Platform Access Requests</h1>
         <p className="text-ink-muted">
           Self-service access requests submitted from the platform sign-in
-          screen. Approve or reject each request, then set the person up under{' '}
+          screen. Approving a request creates and activates the{' '}
           <Link href="/admin/platform-users" className="font-semibold text-brand-700">
-            Platform Users
-          </Link>
-          .
+            Platform User
+          </Link>{' '}
+          automatically — no manual set-up needed — and they can sign in right
+          away.
         </p>
       </header>
 
