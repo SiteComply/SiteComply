@@ -146,6 +146,15 @@ export function setAccessRequestStatus(id: string, status: AccessRequestStatus) 
 }
 
 /**
+ * Permanently delete an access request. Used by admins to clear out decided
+ * (Approved/Rejected) requests. This only removes the request row — any Platform
+ * User created from an approval is untouched (the link FK is on the request).
+ */
+export function deleteAccessRequest(id: string) {
+  return prisma.platformAccessRequest.delete({ where: { id } });
+}
+
+/**
  * Approve a request: create + activate the Platform User in one transaction and
  * link it back to the request, recording the approving admin and timestamp. The
  * new user is ACTIVE so they can sign in immediately. Only PENDING requests can
