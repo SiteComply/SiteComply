@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { toCsv } from '@/lib/csv';
 import { formatDateTimeUK } from '@/lib/datetime';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
@@ -14,11 +15,6 @@ export const dynamic = 'force-dynamic';
  * Manager, Auditor, H&S Consultant and Principal Contractor; refused for
  * Engineer and Client. Scoped to the viewer's accessible sites only.
  */
-function csvCell(value: string): string {
-  const s = String(value ?? '');
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 export async function GET() {
   const viewer = await getPlatformViewer();
   if (!viewer) {
@@ -66,9 +62,7 @@ export async function GET() {
     s.checkedOutAt ? formatDateTimeUK(s.checkedOutAt) : '',
     s.status,
   ]);
-  const csv = [header, ...rows]
-    .map((r) => r.map(csvCell).join(','))
-    .join('\r\n');
+  const csv = toCsv(header, rows);
 
   return new NextResponse(csv, {
     status: 200,

@@ -245,6 +245,27 @@ model PlatformUser {
   // Sites this user is assigned to (scope for their future RBAC permissions).
   assignedSites JobSite[] @relation("PlatformUserSites")
 
+  reportExports ReportExportLog[]
+
   @@index([status])
   @@index([company])
+}
+
+/// Audit log of report exports (UK-GDPR accountability for worker-level data).
+/// One row per successful export; viewing the log is Admin-only.
+model ReportExportLog {
+  id             String       @id @default(cuid())
+  platformUser   PlatformUser @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+  platformUserId String
+  role           PlatformRole // Role at time of export
+  reportType     String // Report id, e.g. "attendance", "cscs-expiring"
+  format         String // "csv" (PDF later)
+  siteIds        Json // string[] of the site ids in scope for this export
+  dateFrom       DateTime? // Report period start (if the report is date-ranged)
+  dateTo         DateTime?
+  rowCount       Int // Number of data rows exported
+  createdAt      DateTime     @default(now())
+
+  @@index([reportType, createdAt])
+  @@index([platformUserId])
 }

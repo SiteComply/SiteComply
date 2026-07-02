@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { toCsv } from '@/lib/csv';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 
@@ -11,11 +12,6 @@ export const dynamic = 'force-dynamic';
  * permission (Clients, being read-only, are refused) and the Assigned-Sites
  * boundary (only the viewer's sites are included; Directors get all sites).
  */
-function csvCell(value: string): string {
-  const s = String(value ?? '');
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 export async function GET() {
   const viewer = await getPlatformViewer();
   if (!viewer) {
@@ -39,9 +35,7 @@ export async function GET() {
     s.postcode,
     s.status,
   ]);
-  const csv = [header, ...rows]
-    .map((r) => r.map(csvCell).join(','))
-    .join('\r\n');
+  const csv = toCsv(header, rows);
 
   return new NextResponse(csv, {
     status: 200,
