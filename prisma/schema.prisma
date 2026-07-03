@@ -103,6 +103,31 @@ enum AuditStatus {
   SIGNED_OFF //    Reviewed and signed off (records who + when)
 }
 
+/// Category of an audit finding (Audits Phase 2). Values match the
+/// FINDING_CATEGORIES option list in services/audits/findingConstants.
+enum FindingCategory {
+  SAFETY //         Health & Safety
+  ENVIRONMENTAL
+  QUALITY
+  DOCUMENTATION
+  OTHER
+}
+
+/// Severity of an audit finding.
+enum FindingSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+/// Lifecycle status of an audit finding.
+enum FindingStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+}
+
 // ----------------------------------------------------------------------------
 // Models
 // ----------------------------------------------------------------------------
@@ -411,9 +436,45 @@ model Audit {
   // Existing documents this audit references (many-to-many).
   documents Document[] @relation("AuditDocuments")
 
+  // Findings raised during this audit (Phase 2).
+  findings AuditFinding[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([jobSiteId, status, createdAt])
+  @@index([status])
+}
+
+/// A finding raised during an audit (Audits Phase 2): an issue with a title,
+/// description, category, severity, status and optional due date, plus a
+/// free-text corrective action. Findings inherit the parent audit's site scope
+/// (there is no site column — access is resolved via `audit.jobSiteId`). Photo
+/// uploads remain out of scope.
+model AuditFinding {
+  id          String          @id @default(cuid())
+  audit       Audit           @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  auditId     String
+  title       String
+  description String?
+  category    FindingCategory @default(OTHER)
+  severity    FindingSeverity @default(MEDIUM)
+  status      FindingStatus   @default(OPEN)
+  dueDate     DateTime? // stored as UTC midnight of the chosen date
+
+  // Free-text corrective action for this finding.
+  correctiveAction String?
+
+  // Who raised it (name denormalised so history survives user deletion).
+  createdByUserId String?
+  createdByName   String?
+
+  // Set when the finding is CLOSED, cleared if reopened.
+  closedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([auditId, status])
   @@index([status])
 }

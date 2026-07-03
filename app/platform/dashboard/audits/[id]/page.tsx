@@ -8,6 +8,11 @@ import {
 } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { getAuditForViewer } from '@/services/audits/auditService';
+import { listFindingsForAudit } from '@/services/audits/findingService';
+import {
+  AuditFindingsPanel,
+  type FindingRow,
+} from '@/components/platform/AuditFindingsPanel';
 import {
   auditStatusLabel,
   AUDIT_STATUS_BADGE,
@@ -35,6 +40,19 @@ export default async function AuditDetailPage({
   if (!audit) notFound();
 
   const canEdit = permits(viewer.role, 'audits', 'edit');
+  const findingRows: FindingRow[] = (await listFindingsForAudit(audit.id)).map(
+    (f) => ({
+      id: f.id,
+      title: f.title,
+      description: f.description,
+      category: f.category,
+      severity: f.severity,
+      status: f.status,
+      dueDate: f.dueDate ? f.dueDate.toISOString() : null,
+      correctiveAction: f.correctiveAction,
+      createdByName: f.createdByName,
+    }),
+  );
 
   return (
     <PlatformShell>
@@ -116,6 +134,12 @@ export default async function AuditDetailPage({
               </ul>
             )}
           </Section>
+
+          <AuditFindingsPanel
+            auditId={audit.id}
+            findings={findingRows}
+            canEdit={canEdit}
+          />
         </div>
 
         <div className="space-y-6">
