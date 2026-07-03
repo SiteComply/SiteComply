@@ -248,6 +248,21 @@ export async function updateAction(
   return { id };
 }
 
+/**
+ * Permanently delete an action within the viewer's scope. Returns false if the
+ * action is not in scope. Deleting an action just removes its row (any audit
+ * finding it was raised from is untouched — the link is on the action side).
+ */
+export async function deleteAction(
+  viewer: PlatformViewer,
+  id: string,
+): Promise<boolean> {
+  const existing = await getActionForViewer(viewer, id);
+  if (!existing) return false;
+  await prisma.action.delete({ where: { id } });
+  return true;
+}
+
 /** Quick status change (open / in progress / complete) within scope. */
 export async function setActionStatus(
   viewer: PlatformViewer,

@@ -8,6 +8,7 @@ import {
 } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { getActionForViewer } from '@/services/actions/actionService';
+import { ActionDeleteButton } from '@/components/platform/ActionDeleteButton';
 import {
   actionPriorityLabel,
   actionStatusLabel,
@@ -61,12 +62,15 @@ export default async function ActionDetailPage({
             <p className="text-ink-muted">{action.jobSite.name}</p>
           </div>
           {canEdit && (
-            <Link
-              href={`/platform/dashboard/actions/${action.id}/edit`}
-              className="rounded-xl border border-brand-500 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
-            >
-              Edit action
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/platform/dashboard/actions/${action.id}/edit`}
+                className="rounded-xl border border-brand-500 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+              >
+                Edit action
+              </Link>
+              <ActionDeleteButton actionId={action.id} title={action.title} />
+            </div>
           )}
         </div>
       </div>

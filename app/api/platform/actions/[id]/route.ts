@@ -4,6 +4,7 @@ import { permits } from '@/services/platformUsers/platformPermissions';
 import {
   validateAction,
   updateAction,
+  deleteAction,
   type ActionInput,
 } from '@/services/actions/actionService';
 
@@ -48,4 +49,33 @@ export async function PATCH(
   }
 
   return NextResponse.json({ ok: true, id: updated.id });
+}
+
+/**
+ * DELETE /api/platform/actions/[id]
+ * Permanently delete an action. Enforces the actions "edit" permission (managing
+ * = editing) and the Assigned-Sites boundary (the action must be in scope). Any
+ * audit finding it was raised from is left intact.
+ */
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const viewer = await getPlatformViewer();
+  if (!viewer) {
+    return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
+  }
+  if (!permits(viewer.role, 'actions', 'edit')) {
+    return NextResponse.json(
+      { ok: false, error: 'You do not have permission to delete actions.' },
+      { status: 403 },
+    );
+  }
+
+  const deleted = await deleteAction(viewer, params.id);
+  if (!deleted) {
+    return NextResponse.json({ ok: false, error: 'Action not found.' }, { status: 404 });
+  }
+
+  return NextResponse.json({ ok: true });
 }
