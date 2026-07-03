@@ -42,3 +42,22 @@ export const SCORE_MAX = 100;
 export const TITLE_MAX = 160;
 export const DESCRIPTION_MAX = 4000;
 export const OBSERVATIONS_MAX = 8000;
+
+/**
+ * Roles permitted to permanently DELETE an audit (and its findings). This is a
+ * deliberate business rule, not the standard edit permission: Director has org-
+ * wide oversight and may delete even though they can't edit audit content, while
+ * Site Manager (also view/export) may not. So it's an explicit allow-list rather
+ * than a `permits(...)` check.
+ */
+export const AUDIT_DELETE_ROLES = [
+  'DIRECTOR',
+  'PROJECT_MANAGER',
+  'AUDITOR',
+  'HS_CONSULTANT',
+  'PRINCIPAL_CONTRACTOR',
+] as const;
+
+export function canDeleteAudit(role: string): boolean {
+  return (AUDIT_DELETE_ROLES as readonly string[]).includes(role);
+}

@@ -8,6 +8,8 @@ import {
 } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { getAuditForViewer } from '@/services/audits/auditService';
+import { canDeleteAudit } from '@/services/audits/auditConstants';
+import { AuditDeleteButton } from '@/components/platform/AuditDeleteButton';
 import { listFindingsForAudit } from '@/services/audits/findingService';
 import {
   AuditFindingsPanel,
@@ -40,6 +42,7 @@ export default async function AuditDetailPage({
   if (!audit) notFound();
 
   const canEdit = permits(viewer.role, 'audits', 'edit');
+  const canDelete = canDeleteAudit(viewer.role);
   const findingRows: FindingRow[] = (await listFindingsForAudit(audit.id)).map(
     (f) => ({
       id: f.id,
@@ -77,14 +80,19 @@ export default async function AuditDetailPage({
             </div>
             <p className="text-ink-muted">{audit.jobSite.name}</p>
           </div>
-          {canEdit && (
-            <Link
-              href={`/platform/dashboard/audits/${audit.id}/edit`}
-              className="rounded-xl border border-brand-500 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
-            >
-              Edit audit
-            </Link>
-          )}
+          <div className="flex items-center gap-2">
+            {canEdit && (
+              <Link
+                href={`/platform/dashboard/audits/${audit.id}/edit`}
+                className="rounded-xl border border-brand-500 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+              >
+                Edit audit
+              </Link>
+            )}
+            {canDelete && (
+              <AuditDeleteButton auditId={audit.id} title={audit.title} />
+            )}
+          </div>
         </div>
       </div>
 

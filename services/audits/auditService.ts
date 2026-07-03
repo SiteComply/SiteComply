@@ -265,6 +265,22 @@ export async function setAuditStatus(
 }
 
 /**
+ * Permanently delete an audit within the viewer's scope. Related findings (and
+ * the audit↔document join rows) are removed via the schema's ON DELETE CASCADE;
+ * the referenced Documents themselves are left intact. Returns false if the
+ * audit is not in scope. The caller enforces the delete-role allow-list.
+ */
+export async function deleteAudit(
+  viewer: PlatformViewer,
+  id: string,
+): Promise<boolean> {
+  const existing = await getAuditForViewer(viewer, id);
+  if (!existing) return false;
+  await prisma.audit.delete({ where: { id } });
+  return true;
+}
+
+/**
  * Documents the viewer may reference from an audit, for the create/edit form to
  * offer per selected site. Kept lightweight (no blob data).
  */

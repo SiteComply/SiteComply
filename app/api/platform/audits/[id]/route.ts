@@ -4,8 +4,10 @@ import { permits } from '@/services/platformUsers/platformPermissions';
 import {
   validateAuditMeta,
   updateAudit,
+  deleteAudit,
   type AuditMetaInput,
 } from '@/services/audits/auditService';
+import { canDeleteAudit } from '@/services/audits/auditConstants';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -52,4 +54,34 @@ export async function PATCH(
   }
 
   return NextResponse.json({ ok: true, id: updated.id });
+}
+
+/**
+ * DELETE /api/platform/audits/[id]
+ * Permanently delete an audit and all its findings. Restricted to the audit
+ * delete-role allow-list (Director, Project Manager, Auditor, H&S Consultant,
+ * Principal Contractor) — a deliberate rule distinct from the "edit" permission
+ * — plus the Assigned-Sites boundary. Referenced documents are left intact.
+ */
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const viewer = await getPlatformViewer();
+  if (!viewer) {
+    return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
+  }
+  if (!canDeleteAudit(viewer.role)) {
+    return NextResponse.json(
+      { ok: false, error: 'You do not have permission to delete audits.' },
+      { status: 403 },
+    );
+  }
+
+  const deleted = await deleteAudit(viewer, params.id);
+  if (!deleted) {
+    return NextResponse.json({ ok: false, error: 'Audit not found.' }, { status: 404 });
+  }
+
+  return NextResponse.json({ ok: true });
 }
