@@ -13,6 +13,7 @@ import {
   documentCategoryLabel,
   formatBytes,
 } from '@/services/documents/documentConstants';
+import { DocumentDeleteButton } from '@/components/platform/DocumentDeleteButton';
 import { formatDateUK } from '@/lib/datetime';
 
 export const dynamic = 'force-dynamic';
@@ -37,6 +38,7 @@ export default async function PlatformDocumentsPage({
     siteId: site || undefined,
   });
   const canCreate = permits(viewer.role, 'documents', 'create');
+  const canDelete = permits(viewer.role, 'documents', 'edit');
 
   return (
     <PlatformShell>
@@ -166,12 +168,21 @@ export default async function PlatformDocumentsPage({
                       {formatBytes(d.sizeBytes)}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <a
-                        href={`/api/platform/documents/${d.id}/download`}
-                        className="text-sm font-semibold text-brand-700 hover:underline"
-                      >
-                        Download
-                      </a>
+                      <div className="flex items-center justify-end gap-4">
+                        <a
+                          href={`/api/platform/documents/${d.id}/download`}
+                          className="text-sm font-semibold text-brand-700 hover:underline"
+                        >
+                          Download
+                        </a>
+                        {canDelete && (
+                          <DocumentDeleteButton
+                            documentId={d.id}
+                            title={d.title}
+                            variant="link"
+                          />
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
