@@ -83,6 +83,19 @@ enum AccessRequestStatus {
   REJECTED
 }
 
+/// Category of a site document in the Documents module (Phase 1). Values match
+/// the DOCUMENT_CATEGORIES option list in services/documents/documentConstants.
+enum DocumentCategory {
+  RAMS //                  Risk Assessment & Method Statement
+  METHOD_STATEMENT
+  TOOLBOX_TALK
+  PERMIT
+  INSURANCE
+  TRAINING_CERTIFICATE
+  PLANT_CERTIFICATE
+  GENERAL
+}
+
 // ----------------------------------------------------------------------------
 // Models
 // ----------------------------------------------------------------------------
@@ -136,6 +149,7 @@ model JobSite {
   checklists    ComplianceChecklist[]
   submissions   Submission[]
   platformUsers PlatformUser[]        @relation("PlatformUserSites")
+  documents     Document[]
 
   @@index([status])
 }
@@ -259,6 +273,9 @@ model PlatformUser {
   // The self-service access request this user was created from (if any).
   accessRequest PlatformAccessRequest?
 
+  // Documents this user uploaded (Documents module).
+  uploadedDocuments Document[]
+
   @@index([status])
   @@index([company])
 }
@@ -308,4 +325,39 @@ model PlatformAccessRequest {
 
   @@index([status, createdAt])
   @@index([email])
+}
+
+/// A site document in the Documents module (Phase 1): method statements, RAMS,
+/// permits, certificates and general paperwork. Each document belongs to exactly
+/// one site, which is the access boundary — a viewer only sees documents for
+/// sites in their scope (Director = all; others = assigned). The file itself
+/// lives in private Azure Blob storage (never a public URL); `blobPath` is its
+/// key within the container. Versioning and expiry tracking are intentionally
+/// out of scope for Phase 1.
+model Document {
+  id          String           @id @default(cuid())
+  title       String
+  description String?
+  category    DocumentCategory
+  // Owning site — the access boundary for site-scoping.
+  jobSite     JobSite          @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId   String
+
+  // Stored file metadata. The bytes live in Azure Blob storage at `blobPath`.
+  fileName  String // original upload filename, for display + download
+  mimeType  String
+  sizeBytes Int
+  blobPath  String @unique // key within the private container
+
+  // Who uploaded it (nullable so a deleted user doesn't orphan the document).
+  uploadedBy       PlatformUser? @relation(fields: [uploadedByUserId], references: [id])
+  uploadedByUserId String?
+  // Denormalised uploader name so history survives if the user is removed.
+  uploadedByName   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobSiteId, category, createdAt])
+  @@index([category])
 }
