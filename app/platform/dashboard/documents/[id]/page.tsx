@@ -11,6 +11,7 @@ import {
   documentCategoryLabel,
   formatBytes,
 } from '@/services/documents/documentConstants';
+import { DocumentDeleteButton } from '@/components/platform/DocumentDeleteButton';
 import { formatDateTimeUK } from '@/lib/datetime';
 
 export const dynamic = 'force-dynamic';
@@ -64,6 +65,9 @@ export default async function DocumentDetailPage({
             >
               Download
             </a>
+            {canEdit && (
+              <DocumentDeleteButton documentId={doc.id} title={doc.title} />
+            )}
           </div>
         </div>
       </div>

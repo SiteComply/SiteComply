@@ -217,3 +217,21 @@ export async function updateDocument(
     select: { id: true },
   });
 }
+
+/**
+ * Permanently delete a document within the viewer's scope: remove the DB row
+ * first (the authoritative record), then delete the blob. Returns false if the
+ * document is not in scope (so the caller can 404). The metadata row is always
+ * gone on success; blob deletion is best-effort, so at worst an orphaned blob
+ * remains — never a metadata row pointing at a missing file.
+ */
+export async function deleteDocument(
+  viewer: PlatformViewer,
+  id: string,
+): Promise<boolean> {
+  const existing = await getDocumentForViewer(viewer, id);
+  if (!existing) return false;
+  await prisma.document.delete({ where: { id } });
+  await deleteDocumentBlob(existing.blobPath);
+  return true;
+}

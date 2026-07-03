@@ -4,6 +4,7 @@ import { permits } from '@/services/platformUsers/platformPermissions';
 import {
   validateDocumentMeta,
   updateDocument,
+  deleteDocument,
   type DocumentMetaInput,
 } from '@/services/documents/documentService';
 
@@ -52,4 +53,36 @@ export async function PATCH(
   }
 
   return NextResponse.json({ ok: true, id: updated.id });
+}
+
+/**
+ * DELETE /api/platform/documents/[id]
+ * Permanently delete a document — its metadata row AND its blob file. Enforces
+ * the documents "edit" permission (deletion is a management action) and the
+ * Assigned-Sites boundary (the document must be in the viewer's scope).
+ */
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const viewer = await getPlatformViewer();
+  if (!viewer) {
+    return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
+  }
+  if (!permits(viewer.role, 'documents', 'edit')) {
+    return NextResponse.json(
+      { ok: false, error: 'You do not have permission to delete documents.' },
+      { status: 403 },
+    );
+  }
+
+  const deleted = await deleteDocument(viewer, params.id);
+  if (!deleted) {
+    return NextResponse.json(
+      { ok: false, error: 'Document not found.' },
+      { status: 404 },
+    );
+  }
+
+  return NextResponse.json({ ok: true });
 }
