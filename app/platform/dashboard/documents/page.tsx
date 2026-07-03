@@ -168,10 +168,10 @@ export default async function PlatformDocumentsPage({
                       {formatBytes(d.sizeBytes)}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <div className="flex items-center justify-end gap-4">
+                      <div className="flex items-center justify-end gap-2">
                         <a
                           href={`/api/platform/documents/${d.id}/download`}
-                          className="text-sm font-semibold text-brand-700 hover:underline"
+                          className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
                         >
                           Download
                         </a>
@@ -179,7 +179,7 @@ export default async function PlatformDocumentsPage({
                           <DocumentDeleteButton
                             documentId={d.id}
                             title={d.title}
-                            variant="link"
+                            variant="list"
                           />
                         )}
                       </div>
