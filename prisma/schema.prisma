@@ -94,6 +94,15 @@ enum DocumentCategory {
   GENERAL //      Anything else (permits, toolbox talks, misc paperwork)
 }
 
+/// Lifecycle / sign-off status of a site Audit (Audits module, Phase 1). Values
+/// match the AUDIT_STATUSES option list in services/audits/auditConstants.
+enum AuditStatus {
+  DRAFT //         Being prepared — not yet started in earnest
+  IN_PROGRESS //   Inspection under way
+  COMPLETED //     Finished, awaiting sign-off
+  SIGNED_OFF //    Reviewed and signed off (records who + when)
+}
+
 // ----------------------------------------------------------------------------
 // Models
 // ----------------------------------------------------------------------------
@@ -148,6 +157,7 @@ model JobSite {
   submissions   Submission[]
   platformUsers PlatformUser[]        @relation("PlatformUserSites")
   documents     Document[]
+  audits        Audit[]
 
   @@index([status])
 }
@@ -274,6 +284,10 @@ model PlatformUser {
   // Documents this user uploaded (Documents module).
   uploadedDocuments Document[]
 
+  // Audits this user created / signed off (Audits module).
+  createdAudits   Audit[] @relation("AuditCreatedBy")
+  signedOffAudits Audit[] @relation("AuditSignedOffBy")
+
   @@index([status])
   @@index([company])
 }
@@ -353,9 +367,53 @@ model Document {
   // Denormalised uploader name so history survives if the user is removed.
   uploadedByName   String?
 
+  // Audits that reference this document (Audits module — many-to-many).
+  audits Audit[] @relation("AuditDocuments")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([jobSiteId, category, createdAt])
   @@index([category])
+}
+
+/// A site audit / inspection (Audits module, Phase 1). Each audit belongs to
+/// exactly one site — the access boundary for site-scoping (Director = all;
+/// others = assigned sites). It captures the headline audit record: title,
+/// description, free-text observations, an optional overall score (0–100) and a
+/// lifecycle/sign-off status, and can reference existing uploaded Documents.
+/// Findings, corrective actions and photo uploads are intentionally out of
+/// scope for Phase 1.
+model Audit {
+  id           String      @id @default(cuid())
+  title        String
+  description  String?
+  observations String?
+  overallScore Int? // 0–100 overall score, optional
+  status       AuditStatus @default(DRAFT)
+
+  // Owning site — the access boundary for site-scoping.
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+
+  // Who created it (nullable so a removed user doesn't orphan the audit);
+  // name denormalised so history survives if the user is deleted.
+  createdBy       PlatformUser? @relation("AuditCreatedBy", fields: [createdByUserId], references: [id])
+  createdByUserId String?
+  createdByName   String?
+
+  // Sign-off record — set when status becomes SIGNED_OFF, cleared if reopened.
+  signedOffBy       PlatformUser? @relation("AuditSignedOffBy", fields: [signedOffByUserId], references: [id])
+  signedOffByUserId String?
+  signedOffByName   String?
+  signedOffAt       DateTime?
+
+  // Existing documents this audit references (many-to-many).
+  documents Document[] @relation("AuditDocuments")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobSiteId, status, createdAt])
+  @@index([status])
 }

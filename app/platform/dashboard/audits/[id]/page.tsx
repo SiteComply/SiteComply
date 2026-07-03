@@ -1,0 +1,183 @@
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { PlatformShell } from '@/components/platform/PlatformShell';
+import { AuditStatusControl } from '@/components/platform/AuditStatusControl';
+import {
+  requirePlatformViewer,
+  assertModuleView,
+} from '@/services/platformUsers/platformAccess';
+import { permits } from '@/services/platformUsers/platformPermissions';
+import { getAuditForViewer } from '@/services/audits/auditService';
+import {
+  auditStatusLabel,
+  AUDIT_STATUS_BADGE,
+  type AuditStatusValue,
+} from '@/services/audits/auditConstants';
+import { documentCategoryLabel } from '@/services/documents/documentConstants';
+import { formatDateTimeUK } from '@/lib/datetime';
+
+export const dynamic = 'force-dynamic';
+
+/**
+ * Audit detail — the full record, its documents and status tracking / sign-off.
+ * Only reachable for audits within the viewer's scope (site boundary enforced in
+ * the service). Editing + status changes are shown to roles with "edit".
+ */
+export default async function AuditDetailPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const viewer = await requirePlatformViewer();
+  assertModuleView(viewer, 'audits');
+
+  const audit = await getAuditForViewer(viewer, params.id);
+  if (!audit) notFound();
+
+  const canEdit = permits(viewer.role, 'audits', 'edit');
+
+  return (
+    <PlatformShell>
+      <div className="mb-6">
+        <Link
+          href="/platform/dashboard/audits"
+          className="text-sm font-semibold text-brand-700 hover:underline"
+        >
+          ← Audits
+        </Link>
+        <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-bold text-ink">{audit.title}</h1>
+              <span
+                className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                  AUDIT_STATUS_BADGE[audit.status as AuditStatusValue]
+                }`}
+              >
+                {auditStatusLabel(audit.status)}
+              </span>
+            </div>
+            <p className="text-ink-muted">{audit.jobSite.name}</p>
+          </div>
+          {canEdit && (
+            <Link
+              href={`/platform/dashboard/audits/${audit.id}/edit`}
+              className="rounded-xl border border-brand-500 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+            >
+              Edit audit
+            </Link>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          {audit.description && (
+            <Section title="Description">
+              <p className="whitespace-pre-line text-sm text-ink">
+                {audit.description}
+              </p>
+            </Section>
+          )}
+          {audit.observations && (
+            <Section title="Observations">
+              <p className="whitespace-pre-line text-sm text-ink">
+                {audit.observations}
+              </p>
+            </Section>
+          )}
+
+          <Section title="Referenced documents">
+            {audit.documents.length === 0 ? (
+              <p className="text-sm text-ink-subtle">No documents referenced.</p>
+            ) : (
+              <ul className="divide-y divide-line">
+                {audit.documents.map((d) => (
+                  <li key={d.id} className="flex items-center justify-between py-2">
+                    <span className="min-w-0">
+                      <Link
+                        href={`/platform/dashboard/documents/${d.id}`}
+                        className="font-medium text-brand-700 hover:underline"
+                      >
+                        {d.title}
+                      </Link>
+                      <span className="block text-xs text-ink-subtle">
+                        {documentCategoryLabel(d.category)} · {d.fileName}
+                      </span>
+                    </span>
+                    <a
+                      href={`/api/platform/documents/${d.id}/download`}
+                      className="shrink-0 text-sm font-semibold text-brand-700 hover:underline"
+                    >
+                      Download
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
+        </div>
+
+        <div className="space-y-6">
+          <Section title="Summary">
+            <dl className="space-y-3">
+              <Detail
+                label="Overall score"
+                value={audit.overallScore === null ? '—' : `${audit.overallScore}%`}
+              />
+              <Detail label="Status" value={auditStatusLabel(audit.status)} />
+              <Detail
+                label="Site"
+                value={`${audit.jobSite.name} · ${audit.jobSite.jobReference}`}
+              />
+              <Detail label="Created by" value={audit.createdByName ?? 'Unknown'} />
+              <Detail label="Created" value={formatDateTimeUK(audit.createdAt)} />
+              {audit.signedOffAt && (
+                <Detail
+                  label="Signed off"
+                  value={`${audit.signedOffByName ?? 'Unknown'} · ${formatDateTimeUK(
+                    audit.signedOffAt,
+                  )}`}
+                />
+              )}
+            </dl>
+          </Section>
+
+          {canEdit && (
+            <Section title="Status tracking">
+              <AuditStatusControl auditId={audit.id} status={audit.status} />
+            </Section>
+          )}
+        </div>
+      </div>
+    </PlatformShell>
+  );
+}
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-subtle">
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
+        {label}
+      </dt>
+      <dd className="mt-0.5 break-words text-sm text-ink">{value}</dd>
+    </div>
+  );
+}
