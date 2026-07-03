@@ -64,10 +64,12 @@ export function AuditFindingsPanel({
   auditId,
   findings,
   canEdit,
+  canCreateAction = false,
 }: {
   auditId: string;
   findings: FindingRow[];
   canEdit: boolean;
+  canCreateAction?: boolean;
 }) {
   const router = useRouter();
   // null = no form open; 'add' = add form; otherwise the finding id being edited.
@@ -83,6 +85,23 @@ export function AuditFindingsPanel({
         body: JSON.stringify({ status }),
       });
       if (res.ok) router.refresh();
+    } finally {
+      setBusyId(undefined);
+    }
+  }
+
+  // Generate a corrective action from this finding, then open it.
+  async function createAction(findingId: string) {
+    setBusyId(findingId);
+    try {
+      const res = await fetch(
+        `/api/platform/audit-findings/${findingId}/create-action`,
+        { method: 'POST' },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok && data.id) {
+        router.push(`/platform/dashboard/actions/${data.id}`);
+      }
     } finally {
       setBusyId(undefined);
     }
@@ -192,36 +211,49 @@ export function AuditFindingsPanel({
                         </span>
                       </div>
                     )}
-                    {canEdit && (
+                    {(canEdit || canCreateAction) && (
                       <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setMode(f.id)}
-                          disabled={busy}
-                          className="rounded-lg border border-line px-3 py-1.5 text-sm font-semibold text-ink-muted hover:bg-surface-sunken disabled:opacity-50"
-                        >
-                          Edit
-                        </button>
-                        {FINDING_STATUSES.map((s) => (
+                        {canEdit && (
                           <button
-                            key={s.value}
                             type="button"
-                            disabled={busy || s.value === f.status}
-                            onClick={() => quickStatus(f.id, s.value)}
-                            className={cn(
-                              'rounded-lg border px-3 py-1.5 text-sm font-semibold disabled:cursor-default',
-                              s.value === f.status
-                                ? 'border-brand-500 bg-brand-50 text-brand-700'
-                                : 'border-line text-ink-muted hover:bg-surface-sunken disabled:opacity-50',
-                            )}
+                            onClick={() => setMode(f.id)}
+                            disabled={busy}
+                            className="rounded-lg border border-line px-3 py-1.5 text-sm font-semibold text-ink-muted hover:bg-surface-sunken disabled:opacity-50"
                           >
-                            {s.value === 'CLOSED'
-                              ? 'Close'
-                              : s.value === 'OPEN'
-                                ? 'Reopen'
-                                : s.label}
+                            Edit
                           </button>
-                        ))}
+                        )}
+                        {canEdit &&
+                          FINDING_STATUSES.map((s) => (
+                            <button
+                              key={s.value}
+                              type="button"
+                              disabled={busy || s.value === f.status}
+                              onClick={() => quickStatus(f.id, s.value)}
+                              className={cn(
+                                'rounded-lg border px-3 py-1.5 text-sm font-semibold disabled:cursor-default',
+                                s.value === f.status
+                                  ? 'border-brand-500 bg-brand-50 text-brand-700'
+                                  : 'border-line text-ink-muted hover:bg-surface-sunken disabled:opacity-50',
+                              )}
+                            >
+                              {s.value === 'CLOSED'
+                                ? 'Close'
+                                : s.value === 'OPEN'
+                                  ? 'Reopen'
+                                  : s.label}
+                            </button>
+                          ))}
+                        {canCreateAction && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => createAction(f.id)}
+                            className="rounded-lg border border-brand-500 px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-50"
+                          >
+                            Create action
+                          </button>
+                        )}
                       </div>
                     )}
                   </>

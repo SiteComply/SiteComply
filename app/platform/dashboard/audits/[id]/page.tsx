@@ -43,6 +43,7 @@ export default async function AuditDetailPage({
 
   const canEdit = permits(viewer.role, 'audits', 'edit');
   const canDelete = canDeleteAudit(viewer.role);
+  const canCreateAction = permits(viewer.role, 'actions', 'create');
   const findingRows: FindingRow[] = (await listFindingsForAudit(audit.id)).map(
     (f) => ({
       id: f.id,
@@ -147,6 +148,7 @@ export default async function AuditDetailPage({
             auditId={audit.id}
             findings={findingRows}
             canEdit={canEdit}
+            canCreateAction={canCreateAction}
           />
         </div>
 

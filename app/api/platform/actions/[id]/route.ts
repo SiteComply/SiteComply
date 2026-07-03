@@ -1,0 +1,51 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
+import { permits } from '@/services/platformUsers/platformPermissions';
+import {
+  validateAction,
+  updateAction,
+  type ActionInput,
+} from '@/services/actions/actionService';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+/**
+ * PATCH /api/platform/actions/[id]
+ * Update an action. Enforces the actions "edit" permission and the
+ * Assigned-Sites boundary (existing + target site must be in scope).
+ */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const viewer = await getPlatformViewer();
+  if (!viewer) {
+    return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
+  }
+  if (!permits(viewer.role, 'actions', 'edit')) {
+    return NextResponse.json(
+      { ok: false, error: 'You do not have permission to edit actions.' },
+      { status: 403 },
+    );
+  }
+
+  let body: ActionInput;
+  try {
+    body = (await req.json()) as ActionInput;
+  } catch {
+    return NextResponse.json({ ok: false, error: 'Invalid request.' }, { status: 400 });
+  }
+
+  const result = validateAction(body, viewer);
+  if (!result.ok) {
+    return NextResponse.json({ ok: false, errors: result.errors }, { status: 400 });
+  }
+
+  const updated = await updateAction(viewer, params.id, result.value);
+  if (!updated) {
+    return NextResponse.json({ ok: false, error: 'Action not found.' }, { status: 404 });
+  }
+
+  return NextResponse.json({ ok: true, id: updated.id });
+}

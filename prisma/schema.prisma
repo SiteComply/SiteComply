@@ -128,6 +128,23 @@ enum FindingStatus {
   CLOSED
 }
 
+/// Priority of a corrective action (Actions module, Phase 1). Values match the
+/// ACTION_PRIORITIES option list in services/actions/actionConstants.
+enum ActionPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+/// Lifecycle status of a corrective action. "Overdue" is NOT a stored status —
+/// it is derived (OPEN/IN_PROGRESS with a due date in the past).
+enum ActionStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+}
+
 // ----------------------------------------------------------------------------
 // Models
 // ----------------------------------------------------------------------------
@@ -183,6 +200,7 @@ model JobSite {
   platformUsers PlatformUser[]        @relation("PlatformUserSites")
   documents     Document[]
   audits        Audit[]
+  actions       Action[]
 
   @@index([status])
 }
@@ -472,9 +490,50 @@ model AuditFinding {
   // Set when the finding is CLOSED, cleared if reopened.
   closedAt DateTime?
 
+  // Corrective actions generated from this finding (Actions module).
+  actions Action[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([auditId, status])
   @@index([status])
+}
+
+/// A corrective action / follow-up task (Actions module, Phase 1). Each action
+/// belongs to exactly one site — the access boundary for site-scoping. It can
+/// optionally originate from an audit finding (auditFinding), giving a central
+/// register of everything that needs doing across sites. "Overdue" is derived
+/// (OPEN/IN_PROGRESS with a past due date), not a stored status.
+model Action {
+  id          String         @id @default(cuid())
+  title       String
+  description String?
+  priority    ActionPriority @default(MEDIUM)
+  status      ActionStatus   @default(OPEN)
+  dueDate     DateTime? // stored as UTC midnight of the chosen date
+
+  // Free-text assignee (a person/company responsible — not necessarily a user).
+  assignedTo String?
+
+  // Owning site — the access boundary for site-scoping.
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+
+  // Optional origin: the audit finding that generated this action.
+  auditFinding   AuditFinding? @relation(fields: [auditFindingId], references: [id], onDelete: SetNull)
+  auditFindingId String?
+
+  // Who created it (name denormalised so history survives user deletion).
+  createdByUserId String?
+  createdByName   String?
+
+  // Set when the action is COMPLETED, cleared if reopened.
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobSiteId, status, dueDate])
+  @@index([status, dueDate])
 }
