@@ -83,17 +83,15 @@ enum AccessRequestStatus {
   REJECTED
 }
 
-/// Category of a site document in the Documents module (Phase 1). Values match
-/// the DOCUMENT_CATEGORIES option list in services/documents/documentConstants.
+/// Category of a site document in the Documents module (Phase 1). Deliberately
+/// minimal — four broad buckets that cover site paperwork without over-filing;
+/// expand only if a genuine business need emerges. Values match the
+/// DOCUMENT_CATEGORIES option list in services/documents/documentConstants.
 enum DocumentCategory {
-  RAMS //                  Risk Assessment & Method Statement
-  METHOD_STATEMENT
-  TOOLBOX_TALK
-  PERMIT
+  RAMS //         Risk Assessment & Method Statement
   INSURANCE
-  TRAINING_CERTIFICATE
-  PLANT_CERTIFICATE
-  GENERAL
+  CERTIFICATE //  Training, plant and other certificates
+  GENERAL //      Anything else (permits, toolbox talks, misc paperwork)
 }
 
 // ----------------------------------------------------------------------------

@@ -7,26 +7,25 @@
 
 export type DocumentCategoryValue =
   | 'RAMS'
-  | 'METHOD_STATEMENT'
-  | 'TOOLBOX_TALK'
-  | 'PERMIT'
   | 'INSURANCE'
-  | 'TRAINING_CERTIFICATE'
-  | 'PLANT_CERTIFICATE'
+  | 'CERTIFICATE'
   | 'GENERAL';
 
-/** Selectable document categories, in display order, with human labels. */
+/**
+ * Selectable document categories, in display order, with human labels.
+ *
+ * Deliberately kept to four broad buckets — expand only if a genuine business
+ * requirement emerges. RAMS also covers method statements; CERTIFICATE covers
+ * training/plant/other certificates; GENERAL covers permits, toolbox talks and
+ * anything else.
+ */
 export const DOCUMENT_CATEGORIES: {
   value: DocumentCategoryValue;
   label: string;
 }[] = [
   { value: 'RAMS', label: 'RAMS' },
-  { value: 'METHOD_STATEMENT', label: 'Method Statements' },
-  { value: 'TOOLBOX_TALK', label: 'Toolbox Talks' },
-  { value: 'PERMIT', label: 'Permits' },
   { value: 'INSURANCE', label: 'Insurance' },
-  { value: 'TRAINING_CERTIFICATE', label: 'Training Certificates' },
-  { value: 'PLANT_CERTIFICATE', label: 'Plant Certificates' },
+  { value: 'CERTIFICATE', label: 'Certificates' },
   { value: 'GENERAL', label: 'General Documents' },
 ];
 
