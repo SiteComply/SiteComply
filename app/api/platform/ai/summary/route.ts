@@ -85,5 +85,8 @@ export async function POST(req: NextRequest) {
     ok: true,
     summary: result.summary,
     cached: result.cached,
+    provider: result.provider,
+    model: result.model,
+    generatedAt: result.generatedAt,
   });
 }

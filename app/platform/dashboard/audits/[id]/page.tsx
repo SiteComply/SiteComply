@@ -21,6 +21,8 @@ import {
   type AuditStatusValue,
 } from '@/services/audits/auditConstants';
 import { documentCategoryLabel } from '@/services/documents/documentConstants';
+import { canUseAiSummaries } from '@/services/ai/aiConfig';
+import { AiSummaryPanel } from '@/components/platform/AiSummaryPanel';
 import { formatDateTimeUK } from '@/lib/datetime';
 
 export const dynamic = 'force-dynamic';
@@ -96,6 +98,10 @@ export default async function AuditDetailPage({
           </div>
         </div>
       </div>
+
+      {canUseAiSummaries(viewer.role) && (
+        <AiSummaryPanel targetType="AUDIT" targetKey={audit.id} />
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">

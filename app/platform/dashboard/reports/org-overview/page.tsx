@@ -20,6 +20,8 @@ import { getReportType } from '@/services/reports/reportRegistry';
 import { canRunReport, canExportReport } from '@/services/reports/reportAccess';
 import { parseReportFilters, reportFiltersQuery } from '@/services/reports/reportFilters';
 import { getOrgOverview } from '@/services/reports/orgOverviewReport';
+import { canUseAiSummaries } from '@/services/ai/aiConfig';
+import { AiSummaryPanel } from '@/components/platform/AiSummaryPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,6 +66,17 @@ export default async function OrgOverviewReportPage({
             : undefined
         }
       />
+
+      {canUseAiSummaries(viewer.role) && (
+        <AiSummaryPanel
+          targetType="ORG_OVERVIEW_REPORT"
+          filters={{
+            from: filters.fromStr,
+            to: filters.toStr,
+            sites: filters.requestedSiteIds ?? undefined,
+          }}
+        />
+      )}
 
       <ReportFilterBar viewer={viewer} filters={filters} action="/platform/dashboard/reports/org-overview" />
 

@@ -23,6 +23,8 @@ import {
   getComplianceRows,
   pct,
 } from '@/services/reports/complianceReport';
+import { canUseAiSummaries } from '@/services/ai/aiConfig';
+import { AiSummaryPanel } from '@/components/platform/AiSummaryPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,6 +72,17 @@ export default async function ComplianceReportPage({
             : undefined
         }
       />
+
+      {canUseAiSummaries(viewer.role) && (
+        <AiSummaryPanel
+          targetType="COMPLIANCE_REPORT"
+          filters={{
+            from: filters.fromStr,
+            to: filters.toStr,
+            sites: filters.requestedSiteIds ?? undefined,
+          }}
+        />
+      )}
 
       <ReportFilterBar
         viewer={viewer}

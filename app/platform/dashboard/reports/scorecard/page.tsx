@@ -14,6 +14,8 @@ import { getReportType } from '@/services/reports/reportRegistry';
 import { canRunReport, canExportReport } from '@/services/reports/reportAccess';
 import { parseReportFilters, reportFiltersQuery } from '@/services/reports/reportFilters';
 import { getScorecard } from '@/services/reports/scorecardReport';
+import { canUseAiSummaries } from '@/services/ai/aiConfig';
+import { AiSummaryPanel } from '@/components/platform/AiSummaryPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,6 +60,17 @@ export default async function ScorecardReportPage({
             : undefined
         }
       />
+
+      {canUseAiSummaries(viewer.role) && (
+        <AiSummaryPanel
+          targetType="SCORECARD_REPORT"
+          filters={{
+            from: filters.fromStr,
+            to: filters.toStr,
+            sites: filters.requestedSiteIds ?? undefined,
+          }}
+        />
+      )}
 
       <ReportFilterBar viewer={viewer} filters={filters} action="/platform/dashboard/reports/scorecard" />
 

@@ -46,7 +46,14 @@ export type SummaryReason =
   | 'provider_error';
 
 export type SummaryResult =
-  | { ok: true; summary: SummaryOutput; cached: boolean }
+  | {
+      ok: true;
+      summary: SummaryOutput;
+      cached: boolean;
+      provider: string;
+      model: string;
+      generatedAt: string;
+    }
   | { ok: false; reason: SummaryReason };
 
 /** Deterministic hash of the scoped context → cache key + change detection. */
@@ -69,15 +76,23 @@ async function findCachedSummary(
   targetKey: string,
   contextHash: string,
   ttlHours: number,
-): Promise<SummaryOutput | null> {
+): Promise<{
+  summary: SummaryOutput;
+  provider: string;
+  model: string;
+  createdAt: Date;
+} | null> {
   if (ttlHours <= 0) return null;
   const since = new Date(Date.now() - ttlHours * 3600 * 1000);
   const row = await prisma.aiSummary.findFirst({
     where: { targetType, targetKey, contextHash, status: 'OK', createdAt: { gte: since } },
     orderBy: { createdAt: 'desc' },
-    select: { summary: true },
+    select: { summary: true, provider: true, model: true, createdAt: true },
   });
-  return row ? parseSummaryOutput(row.summary) : null;
+  if (!row) return null;
+  const summary = parseSummaryOutput(row.summary);
+  if (!summary) return null;
+  return { summary, provider: row.provider, model: row.model, createdAt: row.createdAt };
 }
 
 export async function generateSummary(
@@ -111,7 +126,15 @@ export async function generateSummary(
     contextHash,
     caps.cacheTtlHours,
   );
-  if (cached) return { ok: true, summary: cached, cached: true };
+  if (cached)
+    return {
+      ok: true,
+      summary: cached.summary,
+      cached: true,
+      provider: cached.provider,
+      model: cached.model,
+      generatedAt: cached.createdAt.toISOString(),
+    };
 
   // 5. Pilot usage caps (only live generations count).
   const last = await lastAiSummaryAt(viewer.id);
@@ -162,7 +185,14 @@ export async function generateSummary(
       tokensOutput: result.tokensOutput ?? null,
       status: 'OK',
     });
-    return { ok: true, summary, cached: false };
+    return {
+      ok: true,
+      summary,
+      cached: false,
+      provider: provider.name,
+      model: result.model,
+      generatedAt: new Date().toISOString(),
+    };
   } catch (error) {
     await recordAiSummary({
       ...logBase,

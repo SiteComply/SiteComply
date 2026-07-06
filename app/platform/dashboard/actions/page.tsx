@@ -7,6 +7,8 @@ import {
   assertModuleView,
 } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
+import { canUseAiSummaries } from '@/services/ai/aiConfig';
+import { AiSummaryPanel } from '@/components/platform/AiSummaryPanel';
 import { listActions, actionCounts } from '@/services/actions/actionService';
 import {
   ACTION_BUCKETS,
@@ -87,6 +89,10 @@ export default async function PlatformActionsPage({
           )}
         </div>
       </header>
+
+      {canUseAiSummaries(viewer.role) && (
+        <AiSummaryPanel targetType="ACTIONS_REGISTER" />
+      )}
 
       {/* Register buckets — clickable summary cards that filter the list. */}
       <div className="mb-4 grid gap-3 sm:grid-cols-4">
