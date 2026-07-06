@@ -641,6 +641,35 @@ model SmsConfig {
   updatedAt        DateTime @updatedAt
 }
 
+/// Singleton company / organisation profile + branding (Admin → Settings →
+/// Company). Stores the company name, support contact details and branding
+/// (colours, tagline) plus a pointer to the logo blob. The logo bytes live in the
+/// existing private Documents blob container (under a `branding/` prefix); only
+/// the blob path + content type are stored here and the image is streamed back
+/// via a serving route. Falls back to product defaults when unset.
+model CompanyConfig {
+  id String @id // fixed singleton key ("company")
+
+  companyName  String?
+  supportEmail String?
+  supportPhone String?
+
+  // Branding.
+  primaryColor String? // hex, e.g. "#38B54A"
+  accentColor  String? // hex, e.g. "#00AEEF"
+  tagline      String?
+
+  // Logo — bytes in blob storage; DB holds the pointer only.
+  logoBlobPath    String?
+  logoContentType String?
+  logoUpdatedAt   DateTime?
+
+  updatedByAdminId String?
+  updatedByName    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
 /// Singleton runtime configuration for platform notifications (Admin → Settings →
 /// Notifications). Per notification type: a master enable toggle plus per-channel
 /// (email / SMS) delivery preferences, stored as JSON so new types/channels are a

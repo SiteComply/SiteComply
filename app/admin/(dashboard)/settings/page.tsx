@@ -26,6 +26,12 @@ const SETTINGS_AREAS = [
     body: 'Turn platform notifications on or off — access requests, overdue actions, audit and action reminders, weekly summary — and set email / SMS delivery preferences.',
     cta: 'Manage notifications',
   },
+  {
+    href: '/admin/settings/company',
+    title: 'Company',
+    body: 'Manage your organisation’s name, support email and phone, branding colours and tagline, and upload your company logo.',
+    cta: 'Manage company',
+  },
 ] as const;
 
 export default function AdminSettingsPage() {
