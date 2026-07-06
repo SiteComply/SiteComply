@@ -145,6 +145,14 @@ enum ActionStatus {
   COMPLETED
 }
 
+/// Kind of entry in an action's activity timeline (Actions module).
+enum ActionActivityType {
+  CREATED //        The action was created
+  COMMENT //        A user added an update/comment
+  STATUS_CHANGE //  Status moved (may carry a completion note)
+  ASSIGNMENT //     Assignee set or changed
+}
+
 // ----------------------------------------------------------------------------
 // Models
 // ----------------------------------------------------------------------------
@@ -528,12 +536,42 @@ model Action {
   createdByUserId String?
   createdByName   String?
 
-  // Set when the action is COMPLETED, cleared if reopened.
-  completedAt DateTime?
+  // Set when the action is COMPLETED, cleared if reopened. A completion note is
+  // required when marking Completed; the latest one is mirrored here for display
+  // (the full history lives in the activity timeline).
+  completedAt    DateTime?
+  completionNote String?
+
+  // Chronological activity timeline (creation, assignment, status, comments).
+  activities ActionActivity[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([jobSiteId, status, dueDate])
   @@index([status, dueDate])
+}
+
+/// One entry in an action's activity timeline: creation, assignment change,
+/// status change (optionally with a completion note) or a user comment. Together
+/// these give a chronological history on the action detail page.
+model ActionActivity {
+  id       String             @id @default(cuid())
+  action   Action             @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  actionId String
+  type     ActionActivityType
+
+  // Free text — the comment body or completion note (nullable for pure events).
+  note String?
+  // For STATUS_CHANGE / ASSIGNMENT: the previous and new values (labels/enum).
+  fromValue String?
+  toValue   String?
+
+  // Who performed it (name denormalised so history survives user deletion).
+  authorUserId String?
+  authorName   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([actionId, createdAt])
 }

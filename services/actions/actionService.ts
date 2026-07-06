@@ -1,4 +1,9 @@
-import { ActionPriority, ActionStatus, Prisma } from '@prisma/client';
+import {
+  ActionActivityType,
+  ActionPriority,
+  ActionStatus,
+  Prisma,
+} from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { zonedMidnightToUtc } from '@/lib/datetime';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
@@ -9,8 +14,30 @@ import {
   ACTION_TITLE_MAX,
   ACTION_DESCRIPTION_MAX,
   ACTION_ASSIGNEE_MAX,
+  ACTION_NOTE_MAX,
   type ActionBucket,
 } from '@/services/actions/actionConstants';
+
+/** Result of a mutation that can fail on scope or a required completion note. */
+export type ActionMutation =
+  | { ok: true; id: string }
+  | { ok: false; reason: 'not_found' | 'note_required' };
+
+/** Build an activity row for the given author (used inside transactions). */
+function activityRow(
+  viewer: PlatformViewer,
+  type: ActionActivityType,
+  fields: { note?: string | null; fromValue?: string | null; toValue?: string | null } = {},
+) {
+  return {
+    type,
+    note: fields.note ?? null,
+    fromValue: fields.fromValue ?? null,
+    toValue: fields.toValue ?? null,
+    authorUserId: viewer.id,
+    authorName: viewer.name,
+  };
+}
 
 /**
  * Actions module service (Phase 1) — the central corrective-action register.
@@ -210,12 +237,18 @@ export async function createAction(
   viewer: PlatformViewer,
   value: ValidatedAction,
 ): Promise<{ id: string }> {
+  // Seed the timeline: a CREATED entry, and an ASSIGNMENT entry if assigned now.
+  const activities = [activityRow(viewer, ActionActivityType.CREATED)];
+  if (value.assignedTo)
+    activities.push(activityRow(viewer, ActionActivityType.ASSIGNMENT, { toValue: value.assignedTo }));
+
   const created = await prisma.action.create({
     data: {
       ...value,
       createdByUserId: viewer.id,
       createdByName: viewer.name,
       completedAt: value.status === ActionStatus.COMPLETED ? new Date() : null,
+      activities: { create: activities },
     },
     select: { id: true },
   });
@@ -226,9 +259,37 @@ export async function updateAction(
   viewer: PlatformViewer,
   id: string,
   value: ValidatedAction,
-): Promise<{ id: string } | null> {
+  completionNote?: string,
+): Promise<ActionMutation> {
   const existing = await getActionForViewer(viewer, id);
-  if (!existing) return null;
+  if (!existing) return { ok: false, reason: 'not_found' };
+
+  const statusChanged = value.status !== existing.status;
+  const completing =
+    value.status === ActionStatus.COMPLETED && existing.status !== ActionStatus.COMPLETED;
+  const note = (completionNote ?? '').trim();
+  // A completion note is required when transitioning TO completed.
+  if (completing && note === '') return { ok: false, reason: 'note_required' };
+
+  const assigneeChanged = (value.assignedTo ?? null) !== (existing.assignedTo ?? null);
+
+  const activities = [];
+  if (statusChanged)
+    activities.push(
+      activityRow(viewer, ActionActivityType.STATUS_CHANGE, {
+        fromValue: existing.status,
+        toValue: value.status,
+        note: completing ? note : null,
+      }),
+    );
+  if (assigneeChanged)
+    activities.push(
+      activityRow(viewer, ActionActivityType.ASSIGNMENT, {
+        fromValue: existing.assignedTo,
+        toValue: value.assignedTo,
+      }),
+    );
+
   await prisma.action.update({
     where: { id },
     data: {
@@ -243,9 +304,16 @@ export async function updateAction(
         value.status === ActionStatus.COMPLETED
           ? (existing.completedAt ?? new Date())
           : null,
+      completionNote:
+        value.status === ActionStatus.COMPLETED
+          ? completing
+            ? note
+            : existing.completionNote
+          : null,
+      ...(activities.length ? { activities: { create: activities } } : {}),
     },
   });
-  return { id };
+  return { ok: true, id };
 }
 
 /**
@@ -263,25 +331,71 @@ export async function deleteAction(
   return true;
 }
 
-/** Quick status change (open / in progress / complete) within scope. */
+/**
+ * Quick status change (open / in progress / complete) within scope. Requires a
+ * completion note when moving TO completed; records a STATUS_CHANGE activity.
+ */
 export async function setActionStatus(
   viewer: PlatformViewer,
   id: string,
   status: ActionStatus,
-): Promise<boolean> {
+  completionNote?: string,
+): Promise<ActionMutation> {
   const existing = await getActionForViewer(viewer, id);
-  if (!existing) return false;
+  if (!existing) return { ok: false, reason: 'not_found' };
+  if (status === existing.status) return { ok: true, id };
+
+  const completing =
+    status === ActionStatus.COMPLETED && existing.status !== ActionStatus.COMPLETED;
+  const note = (completionNote ?? '').trim();
+  if (completing && note === '') return { ok: false, reason: 'note_required' };
+
   await prisma.action.update({
     where: { id },
     data: {
       status,
       completedAt:
-        status === ActionStatus.COMPLETED
-          ? (existing.completedAt ?? new Date())
-          : null,
+        status === ActionStatus.COMPLETED ? (existing.completedAt ?? new Date()) : null,
+      completionNote: status === ActionStatus.COMPLETED ? note : null,
+      activities: {
+        create: [
+          activityRow(viewer, ActionActivityType.STATUS_CHANGE, {
+            fromValue: existing.status,
+            toValue: status,
+            note: completing ? note : null,
+          }),
+        ],
+      },
     },
   });
-  return true;
+  return { ok: true, id };
+}
+
+/** Add a comment (an update) to an action's timeline. Returns false if out of scope. */
+export async function addActionComment(
+  viewer: PlatformViewer,
+  id: string,
+  body: string,
+): Promise<{ ok: true } | { ok: false; reason: 'not_found' | 'empty' | 'too_long' }> {
+  const text = (body ?? '').trim();
+  if (text === '') return { ok: false, reason: 'empty' };
+  if (text.length > ACTION_NOTE_MAX) return { ok: false, reason: 'too_long' };
+
+  const existing = await getActionForViewer(viewer, id);
+  if (!existing) return { ok: false, reason: 'not_found' };
+
+  await prisma.actionActivity.create({
+    data: { actionId: id, ...activityRow(viewer, ActionActivityType.COMMENT, { note: text }) },
+  });
+  return { ok: true };
+}
+
+/** Chronological activity timeline for an action (oldest first). */
+export function listActionActivities(actionId: string) {
+  return prisma.actionActivity.findMany({
+    where: { actionId },
+    orderBy: { createdAt: 'asc' },
+  });
 }
 
 /**
@@ -312,6 +426,7 @@ export async function createActionFromFinding(
       auditFindingId: finding.id,
       createdByUserId: viewer.id,
       createdByName: viewer.name,
+      activities: { create: [activityRow(viewer, ActionActivityType.CREATED)] },
     },
     select: { id: true },
   });

@@ -29,9 +29,9 @@ export async function POST(
     );
   }
 
-  let body: { status?: string };
+  let body: { status?: string; note?: string };
   try {
-    body = (await req.json()) as { status?: string };
+    body = (await req.json()) as { status?: string; note?: string };
   } catch {
     return NextResponse.json({ ok: false, error: 'Invalid request.' }, { status: 400 });
   }
@@ -40,8 +40,19 @@ export async function POST(
     return NextResponse.json({ ok: false, error: 'Invalid status.' }, { status: 400 });
   }
 
-  const updated = await setActionStatus(viewer, params.id, body.status as ActionStatus);
-  if (!updated) {
+  const updated = await setActionStatus(
+    viewer,
+    params.id,
+    body.status as ActionStatus,
+    body.note,
+  );
+  if (!updated.ok) {
+    if (updated.reason === 'note_required') {
+      return NextResponse.json(
+        { ok: false, error: 'A completion note is required to mark this action Completed.' },
+        { status: 400 },
+      );
+    }
     return NextResponse.json({ ok: false, error: 'Action not found.' }, { status: 404 });
   }
 

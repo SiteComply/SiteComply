@@ -55,9 +55,17 @@ export function ActionForm({
     assignedTo: initial?.assignedTo ?? '',
     description: initial?.description ?? '',
   });
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const [completionNote, setCompletionNote] = useState('');
+  const [errors, setErrors] = useState<FieldErrors & { completionNote?: string }>({});
   const [formError, setFormError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
+
+  // A completion note is required only when transitioning an existing action to
+  // Completed via the form (not when it was already completed).
+  const needsCompletionNote =
+    mode === 'edit' &&
+    initial?.status !== 'COMPLETED' &&
+    values.status === 'COMPLETED';
 
   function set<K extends keyof Values>(key: K, value: Values[K]) {
     setValues((v) => ({ ...v, [key]: value }));
@@ -67,13 +75,18 @@ export function ActionForm({
     setBusy(true);
     setErrors({});
     setFormError(undefined);
+    if (needsCompletionNote && completionNote.trim() === '') {
+      setErrors({ completionNote: 'A completion note is required to mark this Completed.' });
+      setBusy(false);
+      return;
+    }
     try {
       const res = await fetch(
         mode === 'create' ? '/api/platform/actions' : `/api/platform/actions/${actionId}`,
         {
           method: mode === 'create' ? 'POST' : 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(values),
+          body: JSON.stringify({ ...values, completionNote }),
         },
       );
       const data = await res.json().catch(() => ({}));
@@ -163,6 +176,17 @@ export function ActionForm({
           error={errors.dueDate}
         />
       </div>
+
+      {needsCompletionNote && (
+        <Textarea
+          label="Completion note (required)"
+          rows={3}
+          value={completionNote}
+          onChange={(e) => setCompletionNote(e.target.value)}
+          error={errors.completionNote}
+          hint="Summarise what was done to complete this action."
+        />
+      )}
 
       <Textarea
         label="Description (optional)"

@@ -69,3 +69,10 @@ export const ACTION_OVERDUE_BADGE = 'bg-danger-600 text-white';
 export const ACTION_TITLE_MAX = 200;
 export const ACTION_DESCRIPTION_MAX = 4000;
 export const ACTION_ASSIGNEE_MAX = 160;
+export const ACTION_NOTE_MAX = 4000;
+
+export type ActionActivityTypeValue =
+  | 'CREATED'
+  | 'COMMENT'
+  | 'STATUS_CHANGE'
+  | 'ASSIGNMENT';

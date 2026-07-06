@@ -7,8 +7,15 @@ import {
   assertModuleView,
 } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
-import { getActionForViewer } from '@/services/actions/actionService';
+import {
+  getActionForViewer,
+  listActionActivities,
+} from '@/services/actions/actionService';
 import { ActionDeleteButton } from '@/components/platform/ActionDeleteButton';
+import {
+  ActionTimeline,
+  type ActivityRow,
+} from '@/components/platform/ActionTimeline';
 import {
   actionPriorityLabel,
   actionStatusLabel,
@@ -43,6 +50,18 @@ export default async function ActionDetailPage({
     action.status !== 'COMPLETED' &&
     !!action.dueDate &&
     action.dueDate < new Date();
+
+  const activities: ActivityRow[] = (await listActionActivities(action.id)).map(
+    (a) => ({
+      id: a.id,
+      type: a.type,
+      note: a.note,
+      fromValue: a.fromValue,
+      toValue: a.toValue,
+      authorName: a.authorName,
+      createdAt: a.createdAt.toISOString(),
+    }),
+  );
 
   return (
     <PlatformShell>
@@ -82,6 +101,13 @@ export default async function ActionDetailPage({
               <p className="whitespace-pre-line text-sm text-ink">{action.description}</p>
             </Section>
           )}
+          {action.completionNote && (
+            <Section title="Completion note">
+              <p className="whitespace-pre-line text-sm text-ink">
+                {action.completionNote}
+              </p>
+            </Section>
+          )}
           {action.auditFinding && (
             <Section title="Raised from audit finding">
               <p className="text-sm text-ink">
@@ -97,6 +123,12 @@ export default async function ActionDetailPage({
               </p>
             </Section>
           )}
+
+          <ActionTimeline
+            actionId={action.id}
+            activities={activities}
+            canComment={canEdit}
+          />
         </div>
 
         <div className="space-y-6">

@@ -43,8 +43,19 @@ export async function PATCH(
     return NextResponse.json({ ok: false, errors: result.errors }, { status: 400 });
   }
 
-  const updated = await updateAction(viewer, params.id, result.value);
-  if (!updated) {
+  const updated = await updateAction(
+    viewer,
+    params.id,
+    result.value,
+    (body as { completionNote?: string }).completionNote,
+  );
+  if (!updated.ok) {
+    if (updated.reason === 'note_required') {
+      return NextResponse.json(
+        { ok: false, errors: { completionNote: 'A completion note is required to mark this action Completed.' } },
+        { status: 400 },
+      );
+    }
     return NextResponse.json({ ok: false, error: 'Action not found.' }, { status: 404 });
   }
 
