@@ -153,6 +153,17 @@ enum ActionActivityType {
   ASSIGNMENT //     Assignee set or changed
 }
 
+/// Target of an AI-generated executive summary (AI Summaries — see
+/// docs/AI_REPORT_SUMMARIES.md). Phase 1a foundation only; not yet user-facing.
+enum AiSummaryTarget {
+  COMPLIANCE_REPORT //    per-item (report run)
+  SCORECARD_REPORT //     per-item (report run)
+  ORG_OVERVIEW_REPORT //  per-item (report run, Director-only)
+  AUDIT //                per-item (single audit)
+  AUDITS_REGISTER //      register-level (all audits in scope)
+  ACTIONS_REGISTER //     register-level (all actions in scope)
+}
+
 // ----------------------------------------------------------------------------
 // Models
 // ----------------------------------------------------------------------------
@@ -338,6 +349,9 @@ model PlatformUser {
   // Audits this user created / signed off (Audits module).
   createdAudits   Audit[] @relation("AuditCreatedBy")
   signedOffAudits Audit[] @relation("AuditSignedOffBy")
+
+  // AI summaries this user generated (AI Summaries — accountability log).
+  aiSummaries AiSummary[]
 
   @@index([status])
   @@index([company])
@@ -574,4 +588,39 @@ model ActionActivity {
   createdAt DateTime @default(now())
 
   @@index([actionId, createdAt])
+}
+
+/// Audit + cache record for an AI-generated executive summary (AI Summaries,
+/// Phase 1a foundation — see docs/AI_REPORT_SUMMARIES.md). One row per generation
+/// attempt, capturing the scope snapshot, provider/model, token usage and result.
+/// This is the accountability log (mirrors ReportExportLog) AND the cache store;
+/// no user-facing surface consumes it yet.
+model AiSummary {
+  id         String          @id @default(cuid())
+  targetType AiSummaryTarget
+  targetKey  String // audit id, or a stable hash of the report target + filters
+
+  // Who generated it (nullable + SetNull so the audit trail survives user deletion).
+  platformUser   PlatformUser? @relation(fields: [platformUserId], references: [id], onDelete: SetNull)
+  platformUserId String?
+  role           PlatformRole // role at generation time (scope snapshot)
+
+  siteIds     Json // string[] scope snapshot — the sites the summary was built from
+  contextHash String // hash of the scoped input context → cache key + change detection
+
+  provider      String // 'azure-openai' | 'openai' | 'mock'
+  model         String
+  promptVersion String
+
+  summary      Json? // structured { headline, keyPoints[], risks[], recommendedFocus[] }; null on failure
+  tokensPrompt Int?
+  tokensOutput Int?
+  status       String // 'OK' | 'FAILED'
+  errorReason  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([targetType, targetKey, createdAt])
+  @@index([platformUserId, createdAt])
+  @@index([createdAt])
 }
