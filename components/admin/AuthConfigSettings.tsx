@@ -13,12 +13,63 @@ import { formatDateTimeUK } from '@/lib/datetime';
  * values are shown pre-filled, with the built-in default + accepted range as
  * guidance. Saved settings are consumed at runtime by the OTP service and
  * platform session creation, so no redeploy is needed.
+ *
+ * For readability, OTP expiry is entered in MINUTES and session timeout in HOURS;
+ * both convert to/from the underlying seconds only at the edges (initial value +
+ * on save), so the stored values and all backend behaviour are unchanged.
  */
+
+// Seconds per display unit for each converted field.
+const MINUTE = 60;
+const HOUR = 3600;
+
+/** Trim a number for display: integers show plain, decimals to at most 2 places. */
+function fmtNum(n: number): string {
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
+}
+
+const secondsToUnit = (seconds: number, factor: number) => fmtNum(seconds / factor);
+
+interface Parsed {
+  seconds?: number;
+  error?: string;
+}
+
+/** Parse a user-entered value in `unit`, validate against the seconds range, and
+ *  return the equivalent whole seconds (or a friendly, unit-based error). */
+function parseField(
+  raw: string,
+  factor: number,
+  limitSeconds: { min: number; max: number },
+  label: string,
+  unit: string,
+  wholeOnly = false,
+): Parsed {
+  const trimmed = raw.trim();
+  const n = Number(trimmed);
+  if (trimmed === '' || Number.isNaN(n) || !Number.isFinite(n)) {
+    return { error: `${label} must be a number.` };
+  }
+  if (wholeOnly && !Number.isInteger(n)) {
+    return { error: `${label} must be a whole number.` };
+  }
+  const seconds = Math.round(n * factor);
+  if (seconds < limitSeconds.min || seconds > limitSeconds.max) {
+    const lo = fmtNum(limitSeconds.min / factor);
+    const hi = fmtNum(limitSeconds.max / factor);
+    return { error: `${label} must be between ${lo} and ${hi} ${unit}.` };
+  }
+  return { seconds };
+}
+
 export function AuthConfigSettings({ config }: { config: AuthConfigView }) {
   const router = useRouter();
-  const [otpTtl, setOtpTtl] = useState(String(config.otpTtlSeconds));
+  const L = config.limits;
+
+  // OTP expiry shown in minutes, session timeout in hours; attempts stays raw.
+  const [otpMinutes, setOtpMinutes] = useState(secondsToUnit(config.otpTtlSeconds, MINUTE));
   const [maxAttempts, setMaxAttempts] = useState(String(config.otpMaxAttempts));
-  const [sessionTtl, setSessionTtl] = useState(String(config.sessionTtlSeconds));
+  const [sessionHours, setSessionHours] = useState(secondsToUnit(config.sessionTtlSeconds, HOUR));
   const [smsOtp, setSmsOtp] = useState(config.smsOtpEnabled);
   const [emailOtp, setEmailOtp] = useState(config.emailOtpEnabled);
 
@@ -27,21 +78,36 @@ export function AuthConfigSettings({ config }: { config: AuthConfigView }) {
   const [saveErr, setSaveErr] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
 
-  const L = config.limits;
-
   async function save() {
     setBusy(true);
-    setErrors({});
     setSavedMsg(undefined);
     setSaveErr(undefined);
+
+    // Convert the friendly inputs back to the stored seconds and validate here so
+    // the messages stay in minutes/hours; the API remains the safety net.
+    const otp = parseField(otpMinutes, MINUTE, L.otpTtlSeconds, 'OTP expiry', 'minutes');
+    const attempts = parseField(maxAttempts, 1, L.otpMaxAttempts, 'Max verification attempts', 'attempts', true);
+    const session = parseField(sessionHours, HOUR, L.sessionTtlSeconds, 'Session timeout', 'hours');
+
+    const nextErrors: Record<string, string> = {};
+    if (otp.error) nextErrors.otpTtlSeconds = otp.error;
+    if (attempts.error) nextErrors.otpMaxAttempts = attempts.error;
+    if (session.error) nextErrors.sessionTtlSeconds = session.error;
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      setSaveErr('Fix the highlighted fields.');
+      setBusy(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/admin/settings/authentication', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          otpTtlSeconds: otpTtl.trim(),
-          otpMaxAttempts: maxAttempts.trim(),
-          sessionTtlSeconds: sessionTtl.trim(),
+          otpTtlSeconds: otp.seconds,
+          otpMaxAttempts: attempts.seconds,
+          sessionTtlSeconds: session.seconds,
           smsOtpEnabled: smsOtp,
           emailOtpEnabled: emailOtp,
         }),
@@ -74,14 +140,14 @@ export function AuthConfigSettings({ config }: { config: AuthConfigView }) {
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <NumberField
             label="Code expiry"
-            unit="seconds"
-            value={otpTtl}
-            onChange={setOtpTtl}
+            unit="minutes"
+            value={otpMinutes}
+            onChange={setOtpMinutes}
             error={errors.otpTtlSeconds}
-            min={L.otpTtlSeconds.min}
-            max={L.otpTtlSeconds.max}
-            def={L.otpTtlSeconds.default}
-            hint={durationHint(otpTtl)}
+            min={L.otpTtlSeconds.min / MINUTE}
+            max={L.otpTtlSeconds.max / MINUTE}
+            def={L.otpTtlSeconds.default / MINUTE}
+            step={1}
           />
           <NumberField
             label="Max verification attempts"
@@ -92,6 +158,7 @@ export function AuthConfigSettings({ config }: { config: AuthConfigView }) {
             min={L.otpMaxAttempts.min}
             max={L.otpMaxAttempts.max}
             def={L.otpMaxAttempts.default}
+            step={1}
             hint="Wrong tries before a code locks and a new one is needed."
           />
         </div>
@@ -107,14 +174,14 @@ export function AuthConfigSettings({ config }: { config: AuthConfigView }) {
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <NumberField
             label="Session timeout"
-            unit="seconds"
-            value={sessionTtl}
-            onChange={setSessionTtl}
+            unit="hours"
+            value={sessionHours}
+            onChange={setSessionHours}
             error={errors.sessionTtlSeconds}
-            min={L.sessionTtlSeconds.min}
-            max={L.sessionTtlSeconds.max}
-            def={L.sessionTtlSeconds.default}
-            hint={durationHint(sessionTtl)}
+            min={L.sessionTtlSeconds.min / HOUR}
+            max={L.sessionTtlSeconds.max / HOUR}
+            def={L.sessionTtlSeconds.default / HOUR}
+            step={0.25}
           />
         </div>
       </section>
@@ -194,25 +261,6 @@ export function AuthConfigSettings({ config }: { config: AuthConfigView }) {
   );
 }
 
-/** Render a whole number of seconds as a friendly duration (e.g. "5 minutes"). */
-function durationHint(raw: string): string {
-  const s = Number(raw);
-  if (!Number.isFinite(s) || s <= 0) return '';
-  if (s < 60) return `= ${s} second${s === 1 ? '' : 's'}`;
-  if (s < 3600) {
-    const m = s / 60;
-    return `≈ ${round1(m)} minute${m === 1 ? '' : 's'}`;
-  }
-  if (s < 86400) {
-    const h = s / 3600;
-    return `≈ ${round1(h)} hour${h === 1 ? '' : 's'}`;
-  }
-  const d = s / 86400;
-  return `≈ ${round1(d)} day${d === 1 ? '' : 's'}`;
-}
-
-const round1 = (n: number) => Math.round(n * 10) / 10;
-
 function NumberField({
   label,
   unit,
@@ -222,6 +270,7 @@ function NumberField({
   min,
   max,
   def,
+  step,
   hint,
 }: {
   label: string;
@@ -232,6 +281,7 @@ function NumberField({
   min: number;
   max: number;
   def: number;
+  step: number;
   hint?: string;
 }) {
   return (
@@ -240,10 +290,11 @@ function NumberField({
       <div className="flex items-center gap-2">
         <input
           type="number"
-          inputMode="numeric"
+          inputMode="decimal"
           value={value}
           min={min}
           max={max}
+          step={step}
           onChange={(e) => onChange(e.target.value)}
           className={cn(
             'w-36 rounded-xl border bg-surface px-3 py-2 text-sm text-ink',
@@ -257,7 +308,7 @@ function NumberField({
         <p className="text-sm font-medium text-danger-600">{error}</p>
       ) : (
         <p className="text-xs text-ink-subtle">
-          Allowed {min}–{max}. Default {def}.
+          Allowed {fmtNum(min)}–{fmtNum(max)} {unit}. Default {fmtNum(def)}.
         </p>
       )}
     </div>
