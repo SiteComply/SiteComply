@@ -8,6 +8,7 @@ import {
   createPlatformSessionToken,
   setPlatformSessionCookie,
 } from '@/lib/session';
+import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -58,6 +59,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  setPlatformSessionCookie(createPlatformSessionToken({ userId: user.id }));
+  // Honour the admin-configured session timeout (Settings → Authentication).
+  const { sessionTtlSeconds } = await getAuthRuntimeConfig();
+  setPlatformSessionCookie(
+    createPlatformSessionToken({ userId: user.id, ttlSeconds: sessionTtlSeconds }),
+    sessionTtlSeconds,
+  );
   return NextResponse.json({ ok: true });
 }

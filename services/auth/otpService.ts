@@ -2,6 +2,7 @@ import { createHmac, randomInt, timingSafeEqual } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { normaliseUkMobile, maskUkMobile } from '@/lib/phone';
 import { resolveSmsProvider, SmsSendError } from '@/services/sms';
+import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
 
 /**
  * Worker SMS one-time passcode (MFA) service.
@@ -18,10 +19,12 @@ import { resolveSmsProvider, SmsSendError } from '@/services/sms';
  */
 
 const CODE_LENGTH = clampInt(process.env.OTP_LENGTH, 6, 4, 8);
-const TTL_SECONDS = clampInt(process.env.OTP_TTL_SECONDS, 300, 60, 900);
 const RESEND_COOLDOWN_SECONDS = 30;
 const MAX_REQUESTS_PER_HOUR = 5;
-const MAX_VERIFY_ATTEMPTS = 5;
+
+// OTP expiry (TTL) and the max wrong-code attempts are runtime-configurable via
+// Admin → Settings → Authentication (AuthConfig, DB-over-env-over-default). They
+// are read per call from getAuthRuntimeConfig() so admin changes apply live.
 
 function clampInt(
   raw: string | undefined,
@@ -69,6 +72,16 @@ export async function requestCode(
   const mobile = normalised.e164;
   const now = Date.now();
 
+  const authConfig = await getAuthRuntimeConfig();
+  // Admin can disable the SMS OTP channel (Settings → Authentication).
+  if (!authConfig.smsOtpEnabled) {
+    return {
+      ok: false,
+      error: 'SMS verification is currently unavailable. Please contact your site administrator.',
+    };
+  }
+  const ttlSeconds = authConfig.otpTtlSeconds;
+
   // Cooldown: don't allow rapid re-sends.
   const latest = await prisma.otpChallenge.findFirst({
     where: { mobile },
@@ -98,14 +111,14 @@ export async function requestCode(
   }
 
   const code = generateNumericCode(CODE_LENGTH);
-  const expiresAt = new Date(now + TTL_SECONDS * 1000);
+  const expiresAt = new Date(now + ttlSeconds * 1000);
 
   await prisma.otpChallenge.create({
     data: { mobile, codeHash: hashCode(mobile, code), expiresAt },
   });
 
   const provider = await resolveSmsProvider();
-  const minutes = Math.round(TTL_SECONDS / 60);
+  const minutes = Math.round(ttlSeconds / 60);
   try {
     await provider.send({
       to: mobile,
@@ -128,7 +141,7 @@ export async function requestCode(
   return {
     ok: true,
     maskedMobile: maskUkMobile(mobile),
-    expiresInSeconds: TTL_SECONDS,
+    expiresInSeconds: ttlSeconds,
     resendInSeconds: RESEND_COOLDOWN_SECONDS,
     // Only leak the code when explicitly using the console mock (dev/testing).
     devCode: provider.name === 'mock' ? code : undefined,
@@ -161,6 +174,8 @@ export async function verifyCode(
     return { ok: false, error: `Enter the ${CODE_LENGTH}-digit code.` };
   }
 
+  const maxVerifyAttempts = (await getAuthRuntimeConfig()).otpMaxAttempts;
+
   const challenge = await prisma.otpChallenge.findFirst({
     where: { mobile, consumedAt: null, expiresAt: { gt: new Date() } },
     orderBy: { createdAt: 'desc' },
@@ -173,7 +188,7 @@ export async function verifyCode(
     };
   }
 
-  if (challenge.attempts >= MAX_VERIFY_ATTEMPTS) {
+  if (challenge.attempts >= maxVerifyAttempts) {
     return {
       ok: false,
       error: 'Too many incorrect attempts. Please request a new code.',
@@ -190,7 +205,7 @@ export async function verifyCode(
       where: { id: challenge.id },
       data: { attempts: { increment: 1 } },
     });
-    const remaining = Math.max(0, MAX_VERIFY_ATTEMPTS - updated.attempts);
+    const remaining = Math.max(0, maxVerifyAttempts - updated.attempts);
     return {
       ok: false,
       error:

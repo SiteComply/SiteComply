@@ -641,6 +641,33 @@ model SmsConfig {
   updatedAt        DateTime @updatedAt
 }
 
+/// Singleton runtime configuration for authentication (Admin → Settings →
+/// Authentication). Lets admins tune OTP expiry, max verification attempts,
+/// session timeout and which OTP channels are enabled without a redeploy.
+/// Nullable numeric columns fall back to env vars / built-in defaults when unset,
+/// so the app is safe and backward compatible before any row exists. Consumed at
+/// runtime via getAuthRuntimeConfig() — future ACS / platform auth features read
+/// the same getter, so no code changes are needed to honour new values.
+model AuthConfig {
+  id String @id // fixed singleton key ("auth")
+
+  // OTP settings (null → env/default, clamped on read + save).
+  otpTtlSeconds  Int? // worker SMS OTP validity window
+  otpMaxAttempts Int? // wrong-code attempts before a challenge locks
+
+  // Session settings.
+  sessionTtlSeconds Int? // platform user session lifetime
+
+  // Enabled OTP channels (forward-looking: email OTP not yet implemented).
+  smsOtpEnabled   Boolean @default(true)
+  emailOtpEnabled Boolean @default(false)
+
+  updatedByAdminId String?
+  updatedByName    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
 /// Singleton runtime configuration for AI Summaries (Admin → Settings →
 /// Integrations). Lets admins enable the feature, pick the active AI provider
 /// and store per-provider settings + feature settings without a redeploy.

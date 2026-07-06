@@ -178,13 +178,23 @@ export interface PlatformSession {
   exp: number;
 }
 
-export function createPlatformSessionToken(input: { userId: string }): string {
+/**
+ * Create a platform session token. `ttlSeconds` overrides the built-in default
+ * so the admin-configured session timeout (Settings → Authentication, via
+ * getAuthRuntimeConfig) is honoured; omitting it preserves the legacy 8h TTL.
+ */
+export function createPlatformSessionToken(input: {
+  userId: string;
+  ttlSeconds?: number;
+}): string {
   const now = Math.floor(Date.now() / 1000);
+  const ttl =
+    input.ttlSeconds && input.ttlSeconds > 0 ? input.ttlSeconds : PLATFORM_TTL_SECONDS;
   const session: PlatformSession = {
     typ: 'platform',
     userId: input.userId,
     iat: now,
-    exp: now + PLATFORM_TTL_SECONDS,
+    exp: now + ttl,
   };
   return signSession(session);
 }
@@ -198,13 +208,13 @@ export function getPlatformSession(): PlatformSession | null {
   return session;
 }
 
-export function setPlatformSessionCookie(token: string): void {
+export function setPlatformSessionCookie(token: string, maxAgeSeconds?: number): void {
   cookies().set(PLATFORM_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: PLATFORM_TTL_SECONDS,
+    maxAge: maxAgeSeconds && maxAgeSeconds > 0 ? maxAgeSeconds : PLATFORM_TTL_SECONDS,
   });
 }
 

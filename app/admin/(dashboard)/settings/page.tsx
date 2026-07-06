@@ -11,8 +11,14 @@ const SETTINGS_AREAS = [
   {
     href: '/admin/settings/integrations',
     title: 'Integrations',
-    body: 'Configure the SMS provider used for worker verification codes — select the active provider, set credentials and test connectivity.',
+    body: 'Configure the SMS and AI providers used for worker verification codes and report summaries — select the active provider, set credentials and test connectivity.',
     cta: 'Manage integrations',
+  },
+  {
+    href: '/admin/settings/authentication',
+    title: 'Authentication',
+    body: 'Set one-time passcode expiry and attempt limits, the session timeout, and which SMS / email OTP sign-in methods are enabled.',
+    cta: 'Manage authentication',
   },
 ] as const;
 
