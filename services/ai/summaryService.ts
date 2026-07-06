@@ -2,12 +2,11 @@ import { createHash } from 'crypto';
 import { AiSummaryTarget, PlatformRole, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
-import { getAiProvider, AiError } from '@/services/ai';
+import { AiError } from '@/services/ai';
 import {
-  aiSummariesEnabled,
-  aiSummaryRoles,
-  aiSummaryCaps,
-} from '@/services/ai/aiConfig';
+  getAiRuntimeConfig,
+  resolveAiProvider,
+} from '@/services/ai/aiConfigService';
 import { AI_SUMMARY_PROMPT_VERSION } from '@/services/ai/aiConstants';
 import {
   SUMMARY_SYSTEM_PROMPT,
@@ -100,9 +99,10 @@ export async function generateSummary(
   targetType: AiSummaryTarget,
   opts: SummaryOpts,
 ): Promise<SummaryResult> {
-  // 1. Capability gate — feature flag + pilot role allow-list.
-  if (!aiSummariesEnabled()) return { ok: false, reason: 'disabled' };
-  if (!aiSummaryRoles().has(viewer.role.toUpperCase()))
+  // 1. Capability gate — runtime AiConfig (enabled + allowed roles).
+  const runtime = await getAiRuntimeConfig();
+  if (!runtime.enabled) return { ok: false, reason: 'disabled' };
+  if (!runtime.allowedRoles.has(viewer.role.toUpperCase()))
     return { ok: false, reason: 'forbidden' };
 
   const target = SUMMARY_TARGETS[targetType];
@@ -117,7 +117,7 @@ export async function generateSummary(
   if (!built) return { ok: false, reason: 'not_found' };
 
   const contextHash = hashContext(built.context);
-  const caps = aiSummaryCaps();
+  const caps = runtime.caps;
 
   // 4. Cache — a cache hit costs nothing and does not count against any cap.
   const cached = await findCachedSummary(
@@ -145,8 +145,8 @@ export async function generateSummary(
   if ((await countAiSummariesThisMonth()) >= caps.monthlyGlobal)
     return { ok: false, reason: 'monthly_cap' };
 
-  // 6. Generate via the configured provider (mock by default).
-  const provider = getAiProvider();
+  // 6. Generate via the runtime-resolved provider (mock by default).
+  const provider = await resolveAiProvider();
   const user = buildUserPrompt(target.label, built.scopeLabel, built.context);
 
   const logBase = {

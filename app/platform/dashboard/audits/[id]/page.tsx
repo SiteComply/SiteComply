@@ -46,6 +46,7 @@ export default async function AuditDetailPage({
   const canEdit = permits(viewer.role, 'audits', 'edit');
   const canDelete = canDeleteAudit(viewer.role);
   const canCreateAction = permits(viewer.role, 'actions', 'create');
+  const showAiSummary = await canUseAiSummaries(viewer.role);
   const findingRows: FindingRow[] = (await listFindingsForAudit(audit.id)).map(
     (f) => ({
       id: f.id,
@@ -99,7 +100,7 @@ export default async function AuditDetailPage({
         </div>
       </div>
 
-      {canUseAiSummaries(viewer.role) && (
+      {showAiSummary && (
         <AiSummaryPanel targetType="AUDIT" targetKey={audit.id} />
       )}
 

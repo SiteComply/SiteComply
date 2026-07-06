@@ -640,3 +640,25 @@ model SmsConfig {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
+
+/// Singleton runtime configuration for AI Summaries (Admin → Settings →
+/// Integrations). Lets admins enable the feature, pick the active AI provider
+/// and store per-provider settings + feature settings without a redeploy.
+/// Secret field values inside `settings` are encrypted at rest (lib/secretBox)
+/// and never returned to the client. Falls back to env when no row exists.
+model AiConfig {
+  id             String   @id // fixed singleton key ("ai")
+  enabled        Boolean  @default(false)
+  activeProvider String   @default("mock")
+  settings       Json     @default("{}") // { [providerId]: { [field]: value|ciphertext } }
+
+  // Feature settings.
+  allowedRoles  Json @default("[]") // PlatformRole[] permitted to use AI summaries
+  dailyPerUser  Int? // per-user/day cap (null → env/default)
+  monthlyGlobal Int? // org/month cap (null → env/default)
+
+  updatedByAdminId String?
+  updatedByName    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}

@@ -53,6 +53,7 @@ export default async function OrgOverviewReportPage({
   const canExport = canExportReport(viewer, REPORT);
   const scopeSites = viewer.sites.filter((s) => filters.siteIds.includes(s.id));
   const o = await getOrgOverview(scopeSites, filters.range);
+  const showAiSummary = await canUseAiSummaries(viewer.role);
 
   return (
     <PlatformShell>
@@ -67,7 +68,7 @@ export default async function OrgOverviewReportPage({
         }
       />
 
-      {canUseAiSummaries(viewer.role) && (
+      {showAiSummary && (
         <AiSummaryPanel
           targetType="ORG_OVERVIEW_REPORT"
           filters={{

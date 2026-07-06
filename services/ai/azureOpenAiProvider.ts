@@ -18,11 +18,21 @@ import { requireEnv } from '@/lib/config';
 export class AzureOpenAiProvider implements AiProvider {
   readonly name = 'azure-openai';
 
+  constructor(
+    private readonly config?: {
+      endpoint?: string;
+      apiKey?: string;
+      deployment?: string;
+      apiVersion?: string;
+    },
+  ) {}
+
   async complete(input: AiCompleteInput): Promise<AiCompleteResult> {
-    const endpoint = requireEnv('AZURE_OPENAI_ENDPOINT').replace(/\/+$/, '');
-    const key = requireEnv('AZURE_OPENAI_KEY');
-    const deployment = requireEnv('AZURE_OPENAI_DEPLOYMENT');
-    const apiVersion = process.env.AZURE_OPENAI_API_VERSION || '2024-08-01-preview';
+    const endpoint = (this.config?.endpoint || requireEnv('AZURE_OPENAI_ENDPOINT')).replace(/\/+$/, '');
+    const key = this.config?.apiKey || requireEnv('AZURE_OPENAI_KEY');
+    const deployment = this.config?.deployment || requireEnv('AZURE_OPENAI_DEPLOYMENT');
+    const apiVersion =
+      this.config?.apiVersion || process.env.AZURE_OPENAI_API_VERSION || '2024-08-01-preview';
     const url = `${endpoint}/openai/deployments/${encodeURIComponent(
       deployment,
     )}/chat/completions?api-version=${apiVersion}`;

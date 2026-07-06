@@ -47,6 +47,7 @@ export default async function ScorecardReportPage({
   const canExport = canExportReport(viewer, REPORT);
   const scopeSites = viewer.sites.filter((s) => filters.siteIds.includes(s.id));
   const scorecard = await getScorecard(scopeSites, filters.range);
+  const showAiSummary = await canUseAiSummaries(viewer.role);
 
   return (
     <PlatformShell>
@@ -61,7 +62,7 @@ export default async function ScorecardReportPage({
         }
       />
 
-      {canUseAiSummaries(viewer.role) && (
+      {showAiSummary && (
         <AiSummaryPanel
           targetType="SCORECARD_REPORT"
           filters={{

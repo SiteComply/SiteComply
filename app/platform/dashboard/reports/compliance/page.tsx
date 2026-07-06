@@ -59,6 +59,7 @@ export default async function ComplianceReportPage({
   const rows = aggregate
     ? []
     : await getComplianceRows(filters.siteIds, filters.range, DISPLAY_LIMIT);
+  const showAiSummary = await canUseAiSummaries(viewer.role);
 
   return (
     <PlatformShell>
@@ -73,7 +74,7 @@ export default async function ComplianceReportPage({
         }
       />
 
-      {canUseAiSummaries(viewer.role) && (
+      {showAiSummary && (
         <AiSummaryPanel
           targetType="COMPLIANCE_REPORT"
           filters={{

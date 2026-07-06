@@ -16,21 +16,33 @@ let cached: AiProvider | undefined;
  */
 export function getAiProvider(): AiProvider {
   if (cached) return cached;
-  const choice = process.env.AI_PROVIDER?.toLowerCase() || 'mock';
-  switch (choice) {
+  cached = buildAiProvider(process.env.AI_PROVIDER?.toLowerCase() || 'mock');
+  return cached;
+}
+
+/**
+ * Construct an AI provider by id with explicit settings (from the runtime
+ * AiConfig or a test). Providers fall back to env when a setting is absent.
+ */
+export function buildAiProvider(
+  providerId: string,
+  settings: Record<string, string> = {},
+): AiProvider {
+  switch (providerId.toLowerCase()) {
     case 'azure-openai':
-      cached = new AzureOpenAiProvider();
-      break;
+      return new AzureOpenAiProvider({
+        endpoint: settings.endpoint,
+        apiKey: settings.apiKey,
+        deployment: settings.deployment,
+        apiVersion: settings.apiVersion,
+      });
     case 'openai':
-      cached = new OpenAiProvider();
-      break;
+      return new OpenAiProvider();
     case 'mock':
-      cached = new MockAiProvider();
-      break;
+      return new MockAiProvider();
     default:
       throw new Error(
-        `Unknown AI_PROVIDER "${choice}". Use "azure-openai", "openai" or "mock".`,
+        `Unknown AI provider "${providerId}". Use "azure-openai", "openai" or "mock".`,
       );
   }
-  return cached;
 }

@@ -56,6 +56,7 @@ export default async function PlatformActionsPage({
     actionCounts(viewer, now),
   ]);
   const canCreate = permits(viewer.role, 'actions', 'create');
+  const showAiSummary = await canUseAiSummaries(viewer.role);
 
   const qp = (patch: Record<string, string>) => {
     const sp = new URLSearchParams();
@@ -90,7 +91,7 @@ export default async function PlatformActionsPage({
         </div>
       </header>
 
-      {canUseAiSummaries(viewer.role) && (
+      {showAiSummary && (
         <AiSummaryPanel targetType="ACTIONS_REGISTER" />
       )}
 
