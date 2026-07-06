@@ -1,6 +1,9 @@
 import Link from 'next/link';
 import { AuthConfigSettings } from '@/components/admin/AuthConfigSettings';
 import { getAuthConfigForAdmin } from '@/services/auth/authConfigService';
+import { getAdminSession } from '@/lib/session';
+import { adminCanManage } from '@/lib/adminAuth';
+import { ReadOnlyBanner } from '@/components/admin/ReadOnlyBanner';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +16,7 @@ export const dynamic = 'force-dynamic';
  */
 export default async function AuthenticationSettingsPage() {
   const config = await getAuthConfigForAdmin();
+  const canManage = adminCanManage(getAdminSession()?.role);
 
   return (
     <div className="space-y-6">
@@ -27,7 +31,9 @@ export default async function AuthenticationSettingsPage() {
         </p>
       </header>
 
-      <AuthConfigSettings config={config} />
+      {!canManage && <ReadOnlyBanner />}
+
+      <AuthConfigSettings config={config} canManage={canManage} />
     </div>
   );
 }

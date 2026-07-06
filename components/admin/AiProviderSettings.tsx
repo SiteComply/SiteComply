@@ -22,9 +22,11 @@ import { formatDateTimeUK } from '@/lib/datetime';
 export function AiProviderSettings({
   providers,
   config,
+  canManage = true,
 }: {
   providers: AiProviderDescriptor[];
   config: AiConfigView;
+  canManage?: boolean;
 }) {
   const router = useRouter();
   const [enabled, setEnabled] = useState(config.enabled);
@@ -65,6 +67,7 @@ export function AiProviderSettings({
   }
 
   async function save() {
+    if (!canManage) return;
     setBusy(true);
     setErrors({});
     setSavedMsg(undefined);
@@ -108,6 +111,7 @@ export function AiProviderSettings({
   }
 
   async function test() {
+    if (!canManage) return;
     setTestBusy(true);
     setTestResult(undefined);
     try {
@@ -301,7 +305,7 @@ export function AiProviderSettings({
           <button
             type="button"
             onClick={save}
-            disabled={busy}
+            disabled={busy || !canManage}
             className="rounded-xl bg-safe-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-safe-600 disabled:opacity-60"
           >
             {busy ? 'Saving…' : 'Save configuration'}
@@ -328,7 +332,7 @@ export function AiProviderSettings({
             <button
               type="button"
               onClick={test}
-              disabled={testBusy}
+              disabled={testBusy || !canManage}
               className="rounded-xl border border-brand-500 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-60"
             >
               {testBusy ? 'Testing…' : 'Test connection'}

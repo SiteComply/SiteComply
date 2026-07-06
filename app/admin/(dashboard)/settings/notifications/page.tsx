@@ -1,6 +1,9 @@
 import Link from 'next/link';
 import { NotificationSettings } from '@/components/admin/NotificationSettings';
 import { getNotificationConfigForAdmin } from '@/services/notifications/notificationConfigService';
+import { getAdminSession } from '@/lib/session';
+import { adminCanManage } from '@/lib/adminAuth';
+import { ReadOnlyBanner } from '@/components/admin/ReadOnlyBanner';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +16,7 @@ export const dynamic = 'force-dynamic';
  */
 export default async function NotificationSettingsPage() {
   const config = await getNotificationConfigForAdmin();
+  const canManage = adminCanManage(getAdminSession()?.role);
 
   return (
     <div className="space-y-6">
@@ -27,7 +31,9 @@ export default async function NotificationSettingsPage() {
         </p>
       </header>
 
-      <NotificationSettings config={config} />
+      {!canManage && <ReadOnlyBanner />}
+
+      <NotificationSettings config={config} canManage={canManage} />
     </div>
   );
 }

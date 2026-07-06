@@ -12,7 +12,13 @@ import { formatDateTimeUK } from '@/lib/datetime';
  * fields save as JSON; the logo uploads separately as multipart to the existing
  * blob storage. Current values are shown pre-filled; no secrets are involved.
  */
-export function CompanySettings({ config }: { config: CompanyConfigView }) {
+export function CompanySettings({
+  config,
+  canManage = true,
+}: {
+  config: CompanyConfigView;
+  canManage?: boolean;
+}) {
   const router = useRouter();
   const [companyName, setCompanyName] = useState(config.companyName);
   const [supportEmail, setSupportEmail] = useState(config.supportEmail);
@@ -34,6 +40,7 @@ export function CompanySettings({ config }: { config: CompanyConfigView }) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function save() {
+    if (!canManage) return;
     setBusy(true);
     setErrors({});
     setSavedMsg(undefined);
@@ -67,6 +74,7 @@ export function CompanySettings({ config }: { config: CompanyConfigView }) {
   }
 
   async function uploadLogo(file: File) {
+    if (!canManage) return;
     setLogoBusy(true);
     setLogoMsg(undefined);
     try {
@@ -91,6 +99,7 @@ export function CompanySettings({ config }: { config: CompanyConfigView }) {
   }
 
   async function removeLogo() {
+    if (!canManage) return;
     setLogoBusy(true);
     setLogoMsg(undefined);
     try {
@@ -152,7 +161,7 @@ export function CompanySettings({ config }: { config: CompanyConfigView }) {
           <button
             type="button"
             onClick={save}
-            disabled={busy}
+            disabled={busy || !canManage}
             className="rounded-xl bg-safe-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-safe-600 disabled:opacity-60"
           >
             {busy ? 'Saving…' : 'Save settings'}
@@ -188,7 +197,7 @@ export function CompanySettings({ config }: { config: CompanyConfigView }) {
               ref={fileRef}
               type="file"
               accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
-              disabled={logoBusy}
+              disabled={logoBusy || !canManage}
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) uploadLogo(f);
@@ -199,7 +208,7 @@ export function CompanySettings({ config }: { config: CompanyConfigView }) {
               <button
                 type="button"
                 onClick={removeLogo}
-                disabled={logoBusy}
+                disabled={logoBusy || !canManage}
                 className="self-start rounded-lg border border-danger-500 px-3 py-1.5 text-sm font-semibold text-danger-700 hover:bg-danger-50 disabled:opacity-60"
               >
                 Remove logo

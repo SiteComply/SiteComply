@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminSession } from '@/lib/session';
+import { requireAdminRole, ADMIN_WRITE_ROLES } from '@/lib/adminAuth';
 import {
   validateLogoFile,
   setCompanyLogo,
@@ -16,10 +16,9 @@ export const dynamic = 'force-dynamic';
  * at it. Any previous logo blob is cleaned up.
  */
 export async function POST(req: NextRequest) {
-  const admin = getAdminSession();
-  if (!admin) {
-    return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
-  }
+  const auth = requireAdminRole(ADMIN_WRITE_ROLES);
+  if (!auth.ok) return auth.response;
+  const admin = auth.admin;
 
   let form: FormData;
   try {
@@ -48,10 +47,9 @@ export async function POST(req: NextRequest) {
  * Remove the company logo (delete the blob + clear the pointer). Admin-only.
  */
 export async function DELETE() {
-  const admin = getAdminSession();
-  if (!admin) {
-    return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
-  }
+  const auth = requireAdminRole(ADMIN_WRITE_ROLES);
+  if (!auth.ok) return auth.response;
+  const admin = auth.admin;
   await clearCompanyLogo({ adminId: admin.adminId, name: admin.name });
   return NextResponse.json({ ok: true });
 }

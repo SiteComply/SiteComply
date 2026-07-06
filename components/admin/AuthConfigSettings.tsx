@@ -62,7 +62,13 @@ function parseField(
   return { seconds };
 }
 
-export function AuthConfigSettings({ config }: { config: AuthConfigView }) {
+export function AuthConfigSettings({
+  config,
+  canManage = true,
+}: {
+  config: AuthConfigView;
+  canManage?: boolean;
+}) {
   const router = useRouter();
   const L = config.limits;
 
@@ -79,6 +85,7 @@ export function AuthConfigSettings({ config }: { config: AuthConfigView }) {
   const [busy, setBusy] = useState(false);
 
   async function save() {
+    if (!canManage) return;
     setBusy(true);
     setSavedMsg(undefined);
     setSaveErr(undefined);
@@ -242,7 +249,7 @@ export function AuthConfigSettings({ config }: { config: AuthConfigView }) {
           <button
             type="button"
             onClick={save}
-            disabled={busy}
+            disabled={busy || !canManage}
             className="rounded-xl bg-safe-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-safe-600 disabled:opacity-60"
           >
             {busy ? 'Saving…' : 'Save settings'}

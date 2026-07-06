@@ -1,6 +1,9 @@
 import Link from 'next/link';
 import { CompanySettings } from '@/components/admin/CompanySettings';
 import { getCompanyConfigForAdmin } from '@/services/company/companyConfigService';
+import { getAdminSession } from '@/lib/session';
+import { adminCanManage } from '@/lib/adminAuth';
+import { ReadOnlyBanner } from '@/components/admin/ReadOnlyBanner';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +15,7 @@ export const dynamic = 'force-dynamic';
  */
 export default async function CompanySettingsPage() {
   const config = await getCompanyConfigForAdmin();
+  const canManage = adminCanManage(getAdminSession()?.role);
 
   return (
     <div className="space-y-6">
@@ -25,7 +29,9 @@ export default async function CompanySettingsPage() {
         </p>
       </header>
 
-      <CompanySettings config={config} />
+      {!canManage && <ReadOnlyBanner />}
+
+      <CompanySettings config={config} canManage={canManage} />
     </div>
   );
 }

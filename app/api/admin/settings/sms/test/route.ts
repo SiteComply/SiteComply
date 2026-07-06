@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminSession } from '@/lib/session';
+import { requireAdminRole, ADMIN_WRITE_ROLES } from '@/lib/adminAuth';
 import { normaliseUkMobile } from '@/lib/phone';
 import { buildSmsProvider, SmsSendError } from '@/services/sms';
 import { resolveTestSettings } from '@/services/sms/smsConfigService';
@@ -16,10 +16,8 @@ export const dynamic = 'force-dynamic';
  * HTTP 200 when the test ran; 400/401 only for bad requests.
  */
 export async function POST(req: NextRequest) {
-  const admin = getAdminSession();
-  if (!admin) {
-    return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
-  }
+  const auth = requireAdminRole(ADMIN_WRITE_ROLES);
+  if (!auth.ok) return auth.response;
 
   let body: { providerId?: string; to?: string; settings?: Record<string, string> };
   try {

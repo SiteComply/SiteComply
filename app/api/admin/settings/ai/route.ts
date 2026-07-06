@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminSession } from '@/lib/session';
+import { requireAdminRole, ADMIN_WRITE_ROLES } from '@/lib/adminAuth';
 import { saveAiConfig, type SaveAiConfigInput } from '@/services/ai/aiConfigService';
 
 export const runtime = 'nodejs';
@@ -14,10 +14,9 @@ export const dynamic = 'force-dynamic';
  * feature requires the active provider's required fields to be present.
  */
 export async function POST(req: NextRequest) {
-  const admin = getAdminSession();
-  if (!admin) {
-    return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
-  }
+  const auth = requireAdminRole(ADMIN_WRITE_ROLES);
+  if (!auth.ok) return auth.response;
+  const admin = auth.admin;
 
   let body: SaveAiConfigInput;
   try {

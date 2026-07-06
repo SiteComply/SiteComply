@@ -19,9 +19,11 @@ import { formatDateTimeUK } from '@/lib/datetime';
 export function SmsProviderSettings({
   providers,
   config,
+  canManage = true,
 }: {
   providers: SmsProviderDescriptor[];
   config: SmsConfigView;
+  canManage?: boolean;
 }) {
   const router = useRouter();
   const [active, setActive] = useState(config.activeProvider);
@@ -50,6 +52,7 @@ export function SmsProviderSettings({
   }
 
   async function save() {
+    if (!canManage) return;
     setBusy(true);
     setErrors({});
     setSavedMsg(undefined);
@@ -82,6 +85,7 @@ export function SmsProviderSettings({
   }
 
   async function test() {
+    if (!canManage) return;
     setTestBusy(true);
     setTestResult(undefined);
     try {
@@ -169,7 +173,7 @@ export function SmsProviderSettings({
           <button
             type="button"
             onClick={save}
-            disabled={busy}
+            disabled={busy || !canManage}
             className="rounded-xl bg-safe-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-safe-600 disabled:opacity-60"
           >
             {busy ? 'Saving…' : 'Save configuration'}
@@ -205,7 +209,7 @@ export function SmsProviderSettings({
             <button
               type="button"
               onClick={test}
-              disabled={testBusy || testTo.trim() === ''}
+              disabled={testBusy || testTo.trim() === '' || !canManage}
               className="rounded-xl border border-brand-500 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-60"
             >
               {testBusy ? 'Testing…' : 'Send test message'}

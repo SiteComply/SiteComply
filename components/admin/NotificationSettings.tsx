@@ -20,7 +20,13 @@ type TypeState = { enabled: boolean; channels: Record<NotificationChannelKey, bo
  * ahead of implementation — the preference is stored now and applies when the
  * channel launches. Current settings are shown pre-filled; no secrets involved.
  */
-export function NotificationSettings({ config }: { config: NotificationConfigView }) {
+export function NotificationSettings({
+  config,
+  canManage = true,
+}: {
+  config: NotificationConfigView;
+  canManage?: boolean;
+}) {
   const router = useRouter();
   const [state, setState] = useState<Record<string, TypeState>>(() => {
     const s: Record<string, TypeState> = {};
@@ -51,6 +57,7 @@ export function NotificationSettings({ config }: { config: NotificationConfigVie
   }
 
   async function save() {
+    if (!canManage) return;
     setBusy(true);
     setSavedMsg(undefined);
     setSaveErr(undefined);
@@ -150,7 +157,7 @@ export function NotificationSettings({ config }: { config: NotificationConfigVie
           <button
             type="button"
             onClick={save}
-            disabled={busy}
+            disabled={busy || !canManage}
             className="rounded-xl bg-safe-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-safe-600 disabled:opacity-60"
           >
             {busy ? 'Saving…' : 'Save settings'}

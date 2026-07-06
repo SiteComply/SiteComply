@@ -5,6 +5,9 @@ import { getSmsConfigForAdmin } from '@/services/sms/smsConfigService';
 import { AiProviderSettings } from '@/components/admin/AiProviderSettings';
 import { AI_PROVIDERS } from '@/services/ai/aiProviderCatalog';
 import { getAiConfigForAdmin } from '@/services/ai/aiConfigService';
+import { getAdminSession } from '@/lib/session';
+import { adminCanManage } from '@/lib/adminAuth';
+import { ReadOnlyBanner } from '@/components/admin/ReadOnlyBanner';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +22,7 @@ export default async function IntegrationsPage() {
     getSmsConfigForAdmin(),
     getAiConfigForAdmin(),
   ]);
+  const canManage = adminCanManage(getAdminSession()?.role);
 
   return (
     <div className="space-y-10">
@@ -33,6 +37,8 @@ export default async function IntegrationsPage() {
         </p>
       </header>
 
+      {!canManage && <ReadOnlyBanner />}
+
       <section className="space-y-4">
         <div>
           <h2 className="text-lg font-bold text-ink">SMS</h2>
@@ -40,7 +46,7 @@ export default async function IntegrationsPage() {
             Provider used to send worker sign-in verification codes.
           </p>
         </div>
-        <SmsProviderSettings providers={SMS_PROVIDERS} config={smsConfig} />
+        <SmsProviderSettings providers={SMS_PROVIDERS} config={smsConfig} canManage={canManage} />
       </section>
 
       <section className="space-y-4">
@@ -51,7 +57,7 @@ export default async function IntegrationsPage() {
             action summaries.
           </p>
         </div>
-        <AiProviderSettings providers={AI_PROVIDERS} config={aiConfig} />
+        <AiProviderSettings providers={AI_PROVIDERS} config={aiConfig} canManage={canManage} />
       </section>
     </div>
   );
