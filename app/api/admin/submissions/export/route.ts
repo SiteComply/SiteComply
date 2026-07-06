@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminSession } from '@/lib/session';
+import { requireAdminRole, ADMIN_WRITE_ROLES } from '@/lib/adminAuth';
 import { querySubmissions } from '@/services/submissions/submissionQueryService';
 import { checkInReference } from '@/services/submissions/submissionService';
 import { formatDateTimeUK, formatDateUK } from '@/lib/datetime';
@@ -18,13 +18,8 @@ function csv(value: string): string {
  * UK date/time formatting. Admin only.
  */
 export async function GET(req: NextRequest) {
-  const admin = getAdminSession();
-  if (!admin) {
-    return NextResponse.json(
-      { ok: false, error: 'Not signed in.' },
-      { status: 401 },
-    );
-  }
+  const auth = requireAdminRole(ADMIN_WRITE_ROLES);
+  if (!auth.ok) return auth.response;
 
   const p = req.nextUrl.searchParams;
   const rows = await querySubmissions({

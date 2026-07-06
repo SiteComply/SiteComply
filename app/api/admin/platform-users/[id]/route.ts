@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
-import { getAdminSession } from '@/lib/session';
+import { requireAdminRole, ADMIN_WRITE_ROLES } from '@/lib/adminAuth';
 import {
   validatePlatformUser,
   updatePlatformUser,
@@ -20,13 +20,8 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const admin = getAdminSession();
-  if (!admin) {
-    return NextResponse.json(
-      { ok: false, error: 'Not signed in.' },
-      { status: 401 },
-    );
-  }
+  const auth = requireAdminRole(ADMIN_WRITE_ROLES);
+  if (!auth.ok) return auth.response;
 
   const existing = await getPlatformUserById(params.id);
   if (!existing) {
@@ -82,13 +77,8 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const admin = getAdminSession();
-  if (!admin) {
-    return NextResponse.json(
-      { ok: false, error: 'Not signed in.' },
-      { status: 401 },
-    );
-  }
+  const auth = requireAdminRole(ADMIN_WRITE_ROLES);
+  if (!auth.ok) return auth.response;
 
   const existing = await getPlatformUserById(params.id);
   if (!existing) {

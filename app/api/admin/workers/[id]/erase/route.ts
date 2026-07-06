@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminSession } from '@/lib/session';
+import { requireAdminRole, ADMIN_WRITE_ROLES } from '@/lib/adminAuth';
 import { eraseWorkerPersonalData } from '@/services/workers/workerService';
 
 export const runtime = 'nodejs';
@@ -14,13 +14,8 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const admin = getAdminSession();
-  if (!admin) {
-    return NextResponse.json(
-      { ok: false, error: 'Not signed in.' },
-      { status: 401 },
-    );
-  }
+  const auth = requireAdminRole(ADMIN_WRITE_ROLES);
+  if (!auth.ok) return auth.response;
 
   const result = await eraseWorkerPersonalData(params.id);
   if (!result) {
