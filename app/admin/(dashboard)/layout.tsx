@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { getAdminSession } from '@/lib/session';
 import { countPendingAccessRequests } from '@/services/accessRequests/accessRequestService';
+import { isNotificationEnabled } from '@/services/notifications/notificationConfigService';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +24,12 @@ export default async function AdminDashboardLayout({
   const session = getAdminSession();
   if (!session) redirect('/admin/login');
 
-  const pendingAccessRequests = await countPendingAccessRequests();
+  // The nav badge is the in-app surface of the "new platform access requests"
+  // notification — suppress it when an admin has turned that notification off.
+  const accessRequestNotifications = await isNotificationEnabled('platform_access_request');
+  const pendingAccessRequests = accessRequestNotifications
+    ? await countPendingAccessRequests()
+    : 0;
 
   return (
     <AdminShell

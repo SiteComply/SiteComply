@@ -641,6 +641,25 @@ model SmsConfig {
   updatedAt        DateTime @updatedAt
 }
 
+/// Singleton runtime configuration for platform notifications (Admin → Settings →
+/// Notifications). Per notification type: a master enable toggle plus per-channel
+/// (email / SMS) delivery preferences, stored as JSON so new types/channels are a
+/// catalogue entry only. `settings` shape:
+/// { [typeKey]: { enabled: bool, channels: { email: bool, sms: bool } } }.
+/// Falls back to the catalogue defaults when a type is absent, so the app is safe
+/// before any row exists. Consumed at runtime via getNotificationRuntimeConfig()
+/// (and isNotificationEnabled/…) — future notification services read the same
+/// getters, so no code changes are needed to honour admin preferences.
+model NotificationConfig {
+  id       String @id // fixed singleton key ("notifications")
+  settings Json   @default("{}")
+
+  updatedByAdminId String?
+  updatedByName    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
 /// Singleton runtime configuration for authentication (Admin → Settings →
 /// Authentication). Lets admins tune OTP expiry, max verification attempts,
 /// session timeout and which OTP channels are enabled without a redeploy.

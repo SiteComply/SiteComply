@@ -20,6 +20,12 @@ const SETTINGS_AREAS = [
     body: 'Set one-time passcode expiry and attempt limits, the session timeout, and which SMS / email OTP sign-in methods are enabled.',
     cta: 'Manage authentication',
   },
+  {
+    href: '/admin/settings/notifications',
+    title: 'Notifications',
+    body: 'Turn platform notifications on or off — access requests, overdue actions, audit and action reminders, weekly summary — and set email / SMS delivery preferences.',
+    cta: 'Manage notifications',
+  },
 ] as const;
 
 export default function AdminSettingsPage() {
