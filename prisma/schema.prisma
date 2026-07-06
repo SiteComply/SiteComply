@@ -624,3 +624,19 @@ model AiSummary {
   @@index([platformUserId, createdAt])
   @@index([createdAt])
 }
+
+/// Singleton runtime configuration for the SMS gateway (Admin → Settings →
+/// Integrations). Lets admins pick the active provider and store per-provider
+/// settings without a redeploy. Secret field values inside `settings` are
+/// encrypted at rest (AES-256-GCM via lib/secretBox) and never returned to the
+/// client. `settings` shape: { [providerId]: { [fieldKey]: value|ciphertext } }.
+/// Falls back to env vars when no row exists (backward compatible).
+model SmsConfig {
+  id               String   @id // fixed singleton key ("sms")
+  activeProvider   String   @default("mock")
+  settings         Json     @default("{}")
+  updatedByAdminId String?
+  updatedByName    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}

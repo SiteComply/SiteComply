@@ -15,6 +15,7 @@ export const ADMIN_NAV = [
   { href: '/admin/submissions', label: 'Submissions' },
   { href: '/admin/platform-users', label: 'Platform Users' },
   { href: '/admin/platform-access-requests', label: 'Platform Access Requests' },
+  { href: '/admin/settings', label: 'Settings' },
 ] as const;
 
 export function AdminNav({

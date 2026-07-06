@@ -16,6 +16,10 @@ import {
 export class TwilioSmsProvider implements SmsProvider {
   readonly name = 'twilio';
 
+  constructor(
+    private readonly config?: { accountSid?: string; authToken?: string; from?: string },
+  ) {}
+
   async send(_input: SendSmsInput): Promise<SendSmsResult> {
     // const client = twilio(
     //   requireEnv('TWILIO_ACCOUNT_SID'),

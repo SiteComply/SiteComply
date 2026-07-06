@@ -8,11 +8,12 @@ import {
 import { requireEnv } from '@/lib/config';
 
 /**
- * Azure Communication Services SMS provider — the default for production.
+ * Azure Communication Services SMS provider.
  *
- * Requires:
- *   ACS_CONNECTION_STRING  — the ACS resource connection string
- *   ACS_SMS_SENDER         — a provisioned sender number in E.164 form
+ * Configuration comes from the runtime SmsConfig (Admin → Settings →
+ * Integrations) when provided, else from env for backward compatibility:
+ *   connectionString / ACS_CONNECTION_STRING  — the ACS resource connection string
+ *   senderNumber     / ACS_SMS_SENDER         — a provisioned sender in E.164 form
  *
  * The client is created lazily on first send so the app can boot without ACS
  * configured (e.g. when running the worker flow against the mock provider).
@@ -22,10 +23,16 @@ export class AcsSmsProvider implements SmsProvider {
   private client?: SmsClient;
   private sender?: string;
 
+  constructor(
+    private readonly config?: { connectionString?: string; senderNumber?: string },
+  ) {}
+
   private getClient(): { client: SmsClient; sender: string } {
     if (!this.client || !this.sender) {
-      this.client = new SmsClient(requireEnv('ACS_CONNECTION_STRING'));
-      this.sender = requireEnv('ACS_SMS_SENDER');
+      this.client = new SmsClient(
+        this.config?.connectionString || requireEnv('ACS_CONNECTION_STRING'),
+      );
+      this.sender = this.config?.senderNumber || requireEnv('ACS_SMS_SENDER');
     }
     return { client: this.client, sender: this.sender };
   }

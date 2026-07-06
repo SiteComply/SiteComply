@@ -1,7 +1,7 @@
 import { createHmac, randomInt, timingSafeEqual } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { normaliseUkMobile, maskUkMobile } from '@/lib/phone';
-import { getSmsProvider, SmsSendError } from '@/services/sms';
+import { resolveSmsProvider, SmsSendError } from '@/services/sms';
 
 /**
  * Worker SMS one-time passcode (MFA) service.
@@ -104,7 +104,7 @@ export async function requestCode(
     data: { mobile, codeHash: hashCode(mobile, code), expiresAt },
   });
 
-  const provider = getSmsProvider();
+  const provider = await resolveSmsProvider();
   const minutes = Math.round(TTL_SECONDS / 60);
   try {
     await provider.send({
