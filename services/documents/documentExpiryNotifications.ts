@@ -5,6 +5,7 @@ import {
   getNotificationChannels,
 } from '@/services/notifications/notificationConfigService';
 import type { NotificationChannelKey } from '@/services/notifications/notificationCatalog';
+import { getReadNotificationKeys } from '@/services/notifications/notificationReadService';
 
 /**
  * Automated document-expiry notifications.
@@ -32,6 +33,10 @@ const utcDay = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getU
 export type ExpiryNotificationStatus = 'EXPIRING_SOON' | 'EXPIRED';
 
 export interface DocumentExpiryNotification {
+  /** Stable per-reminder identity (incl. threshold), used for read-state. */
+  key: string;
+  /** Whether this user has marked it read. */
+  read: boolean;
   documentId: string;
   title: string;
   fileName: string;
@@ -45,6 +50,18 @@ export interface DocumentExpiryNotification {
   /** The reminder threshold (30/14/7) currently in effect; null for expired. */
   threshold: number | null;
   message: string;
+}
+
+/**
+ * A notification's stable identity string. Includes the reminder level so that
+ * when a document escalates to the next threshold it reads as a fresh (unread)
+ * reminder even if the previous level was marked read.
+ */
+export function documentExpiryNotificationKey(
+  documentId: string,
+  threshold: number | null,
+): string {
+  return `${DOCUMENT_EXPIRY_NOTIFICATION_TYPE}:${documentId}:${threshold === null ? 'expired' : `t${threshold}`}`;
 }
 
 function expiringMessage(days: number): string {
@@ -90,7 +107,7 @@ export async function getDocumentExpiryNotifications(
     },
   });
 
-  const out: DocumentExpiryNotification[] = [];
+  const out: Omit<DocumentExpiryNotification, 'read'>[] = [];
   for (const d of docs) {
     if (!d.expiresAt) continue;
     const daysUntilExpiry = Math.round((utcDay(d.expiresAt) - todayMs) / DAY_MS);
@@ -106,31 +123,47 @@ export async function getDocumentExpiryNotifications(
     };
 
     if (daysUntilExpiry < 0) {
-      out.push({ ...common, status: 'EXPIRED', threshold: null, message: expiredMessage(daysUntilExpiry) });
+      out.push({
+        ...common,
+        key: documentExpiryNotificationKey(d.id, null),
+        status: 'EXPIRED',
+        threshold: null,
+        message: expiredMessage(daysUntilExpiry),
+      });
       continue;
     }
     // Expiring soon — the active reminder is the smallest crossed threshold.
     const crossed = DOCUMENT_EXPIRY_THRESHOLDS.filter((t) => daysUntilExpiry <= t);
     if (crossed.length === 0) continue; // outside all reminder windows
+    const threshold = Math.min(...crossed);
     out.push({
       ...common,
+      key: documentExpiryNotificationKey(d.id, threshold),
       status: 'EXPIRING_SOON',
-      threshold: Math.min(...crossed),
+      threshold,
       message: expiringMessage(daysUntilExpiry),
     });
   }
 
+  // Annotate each with the user's read state (absent row = unread).
+  const readKeys = await getReadNotificationKeys(viewer.id, out.map((n) => n.key));
+  const notifications: DocumentExpiryNotification[] = out.map((n) => ({
+    ...n,
+    read: readKeys.has(n.key),
+  }));
+
   // Expired first (most negative days), then soonest to expire.
-  out.sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
-  return out;
+  notifications.sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
+  return notifications;
 }
 
-/** Count of the viewer's current document-expiry notifications (for the nav badge). */
-export async function countDocumentExpiryNotifications(
+/** Count of the viewer's UNREAD document-expiry notifications (for the nav badge). */
+export async function countUnreadDocumentExpiryNotifications(
   viewer: PlatformViewer,
   now: Date = new Date(),
 ): Promise<number> {
-  return (await getDocumentExpiryNotifications(viewer, now)).length;
+  const notifications = await getDocumentExpiryNotifications(viewer, now);
+  return notifications.filter((n) => !n.read).length;
 }
 
 /**

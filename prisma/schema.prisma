@@ -353,8 +353,27 @@ model PlatformUser {
   // AI summaries this user generated (AI Summaries — accountability log).
   aiSummaries AiSummary[]
 
+  // Per-user read state for in-app notifications.
+  notificationReads NotificationRead[]
+
   @@index([status])
   @@index([company])
+}
+
+/// Per-user read state for in-app notifications. Notifications are derived (e.g.
+/// document-expiry reminders), so there is no notification row to flag — instead
+/// the presence of a row here means "user U has read the notification identified
+/// by `key`". Absent = unread. The key encodes the notification identity incl.
+/// its reminder level, so escalating to a new threshold reads as a fresh unread.
+model NotificationRead {
+  id     String       @id @default(cuid())
+  user   PlatformUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  key    String
+  readAt DateTime     @default(now())
+
+  @@unique([userId, key])
+  @@index([userId])
 }
 
 /// Audit log of report exports (UK-GDPR accountability for worker-level data).
