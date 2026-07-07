@@ -75,3 +75,57 @@ export function formatBytes(bytes: number): string {
   const mb = kb / 1024;
   return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`;
 }
+
+// --- Expiry tracking --------------------------------------------------------
+
+/** A document is "expiring soon" within this many days of its expiry date. */
+export const EXPIRING_SOON_DAYS = 30;
+
+export type DocumentExpiryStatus = 'VALID' | 'EXPIRING_SOON' | 'EXPIRED' | 'NONE';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const utcDay = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+
+/**
+ * Classify a document by its expiry date, comparing whole UTC days so the result
+ * is stable regardless of time-of-day. Null expiry → NONE (does not expire).
+ * EXPIRED once the date has passed; EXPIRING_SOON from today up to +30 days.
+ */
+export function documentExpiryStatus(
+  expiresAt: Date | string | null | undefined,
+  now: Date = new Date(),
+): DocumentExpiryStatus {
+  if (!expiresAt) return 'NONE';
+  const exp = typeof expiresAt === 'string' ? new Date(expiresAt) : expiresAt;
+  if (Number.isNaN(exp.getTime())) return 'NONE';
+  const today = utcDay(now);
+  const expDay = utcDay(exp);
+  const soon = today + EXPIRING_SOON_DAYS * DAY_MS;
+  if (expDay < today) return 'EXPIRED';
+  if (expDay <= soon) return 'EXPIRING_SOON';
+  return 'VALID';
+}
+
+export const DOCUMENT_EXPIRY_LABEL: Record<DocumentExpiryStatus, string> = {
+  VALID: 'Valid',
+  EXPIRING_SOON: 'Expiring soon',
+  EXPIRED: 'Expired',
+  NONE: 'No expiry',
+};
+
+export const DOCUMENT_EXPIRY_BADGE: Record<DocumentExpiryStatus, string> = {
+  VALID: 'bg-safe-50 text-safe-700',
+  EXPIRING_SOON: 'bg-hivis-400/25 text-ink',
+  EXPIRED: 'bg-danger-50 text-danger-700',
+  NONE: 'bg-surface-sunken text-ink-subtle',
+};
+
+/** The selectable expiry filters (excludes NONE — those show only under "All"). */
+export const DOCUMENT_EXPIRY_FILTERS: { value: string; label: string }[] = [
+  { value: 'valid', label: 'Valid' },
+  { value: 'expiring', label: 'Expiring soon' },
+  { value: 'expired', label: 'Expired' },
+];
+
+export const isDocumentExpiryFilter = (v: string): v is 'valid' | 'expiring' | 'expired' =>
+  v === 'valid' || v === 'expiring' || v === 'expired';

@@ -25,6 +25,7 @@ interface Values {
   description: string;
   category: string;
   jobSiteId: string;
+  expiresAt: string; // yyyy-mm-dd, or '' for no expiry
 }
 
 type FieldErrors = Partial<Record<keyof Values | 'file', string>>;
@@ -54,6 +55,7 @@ export function DocumentForm({
     description: initial?.description ?? '',
     category: initial?.category ?? '',
     jobSiteId: initial?.jobSiteId ?? (sites.length === 1 ? sites[0].id : ''),
+    expiresAt: initial?.expiresAt ?? '',
   });
   const [file, setFile] = useState<File | undefined>();
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -92,6 +94,7 @@ export function DocumentForm({
         fd.set('description', values.description);
         fd.set('category', values.category);
         fd.set('jobSiteId', values.jobSiteId);
+        fd.set('expiresAt', values.expiresAt);
         fd.set('file', file as File);
         res = await fetch('/api/platform/documents', { method: 'POST', body: fd });
       } else {
@@ -184,6 +187,32 @@ export function DocumentForm({
             </option>
           ))}
         </Select>
+      </div>
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <label className="block text-sm font-semibold text-ink">
+            Expiry date (optional)
+          </label>
+          <input
+            type="date"
+            value={values.expiresAt}
+            onChange={(e) => set('expiresAt', e.target.value)}
+            aria-invalid={errors.expiresAt ? true : undefined}
+            className={cn(
+              'touch-target w-full rounded-xl border bg-surface px-4 py-3 text-base text-ink',
+              errors.expiresAt ? 'border-danger-500' : 'border-line',
+            )}
+          />
+          {errors.expiresAt ? (
+            <p className="text-sm font-medium text-danger-600">{errors.expiresAt}</p>
+          ) : (
+            <p className="text-sm text-ink-subtle">
+              For certificates, insurance or permits that expire. Leave blank if it
+              doesn’t expire.
+            </p>
+          )}
+        </div>
       </div>
 
       {mode === 'upload' ? (

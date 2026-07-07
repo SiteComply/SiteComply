@@ -10,9 +10,12 @@ import { getDocumentForViewer } from '@/services/documents/documentService';
 import {
   documentCategoryLabel,
   formatBytes,
+  documentExpiryStatus,
+  DOCUMENT_EXPIRY_LABEL,
+  DOCUMENT_EXPIRY_BADGE,
 } from '@/services/documents/documentConstants';
 import { DocumentDeleteButton } from '@/components/platform/DocumentDeleteButton';
-import { formatDateTimeUK } from '@/lib/datetime';
+import { formatDateUK, formatDateTimeUK } from '@/lib/datetime';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +36,7 @@ export default async function DocumentDetailPage({
   if (!doc) notFound();
 
   const canEdit = permits(viewer.role, 'documents', 'edit');
+  const expiryStatus = documentExpiryStatus(doc.expiresAt);
 
   return (
     <PlatformShell>
@@ -45,7 +49,16 @@ export default async function DocumentDetailPage({
         </Link>
         <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-ink">{doc.title}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-bold text-ink">{doc.title}</h1>
+              {expiryStatus !== 'NONE' && (
+                <span
+                  className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${DOCUMENT_EXPIRY_BADGE[expiryStatus]}`}
+                >
+                  {DOCUMENT_EXPIRY_LABEL[expiryStatus]}
+                </span>
+              )}
+            </div>
             <p className="text-ink-muted">
               {documentCategoryLabel(doc.category)} · {doc.jobSite.name}
             </p>
@@ -83,6 +96,10 @@ export default async function DocumentDetailPage({
         <Detail
           label="Site"
           value={`${doc.jobSite.name} · ${doc.jobSite.jobReference}`}
+        />
+        <Detail
+          label="Expiry"
+          value={doc.expiresAt ? formatDateUK(doc.expiresAt) : 'No expiry'}
         />
         <Detail label="File name" value={doc.fileName} />
         <Detail label="File size" value={formatBytes(doc.sizeBytes)} />

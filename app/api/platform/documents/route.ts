@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
     description: (form.get('description') as string) ?? undefined,
     category: (form.get('category') as string) ?? undefined,
     jobSiteId: (form.get('jobSiteId') as string) ?? undefined,
+    expiresAt: (form.get('expiresAt') as string) ?? undefined,
   };
   const result = validateDocumentMeta(meta, viewer);
   if (!result.ok) {

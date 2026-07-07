@@ -12,6 +12,10 @@ import {
   DOCUMENT_CATEGORIES,
   documentCategoryLabel,
   formatBytes,
+  documentExpiryStatus,
+  DOCUMENT_EXPIRY_LABEL,
+  DOCUMENT_EXPIRY_BADGE,
+  DOCUMENT_EXPIRY_FILTERS,
 } from '@/services/documents/documentConstants';
 import { DocumentDeleteButton } from '@/components/platform/DocumentDeleteButton';
 import { formatDateUK } from '@/lib/datetime';
@@ -26,17 +30,20 @@ export const dynamic = 'force-dynamic';
 export default async function PlatformDocumentsPage({
   searchParams,
 }: {
-  searchParams: { category?: string; site?: string };
+  searchParams: { category?: string; site?: string; expiry?: string };
 }) {
   const viewer = await requirePlatformViewer();
   assertModuleView(viewer, 'documents');
 
   const category = searchParams.category ?? '';
   const site = searchParams.site ?? '';
+  const expiry = searchParams.expiry ?? '';
   const documents = await listDocuments(viewer, {
     category: category || undefined,
     siteId: site || undefined,
+    expiry: expiry || undefined,
   });
+  const now = new Date();
   const canCreate = permits(viewer.role, 'documents', 'create');
   const canDelete = permits(viewer.role, 'documents', 'edit');
 
@@ -102,13 +109,29 @@ export default async function PlatformDocumentsPage({
           </select>
         </label>
 
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-semibold text-ink">Status</span>
+          <select
+            name="expiry"
+            defaultValue={expiry}
+            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+          >
+            <option value="">All statuses</option>
+            {DOCUMENT_EXPIRY_FILTERS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <button
           type="submit"
           className="rounded-lg border border-brand-500 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
         >
           Apply
         </button>
-        {(category || site) && (
+        {(category || site || expiry) && (
           <Link
             href="/platform/dashboard/documents"
             className="rounded-lg px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken"
@@ -136,6 +159,7 @@ export default async function PlatformDocumentsPage({
                 <tr className="border-b border-line text-left text-ink-subtle">
                   <th className="px-5 py-2.5 font-medium">Title</th>
                   <th className="px-5 py-2.5 font-medium">Category</th>
+                  <th className="px-5 py-2.5 font-medium">Status</th>
                   <th className="px-5 py-2.5 font-medium">Site</th>
                   <th className="px-5 py-2.5 font-medium">Uploaded</th>
                   <th className="px-5 py-2.5 text-right font-medium">Size</th>
@@ -158,6 +182,9 @@ export default async function PlatformDocumentsPage({
                     </td>
                     <td className="px-5 py-3 text-ink">
                       {documentCategoryLabel(d.category)}
+                    </td>
+                    <td className="px-5 py-3">
+                      <ExpiryStatus expiresAt={d.expiresAt} now={now} />
                     </td>
                     <td className="px-5 py-3 text-ink">{d.jobSite.name}</td>
                     <td className="px-5 py-3 text-ink-muted">
@@ -192,5 +219,23 @@ export default async function PlatformDocumentsPage({
         )}
       </section>
     </PlatformShell>
+  );
+}
+
+/** Expiry status badge + the expiry date (or a dash when the document never expires). */
+function ExpiryStatus({ expiresAt, now }: { expiresAt: Date | null; now: Date }) {
+  const status = documentExpiryStatus(expiresAt, now);
+  if (status === 'NONE' || !expiresAt) {
+    return <span className="text-xs text-ink-subtle">—</span>;
+  }
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span
+        className={`inline-flex w-fit rounded-full px-2 py-0.5 text-xs font-semibold ${DOCUMENT_EXPIRY_BADGE[status]}`}
+      >
+        {DOCUMENT_EXPIRY_LABEL[status]}
+      </span>
+      <span className="text-xs text-ink-subtle">{formatDateUK(expiresAt)}</span>
+    </div>
   );
 }

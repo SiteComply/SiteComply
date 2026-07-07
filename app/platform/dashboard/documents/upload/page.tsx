@@ -37,8 +37,8 @@ export default async function UploadDocumentPage() {
         </Link>
         <h1 className="mt-1 text-2xl font-bold text-ink">Upload document</h1>
         <p className="text-ink-muted">
-          Add a document to one of your sites. Versioning and expiry tracking
-          come in a later phase.
+          Add a document to one of your sites. Set an optional expiry date for
+          certificates, insurance or permits. Versioning comes in a later phase.
         </p>
       </div>
 

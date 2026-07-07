@@ -420,6 +420,11 @@ model Document {
   jobSite     JobSite          @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
   jobSiteId   String
 
+  // Optional expiry date (UTC midnight of the chosen day). Drives the
+  // Valid / Expiring soon / Expired status shown across the module. Null = the
+  // document does not expire.
+  expiresAt DateTime?
+
   // Stored file metadata. The bytes live in Azure Blob storage at `blobPath`.
   fileName  String // original upload filename, for display + download
   mimeType  String
@@ -440,6 +445,7 @@ model Document {
 
   @@index([jobSiteId, category, createdAt])
   @@index([category])
+  @@index([jobSiteId, expiresAt])
 }
 
 /// A site audit / inspection (Audits module, Phase 1). Each audit belongs to

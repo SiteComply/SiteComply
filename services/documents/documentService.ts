@@ -1,10 +1,12 @@
-import { DocumentCategory } from '@prisma/client';
+import { DocumentCategory, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import {
   isDocumentCategory,
   MAX_DOCUMENT_BYTES,
   ACCEPTED_DOCUMENT_MIME_TYPES,
+  EXPIRING_SOON_DAYS,
+  isDocumentExpiryFilter,
 } from '@/services/documents/documentConstants';
 import {
   buildBlobPath,
@@ -31,6 +33,8 @@ export interface DocumentMetaInput {
   description?: string;
   category?: string;
   jobSiteId?: string;
+  /** Optional expiry as a yyyy-mm-dd date string (empty = no expiry). */
+  expiresAt?: string;
 }
 
 export interface ValidatedDocumentMeta {
@@ -38,6 +42,7 @@ export interface ValidatedDocumentMeta {
   description: string | null;
   category: DocumentCategory;
   jobSiteId: string;
+  expiresAt: Date | null;
 }
 
 export type DocumentFieldErrors = Partial<
@@ -76,6 +81,20 @@ export function validateDocumentMeta(
   else if (!viewer.siteIds.includes(jobSiteId))
     errors.jobSiteId = 'That site is not in your access.';
 
+  // Optional expiry — a yyyy-mm-dd date, stored at UTC midnight. Blank = null.
+  let expiresAt: Date | null = null;
+  const rawExpiry = text(input.expiresAt);
+  if (rawExpiry !== '') {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(rawExpiry);
+    const d = m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null;
+    // The month round-trip check rejects impossible dates like 2026-02-31.
+    if (!d || Number.isNaN(d.getTime()) || d.getUTCMonth() !== +m![2] - 1) {
+      errors.expiresAt = 'Enter a valid expiry date.';
+    } else {
+      expiresAt = d;
+    }
+  }
+
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return {
     ok: true,
@@ -84,6 +103,7 @@ export function validateDocumentMeta(
       description: description || null,
       category: category as DocumentCategory,
       jobSiteId,
+      expiresAt,
     },
   };
 }
@@ -106,6 +126,17 @@ export function validateUploadFile(
 export interface DocumentListFilters {
   category?: string;
   siteId?: string;
+  /** Expiry status filter: "valid" | "expiring" | "expired" (else all). */
+  expiry?: string;
+}
+
+/** Whole UTC day boundaries used for expiry filtering (matches documentExpiryStatus). */
+function expiryBoundaries(now = new Date()) {
+  const today = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+  const soon = new Date(today.getTime() + EXPIRING_SOON_DAYS * 24 * 60 * 60 * 1000);
+  return { today, soon };
 }
 
 /** Site-scoped list of documents for the viewer, newest first. */
@@ -127,8 +158,18 @@ export async function listDocuments(
       ? (filters.category as DocumentCategory)
       : undefined;
 
+  // Expiry filter — only documents WITH an expiry date match a specific status;
+  // documents without an expiry appear only under "all".
+  let expiresAt: Prisma.DateTimeNullableFilter | undefined;
+  if (filters.expiry && isDocumentExpiryFilter(filters.expiry)) {
+    const { today, soon } = expiryBoundaries();
+    if (filters.expiry === 'expired') expiresAt = { lt: today };
+    else if (filters.expiry === 'expiring') expiresAt = { gte: today, lte: soon };
+    else expiresAt = { gt: soon }; // valid
+  }
+
   return prisma.document.findMany({
-    where: { jobSiteId: { in: siteIds }, category },
+    where: { jobSiteId: { in: siteIds }, category, expiresAt },
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,
@@ -137,6 +178,7 @@ export async function listDocuments(
       fileName: true,
       mimeType: true,
       sizeBytes: true,
+      expiresAt: true,
       uploadedByName: true,
       createdAt: true,
       jobSite: { select: { id: true, name: true, jobReference: true } },
@@ -178,6 +220,7 @@ export async function createDocument(
         description: meta.description,
         category: meta.category,
         jobSiteId: meta.jobSiteId,
+        expiresAt: meta.expiresAt,
         fileName: file.fileName,
         mimeType: file.mimeType,
         sizeBytes: file.size,
@@ -213,6 +256,7 @@ export async function updateDocument(
       description: meta.description,
       category: meta.category,
       jobSiteId: meta.jobSiteId,
+      expiresAt: meta.expiresAt,
     },
     select: { id: true },
   });

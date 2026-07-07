@@ -66,6 +66,8 @@ export default async function EditDocumentPage({
           description: doc.description ?? '',
           category: doc.category,
           jobSiteId: doc.jobSiteId,
+          // Pre-fill the date input in yyyy-mm-dd (UTC) form.
+          expiresAt: doc.expiresAt ? doc.expiresAt.toISOString().slice(0, 10) : '',
         }}
         existingFile={{ fileName: doc.fileName, sizeBytes: doc.sizeBytes }}
       />
