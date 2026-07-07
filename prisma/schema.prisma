@@ -559,11 +559,37 @@ model Action {
   // Chronological activity timeline (creation, assignment, status, comments).
   activities ActionActivity[]
 
+  // Uploaded evidence (photos / documents) supporting the action.
+  evidence ActionEvidence[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([jobSiteId, status, dueDate])
   @@index([status, dueDate])
+}
+
+/// A photo or document uploaded as evidence against an Action. The bytes live in
+/// the existing private Documents blob container (under an `actions/<id>/` prefix);
+/// only the pointer + metadata are stored here. Cascade-deleted with the action;
+/// site-scoping is inherited from the parent action's owning site.
+model ActionEvidence {
+  id       String @id @default(cuid())
+  action   Action @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  actionId String
+
+  blobPath String
+  fileName String
+  mimeType String
+  size     Int
+
+  // Who uploaded it (name denormalised so it survives user deletion).
+  uploadedByUserId String?
+  uploadedByName   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([actionId, createdAt])
 }
 
 /// One entry in an action's activity timeline: creation, assignment change,

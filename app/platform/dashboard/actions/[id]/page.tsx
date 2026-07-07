@@ -11,7 +11,9 @@ import {
   getActionForViewer,
   listActionActivities,
 } from '@/services/actions/actionService';
+import { listActionEvidence } from '@/services/actions/actionEvidenceService';
 import { ActionDeleteButton } from '@/components/platform/ActionDeleteButton';
+import { ActionEvidencePanel } from '@/components/platform/ActionEvidencePanel';
 import {
   ActionTimeline,
   type ActivityRow,
@@ -62,6 +64,8 @@ export default async function ActionDetailPage({
       createdAt: a.createdAt.toISOString(),
     }),
   );
+
+  const evidence = await listActionEvidence(action.id);
 
   return (
     <PlatformShell>
@@ -123,6 +127,12 @@ export default async function ActionDetailPage({
               </p>
             </Section>
           )}
+
+          <ActionEvidencePanel
+            actionId={action.id}
+            evidence={evidence}
+            canManage={canEdit}
+          />
 
           <ActionTimeline
             actionId={action.id}
