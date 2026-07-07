@@ -12,8 +12,10 @@ import {
   listActionActivities,
 } from '@/services/actions/actionService';
 import { listActionEvidence } from '@/services/actions/actionEvidenceService';
+import { listFindingEvidence } from '@/services/audits/findingEvidenceService';
 import { ActionDeleteButton } from '@/components/platform/ActionDeleteButton';
 import { ActionEvidencePanel } from '@/components/platform/ActionEvidencePanel';
+import { EvidenceGallery } from '@/components/platform/EvidenceGallery';
 import {
   ActionTimeline,
   type ActivityRow,
@@ -66,6 +68,12 @@ export default async function ActionDetailPage({
   );
 
   const evidence = await listActionEvidence(action.id);
+  // If this action was raised from a finding, surface that finding's evidence
+  // (read-only) so the user has the original issue evidence. Gated by audits view.
+  const findingEvidence =
+    action.auditFinding && permits(viewer.role, 'audits', 'view')
+      ? await listFindingEvidence(action.auditFinding.id)
+      : [];
 
   return (
     <PlatformShell>
@@ -125,6 +133,16 @@ export default async function ActionDetailPage({
                   · audit “{action.auditFinding.audit.title}”
                 </span>
               </p>
+              {findingEvidence.length > 0 && (
+                <div className="mt-3 border-t border-line pt-3">
+                  <EvidenceGallery
+                    basePath={`/api/platform/audit-findings/${action.auditFinding.id}/evidence`}
+                    evidence={findingEvidence}
+                    canManage={false}
+                    label="Finding evidence"
+                  />
+                </div>
+              )}
             </Section>
           )}
 

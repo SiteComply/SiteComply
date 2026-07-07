@@ -11,6 +11,7 @@ import { getAuditForViewer } from '@/services/audits/auditService';
 import { canDeleteAudit } from '@/services/audits/auditConstants';
 import { AuditDeleteButton } from '@/components/platform/AuditDeleteButton';
 import { listFindingsForAudit } from '@/services/audits/findingService';
+import { listEvidenceForFindings } from '@/services/audits/findingEvidenceService';
 import {
   AuditFindingsPanel,
   type FindingRow,
@@ -47,19 +48,20 @@ export default async function AuditDetailPage({
   const canDelete = canDeleteAudit(viewer.role);
   const canCreateAction = permits(viewer.role, 'actions', 'create');
   const showAiSummary = await canUseAiSummaries(viewer.role);
-  const findingRows: FindingRow[] = (await listFindingsForAudit(audit.id)).map(
-    (f) => ({
-      id: f.id,
-      title: f.title,
-      description: f.description,
-      category: f.category,
-      severity: f.severity,
-      status: f.status,
-      dueDate: f.dueDate ? f.dueDate.toISOString() : null,
-      correctiveAction: f.correctiveAction,
-      createdByName: f.createdByName,
-    }),
-  );
+  const findings = await listFindingsForAudit(audit.id);
+  const evidenceByFinding = await listEvidenceForFindings(findings.map((f) => f.id));
+  const findingRows: FindingRow[] = findings.map((f) => ({
+    id: f.id,
+    title: f.title,
+    description: f.description,
+    category: f.category,
+    severity: f.severity,
+    status: f.status,
+    dueDate: f.dueDate ? f.dueDate.toISOString() : null,
+    correctiveAction: f.correctiveAction,
+    createdByName: f.createdByName,
+    evidence: evidenceByFinding[f.id] ?? [],
+  }));
 
   return (
     <PlatformShell>

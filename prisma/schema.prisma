@@ -540,11 +540,38 @@ model AuditFinding {
   // Corrective actions generated from this finding (Actions module).
   actions Action[]
 
+  // Uploaded evidence (photos / documents) supporting the finding.
+  evidence FindingEvidence[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([auditId, status])
   @@index([status])
+}
+
+/// A photo or document uploaded as evidence against an audit finding. Mirrors
+/// ActionEvidence: bytes live in the existing private Documents blob container
+/// (under a `findings/<id>/` prefix), only the pointer + metadata are stored.
+/// Cascade-deleted with the finding; site-scoping inherited from the parent
+/// audit. Stays linked to the finding for its lifetime, incl. when the finding
+/// generates a corrective action (the action links back to the finding).
+model FindingEvidence {
+  id        String       @id @default(cuid())
+  finding   AuditFinding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  findingId String
+
+  blobPath String
+  fileName String
+  mimeType String
+  size     Int
+
+  uploadedByUserId String?
+  uploadedByName   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([findingId, createdAt])
 }
 
 /// A corrective action / follow-up task (Actions module, Phase 1). Each action

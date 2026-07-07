@@ -20,6 +20,7 @@ import {
   type FindingStatusValue,
 } from '@/services/audits/findingConstants';
 import { DEFAULT_PAGE_SIZE } from '@/lib/pagination';
+import { EvidenceGallery, type EvidenceItem } from '@/components/platform/EvidenceGallery';
 
 export interface FindingRow {
   id: string;
@@ -31,6 +32,7 @@ export interface FindingRow {
   dueDate: string | null; // ISO
   correctiveAction: string | null;
   createdByName: string | null;
+  evidence: EvidenceItem[];
 }
 
 interface FormValues {
@@ -292,6 +294,15 @@ export function AuditFindingsPanel({
                             Create action
                           </button>
                         )}
+                      </div>
+                    )}
+                    {(f.evidence.length > 0 || canEdit) && (
+                      <div className="mt-3 border-t border-line pt-3">
+                        <EvidenceGallery
+                          basePath={`/api/platform/audit-findings/${f.id}/evidence`}
+                          evidence={f.evidence}
+                          canManage={canEdit}
+                        />
                       </div>
                     )}
                   </>
