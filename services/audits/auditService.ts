@@ -1,4 +1,4 @@
-import { AuditStatus } from '@prisma/client';
+import { AuditStatus, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import {
@@ -137,6 +137,50 @@ async function resolveDocumentIds(
 export interface AuditListFilters {
   status?: string;
   siteId?: string;
+  /** Free-text search over title and description. */
+  search?: string;
+  /** Pagination (omit for the full list). */
+  skip?: number;
+  take?: number;
+}
+
+/** Shared site-scoped where clause for listAudits + countAudits. Null → no sites. */
+function auditWhere(
+  viewer: PlatformViewer,
+  filters: AuditListFilters,
+): Prisma.AuditWhereInput | null {
+  const siteIds =
+    filters.siteId && viewer.siteIds.includes(filters.siteId)
+      ? [filters.siteId]
+      : viewer.siteIds;
+  if (siteIds.length === 0) return null;
+
+  const status =
+    filters.status && isAuditStatus(filters.status)
+      ? (filters.status as AuditStatus)
+      : undefined;
+
+  const q = (filters.search ?? '').trim();
+  const search: Prisma.AuditWhereInput | undefined = q
+    ? {
+        OR: [
+          { title: { contains: q, mode: 'insensitive' } },
+          { description: { contains: q, mode: 'insensitive' } },
+        ],
+      }
+    : undefined;
+
+  return { jobSiteId: { in: siteIds }, status, ...search };
+}
+
+/** Count of audits matching the (scoped) filters — for pagination totals. */
+export async function countAudits(
+  viewer: PlatformViewer,
+  filters: AuditListFilters = {},
+): Promise<number> {
+  const where = auditWhere(viewer, filters);
+  if (!where) return 0;
+  return prisma.audit.count({ where });
 }
 
 /** Site-scoped list of audits for the viewer, newest first. */
@@ -144,20 +188,14 @@ export async function listAudits(
   viewer: PlatformViewer,
   filters: AuditListFilters = {},
 ) {
-  const siteIds =
-    filters.siteId && viewer.siteIds.includes(filters.siteId)
-      ? [filters.siteId]
-      : viewer.siteIds;
-  if (siteIds.length === 0) return [];
-
-  const status =
-    filters.status && isAuditStatus(filters.status)
-      ? (filters.status as AuditStatus)
-      : undefined;
+  const where = auditWhere(viewer, filters);
+  if (!where) return [];
 
   return prisma.audit.findMany({
-    where: { jobSiteId: { in: siteIds }, status },
+    where,
     orderBy: { createdAt: 'desc' },
+    skip: filters.skip,
+    take: filters.take,
     select: {
       id: true,
       title: true,

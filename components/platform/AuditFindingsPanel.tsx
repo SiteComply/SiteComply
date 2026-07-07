@@ -19,6 +19,7 @@ import {
   type FindingSeverityValue,
   type FindingStatusValue,
 } from '@/services/audits/findingConstants';
+import { DEFAULT_PAGE_SIZE } from '@/lib/pagination';
 
 export interface FindingRow {
   id: string;
@@ -75,6 +76,8 @@ export function AuditFindingsPanel({
   // null = no form open; 'add' = add form; otherwise the finding id being edited.
   const [mode, setMode] = useState<null | 'add' | string>(null);
   const [busyId, setBusyId] = useState<string | undefined>();
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
 
   async function quickStatus(id: string, status: string) {
     setBusyId(id);
@@ -108,6 +111,24 @@ export function AuditFindingsPanel({
   }
 
   const openCount = findings.filter((f) => f.status !== 'CLOSED').length;
+
+  // Client-side search + pagination — findings for one audit are already loaded,
+  // and the UX (search box, "Showing X–Y of N", Prev/Next) matches the list views.
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? findings.filter(
+        (f) =>
+          f.title.toLowerCase().includes(q) ||
+          (f.description ?? '').toLowerCase().includes(q) ||
+          (f.correctiveAction ?? '').toLowerCase().includes(q),
+      )
+    : findings;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / DEFAULT_PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const start = (currentPage - 1) * DEFAULT_PAGE_SIZE;
+  const pageItems = filtered.slice(start, start + DEFAULT_PAGE_SIZE);
+  const rangeStart = filtered.length === 0 ? 0 : start + 1;
+  const rangeEnd = Math.min(start + DEFAULT_PAGE_SIZE, filtered.length);
 
   return (
     <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
@@ -143,11 +164,28 @@ export function AuditFindingsPanel({
         </div>
       )}
 
+      {findings.length > 0 && (
+        <div className="mb-3">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Search findings…"
+            className="w-full max-w-xs rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+          />
+        </div>
+      )}
+
       {findings.length === 0 ? (
         <p className="text-sm text-ink-subtle">No findings recorded for this audit.</p>
+      ) : filtered.length === 0 ? (
+        <p className="text-sm text-ink-subtle">No findings match your search.</p>
       ) : (
         <ul className="space-y-3">
-          {findings.map((f) => {
+          {pageItems.map((f) => {
             const editing = mode === f.id;
             const busy = busyId === f.id;
             return (
@@ -263,7 +301,59 @@ export function AuditFindingsPanel({
           })}
         </ul>
       )}
+
+      {filtered.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3 text-sm">
+          <span className="text-ink-subtle">
+            Showing <span className="font-semibold text-ink">{rangeStart}–{rangeEnd}</span> of{' '}
+            <span className="font-semibold text-ink">{filtered.length}</span>
+          </span>
+          <div className="flex items-center gap-2">
+            <PagerButton
+              disabled={currentPage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </PagerButton>
+            <span className="tabular-nums text-ink-subtle">
+              Page {currentPage} of {pageCount}
+            </span>
+            <PagerButton
+              disabled={currentPage >= pageCount}
+              onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+            >
+              Next
+            </PagerButton>
+          </div>
+        </div>
+      )}
     </section>
+  );
+}
+
+function PagerButton({
+  disabled,
+  onClick,
+  children,
+}: {
+  disabled: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        'rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors',
+        disabled
+          ? 'cursor-default border-line text-ink-subtle opacity-50'
+          : 'border-brand-500 text-brand-700 hover:bg-brand-50',
+      )}
+    >
+      {children}
+    </button>
   );
 }
 

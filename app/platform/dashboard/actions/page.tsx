@@ -9,7 +9,7 @@ import {
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { canUseAiSummaries } from '@/services/ai/aiConfig';
 import { AiSummaryPanel } from '@/components/platform/AiSummaryPanel';
-import { listActions, actionCounts } from '@/services/actions/actionService';
+import { listActions, actionCounts, countActions } from '@/services/actions/actionService';
 import {
   ACTION_BUCKETS,
   ACTION_PRIORITIES,
@@ -22,6 +22,8 @@ import {
   type ActionPriorityValue,
   type ActionStatusValue,
 } from '@/services/actions/actionConstants';
+import { PaginationControls } from '@/components/platform/PaginationControls';
+import { resolvePage } from '@/lib/pagination';
 import { formatDateUK } from '@/lib/datetime';
 
 export const dynamic = 'force-dynamic';
@@ -34,7 +36,7 @@ export const dynamic = 'force-dynamic';
 export default async function PlatformActionsPage({
   searchParams,
 }: {
-  searchParams: { bucket?: string; site?: string; priority?: string };
+  searchParams: { bucket?: string; site?: string; priority?: string; q?: string; page?: string };
 }) {
   const viewer = await requirePlatformViewer();
   assertModuleView(viewer, 'actions');
@@ -46,21 +48,27 @@ export default async function PlatformActionsPage({
       : '';
   const site = searchParams.site ?? '';
   const priority = searchParams.priority ?? '';
+  const q = (searchParams.q ?? '').trim();
+  const filters = {
+    bucket: bucket || undefined,
+    siteId: site || undefined,
+    priority: priority || undefined,
+    search: q || undefined,
+  };
 
-  const [actions, counts] = await Promise.all([
-    listActions(
-      viewer,
-      { bucket: bucket || undefined, siteId: site || undefined, priority: priority || undefined },
-      now,
-    ),
+  const [total, counts] = await Promise.all([
+    countActions(viewer, filters, now),
     actionCounts(viewer, now),
   ]);
+  const pg = resolvePage(searchParams.page, total);
+  const actions = await listActions(viewer, { ...filters, skip: pg.skip, take: pg.take }, now);
   const canCreate = permits(viewer.role, 'actions', 'create');
   const showAiSummary = await canUseAiSummaries(viewer.role);
 
   const qp = (patch: Record<string, string>) => {
     const sp = new URLSearchParams();
-    const merged = { bucket, site, priority, ...patch };
+    // Changing a bucket resets to page 1 (page is intentionally not carried here).
+    const merged = { bucket, site, priority, q, ...patch };
     for (const [k, v] of Object.entries(merged)) if (v) sp.set(k, v);
     const s = sp.toString();
     return `/platform/dashboard/actions${s ? `?${s}` : ''}`;
@@ -122,6 +130,16 @@ export default async function PlatformActionsPage({
       >
         {bucket && <input type="hidden" name="bucket" value={bucket} />}
         <label className="flex flex-col gap-1 text-sm">
+          <span className="font-semibold text-ink">Search</span>
+          <input
+            type="search"
+            name="q"
+            defaultValue={q}
+            placeholder="Title or assignee…"
+            className="w-56 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
           <span className="font-semibold text-ink">Site</span>
           <select name="site" defaultValue={site} className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink">
             <option value="">All my sites</option>
@@ -142,7 +160,7 @@ export default async function PlatformActionsPage({
         <button type="submit" className="rounded-lg border border-brand-500 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50">
           Apply
         </button>
-        {(bucket || site || priority) && (
+        {(bucket || site || priority || q) && (
           <Link href="/platform/dashboard/actions" className="rounded-lg px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken">
             Clear
           </Link>
@@ -214,6 +232,13 @@ export default async function PlatformActionsPage({
               </tbody>
             </table>
           </div>
+        )}
+        {total > 0 && (
+          <PaginationControls
+            basePath="/platform/dashboard/actions"
+            params={{ bucket, site, priority, q }}
+            pg={pg}
+          />
         )}
       </section>
     </PlatformShell>

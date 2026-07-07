@@ -157,19 +157,24 @@ export interface ActionListFilters {
   bucket?: string;
   siteId?: string;
   priority?: string;
+  /** Free-text search over title, description and assignee. */
+  search?: string;
+  /** Pagination (omit for the full list). */
+  skip?: number;
+  take?: number;
 }
 
-/** Site-scoped list of actions. Overdue first, then by due date, then newest. */
-export async function listActions(
+/** Shared site-scoped where clause for listActions + countActions. Null → no sites. */
+function actionWhere(
   viewer: PlatformViewer,
-  filters: ActionListFilters = {},
-  now: Date = new Date(),
-) {
+  filters: ActionListFilters,
+  now: Date,
+): Prisma.ActionWhereInput | null {
   const siteIds =
     filters.siteId && viewer.siteIds.includes(filters.siteId)
       ? [filters.siteId]
       : viewer.siteIds;
-  if (siteIds.length === 0) return [];
+  if (siteIds.length === 0) return null;
 
   const bucket =
     filters.bucket && isActionBucket(filters.bucket)
@@ -179,9 +184,42 @@ export async function listActions(
   if (filters.priority && isActionPriority(filters.priority))
     where.priority = filters.priority as ActionPriority;
 
+  const q = (filters.search ?? '').trim();
+  if (q) {
+    where.OR = [
+      { title: { contains: q, mode: 'insensitive' } },
+      { description: { contains: q, mode: 'insensitive' } },
+      { assignedTo: { contains: q, mode: 'insensitive' } },
+    ];
+  }
+  return where;
+}
+
+/** Count of actions matching the (scoped) filters — for pagination totals. */
+export async function countActions(
+  viewer: PlatformViewer,
+  filters: ActionListFilters = {},
+  now: Date = new Date(),
+): Promise<number> {
+  const where = actionWhere(viewer, filters, now);
+  if (!where) return 0;
+  return prisma.action.count({ where });
+}
+
+/** Site-scoped list of actions. Overdue first, then by due date, then newest. */
+export async function listActions(
+  viewer: PlatformViewer,
+  filters: ActionListFilters = {},
+  now: Date = new Date(),
+) {
+  const where = actionWhere(viewer, filters, now);
+  if (!where) return [];
+
   return prisma.action.findMany({
     where,
     orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+    skip: filters.skip,
+    take: filters.take,
     select: {
       id: true,
       title: true,

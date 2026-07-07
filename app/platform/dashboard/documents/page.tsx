@@ -7,7 +7,7 @@ import {
   assertModuleView,
 } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
-import { listDocuments } from '@/services/documents/documentService';
+import { listDocuments, countDocuments } from '@/services/documents/documentService';
 import {
   DOCUMENT_CATEGORIES,
   documentCategoryLabel,
@@ -16,6 +16,8 @@ import {
 } from '@/services/documents/documentConstants';
 import { DocumentDeleteButton } from '@/components/platform/DocumentDeleteButton';
 import { DocumentExpiryBadge } from '@/components/platform/DocumentExpiryBadge';
+import { PaginationControls } from '@/components/platform/PaginationControls';
+import { resolvePage } from '@/lib/pagination';
 import { formatDateUK } from '@/lib/datetime';
 
 export const dynamic = 'force-dynamic';
@@ -28,7 +30,7 @@ export const dynamic = 'force-dynamic';
 export default async function PlatformDocumentsPage({
   searchParams,
 }: {
-  searchParams: { category?: string; site?: string; expiry?: string };
+  searchParams: { category?: string; site?: string; expiry?: string; q?: string; page?: string };
 }) {
   const viewer = await requirePlatformViewer();
   assertModuleView(viewer, 'documents');
@@ -36,11 +38,16 @@ export default async function PlatformDocumentsPage({
   const category = searchParams.category ?? '';
   const site = searchParams.site ?? '';
   const expiry = searchParams.expiry ?? '';
-  const documents = await listDocuments(viewer, {
+  const q = (searchParams.q ?? '').trim();
+  const filters = {
     category: category || undefined,
     siteId: site || undefined,
     expiry: expiry || undefined,
-  });
+    search: q || undefined,
+  };
+  const total = await countDocuments(viewer, filters);
+  const pg = resolvePage(searchParams.page, total);
+  const documents = await listDocuments(viewer, { ...filters, skip: pg.skip, take: pg.take });
   const now = new Date();
   const canCreate = permits(viewer.role, 'documents', 'create');
   const canDelete = permits(viewer.role, 'documents', 'edit');
@@ -75,6 +82,17 @@ export default async function PlatformDocumentsPage({
         method="get"
         className="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-line bg-surface p-4 shadow-card"
       >
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-semibold text-ink">Search</span>
+          <input
+            type="search"
+            name="q"
+            defaultValue={q}
+            placeholder="Title or file name…"
+            className="w-56 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+          />
+        </label>
+
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-semibold text-ink">Category</span>
           <select
@@ -129,7 +147,7 @@ export default async function PlatformDocumentsPage({
         >
           Apply
         </button>
-        {(category || site || expiry) && (
+        {(category || site || expiry || q) && (
           <Link
             href="/platform/dashboard/documents"
             className="rounded-lg px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken"
@@ -214,6 +232,13 @@ export default async function PlatformDocumentsPage({
               </tbody>
             </table>
           </div>
+        )}
+        {total > 0 && (
+          <PaginationControls
+            basePath="/platform/dashboard/documents"
+            params={{ category, site, expiry, q }}
+            pg={pg}
+          />
         )}
       </section>
     </PlatformShell>

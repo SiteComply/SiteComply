@@ -7,13 +7,15 @@ import {
   assertModuleView,
 } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
-import { listAudits } from '@/services/audits/auditService';
+import { listAudits, countAudits } from '@/services/audits/auditService';
 import {
   AUDIT_STATUSES,
   auditStatusLabel,
   AUDIT_STATUS_BADGE,
   type AuditStatusValue,
 } from '@/services/audits/auditConstants';
+import { PaginationControls } from '@/components/platform/PaginationControls';
+import { resolvePage } from '@/lib/pagination';
 import { formatDateUK } from '@/lib/datetime';
 
 export const dynamic = 'force-dynamic';
@@ -26,17 +28,22 @@ export const dynamic = 'force-dynamic';
 export default async function PlatformAuditsPage({
   searchParams,
 }: {
-  searchParams: { status?: string; site?: string };
+  searchParams: { status?: string; site?: string; q?: string; page?: string };
 }) {
   const viewer = await requirePlatformViewer();
   assertModuleView(viewer, 'audits');
 
   const status = searchParams.status ?? '';
   const site = searchParams.site ?? '';
-  const audits = await listAudits(viewer, {
+  const q = (searchParams.q ?? '').trim();
+  const filters = {
     status: status || undefined,
     siteId: site || undefined,
-  });
+    search: q || undefined,
+  };
+  const total = await countAudits(viewer, filters);
+  const pg = resolvePage(searchParams.page, total);
+  const audits = await listAudits(viewer, { ...filters, skip: pg.skip, take: pg.take });
   const canCreate = permits(viewer.role, 'audits', 'create');
 
   return (
@@ -69,6 +76,17 @@ export default async function PlatformAuditsPage({
         method="get"
         className="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-line bg-surface p-4 shadow-card"
       >
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-semibold text-ink">Search</span>
+          <input
+            type="search"
+            name="q"
+            defaultValue={q}
+            placeholder="Audit title…"
+            className="w-56 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+          />
+        </label>
+
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-semibold text-ink">Status</span>
           <select
@@ -107,7 +125,7 @@ export default async function PlatformAuditsPage({
         >
           Apply
         </button>
-        {(status || site) && (
+        {(status || site || q) && (
           <Link
             href="/platform/dashboard/audits"
             className="rounded-lg px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken"
@@ -179,6 +197,13 @@ export default async function PlatformAuditsPage({
               </tbody>
             </table>
           </div>
+        )}
+        {total > 0 && (
+          <PaginationControls
+            basePath="/platform/dashboard/audits"
+            params={{ status, site, q }}
+            pg={pg}
+          />
         )}
       </section>
     </PlatformShell>

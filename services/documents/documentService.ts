@@ -126,8 +126,13 @@ export function validateUploadFile(
 export interface DocumentListFilters {
   category?: string;
   siteId?: string;
-  /** Expiry status filter: "valid" | "expiring" | "expired" (else all). */
+  /** Expiry status filter: "valid" | "expiring" | "expired" | "none" (else all). */
   expiry?: string;
+  /** Free-text search over title, file name and description. */
+  search?: string;
+  /** Pagination (omit for the full list). */
+  skip?: number;
+  take?: number;
 }
 
 /** Whole UTC day boundaries used for expiry filtering (matches documentExpiryStatus). */
@@ -139,19 +144,19 @@ function expiryBoundaries(now = new Date()) {
   return { today, soon };
 }
 
-/** Site-scoped list of documents for the viewer, newest first. */
-export async function listDocuments(
+/**
+ * Build the site-scoped where clause shared by listDocuments + countDocuments so
+ * the two never drift. Returns null when the viewer has no sites (empty list).
+ */
+function documentWhere(
   viewer: PlatformViewer,
-  filters: DocumentListFilters = {},
-) {
-  // Constrain to the viewer's sites; narrow further to one site if requested
-  // (and only if that site is in scope).
+  filters: DocumentListFilters,
+): Prisma.DocumentWhereInput | null {
   const siteIds =
     filters.siteId && viewer.siteIds.includes(filters.siteId)
       ? [filters.siteId]
       : viewer.siteIds;
-
-  if (siteIds.length === 0) return [];
+  if (siteIds.length === 0) return null;
 
   const category =
     filters.category && isDocumentCategory(filters.category)
@@ -159,7 +164,7 @@ export async function listDocuments(
       : undefined;
 
   // Expiry filter — only documents WITH an expiry date match a specific status;
-  // documents without an expiry appear only under "all".
+  // documents without an expiry appear only under "none" / "all".
   let expiresAt: Prisma.DateTimeNullableFilter | null | undefined;
   if (filters.expiry && isDocumentExpiryFilter(filters.expiry)) {
     const { today, soon } = expiryBoundaries();
@@ -169,9 +174,43 @@ export async function listDocuments(
     else expiresAt = null; // none — documents with no expiry date
   }
 
+  const q = (filters.search ?? '').trim();
+  const search: Prisma.DocumentWhereInput | undefined = q
+    ? {
+        OR: [
+          { title: { contains: q, mode: 'insensitive' } },
+          { fileName: { contains: q, mode: 'insensitive' } },
+          { description: { contains: q, mode: 'insensitive' } },
+        ],
+      }
+    : undefined;
+
+  return { jobSiteId: { in: siteIds }, category, expiresAt, ...search };
+}
+
+/** Count of documents matching the (scoped) filters — for pagination totals. */
+export async function countDocuments(
+  viewer: PlatformViewer,
+  filters: DocumentListFilters = {},
+): Promise<number> {
+  const where = documentWhere(viewer, filters);
+  if (!where) return 0;
+  return prisma.document.count({ where });
+}
+
+/** Site-scoped list of documents for the viewer, newest first. */
+export async function listDocuments(
+  viewer: PlatformViewer,
+  filters: DocumentListFilters = {},
+) {
+  const where = documentWhere(viewer, filters);
+  if (!where) return [];
+
   return prisma.document.findMany({
-    where: { jobSiteId: { in: siteIds }, category, expiresAt },
+    where,
     orderBy: { createdAt: 'desc' },
+    skip: filters.skip,
+    take: filters.take,
     select: {
       id: true,
       title: true,
