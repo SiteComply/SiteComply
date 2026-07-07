@@ -5,16 +5,21 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { cn } from '@/lib/cn';
 import { DocumentExpiryBadge } from '@/components/platform/DocumentExpiryBadge';
+import { PlatformIcon } from '@/components/platform/icons';
 import { documentCategoryLabel } from '@/services/documents/documentConstants';
 import { formatDateUK } from '@/lib/datetime';
 import type { DocumentExpiryNotification } from '@/services/documents/documentExpiryNotifications';
 
+type Filter = 'all' | 'unread' | 'read';
+
 /**
- * The interactive notifications list: keeps the Expired / Expiring soon
- * categories and card styling, and adds per-notification read/unread toggles
- * plus a "Mark all as read" action. Read state persists per user via the
- * /api/platform/notifications endpoints; router.refresh() re-derives the list
- * and the nav badge so counts stay in step.
+ * The interactive notifications list. Keeps the Expired / Expiring soon
+ * categories and card styling, and adds:
+ *  - All / Unread / Read filters (defaults to Unread — the actionable view);
+ *  - clearly muted, de-emphasised styling for read notifications (no unread dot);
+ *  - per-notification read/unread toggles + a "Mark all as read" action;
+ *  - a friendly empty state per filter ("You're all caught up").
+ * Read state persists per user; router.refresh() re-derives the list + nav badge.
  */
 export function NotificationsList({
   notifications,
@@ -22,12 +27,18 @@ export function NotificationsList({
   notifications: DocumentExpiryNotification[];
 }) {
   const router = useRouter();
+  const [filter, setFilter] = useState<Filter>('unread');
   const [busyKey, setBusyKey] = useState<string | undefined>();
   const [busyAll, setBusyAll] = useState(false);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
-  const expired = notifications.filter((n) => n.status === 'EXPIRED');
-  const expiring = notifications.filter((n) => n.status === 'EXPIRING_SOON');
+  const readCount = notifications.length - unreadCount;
+
+  const visible = notifications.filter((n) =>
+    filter === 'unread' ? !n.read : filter === 'read' ? n.read : true,
+  );
+  const expired = visible.filter((n) => n.status === 'EXPIRED');
+  const expiring = visible.filter((n) => n.status === 'EXPIRING_SOON');
 
   async function toggle(n: DocumentExpiryNotification) {
     setBusyKey(n.key);
@@ -56,11 +67,15 @@ export function NotificationsList({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-ink-subtle">
-          {unreadCount > 0
-            ? `${unreadCount} unread of ${notifications.length}`
-            : `All ${notifications.length} read`}
-        </p>
+        <div
+          role="group"
+          aria-label="Filter notifications"
+          className="inline-flex rounded-lg border border-line bg-surface p-0.5"
+        >
+          <Tab label="All" count={notifications.length} active={filter === 'all'} onClick={() => setFilter('all')} />
+          <Tab label="Unread" count={unreadCount} active={filter === 'unread'} onClick={() => setFilter('unread')} />
+          <Tab label="Read" count={readCount} active={filter === 'read'} onClick={() => setFilter('read')} />
+        </div>
         <button
           type="button"
           onClick={markAll}
@@ -71,12 +86,72 @@ export function NotificationsList({
         </button>
       </div>
 
-      {expired.length > 0 && (
-        <Group title="Expired" count={expired.length} accent="text-danger-700" items={expired} busyKey={busyKey} onToggle={toggle} />
+      {visible.length === 0 ? (
+        <EmptyState filter={filter} />
+      ) : (
+        <div className="space-y-6">
+          {expired.length > 0 && (
+            <Group title="Expired" count={expired.length} accent="text-danger-700" items={expired} busyKey={busyKey} onToggle={toggle} />
+          )}
+          {expiring.length > 0 && (
+            <Group title="Expiring soon" count={expiring.length} accent="text-hivis-600" items={expiring} busyKey={busyKey} onToggle={toggle} />
+          )}
+        </div>
       )}
-      {expiring.length > 0 && (
-        <Group title="Expiring soon" count={expiring.length} accent="text-hivis-600" items={expiring} busyKey={busyKey} onToggle={toggle} />
+    </div>
+  );
+}
+
+function Tab({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'rounded-md px-3 py-1.5 text-sm font-semibold transition-colors',
+        active ? 'bg-brand-500 text-white' : 'text-ink-muted hover:text-brand-700',
       )}
+    >
+      {label}
+      <span className={cn('ml-1.5 tabular-nums', active ? 'text-white/80' : 'text-ink-subtle')}>
+        {count}
+      </span>
+    </button>
+  );
+}
+
+function EmptyState({ filter }: { filter: Filter }) {
+  const copy =
+    filter === 'read'
+      ? {
+          title: 'No read notifications',
+          body: 'Notifications you mark as read will appear here.',
+        }
+      : {
+          title: 'You’re all caught up',
+          body:
+            filter === 'unread'
+              ? 'You have no unread notifications.'
+              : 'You have no notifications right now.',
+        };
+  return (
+    <div className="rounded-xl border border-line bg-surface p-10 text-center shadow-card">
+      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-safe-50 text-safe-700">
+        <PlatformIcon name="bell" className="h-6 w-6" />
+      </div>
+      <p className="text-sm font-semibold text-ink">{copy.title}</p>
+      <p className="mt-1 text-sm text-ink-subtle">{copy.body}</p>
     </div>
   );
 }
@@ -106,8 +181,10 @@ function Group({
           <li
             key={n.key}
             className={cn(
-              'rounded-xl border bg-surface p-4 shadow-card',
-              n.read ? 'border-line' : 'border-brand-300',
+              'rounded-xl border p-4 shadow-card transition-colors',
+              n.read
+                ? 'border-line bg-surface-sunken' // read → muted, de-emphasised
+                : 'border-brand-300 bg-surface', // unread → stands out
             )}
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -116,26 +193,33 @@ function Group({
                   {!n.read && (
                     <span
                       className="h-2 w-2 shrink-0 rounded-full bg-brand-500"
-                      aria-label="Unread"
+                      aria-hidden="true"
                     />
                   )}
                   <Link
                     href={`/platform/dashboard/documents/${n.documentId}`}
                     className={cn(
                       'hover:underline',
-                      n.read ? 'font-medium text-ink' : 'font-semibold text-brand-700',
+                      n.read ? 'font-medium text-ink-muted' : 'font-semibold text-brand-700',
                     )}
                   >
                     {n.title}
                   </Link>
+                  {/* Read/unread state is conveyed to assistive tech in text, not just colour. */}
+                  <span className="sr-only">{n.read ? '(read)' : '(unread)'}</span>
                   <DocumentExpiryBadge expiresAt={n.expiresAt} />
                   {n.threshold !== null && (
-                    <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-[11px] font-semibold text-ink-subtle">
+                    <span
+                      className={cn(
+                        'rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                        n.read ? 'bg-surface text-ink-subtle' : 'bg-surface-sunken text-ink-subtle',
+                      )}
+                    >
                       {n.threshold}-day reminder
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-sm text-ink">
+                <p className={cn('mt-1 text-sm', n.read ? 'text-ink-muted' : 'text-ink')}>
                   <span className="font-medium">{n.message}</span>
                   <span className="text-ink-subtle">
                     {' '}
@@ -151,7 +235,7 @@ function Group({
                   type="button"
                   onClick={() => onToggle(n)}
                   disabled={busyKey === n.key}
-                  className="rounded-lg border border-line px-3 py-1.5 text-sm font-semibold text-ink-muted hover:bg-surface-sunken disabled:opacity-50"
+                  className="rounded-lg border border-line px-3 py-1.5 text-sm font-semibold text-ink-muted hover:bg-surface hover:text-ink disabled:opacity-50"
                 >
                   {n.read ? 'Mark as unread' : 'Mark as read'}
                 </button>
