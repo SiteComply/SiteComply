@@ -79,6 +79,14 @@ export const NOTIFICATION_TYPES: NotificationTypeDescriptor[] = [
     defaultChannels: { email: false, sms: false },
   },
   {
+    key: 'document_expiry',
+    label: 'Document expiry reminders',
+    description:
+      'Site documents (certificates, insurance, permits) that are expiring soon — reminders at 30, 14 and 7 days — or have already expired.',
+    defaultEnabled: true,
+    defaultChannels: { email: false, sms: false },
+  },
+  {
     key: 'weekly_summary',
     label: 'Weekly summary',
     description:

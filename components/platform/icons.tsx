@@ -12,7 +12,8 @@ export type PlatformIconName =
   | 'doc'
   | 'shield'
   | 'bolt'
-  | 'hardhat';
+  | 'hardhat'
+  | 'bell';
 
 const PATHS: Record<PlatformIconName, ReactNode> = {
   grid: (
@@ -64,6 +65,12 @@ const PATHS: Record<PlatformIconName, ReactNode> = {
       <path d="M4 16a8 8 0 0 1 16 0" />
       <path d="M10 9V5.5a1.5 1.5 0 0 1 3 0V9" />
       <path d="M3 16h18" />
+    </>
+  ),
+  bell: (
+    <>
+      <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z" />
+      <path d="M10.5 20a1.8 1.8 0 0 0 3 0" />
     </>
   ),
 };

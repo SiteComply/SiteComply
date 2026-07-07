@@ -7,6 +7,8 @@ import {
   getPlatformViewer,
   describeScope,
 } from '@/services/platformUsers/platformAccess';
+import { permits } from '@/services/platformUsers/platformPermissions';
+import { countDocumentExpiryNotifications } from '@/services/documents/documentExpiryNotifications';
 import { PlatformNav } from './PlatformNav';
 
 /**
@@ -19,6 +21,13 @@ import { PlatformNav } from './PlatformNav';
  */
 export async function PlatformShell({ children }: { children: ReactNode }) {
   const viewer = await getPlatformViewer();
+
+  // Notification badge — document-expiry reminders for the viewer's sites. Only
+  // computed for roles that can see documents (the notifications surface).
+  const notificationCount =
+    viewer && permits(viewer.role, 'documents', 'view')
+      ? await countDocumentExpiryNotifications(viewer)
+      : 0;
 
   return (
     <div className="flex min-h-dvh flex-col bg-surface-sunken">
@@ -69,7 +78,7 @@ export async function PlatformShell({ children }: { children: ReactNode }) {
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 md:flex-row">
         <aside className="shrink-0 md:w-52">
           <div className="rounded-xl border border-line bg-surface p-2 shadow-card md:sticky md:top-6">
-            <PlatformNav role={viewer?.role} />
+            <PlatformNav role={viewer?.role} notificationCount={notificationCount} />
           </div>
         </aside>
 

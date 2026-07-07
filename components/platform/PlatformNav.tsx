@@ -22,6 +22,7 @@ export const PLATFORM_NAV: {
   module: PlatformModule;
 }[] = [
   { href: '/platform/dashboard', label: 'Dashboard', icon: 'grid', module: 'dashboard' },
+  { href: '/platform/dashboard/notifications', label: 'Notifications', icon: 'bell', module: 'documents' },
   { href: '/platform/dashboard/sites', label: 'Sites', icon: 'pin', module: 'sites' },
   { href: '/platform/dashboard/submissions', label: 'Submissions', icon: 'clipboard', module: 'checkins' },
   { href: '/platform/dashboard/reports', label: 'Reports', icon: 'chart', module: 'reports' },
@@ -30,7 +31,15 @@ export const PLATFORM_NAV: {
   { href: '/platform/dashboard/actions', label: 'Actions', icon: 'bolt', module: 'actions' },
 ];
 
-export function PlatformNav({ role }: { role?: PlatformRoleValue }) {
+const NOTIFICATIONS_HREF = '/platform/dashboard/notifications';
+
+export function PlatformNav({
+  role,
+  notificationCount = 0,
+}: {
+  role?: PlatformRoleValue;
+  notificationCount?: number;
+}) {
   const pathname = usePathname();
   const items = role
     ? PLATFORM_NAV.filter((item) => permits(role, item.module, 'view'))
@@ -59,7 +68,18 @@ export function PlatformNav({ role }: { role?: PlatformRoleValue }) {
             )}
           >
             <PlatformIcon name={item.icon} className="h-5 w-5 shrink-0" />
-            {item.label}
+            <span className="flex-1">{item.label}</span>
+            {item.href === NOTIFICATIONS_HREF && notificationCount > 0 && (
+              <span
+                aria-label={`${notificationCount} notifications`}
+                className={cn(
+                  'inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-xs font-bold',
+                  active ? 'bg-white text-brand-700' : 'bg-danger-500 text-white',
+                )}
+              >
+                {notificationCount > 99 ? '99+' : notificationCount}
+              </span>
+            )}
           </Link>
         );
       })}
