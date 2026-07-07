@@ -10,11 +10,9 @@ import { getDocumentForViewer } from '@/services/documents/documentService';
 import {
   documentCategoryLabel,
   formatBytes,
-  documentExpiryStatus,
-  DOCUMENT_EXPIRY_LABEL,
-  DOCUMENT_EXPIRY_BADGE,
 } from '@/services/documents/documentConstants';
 import { DocumentDeleteButton } from '@/components/platform/DocumentDeleteButton';
+import { DocumentExpiryBadge } from '@/components/platform/DocumentExpiryBadge';
 import { formatDateUK, formatDateTimeUK } from '@/lib/datetime';
 
 export const dynamic = 'force-dynamic';
@@ -36,7 +34,6 @@ export default async function DocumentDetailPage({
   if (!doc) notFound();
 
   const canEdit = permits(viewer.role, 'documents', 'edit');
-  const expiryStatus = documentExpiryStatus(doc.expiresAt);
 
   return (
     <PlatformShell>
@@ -51,13 +48,7 @@ export default async function DocumentDetailPage({
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-bold text-ink">{doc.title}</h1>
-              {expiryStatus !== 'NONE' && (
-                <span
-                  className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${DOCUMENT_EXPIRY_BADGE[expiryStatus]}`}
-                >
-                  {DOCUMENT_EXPIRY_LABEL[expiryStatus]}
-                </span>
-              )}
+              <DocumentExpiryBadge expiresAt={doc.expiresAt} />
             </div>
             <p className="text-ink-muted">
               {documentCategoryLabel(doc.category)} · {doc.jobSite.name}

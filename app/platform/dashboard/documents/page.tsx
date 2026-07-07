@@ -12,12 +12,10 @@ import {
   DOCUMENT_CATEGORIES,
   documentCategoryLabel,
   formatBytes,
-  documentExpiryStatus,
-  DOCUMENT_EXPIRY_LABEL,
-  DOCUMENT_EXPIRY_BADGE,
   DOCUMENT_EXPIRY_FILTERS,
 } from '@/services/documents/documentConstants';
 import { DocumentDeleteButton } from '@/components/platform/DocumentDeleteButton';
+import { DocumentExpiryBadge } from '@/components/platform/DocumentExpiryBadge';
 import { formatDateUK } from '@/lib/datetime';
 
 export const dynamic = 'force-dynamic';
@@ -184,7 +182,7 @@ export default async function PlatformDocumentsPage({
                       {documentCategoryLabel(d.category)}
                     </td>
                     <td className="px-5 py-3">
-                      <ExpiryStatus expiresAt={d.expiresAt} now={now} />
+                      <DocumentExpiryBadge expiresAt={d.expiresAt} now={now} showDate />
                     </td>
                     <td className="px-5 py-3 text-ink">{d.jobSite.name}</td>
                     <td className="px-5 py-3 text-ink-muted">
@@ -219,23 +217,5 @@ export default async function PlatformDocumentsPage({
         )}
       </section>
     </PlatformShell>
-  );
-}
-
-/** Expiry status badge + the expiry date (or a dash when the document never expires). */
-function ExpiryStatus({ expiresAt, now }: { expiresAt: Date | null; now: Date }) {
-  const status = documentExpiryStatus(expiresAt, now);
-  if (status === 'NONE' || !expiresAt) {
-    return <span className="text-xs text-ink-subtle">—</span>;
-  }
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span
-        className={`inline-flex w-fit rounded-full px-2 py-0.5 text-xs font-semibold ${DOCUMENT_EXPIRY_BADGE[status]}`}
-      >
-        {DOCUMENT_EXPIRY_LABEL[status]}
-      </span>
-      <span className="text-xs text-ink-subtle">{formatDateUK(expiresAt)}</span>
-    </div>
   );
 }

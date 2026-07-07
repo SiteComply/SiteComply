@@ -120,12 +120,16 @@ export const DOCUMENT_EXPIRY_BADGE: Record<DocumentExpiryStatus, string> = {
   NONE: 'bg-surface-sunken text-ink-subtle',
 };
 
-/** The selectable expiry filters (excludes NONE — those show only under "All"). */
-export const DOCUMENT_EXPIRY_FILTERS: { value: string; label: string }[] = [
-  { value: 'valid', label: 'Valid' },
-  { value: 'expiring', label: 'Expiring soon' },
-  { value: 'expired', label: 'Expired' },
+export type DocumentExpiryFilter = 'valid' | 'expiring' | 'expired' | 'none';
+
+/** The selectable expiry filters — all four states. Labels reuse the badge
+ *  labels so the filter and the badges always read identically. */
+export const DOCUMENT_EXPIRY_FILTERS: { value: DocumentExpiryFilter; label: string }[] = [
+  { value: 'valid', label: DOCUMENT_EXPIRY_LABEL.VALID },
+  { value: 'expiring', label: DOCUMENT_EXPIRY_LABEL.EXPIRING_SOON },
+  { value: 'expired', label: DOCUMENT_EXPIRY_LABEL.EXPIRED },
+  { value: 'none', label: DOCUMENT_EXPIRY_LABEL.NONE },
 ];
 
-export const isDocumentExpiryFilter = (v: string): v is 'valid' | 'expiring' | 'expired' =>
-  v === 'valid' || v === 'expiring' || v === 'expired';
+export const isDocumentExpiryFilter = (v: string): v is DocumentExpiryFilter =>
+  v === 'valid' || v === 'expiring' || v === 'expired' || v === 'none';

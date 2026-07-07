@@ -160,12 +160,13 @@ export async function listDocuments(
 
   // Expiry filter — only documents WITH an expiry date match a specific status;
   // documents without an expiry appear only under "all".
-  let expiresAt: Prisma.DateTimeNullableFilter | undefined;
+  let expiresAt: Prisma.DateTimeNullableFilter | null | undefined;
   if (filters.expiry && isDocumentExpiryFilter(filters.expiry)) {
     const { today, soon } = expiryBoundaries();
     if (filters.expiry === 'expired') expiresAt = { lt: today };
     else if (filters.expiry === 'expiring') expiresAt = { gte: today, lte: soon };
-    else expiresAt = { gt: soon }; // valid
+    else if (filters.expiry === 'valid') expiresAt = { gt: soon };
+    else expiresAt = null; // none — documents with no expiry date
   }
 
   return prisma.document.findMany({
