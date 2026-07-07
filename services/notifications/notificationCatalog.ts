@@ -74,7 +74,15 @@ export const NOTIFICATION_TYPES: NotificationTypeDescriptor[] = [
     key: 'action_due_reminders',
     label: 'Action due reminders',
     description:
-      'A corrective action is approaching its due date and may need attention.',
+      'A corrective action is approaching its due date — reminders at 7 and 3 days.',
+    defaultEnabled: true,
+    defaultChannels: { email: false, sms: false },
+  },
+  {
+    key: 'action_assigned',
+    label: 'Newly assigned actions',
+    description:
+      'A corrective action has just been assigned or reassigned to someone.',
     defaultEnabled: true,
     defaultChannels: { email: false, sms: false },
   },

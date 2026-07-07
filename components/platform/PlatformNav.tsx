@@ -22,7 +22,7 @@ export const PLATFORM_NAV: {
   module: PlatformModule;
 }[] = [
   { href: '/platform/dashboard', label: 'Dashboard', icon: 'grid', module: 'dashboard' },
-  { href: '/platform/dashboard/notifications', label: 'Notifications', icon: 'bell', module: 'documents' },
+  { href: '/platform/dashboard/notifications', label: 'Notifications', icon: 'bell', module: 'dashboard' },
   { href: '/platform/dashboard/sites', label: 'Sites', icon: 'pin', module: 'sites' },
   { href: '/platform/dashboard/submissions', label: 'Submissions', icon: 'clipboard', module: 'checkins' },
   { href: '/platform/dashboard/reports', label: 'Reports', icon: 'chart', module: 'reports' },

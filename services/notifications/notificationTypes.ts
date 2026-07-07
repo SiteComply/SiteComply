@@ -1,0 +1,44 @@
+/**
+ * Client-safe notification shapes + display metadata. Kept free of any server
+ * imports (no prisma) so both the server aggregator and the client list can use
+ * them. Adding a new group/source touches only this file + the deriver.
+ */
+
+export type NotificationGroup =
+  | 'ACTION_OVERDUE'
+  | 'DOC_EXPIRED'
+  | 'ACTION_DUE'
+  | 'DOC_EXPIRING'
+  | 'ACTION_ASSIGNED';
+
+/** A derived notification before per-user read state is applied. */
+export interface RawNotification {
+  key: string;
+  group: NotificationGroup;
+  title: string;
+  message: string;
+  context: string;
+  meta: string;
+  href: string;
+  badgeLabel: string;
+  badgeClass: string;
+  chip: string | null;
+  /** Sort within a group; lower = more urgent. */
+  urgency: number;
+}
+
+export interface PlatformNotification extends RawNotification {
+  read: boolean;
+}
+
+/** Display metadata per group: heading, accent colour and display order. */
+export const NOTIFICATION_GROUP_META: Record<
+  NotificationGroup,
+  { title: string; accent: string; order: number }
+> = {
+  ACTION_OVERDUE: { title: 'Overdue actions', accent: 'text-danger-700', order: 1 },
+  DOC_EXPIRED: { title: 'Expired', accent: 'text-danger-700', order: 2 },
+  ACTION_DUE: { title: 'Actions due soon', accent: 'text-hivis-600', order: 3 },
+  DOC_EXPIRING: { title: 'Expiring soon', accent: 'text-hivis-600', order: 4 },
+  ACTION_ASSIGNED: { title: 'Newly assigned actions', accent: 'text-brand-700', order: 5 },
+};

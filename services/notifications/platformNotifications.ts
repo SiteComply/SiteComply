@@ -1,0 +1,55 @@
+import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
+import { getReadNotificationKeys } from '@/services/notifications/notificationReadService';
+import {
+  NOTIFICATION_GROUP_META,
+  type RawNotification,
+  type PlatformNotification,
+} from '@/services/notifications/notificationTypes';
+import { deriveDocumentNotifications } from '@/services/documents/documentExpiryNotifications';
+import { deriveActionNotifications } from '@/services/actions/actionNotifications';
+
+/**
+ * Unified in-app notifications for a platform user.
+ *
+ * Notifications are DERIVED on read from multiple sources (document expiry,
+ * action due/overdue/assignment) into one common shape (see notificationTypes),
+ * so the Notifications page, the nav badge and the read/unread endpoints all
+ * speak the same model. Each source is independently:
+ *  - gated by its notification type in Admin → Settings → Notifications,
+ *  - gated by the viewer's module RBAC (documents / actions "view"),
+ *  - scoped to the viewer's Assigned Sites.
+ * Read state is applied here (once) from NotificationRead. Adding a future source
+ * is just another deriver returning RawNotification[].
+ */
+
+/** All of the viewer's current notifications, most urgent group first. */
+export async function getPlatformNotifications(
+  viewer: PlatformViewer,
+  now: Date = new Date(),
+): Promise<PlatformNotification[]> {
+  if (viewer.siteIds.length === 0) return [];
+
+  const raw: RawNotification[] = [
+    ...(await deriveActionNotifications(viewer, now)),
+    ...(await deriveDocumentNotifications(viewer, now)),
+  ];
+
+  const readKeys = await getReadNotificationKeys(viewer.id, raw.map((r) => r.key));
+  const list: PlatformNotification[] = raw.map((r) => ({ ...r, read: readKeys.has(r.key) }));
+
+  list.sort((a, b) => {
+    const oa = NOTIFICATION_GROUP_META[a.group].order;
+    const ob = NOTIFICATION_GROUP_META[b.group].order;
+    return oa !== ob ? oa - ob : a.urgency - b.urgency;
+  });
+  return list;
+}
+
+/** Unread count across all sources — for the nav badge. */
+export async function countUnreadPlatformNotifications(
+  viewer: PlatformViewer,
+  now: Date = new Date(),
+): Promise<number> {
+  const list = await getPlatformNotifications(viewer, now);
+  return list.filter((n) => !n.read).length;
+}

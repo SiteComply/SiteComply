@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
-import { permits } from '@/services/platformUsers/platformPermissions';
-import { getDocumentExpiryNotifications } from '@/services/documents/documentExpiryNotifications';
+import { getPlatformNotifications } from '@/services/notifications/platformNotifications';
 import { setNotificationRead } from '@/services/notifications/notificationReadService';
 
 export const runtime = 'nodejs';
@@ -11,16 +10,13 @@ export const dynamic = 'force-dynamic';
  * POST /api/platform/notifications/read
  * Body: { key: string, read: boolean }
  * Mark a single notification read (true) or unread (false) for the current user.
- * Only notifications the viewer can currently see — i.e. within their
- * Assigned-Sites scope — may be marked (validated against the derived set).
+ * Only notifications the viewer can currently see — validated against their
+ * derived set, which already applies module RBAC + Assigned-Sites scope.
  */
 export async function POST(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
     return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
-  }
-  if (!permits(viewer.role, 'documents', 'view')) {
-    return NextResponse.json({ ok: false, error: 'Forbidden.' }, { status: 403 });
   }
 
   let body: { key?: string; read?: boolean };
@@ -37,7 +33,7 @@ export async function POST(req: NextRequest) {
 
   // Scope + RBAC: only keys present in the viewer's current notifications.
   const validKeys = new Set(
-    (await getDocumentExpiryNotifications(viewer)).map((n) => n.key),
+    (await getPlatformNotifications(viewer)).map((n) => n.key),
   );
   if (!validKeys.has(key)) {
     return NextResponse.json({ ok: false, error: 'Notification not found.' }, { status: 404 });

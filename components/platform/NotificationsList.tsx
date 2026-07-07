@@ -4,27 +4,32 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { cn } from '@/lib/cn';
-import { DocumentExpiryBadge } from '@/components/platform/DocumentExpiryBadge';
 import { PlatformIcon } from '@/components/platform/icons';
-import { documentCategoryLabel } from '@/services/documents/documentConstants';
-import { formatDateUK } from '@/lib/datetime';
-import type { DocumentExpiryNotification } from '@/services/documents/documentExpiryNotifications';
+import {
+  NOTIFICATION_GROUP_META,
+  type NotificationGroup,
+  type PlatformNotification,
+} from '@/services/notifications/notificationTypes';
 
 type Filter = 'all' | 'unread' | 'read';
 
+const GROUP_ORDER = (Object.keys(NOTIFICATION_GROUP_META) as NotificationGroup[]).sort(
+  (a, b) => NOTIFICATION_GROUP_META[a].order - NOTIFICATION_GROUP_META[b].order,
+);
+
 /**
- * The interactive notifications list. Keeps the Expired / Expiring soon
- * categories and card styling, and adds:
- *  - All / Unread / Read filters (defaults to Unread — the actionable view);
+ * The interactive notifications list. Renders the unified notification feed
+ * (document expiry + action alerts) grouped by category, with:
+ *  - All / Unread / Read filters (defaults to Unread);
  *  - clearly muted, de-emphasised styling for read notifications (no unread dot);
  *  - per-notification read/unread toggles + a "Mark all as read" action;
- *  - a friendly empty state per filter ("You're all caught up").
+ *  - a friendly empty state per filter.
  * Read state persists per user; router.refresh() re-derives the list + nav badge.
  */
 export function NotificationsList({
   notifications,
 }: {
-  notifications: DocumentExpiryNotification[];
+  notifications: PlatformNotification[];
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>('unread');
@@ -37,10 +42,8 @@ export function NotificationsList({
   const visible = notifications.filter((n) =>
     filter === 'unread' ? !n.read : filter === 'read' ? n.read : true,
   );
-  const expired = visible.filter((n) => n.status === 'EXPIRED');
-  const expiring = visible.filter((n) => n.status === 'EXPIRING_SOON');
 
-  async function toggle(n: DocumentExpiryNotification) {
+  async function toggle(n: PlatformNotification) {
     setBusyKey(n.key);
     try {
       const res = await fetch('/api/platform/notifications/read', {
@@ -90,12 +93,22 @@ export function NotificationsList({
         <EmptyState filter={filter} />
       ) : (
         <div className="space-y-6">
-          {expired.length > 0 && (
-            <Group title="Expired" count={expired.length} accent="text-danger-700" items={expired} busyKey={busyKey} onToggle={toggle} />
-          )}
-          {expiring.length > 0 && (
-            <Group title="Expiring soon" count={expiring.length} accent="text-hivis-600" items={expiring} busyKey={busyKey} onToggle={toggle} />
-          )}
+          {GROUP_ORDER.map((group) => {
+            const items = visible.filter((n) => n.group === group);
+            if (items.length === 0) return null;
+            const meta = NOTIFICATION_GROUP_META[group];
+            return (
+              <Group
+                key={group}
+                title={meta.title}
+                count={items.length}
+                accent={meta.accent}
+                items={items}
+                busyKey={busyKey}
+                onToggle={toggle}
+              />
+            );
+          })}
         </div>
       )}
     </div>
@@ -134,10 +147,7 @@ function Tab({
 function EmptyState({ filter }: { filter: Filter }) {
   const copy =
     filter === 'read'
-      ? {
-          title: 'No read notifications',
-          body: 'Notifications you mark as read will appear here.',
-        }
+      ? { title: 'No read notifications', body: 'Notifications you mark as read will appear here.' }
       : {
           title: 'You’re all caught up',
           body:
@@ -167,9 +177,9 @@ function Group({
   title: string;
   count: number;
   accent: string;
-  items: DocumentExpiryNotification[];
+  items: PlatformNotification[];
   busyKey: string | undefined;
-  onToggle: (n: DocumentExpiryNotification) => void;
+  onToggle: (n: PlatformNotification) => void;
 }) {
   return (
     <section>
@@ -182,22 +192,17 @@ function Group({
             key={n.key}
             className={cn(
               'rounded-xl border p-4 shadow-card transition-colors',
-              n.read
-                ? 'border-line bg-surface-sunken' // read → muted, de-emphasised
-                : 'border-brand-300 bg-surface', // unread → stands out
+              n.read ? 'border-line bg-surface-sunken' : 'border-brand-300 bg-surface',
             )}
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   {!n.read && (
-                    <span
-                      className="h-2 w-2 shrink-0 rounded-full bg-brand-500"
-                      aria-hidden="true"
-                    />
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-brand-500" aria-hidden="true" />
                   )}
                   <Link
-                    href={`/platform/dashboard/documents/${n.documentId}`}
+                    href={n.href}
                     className={cn(
                       'hover:underline',
                       n.read ? 'font-medium text-ink-muted' : 'font-semibold text-brand-700',
@@ -205,30 +210,26 @@ function Group({
                   >
                     {n.title}
                   </Link>
-                  {/* Read/unread state is conveyed to assistive tech in text, not just colour. */}
                   <span className="sr-only">{n.read ? '(read)' : '(unread)'}</span>
-                  <DocumentExpiryBadge expiresAt={n.expiresAt} />
-                  {n.threshold !== null && (
-                    <span
-                      className={cn(
-                        'rounded-full px-2 py-0.5 text-[11px] font-semibold',
-                        n.read ? 'bg-surface text-ink-subtle' : 'bg-surface-sunken text-ink-subtle',
-                      )}
-                    >
-                      {n.threshold}-day reminder
+                  <span
+                    className={cn(
+                      'inline-flex w-fit items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold',
+                      n.badgeClass,
+                    )}
+                  >
+                    {n.badgeLabel}
+                  </span>
+                  {n.chip && (
+                    <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-[11px] font-semibold text-ink-subtle">
+                      {n.chip}
                     </span>
                   )}
                 </div>
                 <p className={cn('mt-1 text-sm', n.read ? 'text-ink-muted' : 'text-ink')}>
                   <span className="font-medium">{n.message}</span>
-                  <span className="text-ink-subtle">
-                    {' '}
-                    · {documentCategoryLabel(n.category)} · {n.jobSiteName}
-                  </span>
+                  <span className="text-ink-subtle"> · {n.context}</span>
                 </p>
-                <p className="mt-0.5 text-xs text-ink-subtle">
-                  {n.fileName} · expires {formatDateUK(n.expiresAt)}
-                </p>
+                <p className="mt-0.5 text-xs text-ink-subtle">{n.meta}</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <button
@@ -240,10 +241,10 @@ function Group({
                   {n.read ? 'Mark as unread' : 'Mark as read'}
                 </button>
                 <Link
-                  href={`/platform/dashboard/documents/${n.documentId}`}
+                  href={n.href}
                   className="rounded-lg border border-brand-500 px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50"
                 >
-                  View document
+                  View
                 </Link>
               </div>
             </div>

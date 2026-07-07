@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
-import { permits } from '@/services/platformUsers/platformPermissions';
-import { getDocumentExpiryNotifications } from '@/services/documents/documentExpiryNotifications';
+import { getPlatformNotifications } from '@/services/notifications/platformNotifications';
 import { markNotificationsRead } from '@/services/notifications/notificationReadService';
 
 export const runtime = 'nodejs';
@@ -17,11 +16,8 @@ export async function POST() {
   if (!viewer) {
     return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
   }
-  if (!permits(viewer.role, 'documents', 'view')) {
-    return NextResponse.json({ ok: false, error: 'Forbidden.' }, { status: 403 });
-  }
 
-  const keys = (await getDocumentExpiryNotifications(viewer)).map((n) => n.key);
+  const keys = (await getPlatformNotifications(viewer)).map((n) => n.key);
   await markNotificationsRead(viewer.id, keys);
   return NextResponse.json({ ok: true, count: keys.length });
 }

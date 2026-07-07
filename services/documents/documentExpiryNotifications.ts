@@ -1,25 +1,25 @@
 import { prisma } from '@/lib/prisma';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
+import { permits } from '@/services/platformUsers/platformPermissions';
 import {
   isNotificationEnabled,
   getNotificationChannels,
 } from '@/services/notifications/notificationConfigService';
 import type { NotificationChannelKey } from '@/services/notifications/notificationCatalog';
-import { getReadNotificationKeys } from '@/services/notifications/notificationReadService';
+import {
+  documentCategoryLabel,
+  DOCUMENT_EXPIRY_LABEL,
+  DOCUMENT_EXPIRY_BADGE,
+} from '@/services/documents/documentConstants';
+import { formatDateUK } from '@/lib/datetime';
+import type { RawNotification } from '@/services/notifications/notificationTypes';
 
 /**
- * Automated document-expiry notifications.
- *
- * Rather than a scheduled job writing rows, these are DERIVED on read from the
- * documents' expiry dates + the configured reminder thresholds — always current,
- * naturally site-scoped, and with no duplicate-send bookkeeping (the same pattern
- * the Actions register uses for "overdue"). The result is shown in-app.
- *
- * They plug into the existing notifications framework: nothing is generated when
- * the `document_expiry` notification type is disabled in Admin → Settings →
- * Notifications, and the enabled delivery channels are read from that same config
- * so a future scheduled worker can send these over email / SMS by reusing
- * getDocumentExpiryNotifications() + getDocumentExpiryChannels() — no changes here.
+ * Document-expiry notifications — DERIVED on read from documents' expiry dates +
+ * the configured reminder thresholds, mapped into the unified RawNotification
+ * shape consumed by services/notifications/platformNotifications. Nothing is
+ * produced when the `document_expiry` notification type is disabled, when the
+ * viewer lacks documents "view", or for sites outside the viewer's scope.
  */
 
 export const DOCUMENT_EXPIRY_NOTIFICATION_TYPE = 'document_expiry';
@@ -29,28 +29,6 @@ export const DOCUMENT_EXPIRY_THRESHOLDS = [30, 14, 7] as const;
 const MAX_THRESHOLD = Math.max(...DOCUMENT_EXPIRY_THRESHOLDS);
 const DAY_MS = 24 * 60 * 60 * 1000;
 const utcDay = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-
-export type ExpiryNotificationStatus = 'EXPIRING_SOON' | 'EXPIRED';
-
-export interface DocumentExpiryNotification {
-  /** Stable per-reminder identity (incl. threshold), used for read-state. */
-  key: string;
-  /** Whether this user has marked it read. */
-  read: boolean;
-  documentId: string;
-  title: string;
-  fileName: string;
-  category: string;
-  jobSiteId: string;
-  jobSiteName: string;
-  expiresAt: string; // ISO
-  status: ExpiryNotificationStatus;
-  /** Whole days until expiry; negative once expired. */
-  daysUntilExpiry: number;
-  /** The reminder threshold (30/14/7) currently in effect; null for expired. */
-  threshold: number | null;
-  message: string;
-}
 
 /**
  * A notification's stable identity string. Includes the reminder level so that
@@ -76,21 +54,20 @@ function expiredMessage(days: number): string {
 }
 
 /**
- * The viewer's current document-expiry notifications, most urgent first
- * (expired, then soonest expiry). Site-scoped to the viewer's Assigned Sites.
- * Returns [] when the notification type is disabled or the viewer has no sites.
+ * Derive the viewer's document-expiry notifications (without read state) as
+ * unified RawNotification items. Site-scoped + RBAC-gated + settings-gated.
  */
-export async function getDocumentExpiryNotifications(
+export async function deriveDocumentNotifications(
   viewer: PlatformViewer,
   now: Date = new Date(),
-): Promise<DocumentExpiryNotification[]> {
+): Promise<RawNotification[]> {
   if (viewer.siteIds.length === 0) return [];
+  if (!permits(viewer.role, 'documents', 'view')) return [];
   if (!(await isNotificationEnabled(DOCUMENT_EXPIRY_NOTIFICATION_TYPE))) return [];
 
   const todayMs = utcDay(now);
   const cutoff = new Date(todayMs + MAX_THRESHOLD * DAY_MS); // today + 30 days
 
-  // Documents in scope that are already expired or expiring within the window.
   const docs = await prisma.document.findMany({
     where: {
       jobSiteId: { in: viewer.siteIds },
@@ -107,63 +84,48 @@ export async function getDocumentExpiryNotifications(
     },
   });
 
-  const out: Omit<DocumentExpiryNotification, 'read'>[] = [];
+  const out: RawNotification[] = [];
   for (const d of docs) {
     if (!d.expiresAt) continue;
     const daysUntilExpiry = Math.round((utcDay(d.expiresAt) - todayMs) / DAY_MS);
-    const common = {
-      documentId: d.id,
-      title: d.title,
-      fileName: d.fileName,
-      category: d.category,
-      jobSiteId: d.jobSite.id,
-      jobSiteName: d.jobSite.name,
-      expiresAt: d.expiresAt.toISOString(),
-      daysUntilExpiry,
-    };
+    const context = `${documentCategoryLabel(d.category)} · ${d.jobSite.name}`;
+    const meta = `${d.fileName} · expires ${formatDateUK(d.expiresAt)}`;
+    const href = `/platform/dashboard/documents/${d.id}`;
 
     if (daysUntilExpiry < 0) {
       out.push({
-        ...common,
         key: documentExpiryNotificationKey(d.id, null),
-        status: 'EXPIRED',
-        threshold: null,
+        group: 'DOC_EXPIRED',
+        title: d.title,
         message: expiredMessage(daysUntilExpiry),
+        context,
+        meta,
+        href,
+        badgeLabel: DOCUMENT_EXPIRY_LABEL.EXPIRED,
+        badgeClass: DOCUMENT_EXPIRY_BADGE.EXPIRED,
+        chip: null,
+        urgency: daysUntilExpiry,
       });
       continue;
     }
-    // Expiring soon — the active reminder is the smallest crossed threshold.
     const crossed = DOCUMENT_EXPIRY_THRESHOLDS.filter((t) => daysUntilExpiry <= t);
-    if (crossed.length === 0) continue; // outside all reminder windows
+    if (crossed.length === 0) continue;
     const threshold = Math.min(...crossed);
     out.push({
-      ...common,
       key: documentExpiryNotificationKey(d.id, threshold),
-      status: 'EXPIRING_SOON',
-      threshold,
+      group: 'DOC_EXPIRING',
+      title: d.title,
       message: expiringMessage(daysUntilExpiry),
+      context,
+      meta,
+      href,
+      badgeLabel: DOCUMENT_EXPIRY_LABEL.EXPIRING_SOON,
+      badgeClass: DOCUMENT_EXPIRY_BADGE.EXPIRING_SOON,
+      chip: `${threshold}-day reminder`,
+      urgency: daysUntilExpiry,
     });
   }
-
-  // Annotate each with the user's read state (absent row = unread).
-  const readKeys = await getReadNotificationKeys(viewer.id, out.map((n) => n.key));
-  const notifications: DocumentExpiryNotification[] = out.map((n) => ({
-    ...n,
-    read: readKeys.has(n.key),
-  }));
-
-  // Expired first (most negative days), then soonest to expire.
-  notifications.sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
-  return notifications;
-}
-
-/** Count of the viewer's UNREAD document-expiry notifications (for the nav badge). */
-export async function countUnreadDocumentExpiryNotifications(
-  viewer: PlatformViewer,
-  now: Date = new Date(),
-): Promise<number> {
-  const notifications = await getDocumentExpiryNotifications(viewer, now);
-  return notifications.filter((n) => !n.read).length;
+  return out;
 }
 
 /**

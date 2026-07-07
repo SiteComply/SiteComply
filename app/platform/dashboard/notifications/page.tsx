@@ -3,26 +3,22 @@ import { PlatformIcon } from '@/components/platform/icons';
 import {
   requirePlatformViewer,
   describeScope,
-  assertModuleView,
 } from '@/services/platformUsers/platformAccess';
-import { getDocumentExpiryNotifications } from '@/services/documents/documentExpiryNotifications';
+import { getPlatformNotifications } from '@/services/notifications/platformNotifications';
 import { NotificationsList } from '@/components/platform/NotificationsList';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Platform notifications — document-expiry reminders derived from the viewer's
- * in-scope documents (30 / 14 / 7-day reminders plus expired). Users can mark
- * individual notifications read/unread (state persists per user); the nav badge
- * counts only unread. Only documents on the viewer's Assigned Sites appear, and
- * nothing shows when an admin has turned "document expiry" notifications off.
+ * Platform notifications — a unified, derived feed across sources: document
+ * expiry reminders and action overdue / due-soon / newly-assigned alerts. Each
+ * source is gated by its notification type + the viewer's module RBAC and scoped
+ * to the viewer's Assigned Sites, so only notifications the viewer can access
+ * appear. Users can mark items read/unread (persisted per user).
  */
 export default async function PlatformNotificationsPage() {
   const viewer = await requirePlatformViewer();
-  // Document-expiry notifications require the documents module.
-  assertModuleView(viewer, 'documents');
-
-  const notifications = await getDocumentExpiryNotifications(viewer);
+  const notifications = await getPlatformNotifications(viewer);
 
   return (
     <PlatformShell>
@@ -30,7 +26,7 @@ export default async function PlatformNotificationsPage() {
         <div>
           <h1 className="text-2xl font-bold text-ink">Notifications</h1>
           <p className="text-ink-muted">
-            Document expiry reminders across your sites.
+            Document expiry and action reminders across your sites.
           </p>
         </div>
         <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
@@ -45,7 +41,7 @@ export default async function PlatformNotificationsPage() {
           </div>
           <p className="text-sm font-semibold text-ink">You’re all caught up</p>
           <p className="mt-1 text-sm text-ink-subtle">
-            No documents are expiring soon or expired on your sites.
+            You have no notifications right now.
           </p>
         </div>
       ) : (

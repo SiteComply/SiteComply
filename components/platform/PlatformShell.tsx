@@ -7,8 +7,7 @@ import {
   getPlatformViewer,
   describeScope,
 } from '@/services/platformUsers/platformAccess';
-import { permits } from '@/services/platformUsers/platformPermissions';
-import { countUnreadDocumentExpiryNotifications } from '@/services/documents/documentExpiryNotifications';
+import { countUnreadPlatformNotifications } from '@/services/notifications/platformNotifications';
 import { PlatformNav } from './PlatformNav';
 
 /**
@@ -22,12 +21,11 @@ import { PlatformNav } from './PlatformNav';
 export async function PlatformShell({ children }: { children: ReactNode }) {
   const viewer = await getPlatformViewer();
 
-  // Notification badge — UNREAD document-expiry reminders for the viewer's sites.
-  // Only computed for roles that can see documents (the notifications surface).
-  const notificationCount =
-    viewer && permits(viewer.role, 'documents', 'view')
-      ? await countUnreadDocumentExpiryNotifications(viewer)
-      : 0;
+  // Notification badge — unread count across all sources (document expiry +
+  // action alerts). The derivation applies each source's RBAC + site-scoping.
+  const notificationCount = viewer
+    ? await countUnreadPlatformNotifications(viewer)
+    : 0;
 
   return (
     <div className="flex min-h-dvh flex-col bg-surface-sunken">
