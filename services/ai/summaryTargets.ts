@@ -48,6 +48,16 @@ export interface SummaryTargetDef {
   authorize(viewer: PlatformViewer, opts: SummaryOpts): boolean;
   /** Build the scoped context, or null if out of scope / not found. */
   build(viewer: PlatformViewer, opts: SummaryOpts): Promise<BuiltContext | null>;
+  /**
+   * Resolve JUST the stable grouping key + scope snapshot for this target,
+   * without building the full model context. Used by the history browser to find
+   * prior summaries for the same report/record. Returns null if out of scope or
+   * not found. Same key formula as build(), so history lines up with the cache.
+   */
+  resolveKey(
+    viewer: PlatformViewer,
+    opts: SummaryOpts,
+  ): Promise<{ targetKey: string; siteIds: string[] } | null>;
 }
 
 const roundPct = (n: number, total: number) =>
@@ -67,6 +77,13 @@ const COMPLIANCE: SummaryTargetDef = {
   type: 'COMPLIANCE_REPORT',
   label: 'compliance report',
   authorize: (v) => canRunReport(v, getReportType('compliance')!),
+  async resolveKey(viewer, opts) {
+    const f = parseReportFilters(opts.filters ?? {}, viewer);
+    return {
+      targetKey: reportTargetKey('compliance', f.fromStr, f.toStr, f.siteIds),
+      siteIds: f.siteIds,
+    };
+  },
   async build(viewer, opts) {
     const filters = parseReportFilters(opts.filters ?? {}, viewer);
     const s = await getComplianceSummary(filters.siteIds, filters.range);
@@ -102,6 +119,13 @@ const SCORECARD: SummaryTargetDef = {
   type: 'SCORECARD_REPORT',
   label: 'site compliance scorecard',
   authorize: (v) => canRunReport(v, getReportType('scorecard')!),
+  async resolveKey(viewer, opts) {
+    const f = parseReportFilters(opts.filters ?? {}, viewer);
+    return {
+      targetKey: reportTargetKey('scorecard', f.fromStr, f.toStr, f.siteIds),
+      siteIds: f.siteIds,
+    };
+  },
   async build(viewer, opts) {
     const filters = parseReportFilters(opts.filters ?? {}, viewer);
     const scopeSites = viewer.sites.filter((s) => filters.siteIds.includes(s.id));
@@ -130,6 +154,13 @@ const ORG_OVERVIEW: SummaryTargetDef = {
   type: 'ORG_OVERVIEW_REPORT',
   label: 'organisation overview report',
   authorize: (v) => canRunReport(v, getReportType('org-overview')!), // directorOnly enforced here
+  async resolveKey(viewer, opts) {
+    const f = parseReportFilters(opts.filters ?? {}, viewer);
+    return {
+      targetKey: reportTargetKey('org-overview', f.fromStr, f.toStr, f.siteIds),
+      siteIds: f.siteIds,
+    };
+  },
   async build(viewer, opts) {
     const filters = parseReportFilters(opts.filters ?? {}, viewer);
     const scopeSites = viewer.sites.filter((s) => filters.siteIds.includes(s.id));
@@ -168,6 +199,11 @@ const AUDIT: SummaryTargetDef = {
   type: 'AUDIT',
   label: 'audit',
   authorize: (v) => permits(v.role, 'audits', 'view'),
+  async resolveKey(viewer, opts) {
+    if (!opts.targetKey) return null;
+    const audit = await getAuditForViewer(viewer, opts.targetKey); // enforces site scope
+    return audit ? { targetKey: audit.id, siteIds: [audit.jobSiteId] } : null;
+  },
   async build(viewer, opts) {
     if (!opts.targetKey) return null;
     const audit = await getAuditForViewer(viewer, opts.targetKey); // enforces site scope
@@ -216,6 +252,9 @@ const AUDITS_REGISTER: SummaryTargetDef = {
   type: 'AUDITS_REGISTER',
   label: 'audits register',
   authorize: (v) => permits(v.role, 'audits', 'view'),
+  async resolveKey(viewer) {
+    return { targetKey: 'register', siteIds: viewer.siteIds };
+  },
   async build(viewer) {
     const audits = await listAudits(viewer, {});
     const byStatus = audits.reduce<Record<string, number>>((acc, a) => {
@@ -257,6 +296,9 @@ const ACTIONS_REGISTER: SummaryTargetDef = {
   type: 'ACTIONS_REGISTER',
   label: 'actions register',
   authorize: (v) => permits(v.role, 'actions', 'view'),
+  async resolveKey(viewer) {
+    return { targetKey: 'register', siteIds: viewer.siteIds };
+  },
   async build(viewer) {
     const now = new Date();
     const [counts, overdue] = await Promise.all([
