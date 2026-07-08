@@ -55,9 +55,15 @@ export type SummaryResult =
     }
   | { ok: false; reason: SummaryReason };
 
-/** Deterministic hash of the scoped context → cache key + change detection. */
+/**
+ * Deterministic hash of the scoped context → cache key + change detection. The
+ * prompt version is mixed in so a prompt/format change regenerates the summary
+ * instead of serving a result written by the previous template.
+ */
 function hashContext(context: unknown): string {
-  return createHash('sha256').update(canonical(context)).digest('hex');
+  return createHash('sha256')
+    .update(`${AI_SUMMARY_PROMPT_VERSION}\n${canonical(context)}`)
+    .digest('hex');
 }
 
 function canonical(value: unknown): string {
@@ -147,7 +153,7 @@ export async function generateSummary(
 
   // 6. Generate via the runtime-resolved provider (mock by default).
   const provider = await resolveAiProvider();
-  const user = buildUserPrompt(target.label, built.scopeLabel, built.context);
+  const user = buildUserPrompt(targetType, target.label, built.scopeLabel, built.context);
 
   const logBase = {
     targetType,

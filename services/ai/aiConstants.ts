@@ -34,5 +34,8 @@ export const aiSummaryTargetLabel = (v: string) =>
 export const isAiSummaryTarget = (v: string): v is AiSummaryTargetValue =>
   LABELS.has(v as AiSummaryTargetValue);
 
-/** Current prompt/template version — logged with each generation for reproducibility. */
-export const AI_SUMMARY_PROMPT_VERSION = 'v1';
+/** Current prompt/template version — logged with each generation for reproducibility
+ *  and mixed into the summary cache key so a prompt change regenerates the result.
+ *  v2: executive format (headline · executive summary · key risks · positive
+ *  observations · recommended actions · priority focus) with per-report guidance. */
+export const AI_SUMMARY_PROMPT_VERSION = 'v2';

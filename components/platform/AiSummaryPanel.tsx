@@ -5,9 +5,11 @@ import { formatDateTimeUK } from '@/lib/datetime';
 
 interface SummaryOutput {
   headline: string;
-  keyPoints: string[];
-  risks: string[];
-  recommendedFocus: string[];
+  executiveSummary: string;
+  keyRisks: string[];
+  positiveObservations: string[];
+  recommendedActions: string[];
+  priorityFocus: string[];
 }
 
 interface Loaded {
@@ -108,14 +110,21 @@ export function AiSummaryPanel({
         <div className="mt-4 space-y-4">
           <p className="text-base font-semibold text-ink">{loaded.summary.headline}</p>
 
-          {loaded.summary.keyPoints.length > 0 && (
-            <Block title="Key points" items={loaded.summary.keyPoints} />
+          {loaded.summary.executiveSummary && (
+            <p className="text-sm text-ink">{loaded.summary.executiveSummary}</p>
           )}
-          {loaded.summary.risks.length > 0 && (
-            <Block title="Risks & concerns" items={loaded.summary.risks} />
+
+          {loaded.summary.keyRisks.length > 0 && (
+            <Block title="Key risks" items={loaded.summary.keyRisks} />
           )}
-          {loaded.summary.recommendedFocus.length > 0 && (
-            <Block title="Recommended focus" items={loaded.summary.recommendedFocus} />
+          {loaded.summary.positiveObservations.length > 0 && (
+            <Block title="Positive observations" items={loaded.summary.positiveObservations} />
+          )}
+          {loaded.summary.recommendedActions.length > 0 && (
+            <Block title="Recommended actions" items={loaded.summary.recommendedActions} />
+          )}
+          {loaded.summary.priorityFocus.length > 0 && (
+            <Block title="Priority focus areas" items={loaded.summary.priorityFocus} ordered />
           )}
 
           <p className="border-t border-brand-200 pt-3 text-xs text-ink-subtle">
@@ -130,17 +139,36 @@ export function AiSummaryPanel({
   );
 }
 
-function Block({ title, items }: { title: string; items: string[] }) {
+function Block({
+  title,
+  items,
+  ordered = false,
+}: {
+  title: string;
+  items: string[];
+  ordered?: boolean;
+}) {
+  const listClass = `mt-1 space-y-1 pl-5 text-sm text-ink ${
+    ordered ? 'list-decimal' : 'list-disc'
+  }`;
   return (
     <div>
       <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">
         {title}
       </h3>
-      <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-ink">
-        {items.map((it, i) => (
-          <li key={i}>{it}</li>
-        ))}
-      </ul>
+      {ordered ? (
+        <ol className={listClass}>
+          {items.map((it, i) => (
+            <li key={i}>{it}</li>
+          ))}
+        </ol>
+      ) : (
+        <ul className={listClass}>
+          {items.map((it, i) => (
+            <li key={i}>{it}</li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

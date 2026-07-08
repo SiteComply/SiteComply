@@ -32,19 +32,25 @@ export class AzureOpenAiProvider implements AiProvider {
     const key = this.config?.apiKey || requireEnv('AZURE_OPENAI_KEY');
     const deployment = this.config?.deployment || requireEnv('AZURE_OPENAI_DEPLOYMENT');
     const apiVersion =
-      this.config?.apiVersion || process.env.AZURE_OPENAI_API_VERSION || '2024-08-01-preview';
+      this.config?.apiVersion || process.env.AZURE_OPENAI_API_VERSION || '2025-04-01-preview';
     const url = `${endpoint}/openai/deployments/${encodeURIComponent(
       deployment,
     )}/chat/completions?api-version=${apiVersion}`;
 
+    // `max_completion_tokens` (not the legacy `max_tokens`) is required by the
+    // GPT-5 / o-series reasoning models and accepted by the 4.x models on recent
+    // API versions. Reasoning models also spend part of this budget on hidden
+    // reasoning tokens before the visible answer, so the cap must leave headroom.
     const body: Record<string, unknown> = {
       messages: [
         { role: 'system', content: input.system },
         { role: 'user', content: input.user },
       ],
-      max_tokens: input.maxOutputTokens ?? 700,
-      temperature: input.temperature ?? 0.2,
+      max_completion_tokens: input.maxOutputTokens ?? 2500,
     };
+    // Reasoning models only accept the default temperature (1); sending any other
+    // value is a 400. So only forward temperature when a caller explicitly sets one.
+    if (typeof input.temperature === 'number') body.temperature = input.temperature;
     if (input.schema) {
       body.response_format = {
         type: 'json_schema',
