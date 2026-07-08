@@ -8,43 +8,47 @@
  * AI_SUMMARY_PROMPT_VERSION (logged with, and mixed into the cache key for, each
  * summary so a prompt change regenerates rather than serving a stale result).
  *
- * The output is written for senior leaders and always carries five sections:
- *   headline · executiveSummary · keyRisks · positiveObservations ·
+ * The output is a balanced, strengths-first executive narrative for directors and
+ * clients, carrying five sections in this order:
+ *   headline · executiveSummary · positiveObservations · keyRisks ·
  *   recommendedActions · priorityFocus.
  */
 
 export interface SummaryOutput {
   /** One-line verdict used as the panel title. */
   headline: string;
-  /** 2–3 sentence executive overview. */
+  /** 2–3 sentence executive overview, opening on strengths. */
   executiveSummary: string;
+  /** Genuine strengths and achievements evident in the data — presented first. */
+  positiveObservations: string[];
   /** Top risks / compliance gaps, most serious first. */
   keyRisks: string[];
-  /** Genuine strengths evident in the data. */
-  positiveObservations: string[];
   /** Concrete, practical next actions. */
   recommendedActions: string[];
   /** Ranked focus areas — where to concentrate effort now. */
   priorityFocus: string[];
 }
 
-/** JSON schema passed to the provider for structured output. */
+/**
+ * JSON schema passed to the provider for structured output. Property order mirrors
+ * the strengths-first narrative (positiveObservations before keyRisks).
+ */
 export const SUMMARY_SCHEMA: Record<string, unknown> = {
   type: 'object',
   additionalProperties: false,
   properties: {
     headline: { type: 'string' },
     executiveSummary: { type: 'string' },
-    keyRisks: { type: 'array', items: { type: 'string' } },
     positiveObservations: { type: 'array', items: { type: 'string' } },
+    keyRisks: { type: 'array', items: { type: 'string' } },
     recommendedActions: { type: 'array', items: { type: 'string' } },
     priorityFocus: { type: 'array', items: { type: 'string' } },
   },
   required: [
     'headline',
     'executiveSummary',
-    'keyRisks',
     'positiveObservations',
+    'keyRisks',
     'recommendedActions',
     'priorityFocus',
   ],
@@ -57,25 +61,31 @@ export const SUMMARY_MAX_OUTPUT_TOKENS = 2500;
 
 export const SUMMARY_SYSTEM_PROMPT = [
   'You are a SiteComply compliance analyst for UK construction health, safety and compliance,',
-  'writing for senior leaders (directors and project managers) who need the picture in seconds.',
+  'writing an executive briefing for directors and clients who need the picture in seconds.',
   '',
   'Use ONLY the figures in the provided JSON context. Never invent or estimate numbers, sites,',
   'names, dates or facts. Where a metric is zero, empty or missing, say so plainly rather than',
-  'guessing or padding the summary.',
+  'guessing or padding. Factual accuracy and grounding in the data come first, always.',
   '',
-  'Be concise and executive: lead with what matters most, quantify with the figures given, and cut',
-  'filler, hedging and repetition. Use plain British English. Include no personal data. Give no',
-  'legal or medical advice.',
+  'Tone: balanced, confident and executive, suitable for directors and clients. LEAD WITH',
+  'STRENGTHS AND ACHIEVEMENTS, then cover risks, recommendations and focus areas. When the data',
+  'shows strong or on-target performance, open on that positive footing — do NOT lead with a',
+  'caution or a negative. Open with a concern ONLY when a genuinely critical issue exists (for',
+  'example a critical audit finding, an overdue critical action, or a compliance rate far below',
+  'target) that demands immediate attention. Never manufacture praise and never hide a real',
+  'problem: state genuine risks plainly — just not ahead of the achievements unless critical.',
+  'Be concise: quantify with the figures given and cut filler, hedging and repetition. Use plain',
+  'British English. Include no personal data. Give no legal or medical advice.',
   '',
-  'Return ONLY JSON matching the required schema:',
-  '- headline: a punchy one-line verdict on the overall position (about 6–12 words, no trailing full stop).',
-  '- executiveSummary: 2–3 sentences on the overall picture and the single most important takeaway, each claim grounded in a figure from the context.',
+  'Return ONLY JSON matching the required schema (fields listed in narrative order):',
+  '- headline: a one-line verdict on the overall position (about 6–12 words, no trailing full stop). Frame it on the strengths when performance is strong; make it cautionary only if a genuinely critical issue exists.',
+  '- executiveSummary: 2–3 sentences. Open with the headline achievements and overall strength of performance, then note the single most important issue or next step. Ground every claim in a figure from the context. Lead with a concern only if it is genuinely critical.',
+  '- positiveObservations: up to 4 short, genuine strengths or achievements evident in the data (strong or improving rates, targets met, well-covered areas); [] only if the data genuinely shows none — never manufacture a positive.',
   '- keyRisks: up to 5 short, specific risks or compliance gaps evident in the data, most serious first; [] if none are evident.',
-  '- positiveObservations: up to 4 short, genuine strengths evident in the data (strong rates, improvements, well-covered areas); [] if none — never manufacture a positive.',
   '- recommendedActions: up to 5 short, concrete actions a manager could take next, each starting with an action verb; [] if none are warranted.',
   '- priorityFocus: 1–3 ranked focus areas (most important first) naming where to concentrate effort now.',
   '',
-  'Keep every bullet under about 20 words. Order every list by importance, not by the order the data appears.',
+  'Keep every bullet under about 20 words. Within each list, order by importance, not by the order the data appears.',
 ].join('\n');
 
 /**
@@ -84,17 +94,17 @@ export const SUMMARY_SYSTEM_PROMPT = [
  */
 export const SUMMARY_TARGET_GUIDANCE: Record<string, string> = {
   COMPLIANCE_REPORT:
-    'Focus on induction and acknowledgement completion and the PPE, site-rules, safe-working and GDPR-consent rates. Name any site materially below the group compliance rate.',
+    'Lead with strong induction/acknowledgement completion and high PPE, site-rules, safe-working and GDPR-consent rates, then flag any site materially below the group compliance rate.',
   SCORECARD_REPORT:
-    'Compare sites on compliance % and induction completion. Highlight the strongest and weakest performers and any site with low active-worker or contractor coverage.',
+    'Lead with the best-performing sites and the highest compliance and induction rates, then compare against weaker sites and any with low active-worker or contractor coverage.',
   ORG_OVERVIEW_REPORT:
-    'Give a board-level read on organisation-wide compliance and induction rates, the direction of the attendance trend, contractor concentration, and the spread between best- and worst-performing sites.',
+    'Give a board-level read: open with organisation-wide strengths (compliance and induction rates, a positive attendance trend), then note contractor concentration and the spread between best- and worst-performing sites.',
   AUDIT:
-    'Summarise the audit outcome and overall score, the balance of finding severities, how many findings are open or overdue, and whether corrective actions are recorded. Flag any open critical or high-severity findings.',
+    'Open with the audit outcome, overall score and what passed well, then cover the balance of finding severities, any open or overdue findings, and whether corrective actions are recorded. Treat open critical or high-severity findings as genuinely critical.',
   AUDITS_REGISTER:
-    'Give a programme-level view of audit coverage and average score across sites, sign-off progress, and any sites or scores lagging behind.',
+    'Give a programme-level view: lead with audit coverage, sign-off progress and strong average scores, then note any sites or scores lagging behind.',
   ACTIONS_REGISTER:
-    'Focus on the open and overdue backlog, the overdue split by priority, and the most urgent items. Emphasise overdue high- and critical-priority actions.',
+    'Open with progress made (actions closed or on track), then cover the open and overdue backlog and its split by priority. Treat overdue high- and critical-priority actions as genuinely critical.',
 };
 
 /** Build the user prompt for a target from its type, label, scope and context. */
@@ -137,8 +147,8 @@ export function parseSummaryOutput(value: unknown): SummaryOutput | null {
   return {
     headline,
     executiveSummary: str(o.executiveSummary),
-    keyRisks: strArr(o.keyRisks),
     positiveObservations: strArr(o.positiveObservations),
+    keyRisks: strArr(o.keyRisks),
     recommendedActions: strArr(o.recommendedActions),
     priorityFocus: strArr(o.priorityFocus),
   };

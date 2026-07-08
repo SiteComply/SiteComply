@@ -37,5 +37,7 @@ export const isAiSummaryTarget = (v: string): v is AiSummaryTargetValue =>
 /** Current prompt/template version — logged with each generation for reproducibility
  *  and mixed into the summary cache key so a prompt change regenerates the result.
  *  v2: executive format (headline · executive summary · key risks · positive
- *  observations · recommended actions · priority focus) with per-report guidance. */
-export const AI_SUMMARY_PROMPT_VERSION = 'v2';
+ *  observations · recommended actions · priority focus) with per-report guidance.
+ *  v3: strengths-first balanced tone — positive observations lead, negatives only
+ *  open the narrative when a genuinely critical issue exists. */
+export const AI_SUMMARY_PROMPT_VERSION = 'v3';

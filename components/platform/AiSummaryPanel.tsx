@@ -114,11 +114,11 @@ export function AiSummaryPanel({
             <p className="text-sm text-ink">{loaded.summary.executiveSummary}</p>
           )}
 
+          {loaded.summary.positiveObservations.length > 0 && (
+            <Block title="Strengths & achievements" items={loaded.summary.positiveObservations} />
+          )}
           {loaded.summary.keyRisks.length > 0 && (
             <Block title="Key risks" items={loaded.summary.keyRisks} />
-          )}
-          {loaded.summary.positiveObservations.length > 0 && (
-            <Block title="Positive observations" items={loaded.summary.positiveObservations} />
           )}
           {loaded.summary.recommendedActions.length > 0 && (
             <Block title="Recommended actions" items={loaded.summary.recommendedActions} />
