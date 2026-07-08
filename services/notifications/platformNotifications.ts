@@ -7,16 +7,17 @@ import {
 } from '@/services/notifications/notificationTypes';
 import { deriveDocumentNotifications } from '@/services/documents/documentExpiryNotifications';
 import { deriveActionNotifications } from '@/services/actions/actionNotifications';
+import { deriveAuditNotifications } from '@/services/audits/auditNotifications';
 
 /**
  * Unified in-app notifications for a platform user.
  *
  * Notifications are DERIVED on read from multiple sources (document expiry,
- * action due/overdue/assignment) into one common shape (see notificationTypes),
- * so the Notifications page, the nav badge and the read/unread endpoints all
- * speak the same model. Each source is independently:
+ * action due/overdue/assignment, audit created/signed-off) into one common shape
+ * (see notificationTypes), so the Notifications page, the nav badge and the
+ * read/unread endpoints all speak the same model. Each source is independently:
  *  - gated by its notification type in Admin → Settings → Notifications,
- *  - gated by the viewer's module RBAC (documents / actions "view"),
+ *  - gated by the viewer's module RBAC (documents / actions / audits "view"),
  *  - scoped to the viewer's Assigned Sites.
  * Read state is applied here (once) from NotificationRead. Adding a future source
  * is just another deriver returning RawNotification[].
@@ -32,6 +33,7 @@ export async function getPlatformNotifications(
   const raw: RawNotification[] = [
     ...(await deriveActionNotifications(viewer, now)),
     ...(await deriveDocumentNotifications(viewer, now)),
+    ...(await deriveAuditNotifications(viewer, now)),
   ];
 
   const readKeys = await getReadNotificationKeys(viewer.id, raw.map((r) => r.key));

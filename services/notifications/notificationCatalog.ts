@@ -71,6 +71,22 @@ export const NOTIFICATION_TYPES: NotificationTypeDescriptor[] = [
     defaultChannels: { email: false, sms: false },
   },
   {
+    key: 'audit_created',
+    label: 'New audits',
+    description:
+      'A new audit has been created on one of your sites.',
+    defaultEnabled: true,
+    defaultChannels: { email: false, sms: false },
+  },
+  {
+    key: 'audit_signed_off',
+    label: 'Audit sign-off',
+    description:
+      'An audit on one of your sites has been reviewed and signed off.',
+    defaultEnabled: true,
+    defaultChannels: { email: false, sms: false },
+  },
+  {
     key: 'action_due_reminders',
     label: 'Action due reminders',
     description:

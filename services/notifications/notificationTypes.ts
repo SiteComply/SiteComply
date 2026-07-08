@@ -9,7 +9,9 @@ export type NotificationGroup =
   | 'DOC_EXPIRED'
   | 'ACTION_DUE'
   | 'DOC_EXPIRING'
-  | 'ACTION_ASSIGNED';
+  | 'ACTION_ASSIGNED'
+  | 'AUDIT_CREATED'
+  | 'AUDIT_SIGNED_OFF';
 
 /** A derived notification before per-user read state is applied. */
 export interface RawNotification {
@@ -41,4 +43,6 @@ export const NOTIFICATION_GROUP_META: Record<
   ACTION_DUE: { title: 'Actions due soon', accent: 'text-hivis-600', order: 3 },
   DOC_EXPIRING: { title: 'Expiring soon', accent: 'text-hivis-600', order: 4 },
   ACTION_ASSIGNED: { title: 'Newly assigned actions', accent: 'text-brand-700', order: 5 },
+  AUDIT_CREATED: { title: 'New audits', accent: 'text-brand-700', order: 6 },
+  AUDIT_SIGNED_OFF: { title: 'Audits signed off', accent: 'text-safe-700', order: 7 },
 };
