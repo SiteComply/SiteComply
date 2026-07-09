@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
+import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
 import {
   requirePlatformViewer,
   assertModuleView,
@@ -38,6 +39,12 @@ export default async function DocumentDetailPage({
   return (
     <PlatformShell>
       <div className="mb-6">
+        <Breadcrumbs
+          items={[
+            { label: 'Documents', href: '/platform/dashboard/documents' },
+            { label: doc.title },
+          ]}
+        />
         <Link
           href="/platform/dashboard/documents"
           className="text-sm font-semibold text-brand-700 hover:underline"
