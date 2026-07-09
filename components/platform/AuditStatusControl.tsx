@@ -26,7 +26,20 @@ export function AuditStatusControl({
 
   async function change(next: string) {
     if (next === status || busy) return;
-    if (next === 'SIGNED_OFF' && !canSignOff) return;
+    const isSignOff = next === 'SIGNED_OFF';
+    const isReopen = status === 'SIGNED_OFF' && next !== 'SIGNED_OFF';
+    // Signing off and reopening a signed-off audit are both sign-off-role actions.
+    if ((isSignOff || isReopen) && !canSignOff) return;
+    // Reopening a signed-off audit is deliberate + irreversible-in-record: confirm.
+    if (
+      isReopen &&
+      !window.confirm(
+        'Reopen this signed-off audit? It will move out of "Signed off". The ' +
+          'existing sign-off is kept on record until the audit is signed off again.',
+      )
+    ) {
+      return;
+    }
     setBusy(next);
     setError(undefined);
     try {
@@ -56,15 +69,21 @@ export function AuditStatusControl({
       <div className="flex flex-wrap gap-2">
         {AUDIT_STATUSES.map((s) => {
           const active = s.value === status;
-          const signoffBlocked = s.value === 'SIGNED_OFF' && !canSignOff && !active;
+          // Signing off, and reopening a signed-off audit, both require a sign-off
+          // role — disable those buttons (with a reason) for everyone else.
+          const isSignOffTarget = s.value === 'SIGNED_OFF';
+          const isReopenTarget = status === 'SIGNED_OFF' && s.value !== 'SIGNED_OFF';
+          const blocked = (isSignOffTarget || isReopenTarget) && !canSignOff && !active;
           return (
             <button
               key={s.value}
               type="button"
-              disabled={active || !!busy || signoffBlocked}
+              disabled={active || !!busy || blocked}
               title={
-                signoffBlocked
-                  ? 'Only Auditors, H&S Consultants and Principal Contractors can sign off audits.'
+                blocked
+                  ? isReopenTarget
+                    ? 'Only Auditors, H&S Consultants and Principal Contractors can reopen a signed-off audit.'
+                    : 'Only Auditors, H&S Consultants and Principal Contractors can sign off audits.'
                   : undefined
               }
               onClick={() => change(s.value)}

@@ -185,10 +185,10 @@ export default async function AuditDetailPage({
               <Detail label="Created" value={formatDateTimeUK(audit.createdAt)} />
               {audit.signedOffAt && (
                 <Detail
-                  label="Signed off"
+                  label={audit.status === 'SIGNED_OFF' ? 'Signed off' : 'Last signed off'}
                   value={`${audit.signedOffByName ?? 'Unknown'} · ${formatDateTimeUK(
                     audit.signedOffAt,
-                  )}`}
+                  )}${audit.status === 'SIGNED_OFF' ? '' : ' · reopened since'}`}
                 />
               )}
             </dl>

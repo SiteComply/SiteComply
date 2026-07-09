@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AuditStatus } from '@prisma/client';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits, canSignOffAudit } from '@/services/platformUsers/platformPermissions';
-import { setAuditStatus } from '@/services/audits/auditService';
+import { setAuditStatus, getAuditForViewer } from '@/services/audits/auditService';
 import { isAuditStatus } from '@/services/audits/auditConstants';
 
 export const runtime = 'nodejs';
@@ -39,18 +39,38 @@ export async function POST(
   if (!body.status || !isAuditStatus(body.status)) {
     return NextResponse.json({ ok: false, error: 'Invalid status.' }, { status: 400 });
   }
+  const target = body.status as AuditStatus;
 
-  // Signing off is restricted to the sign-off allow-list, over and above the
-  // audits "edit" permission — an edit-capable role (e.g. a Project Manager) can
-  // move an audit through DRAFT/IN_PROGRESS/COMPLETED but cannot sign it off.
-  if (body.status === AuditStatus.SIGNED_OFF && !canSignOffAudit(viewer.role)) {
+  // Load the current audit (also enforces the Assigned-Sites boundary) so we know
+  // whether this change signs it off or reopens an already-signed-off audit.
+  const existing = await getAuditForViewer(viewer, params.id);
+  if (!existing) {
+    return NextResponse.json({ ok: false, error: 'Audit not found.' }, { status: 404 });
+  }
+
+  const isSignOff = target === AuditStatus.SIGNED_OFF;
+  const isReopen =
+    existing.status === AuditStatus.SIGNED_OFF && target !== AuditStatus.SIGNED_OFF;
+
+  // Signing off AND reopening a signed-off audit are both restricted to the
+  // sign-off allow-list, over and above the audits "edit" permission. So an
+  // edit-capable role (e.g. a Project Manager) can move an audit through
+  // DRAFT/IN_PROGRESS/COMPLETED, but cannot sign it off — and, critically, cannot
+  // silently revert a signed-off audit (which would clear its signatory).
+  if (isSignOff && !canSignOffAudit(viewer.role)) {
     return NextResponse.json(
       { ok: false, error: 'Your role is not permitted to sign off audits.' },
       { status: 403 },
     );
   }
+  if (isReopen && !canSignOffAudit(viewer.role)) {
+    return NextResponse.json(
+      { ok: false, error: 'Your role is not permitted to reopen a signed-off audit.' },
+      { status: 403 },
+    );
+  }
 
-  const updated = await setAuditStatus(viewer, params.id, body.status as AuditStatus);
+  const updated = await setAuditStatus(viewer, params.id, target);
   if (!updated) {
     return NextResponse.json({ ok: false, error: 'Audit not found.' }, { status: 404 });
   }

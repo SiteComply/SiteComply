@@ -278,8 +278,13 @@ export async function updateAudit(
 
 /**
  * Change an audit's status within the viewer's scope. Moving to SIGNED_OFF
- * records the signatory (viewer) and time; moving away from SIGNED_OFF clears
- * the sign-off record. Returns false if the audit is not in scope.
+ * records the signatory (viewer) and time — a fresh sign-off, so re-signing after
+ * a reopen overwrites the previous signatory. Moving AWAY from SIGNED_OFF (a
+ * reopen) deliberately PRESERVES the last sign-off fields as the record of who
+ * signed it off and when; the signatory is never silently removed. The status
+ * route restricts both signing off and reopening to the sign-off allow-list, so a
+ * signed audit can't be reverted by an edit-only role. Returns false if the audit
+ * is not in scope.
  */
 export async function setAuditStatus(
   viewer: PlatformViewer,
@@ -289,6 +294,8 @@ export async function setAuditStatus(
   const existing = await getAuditForViewer(viewer, id);
   if (!existing) return false;
 
+  // Only a transition INTO SIGNED_OFF touches the sign-off fields; every other
+  // transition leaves them untouched, so a prior sign-off is preserved on reopen.
   const signOff =
     status === AuditStatus.SIGNED_OFF
       ? {
@@ -296,7 +303,7 @@ export async function setAuditStatus(
           signedOffByName: viewer.name,
           signedOffAt: new Date(),
         }
-      : { signedOffByUserId: null, signedOffByName: null, signedOffAt: null };
+      : {};
 
   await prisma.audit.update({ where: { id }, data: { status, ...signOff } });
   return true;
