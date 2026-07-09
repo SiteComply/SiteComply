@@ -7,7 +7,7 @@ import {
   requirePlatformViewer,
   assertModuleView,
 } from '@/services/platformUsers/platformAccess';
-import { permits } from '@/services/platformUsers/platformPermissions';
+import { permits, canSignOffAudit } from '@/services/platformUsers/platformPermissions';
 import { getAuditForViewer } from '@/services/audits/auditService';
 import { canDeleteAudit } from '@/services/audits/auditConstants';
 import { AuditDeleteButton } from '@/components/platform/AuditDeleteButton';
@@ -47,6 +47,7 @@ export default async function AuditDetailPage({
 
   const canEdit = permits(viewer.role, 'audits', 'edit');
   const canDelete = canDeleteAudit(viewer.role);
+  const canSignOff = canSignOffAudit(viewer.role);
   const canCreateAction = permits(viewer.role, 'actions', 'create');
   const showAiSummary = await canUseAiSummaries(viewer.role);
   const findings = await listFindingsForAudit(audit.id);
@@ -195,7 +196,11 @@ export default async function AuditDetailPage({
 
           {canEdit && (
             <Section title="Status tracking">
-              <AuditStatusControl auditId={audit.id} status={audit.status} />
+              <AuditStatusControl
+                auditId={audit.id}
+                status={audit.status}
+                canSignOff={canSignOff}
+              />
             </Section>
           )}
         </div>

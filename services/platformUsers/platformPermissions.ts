@@ -208,6 +208,16 @@ export const AUDIT_SIGNOFF_ROLES: PlatformRoleValue[] = [
   'PRINCIPAL_CONTRACTOR',
 ];
 
+/**
+ * Whether `role` may sign off an audit (move it to SIGNED_OFF). This is a
+ * deliberate business rule separate from the audits "edit" permission: several
+ * edit-capable roles (e.g. Project Manager) can progress an audit through its
+ * lifecycle but must NOT be the ones to formally sign it off.
+ */
+export function canSignOffAudit(role: PlatformRoleValue): boolean {
+  return AUDIT_SIGNOFF_ROLES.includes(role);
+}
+
 // ---------------------------------------------------------------------------
 // Pure lookup helpers — inert foundation, NOT called anywhere yet. A future
 // enforcement stage will use these; they perform no gating on their own.

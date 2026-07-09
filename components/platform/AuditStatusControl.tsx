@@ -13,9 +13,12 @@ import { AUDIT_STATUSES } from '@/services/audits/auditConstants';
 export function AuditStatusControl({
   auditId,
   status,
+  canSignOff = true,
 }: {
   auditId: string;
   status: string;
+  /** Whether the viewer's role may move the audit to Signed off. */
+  canSignOff?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | undefined>();
@@ -23,6 +26,7 @@ export function AuditStatusControl({
 
   async function change(next: string) {
     if (next === status || busy) return;
+    if (next === 'SIGNED_OFF' && !canSignOff) return;
     setBusy(next);
     setError(undefined);
     try {
@@ -52,11 +56,17 @@ export function AuditStatusControl({
       <div className="flex flex-wrap gap-2">
         {AUDIT_STATUSES.map((s) => {
           const active = s.value === status;
+          const signoffBlocked = s.value === 'SIGNED_OFF' && !canSignOff && !active;
           return (
             <button
               key={s.value}
               type="button"
-              disabled={active || !!busy}
+              disabled={active || !!busy || signoffBlocked}
+              title={
+                signoffBlocked
+                  ? 'Only Auditors, H&S Consultants and Principal Contractors can sign off audits.'
+                  : undefined
+              }
               onClick={() => change(s.value)}
               className={cn(
                 'rounded-xl border px-3 py-1.5 text-sm font-semibold disabled:cursor-default',
