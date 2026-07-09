@@ -4,6 +4,7 @@ import { cn } from '@/lib/cn';
 import { formatDateTimeUK, formatDateUK } from '@/lib/datetime';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { RowLink, DrillChevron } from '@/components/platform/RowLink';
+import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
 import {
   requirePlatformViewer,
   assertModuleView,
@@ -38,6 +39,12 @@ export default async function WorkerDetailPage({
   return (
     <PlatformShell>
       <div className="mb-6">
+        <Breadcrumbs
+          items={[
+            { label: 'Submissions', href: '/platform/dashboard/submissions' },
+            { label: worker.fullName },
+          ]}
+        />
         <Link
           href="/platform/dashboard/submissions"
           className="text-sm font-semibold text-brand-700 hover:underline"

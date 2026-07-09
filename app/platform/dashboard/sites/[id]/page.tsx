@@ -4,6 +4,7 @@ import { cn } from '@/lib/cn';
 import { formatDateTimeUK, formatDateUK } from '@/lib/datetime';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { RowLink } from '@/components/platform/RowLink';
+import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
 import {
   requirePlatformViewer,
   assertModuleView,
@@ -64,6 +65,12 @@ export default async function SiteDetailPage({
   return (
     <PlatformShell>
       <div className="mb-6">
+        <Breadcrumbs
+          items={[
+            { label: 'Sites', href: '/platform/dashboard/sites' },
+            { label: site.name },
+          ]}
+        />
         <Link
           href="/platform/dashboard/sites"
           className="text-sm font-semibold text-brand-700 hover:underline"
