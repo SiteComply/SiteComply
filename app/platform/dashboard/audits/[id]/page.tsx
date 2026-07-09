@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
+import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
 import { AuditStatusControl } from '@/components/platform/AuditStatusControl';
 import {
   requirePlatformViewer,
@@ -66,6 +67,12 @@ export default async function AuditDetailPage({
   return (
     <PlatformShell>
       <div className="mb-6">
+        <Breadcrumbs
+          items={[
+            { label: 'Audits', href: '/platform/dashboard/audits' },
+            { label: audit.title },
+          ]}
+        />
         <Link
           href="/platform/dashboard/audits"
           className="text-sm font-semibold text-brand-700 hover:underline"

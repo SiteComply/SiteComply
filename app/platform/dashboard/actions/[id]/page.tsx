@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
+import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
 import { ActionStatusControl } from '@/components/platform/ActionStatusControl';
 import {
   requirePlatformViewer,
@@ -78,6 +79,12 @@ export default async function ActionDetailPage({
   return (
     <PlatformShell>
       <div className="mb-6">
+        <Breadcrumbs
+          items={[
+            { label: 'Actions', href: '/platform/dashboard/actions' },
+            { label: action.title },
+          ]}
+        />
         <Link href="/platform/dashboard/actions" className="text-sm font-semibold text-brand-700 hover:underline">
           ← Actions
         </Link>
