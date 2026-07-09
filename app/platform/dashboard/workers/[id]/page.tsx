@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { cn } from '@/lib/cn';
 import { formatDateTimeUK, formatDateUK } from '@/lib/datetime';
 import { PlatformShell } from '@/components/platform/PlatformShell';
+import { RowLink, DrillChevron } from '@/components/platform/RowLink';
 import {
   requirePlatformViewer,
   assertModuleView,
@@ -93,6 +94,7 @@ export default async function WorkerDetailPage({
             {history.length === 0 ? (
               <Empty>No check-ins on your sites.</Empty>
             ) : (
+              <>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -101,15 +103,20 @@ export default async function WorkerDetailPage({
                       <th className="py-2 pr-3 font-medium">Checked in</th>
                       <th className="py-2 pr-3 font-medium">Checked out</th>
                       <th className="py-2 font-medium">Status</th>
+                      <th className="w-6 py-2" aria-hidden="true"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
                     {history.map((h) => (
-                      <tr key={h.id}>
+                      <tr
+                        key={h.id}
+                        className="group relative cursor-pointer transition-colors hover:bg-brand-50/60"
+                      >
                         <td className="py-2.5 pr-3">
+                          {/* Stretched link — makes the whole row a drill-down to the site. */}
                           <Link
                             href={`/platform/dashboard/sites/${h.siteId}`}
-                            className="font-medium text-brand-700 hover:underline"
+                            className="font-medium text-brand-700 after:absolute after:inset-0 group-hover:underline"
                           >
                             {h.siteName}
                           </Link>
@@ -128,11 +135,18 @@ export default async function WorkerDetailPage({
                             tone={h.status === 'COMPLIANT' ? 'good' : 'warn'}
                           />
                         </td>
+                        <td className="py-2.5 pl-2 text-right align-middle">
+                          <DrillChevron />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+              <p className="mt-2 text-xs text-ink-subtle">
+                Select a row to open that site&rsquo;s details.
+              </p>
+              </>
             )}
           </Section>
         </div>
@@ -163,17 +177,14 @@ export default async function WorkerDetailPage({
 
           <Section title="Current site">
             {currentSite ? (
-              <div className="space-y-1">
-                <Link
-                  href={`/platform/dashboard/sites/${currentSite.siteId}`}
-                  className="font-semibold text-brand-700 hover:underline"
-                >
+              <RowLink href={`/platform/dashboard/sites/${currentSite.siteId}`}>
+                <span className="block truncate font-semibold text-brand-700">
                   {currentSite.siteName}
-                </Link>
-                <p className="text-xs text-ink-subtle">
+                </span>
+                <span className="block text-xs text-ink-subtle">
                   Checked in {formatDateTimeUK(currentSite.checkedInAt)}
-                </p>
-              </div>
+                </span>
+              </RowLink>
             ) : (
               <Empty>Not currently checked in on any of your sites.</Empty>
             )}

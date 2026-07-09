@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { cn } from '@/lib/cn';
 import { formatDateTimeUK, formatDateUK } from '@/lib/datetime';
 import { PlatformShell } from '@/components/platform/PlatformShell';
+import { RowLink } from '@/components/platform/RowLink';
 import {
   requirePlatformViewer,
   assertModuleView,
@@ -114,21 +115,20 @@ export default async function SiteDetailPage({
               {currentWorkers.length === 0 ? (
                 <Empty>No workers are currently checked in.</Empty>
               ) : (
-                <ul className="divide-y divide-line">
+                <ul className="space-y-1">
                   {currentWorkers.map((w) => (
-                    <li key={w.workerId} className="flex items-center justify-between gap-3 py-2.5">
-                      <Link
+                    <li key={w.workerId}>
+                      <RowLink
                         href={`/platform/dashboard/workers/${w.workerId}`}
-                        className="min-w-0 font-medium text-brand-700 hover:underline"
+                        trailing={
+                          <span className="text-xs tabular-nums text-ink-subtle">
+                            In {formatDateTimeUK(w.checkedInAt)}
+                          </span>
+                        }
                       >
-                        {w.fullName}
-                        <span className="block text-xs font-normal text-ink-subtle">
-                          {w.company}
-                        </span>
-                      </Link>
-                      <span className="shrink-0 text-xs tabular-nums text-ink-subtle">
-                        In {formatDateTimeUK(w.checkedInAt)}
-                      </span>
+                        <span className="truncate font-medium text-brand-700">{w.fullName}</span>
+                        <span className="block truncate text-xs text-ink-subtle">{w.company}</span>
+                      </RowLink>
                     </li>
                   ))}
                 </ul>
@@ -141,27 +141,26 @@ export default async function SiteDetailPage({
               {recentSubmissions.length === 0 ? (
                 <Empty>No check-ins recorded for this site yet.</Empty>
               ) : (
-                <ul className="divide-y divide-line">
+                <ul className="space-y-1">
                   {recentSubmissions.map((s) => (
-                    <li key={s.id} className="flex items-center justify-between gap-3 py-2.5">
-                      <div className="min-w-0">
-                        <Link
-                          href={`/platform/dashboard/workers/${s.workerId}`}
-                          className="font-medium text-brand-700 hover:underline"
-                        >
-                          {s.workerName}
-                        </Link>
-                        <span className="block text-xs text-ink-subtle">{s.company}</span>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <StatusPill
-                          label={s.status === 'COMPLIANT' ? 'Compliant' : 'Incomplete'}
-                          tone={s.status === 'COMPLIANT' ? 'good' : 'warn'}
-                        />
-                        <span className="text-xs tabular-nums text-ink-subtle">
-                          {formatDateTimeUK(s.checkedInAt)}
-                        </span>
-                      </div>
+                    <li key={s.id}>
+                      <RowLink
+                        href={`/platform/dashboard/workers/${s.workerId}`}
+                        trailing={
+                          <>
+                            <StatusPill
+                              label={s.status === 'COMPLIANT' ? 'Compliant' : 'Incomplete'}
+                              tone={s.status === 'COMPLIANT' ? 'good' : 'warn'}
+                            />
+                            <span className="hidden text-xs tabular-nums text-ink-subtle sm:inline">
+                              {formatDateTimeUK(s.checkedInAt)}
+                            </span>
+                          </>
+                        }
+                      >
+                        <span className="truncate font-medium text-brand-700">{s.workerName}</span>
+                        <span className="block truncate text-xs text-ink-subtle">{s.company}</span>
+                      </RowLink>
                     </li>
                   ))}
                 </ul>
@@ -185,23 +184,24 @@ export default async function SiteDetailPage({
               {audits.length === 0 ? (
                 <Empty>No audits for this site.</Empty>
               ) : (
-                <ul className="divide-y divide-line">
+                <ul className="space-y-1">
                   {audits.map((a) => (
-                    <li key={a.id} className="flex items-center justify-between gap-2 py-2.5">
-                      <Link
+                    <li key={a.id}>
+                      <RowLink
                         href={`/platform/dashboard/audits/${a.id}`}
-                        className="min-w-0 truncate font-medium text-brand-700 hover:underline"
+                        trailing={
+                          <span
+                            className={cn(
+                              'rounded-full px-2 py-0.5 text-xs font-semibold',
+                              AUDIT_STATUS_BADGE[a.status as AuditStatusValue],
+                            )}
+                          >
+                            {auditStatusLabel(a.status)}
+                          </span>
+                        }
                       >
-                        {a.title}
-                      </Link>
-                      <span
-                        className={cn(
-                          'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
-                          AUDIT_STATUS_BADGE[a.status as AuditStatusValue],
-                        )}
-                      >
-                        {auditStatusLabel(a.status)}
-                      </span>
+                        <span className="block truncate font-medium text-brand-700">{a.title}</span>
+                      </RowLink>
                     </li>
                   ))}
                 </ul>
@@ -214,33 +214,34 @@ export default async function SiteDetailPage({
               {actions.length === 0 ? (
                 <Empty>No actions for this site.</Empty>
               ) : (
-                <ul className="divide-y divide-line">
+                <ul className="space-y-1">
                   {actions.map((a) => (
-                    <li key={a.id} className="flex items-center justify-between gap-2 py-2.5">
-                      <Link
+                    <li key={a.id}>
+                      <RowLink
                         href={`/platform/dashboard/actions/${a.id}`}
-                        className="min-w-0 truncate font-medium text-brand-700 hover:underline"
+                        trailing={
+                          <>
+                            <span
+                              className={cn(
+                                'rounded-full px-2 py-0.5 text-xs font-semibold',
+                                ACTION_PRIORITY_BADGE[a.priority as ActionPriorityValue],
+                              )}
+                            >
+                              {actionPriorityLabel(a.priority)}
+                            </span>
+                            <span
+                              className={cn(
+                                'hidden rounded-full px-2 py-0.5 text-xs font-semibold sm:inline',
+                                ACTION_STATUS_BADGE[a.status as ActionStatusValue],
+                              )}
+                            >
+                              {actionStatusLabel(a.status)}
+                            </span>
+                          </>
+                        }
                       >
-                        {a.title}
-                      </Link>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        <span
-                          className={cn(
-                            'rounded-full px-2 py-0.5 text-xs font-semibold',
-                            ACTION_PRIORITY_BADGE[a.priority as ActionPriorityValue],
-                          )}
-                        >
-                          {actionPriorityLabel(a.priority)}
-                        </span>
-                        <span
-                          className={cn(
-                            'rounded-full px-2 py-0.5 text-xs font-semibold',
-                            ACTION_STATUS_BADGE[a.status as ActionStatusValue],
-                          )}
-                        >
-                          {actionStatusLabel(a.status)}
-                        </span>
-                      </div>
+                        <span className="block truncate font-medium text-brand-700">{a.title}</span>
+                      </RowLink>
                     </li>
                   ))}
                 </ul>
