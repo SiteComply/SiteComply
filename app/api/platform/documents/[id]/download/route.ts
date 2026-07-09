@@ -9,9 +9,12 @@ export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/platform/documents/[id]/download
- * Stream a document's file back to the client — ONLY after the documents "view"
- * permission and the Assigned-Sites boundary pass. The blob is private; this is
- * the only way to retrieve a file (no public blob URL is ever exposed).
+ * Stream a document's file back to the client — ONLY after the documents
+ * "export" permission and the Assigned-Sites boundary pass. Retrieving a file is
+ * an export-class action (it pulls data out of the system), so it is gated on
+ * "export", not "view": read-only roles (Client) and no-export roles (Engineer)
+ * can see a document's metadata but cannot pull the file. The blob is private;
+ * this is the only way to retrieve a file (no public blob URL is ever exposed).
  */
 export async function GET(
   _req: NextRequest,
@@ -21,7 +24,7 @@ export async function GET(
   if (!viewer) {
     return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
   }
-  if (!permits(viewer.role, 'documents', 'view')) {
+  if (!permits(viewer.role, 'documents', 'export')) {
     return NextResponse.json({ ok: false, error: 'Forbidden.' }, { status: 403 });
   }
 

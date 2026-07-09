@@ -51,6 +51,7 @@ export default async function PlatformDocumentsPage({
   const now = new Date();
   const canCreate = permits(viewer.role, 'documents', 'create');
   const canDelete = permits(viewer.role, 'documents', 'edit');
+  const canDownload = permits(viewer.role, 'documents', 'export');
 
   return (
     <PlatformShell>
@@ -212,12 +213,14 @@ export default async function PlatformDocumentsPage({
                     </td>
                     <td className="px-5 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <a
-                          href={`/api/platform/documents/${d.id}/download`}
-                          className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
-                        >
-                          Download
-                        </a>
+                        {canDownload && (
+                          <a
+                            href={`/api/platform/documents/${d.id}/download`}
+                            className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
+                          >
+                            Download
+                          </a>
+                        )}
                         {canDelete && (
                           <DocumentDeleteButton
                             documentId={d.id}

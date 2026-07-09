@@ -35,6 +35,7 @@ export default async function DocumentDetailPage({
   if (!doc) notFound();
 
   const canEdit = permits(viewer.role, 'documents', 'edit');
+  const canDownload = permits(viewer.role, 'documents', 'export');
 
   return (
     <PlatformShell>
@@ -70,12 +71,14 @@ export default async function DocumentDetailPage({
                 Edit details
               </Link>
             )}
-            <a
-              href={`/api/platform/documents/${doc.id}/download`}
-              className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
-            >
-              Download
-            </a>
+            {canDownload && (
+              <a
+                href={`/api/platform/documents/${doc.id}/download`}
+                className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
+              >
+                Download
+              </a>
+            )}
             {canEdit && (
               <DocumentDeleteButton documentId={doc.id} title={doc.title} />
             )}
