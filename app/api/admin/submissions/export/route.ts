@@ -3,14 +3,10 @@ import { requireAdminRole, ADMIN_WRITE_ROLES } from '@/lib/adminAuth';
 import { querySubmissions } from '@/services/submissions/submissionQueryService';
 import { checkInReference } from '@/services/submissions/submissionService';
 import { formatDateTimeUK, formatDateUK } from '@/lib/datetime';
+import { csvCell } from '@/lib/csv';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-/** Quote a CSV field, escaping embedded quotes; always quoted for safety. */
-function csv(value: string): string {
-  return `"${(value ?? '').replace(/"/g, '""')}"`;
-}
 
 /**
  * GET /api/admin/submissions/export?site=&q=&from=&to=&status=
@@ -42,7 +38,7 @@ export async function GET(req: NextRequest) {
     'Check-in reference',
   ];
 
-  const lines = [headers.map(csv).join(',')];
+  const lines = [headers.map(csvCell).join(',')];
   for (const r of rows) {
     lines.push(
       [
@@ -56,7 +52,7 @@ export async function GET(req: NextRequest) {
         r.status === 'COMPLIANT' ? 'Compliant' : 'Incomplete',
         checkInReference(r.id),
       ]
-        .map((v) => csv(String(v)))
+        .map((v) => csvCell(v))
         .join(','),
     );
   }
