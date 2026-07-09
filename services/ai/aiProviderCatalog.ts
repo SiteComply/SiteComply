@@ -88,13 +88,16 @@ export const isKnownAiProvider = (id: string) =>
   AI_PROVIDERS.some((p) => p.id === id);
 
 /** Roles that may be granted AI summary access (the feature-settings picker). */
+// Client (read-only) and Engineer (limited, no data export) are intentionally
+// excluded: AI summaries are built from worker-derived report/audit data, which
+// those roles must not receive. Excluding them from the eligible list means an
+// admin cannot grant AI summaries to them via Settings (saveAiConfig filters
+// allowed roles to this list).
 export const AI_ELIGIBLE_ROLES: { value: string; label: string }[] = [
   { value: 'DIRECTOR', label: 'Director' },
   { value: 'PROJECT_MANAGER', label: 'Project Manager' },
   { value: 'SITE_MANAGER', label: 'Site Manager' },
   { value: 'AUDITOR', label: 'Auditor' },
-  { value: 'ENGINEER', label: 'Engineer' },
   { value: 'HS_CONSULTANT', label: 'H&S Consultant' },
   { value: 'PRINCIPAL_CONTRACTOR', label: 'Principal Contractor' },
-  { value: 'CLIENT', label: 'Client' },
 ];

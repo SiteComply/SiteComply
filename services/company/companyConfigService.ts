@@ -27,11 +27,14 @@ export const COMPANY_DEFAULTS = {
 } as const;
 
 // Accepted logo image types + size cap (smaller than documents — logos are small).
+// SVG is deliberately excluded: it can carry scripts, and the logo is served on a
+// PUBLIC route, so an admin-uploaded SVG would be a stored-XSS vector. Only raster
+// formats are accepted; the serve route additionally sends X-Content-Type-Options:
+// nosniff and forces any non-raster content to download.
 export const ACCEPTED_LOGO_MIME_TYPES = [
   'image/png',
   'image/jpeg',
   'image/webp',
-  'image/svg+xml',
   'image/gif',
 ] as const;
 export const MAX_LOGO_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -155,7 +158,7 @@ export function validateLogoFile(
   if (!file || file.size === 0) return { ok: false, error: 'Please choose an image to upload.' };
   if (file.size > MAX_LOGO_BYTES) return { ok: false, error: 'That image is too large (max 2 MB).' };
   if (!ACCEPTED_LOGO_MIME_TYPES.includes(file.type as never))
-    return { ok: false, error: 'That image type is not supported. Use PNG, JPEG, WEBP, SVG or GIF.' };
+    return { ok: false, error: 'That image type is not supported. Use PNG, JPEG, WEBP or GIF.' };
   return { ok: true };
 }
 

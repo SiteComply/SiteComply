@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
+import { canDeleteDocument } from '@/services/documents/documentConstants';
 import {
   validateDocumentMeta,
   updateDocument,
@@ -57,9 +58,10 @@ export async function PATCH(
 
 /**
  * DELETE /api/platform/documents/[id]
- * Permanently delete a document — its metadata row AND its blob file. Enforces
- * the documents "edit" permission (deletion is a management action) and the
- * Assigned-Sites boundary (the document must be in the viewer's scope).
+ * Permanently delete a document — its metadata row AND its blob file. Deletion is
+ * a destructive management action gated by an explicit role allow-list (over and
+ * above the documents "edit" permission — Engineer can edit but not delete) plus
+ * the Assigned-Sites boundary (the document must be in the viewer's scope).
  */
 export async function DELETE(
   _req: NextRequest,
@@ -69,7 +71,7 @@ export async function DELETE(
   if (!viewer) {
     return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
   }
-  if (!permits(viewer.role, 'documents', 'edit')) {
+  if (!canDeleteDocument(viewer.role)) {
     return NextResponse.json(
       { ok: false, error: 'You do not have permission to delete documents.' },
       { status: 403 },

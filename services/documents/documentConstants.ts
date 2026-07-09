@@ -76,6 +76,27 @@ export function formatBytes(bytes: number): string {
   return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`;
 }
 
+// --- Deletion ---------------------------------------------------------------
+
+/**
+ * Roles permitted to permanently DELETE a document (metadata + blob). Deletion is
+ * a destructive management action, so it is an explicit allow-list rather than the
+ * broad "edit" permission: Engineer can create and edit documents but must not be
+ * able to destroy others' compliance records (RAMS, insurance, certificates).
+ * Mirrors the audit delete allow-list.
+ */
+export const DOCUMENT_DELETE_ROLES = [
+  'DIRECTOR',
+  'PROJECT_MANAGER',
+  'SITE_MANAGER',
+  'HS_CONSULTANT',
+  'PRINCIPAL_CONTRACTOR',
+] as const;
+
+export function canDeleteDocument(role: string): boolean {
+  return (DOCUMENT_DELETE_ROLES as readonly string[]).includes(role);
+}
+
 // --- Expiry tracking --------------------------------------------------------
 
 /** A document is "expiring soon" within this many days of its expiry date. */

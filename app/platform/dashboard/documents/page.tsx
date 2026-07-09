@@ -13,6 +13,7 @@ import {
   documentCategoryLabel,
   formatBytes,
   DOCUMENT_EXPIRY_FILTERS,
+  canDeleteDocument,
 } from '@/services/documents/documentConstants';
 import { DocumentDeleteButton } from '@/components/platform/DocumentDeleteButton';
 import { DocumentExpiryBadge } from '@/components/platform/DocumentExpiryBadge';
@@ -50,7 +51,7 @@ export default async function PlatformDocumentsPage({
   const documents = await listDocuments(viewer, { ...filters, skip: pg.skip, take: pg.take });
   const now = new Date();
   const canCreate = permits(viewer.role, 'documents', 'create');
-  const canDelete = permits(viewer.role, 'documents', 'edit');
+  const canDelete = canDeleteDocument(viewer.role);
   const canDownload = permits(viewer.role, 'documents', 'export');
 
   return (

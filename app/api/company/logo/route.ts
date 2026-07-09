@@ -11,16 +11,31 @@ export const dynamic = 'force-dynamic';
  * branding surface. The blob container itself stays private; this route is the
  * only way the image is exposed. Returns 404 when no logo is set.
  */
+// Raster image types that are safe to render inline. Anything else (e.g. a legacy
+// SVG stored before SVG uploads were blocked) is served as a download so it can
+// never execute as a stored-XSS payload on this public route.
+const INLINE_SAFE_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+]);
+
 export async function GET() {
   const logo = await getCompanyLogo();
   if (!logo) {
     return NextResponse.json({ ok: false, error: 'No logo set.' }, { status: 404 });
   }
+  const inlineSafe = INLINE_SAFE_TYPES.has(logo.contentType);
   return new NextResponse(logo.bytes, {
     status: 200,
     headers: {
       'Content-Type': logo.contentType,
       'Content-Length': String(logo.bytes.length),
+      // Never let the browser MIME-sniff, and force anything not known-safe to
+      // download rather than render (defence-in-depth against stored XSS).
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Disposition': inlineSafe ? 'inline' : 'attachment; filename="logo"',
       // Short cache; the admin UI cache-busts with a version query param on change.
       'Cache-Control': 'public, max-age=300',
     },

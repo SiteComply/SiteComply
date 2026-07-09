@@ -11,6 +11,7 @@ import { getDocumentForViewer } from '@/services/documents/documentService';
 import {
   documentCategoryLabel,
   formatBytes,
+  canDeleteDocument,
 } from '@/services/documents/documentConstants';
 import { DocumentDeleteButton } from '@/components/platform/DocumentDeleteButton';
 import { DocumentExpiryBadge } from '@/components/platform/DocumentExpiryBadge';
@@ -36,6 +37,7 @@ export default async function DocumentDetailPage({
 
   const canEdit = permits(viewer.role, 'documents', 'edit');
   const canDownload = permits(viewer.role, 'documents', 'export');
+  const canDelete = canDeleteDocument(viewer.role);
 
   return (
     <PlatformShell>
@@ -79,7 +81,7 @@ export default async function DocumentDetailPage({
                 Download
               </a>
             )}
-            {canEdit && (
+            {canDelete && (
               <DocumentDeleteButton documentId={doc.id} title={doc.title} />
             )}
           </div>
