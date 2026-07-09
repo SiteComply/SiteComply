@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { cn } from '@/lib/cn';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { permits } from '@/services/platformUsers/platformPermissions';
@@ -54,21 +55,26 @@ export default async function PlatformSitesPage() {
       ) : (
         <ul className="space-y-3">
           {viewer.sites.map((site) => (
-            <li
-              key={site.id}
-              className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 shadow-card"
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="truncate font-semibold text-ink">
-                    {site.name}
-                  </span>
-                  <StatusBadge status={site.status} />
+            <li key={site.id}>
+              <Link
+                href={`/platform/dashboard/sites/${site.id}`}
+                className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 shadow-card transition-colors hover:border-brand-300 hover:bg-brand-50/40"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate font-semibold text-brand-700">
+                      {site.name}
+                    </span>
+                    <StatusBadge status={site.status} />
+                  </div>
+                  <p className="mt-0.5 text-sm text-ink-subtle">
+                    Ref {site.jobReference} · {site.town}, {site.postcode}
+                  </p>
                 </div>
-                <p className="mt-0.5 text-sm text-ink-subtle">
-                  Ref {site.jobReference} · {site.town}, {site.postcode}
-                </p>
-              </div>
+                <span aria-hidden="true" className="shrink-0 text-brand-400">
+                  →
+                </span>
+              </Link>
             </li>
           ))}
         </ul>

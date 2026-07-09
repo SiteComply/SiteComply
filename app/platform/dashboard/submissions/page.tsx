@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { cn } from '@/lib/cn';
 import { prisma } from '@/lib/prisma';
 import { formatDateTimeUK } from '@/lib/datetime';
@@ -31,7 +32,7 @@ export default async function PlatformSubmissionsPage() {
           id: true,
           checkedInAt: true,
           checkedOutAt: true,
-          worker: { select: { fullName: true, company: true } },
+          worker: { select: { id: true, fullName: true, company: true } },
           jobSite: { select: { name: true } },
         },
       })
@@ -70,33 +71,35 @@ export default async function PlatformSubmissionsPage() {
           {submissions.map((s) => {
             const onSite = !s.checkedOutAt;
             return (
-              <li
-                key={s.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 shadow-card"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-semibold text-ink">
-                      {s.worker.fullName}
-                    </span>
-                    <span
-                      className={cn(
-                        'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
-                        onSite
-                          ? 'bg-safe-50 text-safe-700'
-                          : 'border border-line bg-surface-sunken text-ink-muted',
-                      )}
-                    >
-                      {onSite ? 'On site' : 'Checked out'}
-                    </span>
+              <li key={s.id}>
+                <Link
+                  href={`/platform/dashboard/workers/${s.worker.id}`}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 shadow-card transition-colors hover:border-brand-300 hover:bg-brand-50/40"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-semibold text-brand-700">
+                        {s.worker.fullName}
+                      </span>
+                      <span
+                        className={cn(
+                          'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
+                          onSite
+                            ? 'bg-safe-50 text-safe-700'
+                            : 'border border-line bg-surface-sunken text-ink-muted',
+                        )}
+                      >
+                        {onSite ? 'On site' : 'Checked out'}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 truncate text-sm text-ink-subtle">
+                      {s.worker.company} · {s.jobSite.name}
+                    </p>
                   </div>
-                  <p className="mt-0.5 truncate text-sm text-ink-subtle">
-                    {s.worker.company} · {s.jobSite.name}
-                  </p>
-                </div>
-                <span className="shrink-0 text-right text-xs tabular-nums text-ink-subtle">
-                  {formatDateTimeUK(s.checkedInAt)}
-                </span>
+                  <span className="shrink-0 text-right text-xs tabular-nums text-ink-subtle">
+                    {formatDateTimeUK(s.checkedInAt)}
+                  </span>
+                </Link>
               </li>
             );
           })}
