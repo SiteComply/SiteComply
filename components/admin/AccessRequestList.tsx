@@ -114,7 +114,7 @@ export function AccessRequestList({ requests }: { requests: AccessRequestRow[] }
                 {r.status === 'APPROVED' && r.linkedUserEmail && (
                   <div>
                     <span className="font-medium text-ink-muted">
-                      Platform user
+                      User
                     </span>{' '}
                     {r.linkedUserEmail}
                   </div>
@@ -147,7 +147,7 @@ export function AccessRequestList({ requests }: { requests: AccessRequestRow[] }
                       href={`/admin/platform-users/${r.linkedUserId}`}
                       className="touch-target inline-flex items-center rounded-lg border border-brand-500 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
                     >
-                      View Platform User
+                      View user
                     </Link>
                   )}
                   <button

@@ -22,7 +22,7 @@ export default async function PlatformUsersPage() {
     <div className="space-y-6">
       <header className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-ink">Platform Users</h1>
+          <h1 className="text-2xl font-bold text-ink">Users</h1>
           <p className="text-ink-muted">
             Manage who can access the SiteComply platform, their role and
             assigned sites. Sign-in and permissions are added in a later stage.

@@ -96,7 +96,7 @@ export function AccessRequestApprovalForm({
         }
         return;
       }
-      toast.success('Access approved — the Platform User is now active.');
+      toast.success('Access approved — the user is now active.');
       router.push('/admin/platform-access-requests?status=APPROVED');
       router.refresh();
     } catch {

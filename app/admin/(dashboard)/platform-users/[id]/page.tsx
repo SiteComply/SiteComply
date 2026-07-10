@@ -28,9 +28,9 @@ export default async function EditPlatformUserPage({
           href="/admin/platform-users"
           className="text-sm font-semibold text-brand-700"
         >
-          ← Back to platform users
+          ← Back to users
         </Link>
-        <h1 className="text-2xl font-bold text-ink">Edit platform user</h1>
+        <h1 className="text-2xl font-bold text-ink">Edit user</h1>
         <p className="text-ink-muted">
           {user.name} · {user.company}
         </p>

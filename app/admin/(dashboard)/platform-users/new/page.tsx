@@ -15,9 +15,9 @@ export default async function NewPlatformUserPage() {
           href="/admin/platform-users"
           className="text-sm font-semibold text-brand-700"
         >
-          ← Back to platform users
+          ← Back to users
         </Link>
-        <h1 className="text-2xl font-bold text-ink">Add platform user</h1>
+        <h1 className="text-2xl font-bold text-ink">Add user</h1>
         <p className="text-ink-muted">
           Add someone to the SiteComply platform. They’re created as{' '}
           <strong>Pending</strong> until you approve them.

@@ -60,7 +60,7 @@ export default async function PlatformAccessRequestsPage({
           Self-service access requests submitted from the platform sign-in
           screen. Approving a request creates and activates the{' '}
           <Link href="/admin/platform-users" className="font-semibold text-brand-700">
-            Platform User
+            user
           </Link>{' '}
           automatically — no manual set-up needed — and they can sign in right
           away.

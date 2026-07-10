@@ -37,7 +37,7 @@ export default async function ApproveAccessRequestPage({
         <h1 className="text-2xl font-bold text-ink">Approve access request</h1>
         <p className="text-ink-muted">
           Review and, if needed, edit the details below, choose a role and assign
-          sites. Approving creates and activates the Platform User — they can sign
+          sites. Approving creates and activates the user — they can sign
           in straight away.
         </p>
       </header>

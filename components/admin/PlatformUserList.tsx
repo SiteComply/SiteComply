@@ -84,7 +84,7 @@ export function PlatformUserList({ users }: { users: PlatformUserRow[] }) {
   return (
     <div className="space-y-4">
       <TextField
-        label="Search platform users"
+        label="Search users"
         type="search"
         placeholder="Search by name, company, email or role"
         value={query}
@@ -94,8 +94,8 @@ export function PlatformUserList({ users }: { users: PlatformUserRow[] }) {
       {filtered.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface px-4 py-8 text-center text-ink-muted">
           {users.length === 0
-            ? 'No platform users yet. Add your first user to get started.'
-            : 'No platform users match your search.'}
+            ? 'No users yet. Add your first user to get started.'
+            : 'No users match your search.'}
         </p>
       ) : (
         <ul className="space-y-3">
@@ -171,8 +171,8 @@ export function PlatformUserList({ users }: { users: PlatformUserRow[] }) {
         open={pending !== undefined}
         title={
           pending?.action === 'remove'
-            ? 'Remove this platform user?'
-            : 'Disable this platform user?'
+            ? 'Remove this user?'
+            : 'Disable this user?'
         }
         message={
           pending?.action === 'remove'

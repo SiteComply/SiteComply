@@ -175,7 +175,7 @@ export function AuthConfigSettings({
       <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
         <h2 className="text-sm font-semibold text-ink">Sessions</h2>
         <p className="mt-0.5 text-sm text-ink-subtle">
-          How long a platform user stays signed in before they must log in again.
+          How long a user stays signed in before they must log in again.
           Applies to new sign-ins.
         </p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">

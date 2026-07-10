@@ -105,7 +105,7 @@ export function PlatformUserForm({
         return;
       }
       toast.success(
-        mode === 'create' ? 'Platform user added.' : 'Changes saved.',
+        mode === 'create' ? 'User added.' : 'Changes saved.',
       );
       router.push('/admin/platform-users');
       router.refresh();
@@ -243,7 +243,7 @@ export function PlatformUserForm({
           {busy
             ? 'Saving…'
             : mode === 'create'
-              ? 'Add platform user'
+              ? 'Add user'
               : 'Save changes'}
         </Button>
         <Button
