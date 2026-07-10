@@ -55,7 +55,7 @@ export default async function SubmissionDetailPage({
           href="/admin/submissions"
           className="text-sm font-semibold text-brand-700"
         >
-          ← Back to submissions
+          ← Back to check-ins
         </Link>
         <h1 className="text-2xl font-bold text-ink">{worker.fullName}</h1>
         <p className="text-ink-muted">{worker.company}</p>

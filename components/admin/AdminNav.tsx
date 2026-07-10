@@ -12,7 +12,7 @@ export const ADMIN_NAV = [
   { href: '/admin', label: 'Dashboard' },
   { href: '/admin/sites', label: 'Job sites' },
   { href: '/admin/on-site', label: 'On site now' },
-  { href: '/admin/submissions', label: 'Submissions' },
+  { href: '/admin/submissions', label: 'Check-ins' },
   { href: '/admin/platform-users', label: 'Platform Users' },
   { href: '/admin/platform-access-requests', label: 'Platform Access Requests' },
   { href: '/admin/settings', label: 'Settings' },

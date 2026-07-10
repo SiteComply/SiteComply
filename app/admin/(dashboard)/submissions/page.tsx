@@ -17,8 +17,9 @@ interface SearchParams {
 }
 
 /**
- * Submissions report: filter by site, worker and check-in date range, browse the
- * results, open a submission for full detail, or export the filtered set as CSV.
+ * Check-ins report: filter by site, worker and check-in date range, browse the
+ * results, open a check-in for full detail, or export the filtered set as CSV.
+ * (The route path stays /admin/submissions to preserve existing URLs.)
  */
 export default async function SubmissionsPage({
   searchParams,
@@ -45,7 +46,7 @@ export default async function SubmissionsPage({
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-bold text-ink">Submissions</h1>
+        <h1 className="text-2xl font-bold text-ink">Check-ins</h1>
         <p className="text-ink-muted">
           Search and filter check-in records, then open any record or export the
           results.
@@ -139,7 +140,7 @@ export default async function SubmissionsPage({
 
       {rows.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface px-4 py-8 text-center text-ink-muted">
-          No submissions match these filters.
+          No check-ins match these filters.
         </p>
       ) : (
         <ul className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
