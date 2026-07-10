@@ -13,6 +13,7 @@ import { actionCounts } from '@/services/actions/actionService';
 import { countDocuments } from '@/services/documents/documentService';
 import { countAudits } from '@/services/audits/auditService';
 import { countUnreadPlatformNotifications } from '@/services/notifications/platformNotifications';
+import { getRecentActivity, type ActivityKind } from '@/services/dashboard/recentActivity';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +35,20 @@ const CHIP: Record<Chip, string> = {
   warn: 'bg-hivis-400/25 text-ink',
 };
 
+// Icon + colour for each activity kind in the unified Recent activity feed.
+const ACTIVITY_META: Record<ActivityKind, { icon: PlatformIconName; tone: string }> = {
+  checkin: { icon: 'hardhat', tone: 'text-safe-600' },
+  audit_created: { icon: 'shield', tone: 'text-brand-600' },
+  audit_signed_off: { icon: 'shield', tone: 'text-safe-600' },
+  finding_created: { icon: 'shield', tone: 'text-hivis-600' },
+  action_created: { icon: 'bolt', tone: 'text-brand-600' },
+  action_completed: { icon: 'bolt', tone: 'text-safe-600' },
+  action_overdue: { icon: 'bolt', tone: 'text-danger-600' },
+  document_uploaded: { icon: 'doc', tone: 'text-brand-600' },
+  document_expired: { icon: 'doc', tone: 'text-danger-600' },
+  evidence_uploaded: { icon: 'doc', tone: 'text-teal-600' },
+};
+
 export default async function PlatformDashboardPage() {
   const viewer = await requirePlatformViewer();
   assertModuleView(viewer, 'dashboard');
@@ -50,7 +65,7 @@ export default async function PlatformDashboardPage() {
   const canSites = permits(viewer.role, 'sites', 'view');
 
   // Real, viewer-scoped counts (an empty site scope yields 0). Run together.
-  const [actions, workersOnSite, expiredDocs, expiringDocs, auditsAwaiting, unread, recent] =
+  const [actions, workersOnSite, expiredDocs, expiringDocs, auditsAwaiting, unread, activity] =
     await Promise.all([
       actionCounts(viewer, now),
       prisma.submission.count({
@@ -60,17 +75,7 @@ export default async function PlatformDashboardPage() {
       countDocuments(viewer, { expiry: 'expiring' }),
       countAudits(viewer, { status: 'COMPLETED' }),
       countUnreadPlatformNotifications(viewer, now),
-      prisma.submission.findMany({
-        where: { jobSiteId: { in: siteIds } },
-        orderBy: { checkedInAt: 'desc' },
-        take: 5,
-        select: {
-          id: true,
-          checkedInAt: true,
-          worker: { select: { fullName: true } },
-          jobSite: { select: { name: true } },
-        },
-      }),
+      getRecentActivity(viewer, 12, now),
     ]);
 
   // Actionable metrics first (overdue / expired), then operational, then status.
@@ -213,26 +218,36 @@ export default async function PlatformDashboardPage() {
         <div className="border-b border-line px-5 py-3">
           <h2 className="text-base font-semibold text-ink">Recent activity</h2>
         </div>
-        {recent.length === 0 ? (
+        {activity.length === 0 ? (
           <p className="px-5 py-8 text-center text-sm text-ink-subtle">
-            No recent check-ins across your sites.
+            No recent activity across your sites.
           </p>
         ) : (
           <ul className="divide-y divide-line">
-            {recent.map((row) => (
-              <li
-                key={row.id}
-                className="flex items-center justify-between gap-3 px-5 py-3 text-sm"
-              >
-                <span className="min-w-0 truncate text-ink">
-                  <span className="font-semibold">{row.worker.fullName}</span>{' '}
-                  checked in at {row.jobSite.name}
-                </span>
-                <span className="shrink-0 tabular-nums text-ink-subtle">
-                  {formatDateTimeUK(row.checkedInAt)}
-                </span>
-              </li>
-            ))}
+            {activity.map((item) => {
+              const meta = ACTIVITY_META[item.kind];
+              return (
+                <li key={item.key}>
+                  <Link
+                    href={item.href}
+                    className="flex items-center justify-between gap-3 px-5 py-3 text-sm transition-colors hover:bg-brand-50/40"
+                  >
+                    <span className="flex min-w-0 items-center gap-3">
+                      <PlatformIcon
+                        name={meta.icon}
+                        className={cn('h-4 w-4 shrink-0', meta.tone)}
+                      />
+                      <span className="min-w-0 truncate text-ink">
+                        <span className="font-semibold">{item.title}</span> {item.detail}
+                      </span>
+                    </span>
+                    <span className="shrink-0 tabular-nums text-xs text-ink-subtle">
+                      {formatDateTimeUK(item.at)}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
