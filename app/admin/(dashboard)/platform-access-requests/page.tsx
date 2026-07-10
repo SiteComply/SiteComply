@@ -55,7 +55,7 @@ export default async function PlatformAccessRequestsPage({
   return (
     <div className="space-y-6">
       <header className="space-y-1">
-        <h1 className="text-2xl font-bold text-ink">Platform Access Requests</h1>
+        <h1 className="text-2xl font-bold text-ink">Access Requests</h1>
         <p className="text-ink-muted">
           Self-service access requests submitted from the platform sign-in
           screen. Approving a request creates and activates the{' '}

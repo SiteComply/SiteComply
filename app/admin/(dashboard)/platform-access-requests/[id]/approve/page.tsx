@@ -32,7 +32,7 @@ export default async function ApproveAccessRequestPage({
           href="/admin/platform-access-requests"
           className="text-sm font-semibold text-brand-700"
         >
-          ← Platform Access Requests
+          ← Access Requests
         </Link>
         <h1 className="text-2xl font-bold text-ink">Approve access request</h1>
         <p className="text-ink-muted">
