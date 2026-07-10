@@ -1,0 +1,56 @@
+name: CI
+
+# Runs the same three gates a developer runs locally — typecheck, lint and a
+# production build — on every push and every pull request. Any failing gate fails
+# the job, which surfaces a red "CI / Validate" status check on the commit / PR.
+on:
+  push:
+  pull_request:
+
+# One run per ref: a new push cancels an in-flight run for the same branch/PR so
+# CI always reflects the latest commit and doesn't queue stale work.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    env:
+      # Match the App Service runtime (Node 22-lts) so the build is validated on
+      # the same major version that serves production.
+      NODE_VERSION: '22'
+      NEXT_TELEMETRY_DISABLED: '1'
+      # Prisma generate needs the schema, not a live database; a placeholder keeps
+      # any DATABASE_URL reads at build time happy without touching a real DB.
+      DATABASE_URL: 'postgresql://ci:ci@localhost:5432/ci?schema=public'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      # `npm ci` installs from the lockfile and runs the postinstall
+      # `prisma generate`, so the Prisma client exists before typecheck/build.
+      - name: Install dependencies
+        run: npm ci
+
+      # Gate 1 — TypeScript: no type errors (tsc --noEmit).
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Gate 2 — ESLint via next lint. Fails on any warning or error.
+      - name: Lint
+        run: npm run lint
+
+      # Gate 3 — production build (next build) must compile.
+      - name: Production build
+        run: npm run build
