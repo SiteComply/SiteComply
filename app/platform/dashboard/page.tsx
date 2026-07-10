@@ -8,6 +8,11 @@ import {
   requirePlatformViewer,
   assertModuleView,
 } from '@/services/platformUsers/platformAccess';
+import { permits } from '@/services/platformUsers/platformPermissions';
+import { actionCounts } from '@/services/actions/actionService';
+import { countDocuments } from '@/services/documents/documentService';
+import { countAudits } from '@/services/audits/auditService';
+import { countUnreadPlatformNotifications } from '@/services/notifications/platformNotifications';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,42 +24,56 @@ export const dynamic = 'force-dynamic';
  * never contribute to any count or list. Role-based permissions are not enforced.
  */
 
-type Chip = 'brand' | 'safe' | 'teal' | 'danger';
+type Chip = 'brand' | 'safe' | 'teal' | 'danger' | 'warn';
 
 const CHIP: Record<Chip, string> = {
   brand: 'bg-brand-50 text-brand-600',
   safe: 'bg-safe-50 text-safe-600',
   teal: 'bg-teal-50 text-teal-600',
   danger: 'bg-danger-50 text-danger-600',
+  warn: 'bg-hivis-400/25 text-ink',
 };
 
 export default async function PlatformDashboardPage() {
   const viewer = await requirePlatformViewer();
   assertModuleView(viewer, 'dashboard');
   const { siteIds } = viewer;
+  const now = new Date();
 
-  // Everything below is filtered to the viewer's accessible sites only.
+  // Everything below is filtered to the viewer's accessible sites only, and each
+  // metric is additionally shown only if the viewer may view that module.
   const activeSites = viewer.sites.filter((s) => s.status === 'ACTIVE').length;
+  const canActions = permits(viewer.role, 'actions', 'view');
+  const canDocs = permits(viewer.role, 'documents', 'view');
+  const canAudits = permits(viewer.role, 'audits', 'view');
+  const canCheckins = permits(viewer.role, 'checkins', 'view');
+  const canSites = permits(viewer.role, 'sites', 'view');
 
-  const [workersOnSite, recent] = siteIds.length
-    ? await Promise.all([
-        prisma.submission.count({
-          where: { jobSiteId: { in: siteIds }, checkedOutAt: null },
-        }),
-        prisma.submission.findMany({
-          where: { jobSiteId: { in: siteIds } },
-          orderBy: { checkedInAt: 'desc' },
-          take: 5,
-          select: {
-            id: true,
-            checkedInAt: true,
-            worker: { select: { fullName: true } },
-            jobSite: { select: { name: true } },
-          },
-        }),
-      ])
-    : [0, [] as never[]];
+  // Real, viewer-scoped counts (an empty site scope yields 0). Run together.
+  const [actions, workersOnSite, expiredDocs, expiringDocs, auditsAwaiting, unread, recent] =
+    await Promise.all([
+      actionCounts(viewer, now),
+      prisma.submission.count({
+        where: { jobSiteId: { in: siteIds }, checkedOutAt: null },
+      }),
+      countDocuments(viewer, { expiry: 'expired' }),
+      countDocuments(viewer, { expiry: 'expiring' }),
+      countAudits(viewer, { status: 'COMPLETED' }),
+      countUnreadPlatformNotifications(viewer, now),
+      prisma.submission.findMany({
+        where: { jobSiteId: { in: siteIds } },
+        orderBy: { checkedInAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          checkedInAt: true,
+          worker: { select: { fullName: true } },
+          jobSite: { select: { name: true } },
+        },
+      }),
+    ]);
 
+  // Actionable metrics first (overdue / expired), then operational, then status.
   const cards: {
     title: string;
     value: number;
@@ -63,17 +82,74 @@ export default async function PlatformDashboardPage() {
     href: string;
     icon: PlatformIconName;
     chip: Chip;
-  }[] = [
-    {
-      title: 'Active Sites',
-      value: activeSites,
-      sub: viewer.allSites ? 'across the organisation' : 'assigned to you',
-      cta: 'View sites',
-      href: '/platform/dashboard/sites',
-      icon: 'pin',
-      chip: 'brand',
-    },
-    {
+  }[] = [];
+
+  if (canActions) {
+    cards.push(
+      {
+        title: 'Overdue Actions',
+        value: actions.OVERDUE,
+        sub: 'past their due date',
+        cta: 'Review overdue',
+        href: '/platform/dashboard/actions?bucket=OVERDUE',
+        icon: 'bolt',
+        chip: 'danger',
+      },
+      {
+        title: 'Open Actions',
+        value: actions.OPEN,
+        sub: 'awaiting attention',
+        cta: 'See actions',
+        href: '/platform/dashboard/actions?bucket=OPEN',
+        icon: 'bolt',
+        chip: 'brand',
+      },
+    );
+  }
+  if (canAudits) {
+    cards.push({
+      title: 'Audits Awaiting Sign-Off',
+      value: auditsAwaiting,
+      sub: 'completed, not signed off',
+      cta: 'View audits',
+      href: '/platform/dashboard/audits?status=COMPLETED',
+      icon: 'shield',
+      chip: 'teal',
+    });
+  }
+  if (canDocs) {
+    cards.push(
+      {
+        title: 'Expired Documents',
+        value: expiredDocs,
+        sub: 'need replacing',
+        cta: 'View documents',
+        href: '/platform/dashboard/documents?expiry=expired',
+        icon: 'doc',
+        chip: 'danger',
+      },
+      {
+        title: 'Expiring Soon',
+        value: expiringDocs,
+        sub: 'within 30 days',
+        cta: 'View documents',
+        href: '/platform/dashboard/documents?expiry=expiring',
+        icon: 'doc',
+        chip: 'warn',
+      },
+    );
+  }
+  cards.push({
+    title: 'Unread Notifications',
+    value: unread,
+    sub: 'across your sites',
+    cta: 'Open notifications',
+    href: '/platform/dashboard/notifications',
+    icon: 'bell',
+    chip: 'brand',
+  });
+  if (canCheckins) {
+    cards.push({
       title: 'Workers On Site',
       value: workersOnSite,
       sub: 'checked in right now',
@@ -81,26 +157,19 @@ export default async function PlatformDashboardPage() {
       href: '/platform/dashboard/submissions',
       icon: 'hardhat',
       chip: 'safe',
-    },
-    {
-      title: 'Open Actions',
-      value: 0,
-      sub: 'awaiting your attention',
-      cta: 'See actions',
-      href: '/platform/dashboard/actions',
-      icon: 'bolt',
-      chip: 'danger',
-    },
-    {
-      title: 'Latest Reports',
-      value: 0,
-      sub: 'ready to view',
-      cta: 'Open reports',
-      href: '/platform/dashboard/reports',
-      icon: 'chart',
-      chip: 'teal',
-    },
-  ];
+    });
+  }
+  if (canSites) {
+    cards.push({
+      title: 'Active Sites',
+      value: activeSites,
+      sub: viewer.allSites ? 'across the organisation' : 'assigned to you',
+      cta: 'View sites',
+      href: '/platform/dashboard/sites',
+      icon: 'pin',
+      chip: 'brand',
+    });
+  }
 
   return (
     <PlatformShell>
