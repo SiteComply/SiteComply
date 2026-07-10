@@ -8,7 +8,7 @@ export interface Crumb {
 }
 
 /**
- * Platform breadcrumb trail (e.g. "Sites › Test Site A", "Submissions › Tom
+ * Platform breadcrumb trail (e.g. "Sites › Test Site A", "Check-ins › Tom
  * Smith"). Parent crumbs link back to their list view; the final crumb is the
  * current page. Uses the Platform link language (brand links, muted chevron
  * separators) and wraps responsively on narrower tablet widths. Parent links only

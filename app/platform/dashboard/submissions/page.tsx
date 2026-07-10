@@ -13,9 +13,10 @@ import {
 export const dynamic = 'force-dynamic';
 
 /**
- * Platform → Submissions (check-ins). Lists check-in records for the viewer's
+ * Platform → Check-ins. Lists worker site check-in records for the viewer's
  * accessible sites only. The Export button follows the RBAC check-ins export
  * permission (hidden for Engineer and Client, who cannot export worker data).
+ * (The route path stays /submissions to preserve existing URLs/bookmarks.)
  */
 export default async function PlatformSubmissionsPage() {
   const viewer = await requirePlatformViewer();
@@ -42,9 +43,9 @@ export default async function PlatformSubmissionsPage() {
     <PlatformShell>
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-ink">Submissions</h1>
+          <h1 className="text-2xl font-bold text-ink">Check-ins</h1>
           <p className="text-ink-muted">
-            Check-in and induction records across your sites.
+            Worker site check-in and induction records across your sites.
           </p>
         </div>
         <div className="flex items-center gap-2">

@@ -41,7 +41,7 @@ export default async function WorkerDetailPage({
       <div className="mb-6">
         <Breadcrumbs
           items={[
-            { label: 'Submissions', href: '/platform/dashboard/submissions' },
+            { label: 'Check-ins', href: '/platform/dashboard/submissions' },
             { label: worker.fullName },
           ]}
         />
@@ -49,7 +49,7 @@ export default async function WorkerDetailPage({
           href="/platform/dashboard/submissions"
           className="text-sm font-semibold text-brand-700 hover:underline"
         >
-          ← Submissions
+          ← Check-ins
         </Link>
         <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -97,7 +97,7 @@ export default async function WorkerDetailPage({
             </p>
           </Section>
 
-          <Section title="Check-in &amp; submission history">
+          <Section title="Check-in history">
             {history.length === 0 ? (
               <Empty>No check-ins on your sites.</Empty>
             ) : (

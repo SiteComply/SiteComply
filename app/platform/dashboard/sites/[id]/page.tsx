@@ -144,7 +144,7 @@ export default async function SiteDetailPage({
           )}
 
           {canViewCheckins && (
-            <Section title="Recent submissions">
+            <Section title="Recent check-ins">
               {recentSubmissions.length === 0 ? (
                 <Empty>No check-ins recorded for this site yet.</Empty>
               ) : (
