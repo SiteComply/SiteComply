@@ -9,8 +9,9 @@ import {
   requirePlatformViewer,
   assertModuleView,
 } from '@/services/platformUsers/platformAccess';
-import { permits } from '@/services/platformUsers/platformPermissions';
+import { permits, canManualCheckOut } from '@/services/platformUsers/platformPermissions';
 import { getWorkerDetailForViewer } from '@/services/workers/workerDetailService';
+import { ManualCheckOutButton } from '@/components/platform/ManualCheckOutButton';
 import { CSCS_CARD_LABELS } from '@/lib/cscs';
 
 export const dynamic = 'force-dynamic';
@@ -34,6 +35,7 @@ export default async function WorkerDetailPage({
   if (!detail) notFound();
 
   const canSeeMobile = permits(viewer.role, 'checkins', 'export');
+  const canCheckOut = canManualCheckOut(viewer.role);
   const { worker, complianceStatus, currentSite, totalCheckIns, history } = detail;
 
   return (
@@ -131,8 +133,18 @@ export default async function WorkerDetailPage({
                         <td className="py-2.5 pr-3 tabular-nums text-ink-muted">
                           {formatDateTimeUK(h.checkedInAt)}
                         </td>
-                        <td className="py-2.5 pr-3 tabular-nums text-ink-muted">
-                          {h.checkedOutAt ? formatDateTimeUK(h.checkedOutAt) : (
+                        <td className="py-2.5 pr-3 text-ink-muted">
+                          {h.checkedOutAt ? (
+                            <>
+                              <span className="tabular-nums">{formatDateTimeUK(h.checkedOutAt)}</span>
+                              {h.checkedOutManual && (
+                                <span className="mt-0.5 block text-xs text-ink-subtle">
+                                  Manual · {h.checkedOutByName ?? 'Unknown'}
+                                  {h.checkedOutReason ? ` — ${h.checkedOutReason}` : ''}
+                                </span>
+                              )}
+                            </>
+                          ) : (
                             <span className="font-semibold text-safe-700">On site</span>
                           )}
                         </td>
@@ -184,14 +196,23 @@ export default async function WorkerDetailPage({
 
           <Section title="Current site">
             {currentSite ? (
-              <RowLink href={`/platform/dashboard/sites/${currentSite.siteId}`}>
-                <span className="block truncate font-semibold text-brand-700">
-                  {currentSite.siteName}
-                </span>
-                <span className="block text-xs text-ink-subtle">
-                  Checked in {formatDateTimeUK(currentSite.checkedInAt)}
-                </span>
-              </RowLink>
+              <div className="space-y-3">
+                <RowLink href={`/platform/dashboard/sites/${currentSite.siteId}`}>
+                  <span className="block truncate font-semibold text-brand-700">
+                    {currentSite.siteName}
+                  </span>
+                  <span className="block text-xs text-ink-subtle">
+                    Checked in {formatDateTimeUK(currentSite.checkedInAt)}
+                  </span>
+                </RowLink>
+                {canCheckOut && (
+                  <ManualCheckOutButton
+                    submissionId={currentSite.submissionId}
+                    workerName={worker.fullName}
+                    siteName={currentSite.siteName}
+                  />
+                )}
+              </div>
             ) : (
               <Empty>Not currently checked in on any of your sites.</Empty>
             )}

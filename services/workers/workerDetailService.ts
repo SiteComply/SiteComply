@@ -26,6 +26,10 @@ export interface WorkerHistoryEntry {
   gdprConsent: boolean;
   checkedInAt: Date;
   checkedOutAt: Date | null;
+  /** Manual check-out audit trail (present when a Director/PM forced the check-out). */
+  checkedOutManual: boolean;
+  checkedOutByName: string | null;
+  checkedOutReason: string | null;
 }
 
 export interface WorkerDetail {
@@ -48,7 +52,13 @@ export interface WorkerDetail {
     /** CSCS card valid today? null when no expiry is recorded. */
     cscsValid: boolean | null;
   };
-  currentSite: { siteId: string; siteName: string; checkedInAt: Date } | null;
+  /** The worker's open (still on-site) check-in within scope, if any. */
+  currentSite: {
+    submissionId: string;
+    siteId: string;
+    siteName: string;
+    checkedInAt: Date;
+  } | null;
   totalCheckIns: number;
   history: WorkerHistoryEntry[];
 }
@@ -88,6 +98,9 @@ export async function getWorkerDetailForViewer(
       gdprConsent: true,
       checkedInAt: true,
       checkedOutAt: true,
+      checkedOutManual: true,
+      checkedOutByName: true,
+      checkedOutReason: true,
       jobSite: { select: { id: true, name: true } },
     },
   });
@@ -104,6 +117,9 @@ export async function getWorkerDetailForViewer(
     gdprConsent: s.gdprConsent,
     checkedInAt: s.checkedInAt,
     checkedOutAt: s.checkedOutAt,
+    checkedOutManual: s.checkedOutManual,
+    checkedOutByName: s.checkedOutByName,
+    checkedOutReason: s.checkedOutReason,
   }));
 
   const latest = subs[0];
@@ -123,7 +139,12 @@ export async function getWorkerDetailForViewer(
       cscsValid,
     },
     currentSite: onSite
-      ? { siteId: onSite.jobSite.id, siteName: onSite.jobSite.name, checkedInAt: onSite.checkedInAt }
+      ? {
+          submissionId: onSite.id,
+          siteId: onSite.jobSite.id,
+          siteName: onSite.jobSite.name,
+          checkedInAt: onSite.checkedInAt,
+        }
       : null,
     totalCheckIns: subs.length,
     history,

@@ -1,5 +1,6 @@
 import { SubmissionStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { getActiveSiteWithChecklist } from '@/services/sites/siteService';
 import {
   buildInductionSteps,
@@ -143,4 +144,50 @@ export async function checkOut(submissionId: string, workerId: string) {
     data: { checkedOutAt: new Date() },
   });
   return result.count > 0;
+}
+
+export type ManualCheckOutReason = 'no_reason' | 'not_found' | 'already_out';
+
+/**
+ * Manual (forced) check-out of a worker who is still on site, performed by an
+ * authorised platform user (Director / Project Manager — the caller enforces the
+ * role). Site-scoping is enforced here: the check-in must belong to one of the
+ * viewer's Assigned Sites. A reason is mandatory. The original check-in time is
+ * untouched; the actor, time and reason are recorded on the record as an
+ * immutable audit trail (checkedOutManual = true).
+ */
+export async function manualCheckOut(
+  viewer: PlatformViewer,
+  submissionId: string,
+  reason: string,
+): Promise<{ ok: true } | { ok: false; reason: ManualCheckOutReason }> {
+  const trimmed = (reason ?? '').trim();
+  if (!trimmed) return { ok: false, reason: 'no_reason' };
+  if (viewer.siteIds.length === 0) return { ok: false, reason: 'not_found' };
+
+  // Scope + state guard in one atomic conditional update: only an open check-in
+  // on one of the viewer's sites is affected.
+  const result = await prisma.submission.updateMany({
+    where: {
+      id: submissionId,
+      jobSiteId: { in: viewer.siteIds },
+      checkedOutAt: null,
+    },
+    data: {
+      checkedOutAt: new Date(),
+      checkedOutManual: true,
+      checkedOutByUserId: viewer.id,
+      checkedOutByName: viewer.name,
+      checkedOutReason: trimmed.slice(0, 500),
+    },
+  });
+  if (result.count > 0) return { ok: true };
+
+  // Distinguish "not in scope / not found" from "already checked out" for the UI.
+  const exists = await prisma.submission.findFirst({
+    where: { id: submissionId, jobSiteId: { in: viewer.siteIds } },
+    select: { checkedOutAt: true },
+  });
+  if (!exists) return { ok: false, reason: 'not_found' };
+  return { ok: false, reason: 'already_out' };
 }

@@ -201,6 +201,17 @@ export const CHECKOUT_OVERRIDE_ROLES: PlatformRoleValue[] = [
   'PRINCIPAL_CONTRACTOR',
 ];
 
+/**
+ * Roles permitted to MANUALLY check out a worker who is still on site, from
+ * Worker Details. Restricted to Director and Project Manager per the approved
+ * workflow — an oversight action recorded in the check-in audit trail.
+ */
+export const MANUAL_CHECKOUT_ROLES: PlatformRoleValue[] = ['DIRECTOR', 'PROJECT_MANAGER'];
+
+export function canManualCheckOut(role: PlatformRoleValue): boolean {
+  return MANUAL_CHECKOUT_ROLES.includes(role);
+}
+
 /** Sign off / approve an audit. */
 export const AUDIT_SIGNOFF_ROLES: PlatformRoleValue[] = [
   'AUDITOR',

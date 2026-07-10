@@ -278,7 +278,16 @@ model Submission {
 
   status      SubmissionStatus @default(INCOMPLETE)
   checkedInAt DateTime         @default(now())
-  checkedOutAt DateTime? // Set when the worker checks out / leaves site
+  checkedOutAt DateTime? // Set when the worker checks out OR is manually checked out
+
+  // Manual check-out audit trail — set when an authorised platform user
+  // (Director / Project Manager) checks out a worker who is still on site.
+  // checkedInAt + checkedOutAt hold the times; these record who did it and why.
+  // Stored as plain fields (no FK) so the audit record survives user deletion.
+  checkedOutByUserId String? // PlatformUser id of the actor (reference only)
+  checkedOutByName   String? // denormalised actor name for display
+  checkedOutReason   String? // mandatory reason captured at manual check-out
+  checkedOutManual   Boolean @default(false) // true = a manual/forced check-out
 
   @@index([jobSiteId, checkedInAt])
   @@index([workerId])
