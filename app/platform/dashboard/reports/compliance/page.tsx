@@ -120,6 +120,7 @@ export default async function ComplianceReportPage({
             No check-ins in this period for your sites.
           </p>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left text-ink-subtle">
@@ -140,6 +141,7 @@ export default async function ComplianceReportPage({
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </section>
 

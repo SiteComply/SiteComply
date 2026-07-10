@@ -81,6 +81,7 @@ export default async function WorkforceReportPage({
             No check-ins for your sites in this period.
           </p>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left text-ink-subtle">
@@ -99,6 +100,7 @@ export default async function WorkforceReportPage({
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </section>
     </PlatformShell>

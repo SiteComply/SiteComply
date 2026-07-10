@@ -85,6 +85,7 @@ export default async function CscsReportPage({
             No workers on your sites in this period.
           </p>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left text-ink-subtle">
@@ -101,6 +102,7 @@ export default async function CscsReportPage({
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </section>
 

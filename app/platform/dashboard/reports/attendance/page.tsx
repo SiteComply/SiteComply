@@ -94,6 +94,7 @@ export default async function AttendanceReportPage({
             No check-ins in this period for your sites.
           </p>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left text-ink-subtle">
@@ -110,6 +111,7 @@ export default async function AttendanceReportPage({
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </section>
 
