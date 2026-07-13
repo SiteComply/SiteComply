@@ -226,19 +226,17 @@ export default async function PlatformDashboardPage() {
       <ScopeBanner viewer={viewer} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Grouped summary cards (Actions, Documents) span two columns and hold
-            two clickable figures each. */}
+        {/* Grouped summary cards (Actions, Documents) span two columns and show
+            their figures as simple inline metrics — no nested boxes. */}
         {groupCards.map((card) => (
           <div
             key={card.title}
-            className="flex flex-col rounded-xl border border-line bg-surface p-6 shadow-card sm:col-span-2"
+            className="flex flex-col rounded-xl border border-line bg-surface p-5 shadow-card sm:col-span-2"
           >
-            {/* Summary header — bolder title + divider set the card apart from
-                the individual metrics below it. */}
-            <div className="flex items-center gap-2.5 border-b border-line pb-4">
+            <div className="flex items-center gap-2.5">
               <span
                 className={cn(
-                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
+                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
                   CHIP[card.chip],
                 )}
               >
@@ -248,48 +246,40 @@ export default async function PlatformDashboardPage() {
                 {card.title}
               </p>
             </div>
-            <div className="mt-5 grid grid-cols-2 gap-3">
+            <div className="mt-5 flex flex-1 flex-wrap gap-x-10 gap-y-3">
               {card.metrics.map((m) => {
-                // Attention items (Overdue / Expired) get the strong danger
-                // treatment ONLY when there is something to act on, so a clean
-                // state stays calm.
+                // Colour cue for attention items (Overdue / Expired) only when
+                // there is something to act on, so a clean state stays calm.
                 const urgent = m.attention && m.value > 0;
                 return (
                   <Link
                     key={m.label}
                     href={m.href}
-                    className={cn(
-                      'rounded-xl border p-4 transition-colors',
-                      urgent
-                        ? 'border-danger-500/40 bg-danger-50 hover:border-danger-500/60'
-                        : 'border-line bg-surface-sunken hover:border-brand-200 hover:bg-brand-50/40',
-                    )}
+                    className="group flex items-baseline gap-2"
                   >
-                    <p
+                    <span
                       className={cn(
-                        'tabular-nums tracking-tight',
-                        urgent
-                          ? 'text-4xl font-extrabold text-danger-700'
-                          : 'text-3xl font-bold text-ink',
+                        'text-3xl font-bold tabular-nums tracking-tight',
+                        urgent ? 'text-danger-700' : 'text-ink',
                       )}
                     >
                       {m.value}
-                    </p>
-                    <p
+                    </span>
+                    <span
                       className={cn(
-                        'mt-1 text-xs font-bold uppercase tracking-wide',
-                        urgent ? 'text-danger-700' : 'text-ink-subtle',
+                        'text-sm font-semibold group-hover:underline',
+                        urgent ? 'text-danger-600' : 'text-ink-muted',
                       )}
                     >
                       {m.label}
-                    </p>
+                    </span>
                   </Link>
                 );
               })}
             </div>
             <Link
               href={card.moreHref}
-              className="mt-4 text-sm font-semibold text-brand-700 hover:underline"
+              className="mt-5 text-sm font-semibold text-brand-700 hover:underline"
             >
               {card.moreLabel} →
             </Link>
