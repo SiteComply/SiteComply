@@ -97,8 +97,9 @@ export default async function PlatformDashboardPage() {
   // Grouped summary cards: related metrics live together in one business-focused
   // card (each figure still links to its own filtered list), so Actions and
   // Documents each read as a single card instead of two overlapping ones.
-  // Within a grouped card the attention-required metric (Overdue / Expired) is
-  // listed FIRST so it reads first (left) and is styled with stronger emphasis.
+  // Each grouped card holds its two figures as separate metric tiles. The
+  // attention-required figure (Overdue / Expired) gets a subtle colour cue on its
+  // value when non-zero — no alert-style boxes.
   const groupCards: {
     title: string;
     icon: PlatformIconName;
@@ -120,16 +121,16 @@ export default async function PlatformDashboardPage() {
       chip: 'brand',
       metrics: [
         {
-          label: 'Overdue',
-          value: actions.OVERDUE,
-          href: '/platform/dashboard/actions?bucket=OVERDUE',
-          attention: true,
-        },
-        {
           label: 'Open',
           value: actions.OPEN,
           href: '/platform/dashboard/actions?bucket=OPEN',
           attention: false,
+        },
+        {
+          label: 'Overdue',
+          value: actions.OVERDUE,
+          href: '/platform/dashboard/actions?bucket=OVERDUE',
+          attention: true,
         },
       ],
       moreLabel: 'View all actions',
@@ -226,8 +227,8 @@ export default async function PlatformDashboardPage() {
       <ScopeBanner viewer={viewer} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Grouped summary cards (Actions, Documents) span two columns and show
-            their figures as simple inline metrics — no nested boxes. */}
+        {/* Grouped summary cards (Actions, Documents) span two columns and hold
+            their figures as two separate, clean metric tiles. */}
         {groupCards.map((card) => (
           <div
             key={card.title}
@@ -242,44 +243,40 @@ export default async function PlatformDashboardPage() {
               >
                 <PlatformIcon name={card.icon} />
               </span>
-              <p className="text-lg font-bold leading-tight tracking-tight text-ink">
+              <p className="text-base font-bold tracking-tight text-ink">
                 {card.title}
               </p>
             </div>
-            <div className="mt-5 flex flex-1 flex-wrap gap-x-10 gap-y-3">
+            <div className="mt-4 grid grid-cols-2 gap-3">
               {card.metrics.map((m) => {
-                // Colour cue for attention items (Overdue / Expired) only when
-                // there is something to act on, so a clean state stays calm.
+                // Subtle colour cue on the attention value (Overdue / Expired),
+                // only when non-zero — the tile itself stays neutral, never an
+                // alert-style box.
                 const urgent = m.attention && m.value > 0;
                 return (
                   <Link
                     key={m.label}
                     href={m.href}
-                    className="group flex items-baseline gap-2"
+                    className="rounded-lg border border-line bg-surface-sunken p-4 transition-colors hover:border-brand-200 hover:bg-brand-50/40"
                   >
-                    <span
+                    <p
                       className={cn(
                         'text-3xl font-bold tabular-nums tracking-tight',
-                        urgent ? 'text-danger-700' : 'text-ink',
+                        urgent ? 'text-danger-600' : 'text-ink',
                       )}
                     >
                       {m.value}
-                    </span>
-                    <span
-                      className={cn(
-                        'text-sm font-semibold group-hover:underline',
-                        urgent ? 'text-danger-600' : 'text-ink-muted',
-                      )}
-                    >
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-ink-muted">
                       {m.label}
-                    </span>
+                    </p>
                   </Link>
                 );
               })}
             </div>
             <Link
               href={card.moreHref}
-              className="mt-5 text-sm font-semibold text-brand-700 hover:underline"
+              className="mt-4 text-sm font-semibold text-brand-700 hover:underline"
             >
               {card.moreLabel} →
             </Link>
