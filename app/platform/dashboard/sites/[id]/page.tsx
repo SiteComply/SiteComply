@@ -5,6 +5,7 @@ import { formatDateTimeUK, formatDateUK } from '@/lib/datetime';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { RowLink } from '@/components/platform/RowLink';
 import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
+import { SiteStatusButton } from '@/components/platform/SiteStatusButton';
 import {
   requirePlatformViewer,
   assertModuleView,
@@ -95,12 +96,15 @@ export default async function SiteDetailPage({
             </p>
           </div>
           {canEdit && (
-            <Link
-              href={`/platform/dashboard/sites/${site.id}/edit`}
-              className="touch-target inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white shadow-sm shadow-brand-600/20 transition-colors hover:bg-brand-600"
-            >
-              Edit site
-            </Link>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Link
+                href={`/platform/dashboard/sites/${site.id}/edit`}
+                className="touch-target inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white shadow-sm shadow-brand-600/20 transition-colors hover:bg-brand-600"
+              >
+                Edit site
+              </Link>
+              <SiteStatusButton siteId={site.id} status={site.status} />
+            </div>
           )}
         </div>
       </div>

@@ -7,6 +7,7 @@ import {
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import {
   validateSite,
+  setSiteStatus,
   defaultInductionChecklistSeed,
   type SiteInput,
   type FieldErrors,
@@ -177,4 +178,44 @@ export async function updateSiteForDirector(
   });
 
   return { ok: true, id: siteId };
+}
+
+export type SetSiteStatusResult =
+  | { ok: true; status: SiteStatus }
+  | { ok: false; reason: 'forbidden' }
+  | { ok: false; reason: 'not_found' }
+  | { ok: false; reason: 'invalid_status' };
+
+/**
+ * Archive or reactivate a site on behalf of a Director — the dedicated,
+ * discoverable status action (distinct from the Edit form's status field). Same
+ * Director-only capability and site-scoping as editing; archiving ONLY flips the
+ * status, so all history (check-ins, reports, audits, actions, documents) is
+ * untouched and stays available — an archived site simply disappears from the
+ * worker check-in selection (which filters to ACTIVE). Provenance is preserved
+ * and `updatedAt` advances via the shared `setSiteStatus` writer.
+ */
+export async function setSiteStatusForDirector(
+  viewer: PlatformViewer,
+  siteId: string,
+  status: string,
+): Promise<SetSiteStatusResult> {
+  if (!canEditSite(viewer.role)) return { ok: false, reason: 'forbidden' };
+  if (status !== SiteStatus.ACTIVE && status !== SiteStatus.ARCHIVED) {
+    return { ok: false, reason: 'invalid_status' };
+  }
+  if (!viewer.siteIds.includes(siteId)) {
+    return { ok: false, reason: 'not_found' };
+  }
+
+  const existing = await prisma.jobSite.findUnique({
+    where: { id: siteId },
+    select: { id: true },
+  });
+  if (!existing) return { ok: false, reason: 'not_found' };
+
+  const next: SiteStatus =
+    status === SiteStatus.ARCHIVED ? SiteStatus.ARCHIVED : SiteStatus.ACTIVE;
+  await setSiteStatus(siteId, next);
+  return { ok: true, status: next };
 }
