@@ -40,9 +40,7 @@ export interface ValidatedAuditMeta {
   documentIds: string[];
 }
 
-export type AuditFieldErrors = Partial<
-  Record<keyof AuditMetaInput, string>
->;
+export type AuditFieldErrors = Partial<Record<keyof AuditMetaInput, string>>;
 
 /**
  * Validate audit metadata against the viewer's scope. `jobSiteId` must be a site
@@ -90,7 +88,9 @@ export function validateAuditMeta(
 
   const documentIds = Array.isArray(input.documentIds)
     ? Array.from(
-        new Set(input.documentIds.filter((s): s is string => typeof s === 'string')),
+        new Set(
+          input.documentIds.filter((s): s is string => typeof s === 'string'),
+        ),
       )
     : [];
 
@@ -137,6 +137,11 @@ async function resolveDocumentIds(
 export interface AuditListFilters {
   status?: string;
   siteId?: string;
+  /**
+   * Outstanding only = not yet signed off (Draft / In progress / Awaiting
+   * sign-off). Ignored when an explicit `status` filter is set.
+   */
+  outstanding?: boolean;
   /** Free-text search over title and description. */
   search?: string;
   /** Pagination (omit for the full list). */
@@ -155,9 +160,16 @@ function auditWhere(
       : viewer.siteIds;
   if (siteIds.length === 0) return null;
 
-  const status =
+  const explicitStatus =
     filters.status && isAuditStatus(filters.status)
       ? (filters.status as AuditStatus)
+      : undefined;
+  // Outstanding = every status except SIGNED_OFF (Draft / In progress /
+  // Awaiting sign-off). An explicit status filter takes precedence.
+  const status: Prisma.AuditWhereInput['status'] = explicitStatus
+    ? explicitStatus
+    : filters.outstanding
+      ? { not: 'SIGNED_OFF' }
       : undefined;
 
   const q = (filters.search ?? '').trim();
@@ -183,6 +195,17 @@ export async function countAudits(
   return prisma.audit.count({ where });
 }
 
+const AUDIT_LIST_SELECT = {
+  id: true,
+  title: true,
+  status: true,
+  overallScore: true,
+  createdByName: true,
+  createdAt: true,
+  jobSite: { select: { id: true, name: true, jobReference: true } },
+  _count: { select: { documents: true } },
+} satisfies Prisma.AuditSelect;
+
 /** Site-scoped list of audits for the viewer, newest first. */
 export async function listAudits(
   viewer: PlatformViewer,
@@ -196,16 +219,31 @@ export async function listAudits(
     orderBy: { createdAt: 'desc' },
     skip: filters.skip,
     take: filters.take,
-    select: {
-      id: true,
-      title: true,
-      status: true,
-      overallScore: true,
-      createdByName: true,
-      createdAt: true,
-      jobSite: { select: { id: true, name: true, jobReference: true } },
-      _count: { select: { documents: true } },
-    },
+    select: AUDIT_LIST_SELECT,
+  });
+}
+
+/**
+ * Outstanding (not-signed-off) audits for a single site, ordered for operational
+ * focus: by status — Awaiting sign-off → In progress → Draft (the enum orders
+ * DRAFT<IN_PROGRESS<COMPLETED<SIGNED_OFF, so `desc` with SIGNED_OFF excluded
+ * yields that order) — then longest outstanding first. Powers the Site Details
+ * panel; RBAC + site-scoping are enforced via `auditWhere` (out-of-scope or
+ * no-sites → []). Signed-off / historical audits stay in the Audits register.
+ */
+export async function listOutstandingAuditsForSite(
+  viewer: PlatformViewer,
+  siteId: string,
+  take: number,
+) {
+  const where = auditWhere(viewer, { siteId, outstanding: true });
+  if (!where) return [];
+
+  return prisma.audit.findMany({
+    where,
+    orderBy: [{ status: 'desc' }, { createdAt: 'asc' }],
+    take,
+    select: AUDIT_LIST_SELECT,
   });
 }
 
@@ -228,7 +266,11 @@ export async function createAudit(
   viewer: PlatformViewer,
   value: ValidatedAuditMeta,
 ): Promise<{ ok: true; id: string } | { ok: false; errors: AuditFieldErrors }> {
-  const docs = await resolveDocumentIds(viewer, value.jobSiteId, value.documentIds);
+  const docs = await resolveDocumentIds(
+    viewer,
+    value.jobSiteId,
+    value.documentIds,
+  );
   if (!docs.ok) return { ok: false, errors: { documentIds: docs.error } };
 
   const created = await prisma.audit.create({
@@ -259,7 +301,11 @@ export async function updateAudit(
   const existing = await getAuditForViewer(viewer, id);
   if (!existing) return { ok: false, notFound: true };
 
-  const docs = await resolveDocumentIds(viewer, value.jobSiteId, value.documentIds);
+  const docs = await resolveDocumentIds(
+    viewer,
+    value.jobSiteId,
+    value.documentIds,
+  );
   if (!docs.ok) return { ok: false, errors: { documentIds: docs.error } };
 
   await prisma.audit.update({

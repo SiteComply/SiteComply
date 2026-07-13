@@ -16,7 +16,7 @@ import {
 } from '@/services/platformUsers/platformPermissions';
 import { getSiteDetailForViewer } from '@/services/sites/siteDetailService';
 import { pct } from '@/services/reports/complianceReport';
-import { listAudits } from '@/services/audits/auditService';
+import { listOutstandingAuditsForSite } from '@/services/audits/auditService';
 import { listOutstandingActionsForSite } from '@/services/actions/actionService';
 import {
   auditStatusLabel,
@@ -59,8 +59,11 @@ export default async function SiteDetailPage({
   const canEdit = canEditSite(viewer.role);
   const now = new Date();
 
+  // Site Details focuses on outstanding audit work: only Draft / In progress /
+  // Awaiting sign-off, ordered by status then longest outstanding. Signed-off
+  // audits stay in the register.
   const audits = canViewAudits
-    ? await listAudits(viewer, { siteId: params.id, take: 5 })
+    ? await listOutstandingAuditsForSite(viewer, params.id, 5)
     : [];
   // Site Details focuses on outstanding work: only Open / In progress / Overdue,
   // ordered by urgency then priority. Completed actions stay in the register.
@@ -243,9 +246,9 @@ export default async function SiteDetailPage({
           </Section>
 
           {canViewAudits && (
-            <Section title="Audits">
+            <Section title="Outstanding audits">
               {audits.length === 0 ? (
-                <Empty>No audits for this site.</Empty>
+                <Empty>No outstanding audits for this site.</Empty>
               ) : (
                 <ul className="space-y-1">
                   {audits.map((a) => (
@@ -271,6 +274,12 @@ export default async function SiteDetailPage({
                   ))}
                 </ul>
               )}
+              <Link
+                href={`/platform/dashboard/audits?site=${site.id}`}
+                className="mt-3 inline-block text-sm font-semibold text-brand-700 hover:underline"
+              >
+                View all audits →
+              </Link>
             </Section>
           )}
 
