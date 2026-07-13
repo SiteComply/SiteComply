@@ -1,6 +1,9 @@
 import { SiteStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { canCreateSite } from '@/services/platformUsers/platformPermissions';
+import {
+  canCreateSite,
+  canEditSite,
+} from '@/services/platformUsers/platformPermissions';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import {
   validateSite,
@@ -80,4 +83,98 @@ export async function createSiteForDirector(
   });
 
   return { ok: true, id: site.id };
+}
+
+/** All editable fields of a site, for pre-filling the Director edit form. */
+export interface EditableSite {
+  id: string;
+  name: string;
+  jobReference: string;
+  status: 'ACTIVE' | 'ARCHIVED';
+  addressLine1: string;
+  addressLine2: string | null;
+  town: string;
+  postcode: string;
+  inductionContent: string;
+  fireAssemblyPoint: string | null;
+  firstAiderName: string | null;
+  firstAiderNumber: string | null;
+}
+
+/**
+ * Load a site's full editable field set for a viewer, enforcing site-scoping:
+ * returns null unless the site is in the viewer's scope (all sites for a
+ * Director). Used to pre-fill the edit form; the update path re-checks scope.
+ */
+export async function getSiteForEditByViewer(
+  viewer: PlatformViewer,
+  siteId: string,
+): Promise<EditableSite | null> {
+  if (!viewer.siteIds.includes(siteId)) return null; // out of scope → not found
+  return prisma.jobSite.findUnique({
+    where: { id: siteId },
+    select: {
+      id: true,
+      name: true,
+      jobReference: true,
+      status: true,
+      addressLine1: true,
+      addressLine2: true,
+      town: true,
+      postcode: true,
+      inductionContent: true,
+      fireAssemblyPoint: true,
+      firstAiderName: true,
+      firstAiderNumber: true,
+    },
+  });
+}
+
+export type UpdateSiteResult =
+  | { ok: true; id: string }
+  | { ok: false; reason: 'forbidden' }
+  | { ok: false; reason: 'not_found' }
+  | { ok: false; reason: 'validation'; errors: FieldErrors };
+
+/**
+ * Update an existing job site on behalf of a Director. Enforces the Director-only
+ * edit capability AND site-scoping (the site must be in the viewer's scope), then
+ * validates and writes the site's details, address and status in one update — so
+ * a status change also archives/reactivates the site.
+ *
+ * Provenance is preserved: `createdByAdmin` is never touched, and `updatedAt`
+ * advances automatically. Because every downstream view (documents, audits,
+ * actions, check-ins, reporting, dashboard, Site Details) joins the live JobSite
+ * row, edits are reflected immediately with no further wiring.
+ */
+export async function updateSiteForDirector(
+  viewer: PlatformViewer,
+  siteId: string,
+  input: PlatformSiteInput,
+): Promise<UpdateSiteResult> {
+  if (!canEditSite(viewer.role)) return { ok: false, reason: 'forbidden' };
+  if (!viewer.siteIds.includes(siteId))
+    return { ok: false, reason: 'not_found' };
+
+  // Guard against a race where the site was removed after the scope check.
+  const existing = await prisma.jobSite.findUnique({
+    where: { id: siteId },
+    select: { id: true },
+  });
+  if (!existing) return { ok: false, reason: 'not_found' };
+
+  const validated = validateSite(input);
+  if (!validated.ok) {
+    return { ok: false, reason: 'validation', errors: validated.errors };
+  }
+
+  await prisma.jobSite.update({
+    where: { id: siteId },
+    data: {
+      ...validated.value,
+      status: parseStatus(input.status),
+    },
+  });
+
+  return { ok: true, id: siteId };
 }

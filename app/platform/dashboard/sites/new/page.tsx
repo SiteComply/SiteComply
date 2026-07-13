@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
-import { SiteCreateForm } from '@/components/platform/SiteCreateForm';
+import { SiteForm } from '@/components/platform/SiteForm';
 import {
   requirePlatformViewer,
   assertModuleView,
@@ -46,7 +46,7 @@ export default async function NewSitePage() {
         </p>
       </div>
 
-      <SiteCreateForm />
+      <SiteForm mode="create" />
     </PlatformShell>
   );
 }

@@ -7,7 +7,7 @@ import { TextField } from '@/components/ui/TextField';
 import { Textarea } from '@/components/ui/Textarea';
 import { cn } from '@/lib/cn';
 
-interface Values {
+export interface SiteFormValues {
   name: string;
   jobReference: string;
   status: string;
@@ -21,9 +21,9 @@ interface Values {
   inductionContent: string;
 }
 
-type FieldErrors = Partial<Record<keyof Values, string>>;
+type FieldErrors = Partial<Record<keyof SiteFormValues, string>>;
 
-const EMPTY: Values = {
+const EMPTY: SiteFormValues = {
   name: '',
   jobReference: '',
   status: 'ACTIVE',
@@ -38,20 +38,31 @@ const EMPTY: Values = {
 };
 
 /**
- * Director-only "Create site" form for the Platform portal. Submits JSON to
- * POST /api/platform/sites, which is the authoritative validator; field errors
- * it returns are shown inline. On success the new site's details page is opened.
- * Styled to match the platform Site Details experience (card sections, brand
- * primary action).
+ * Director-only create / edit form for a job site (Platform portal). Submits JSON
+ * to POST /api/platform/sites (create) or PATCH /api/platform/sites/[id] (edit),
+ * which is the authoritative validator; field errors it returns are shown inline.
+ * On success the site's details page is opened. Styled to match Site Details
+ * (card sections, brand primary action).
  */
-export function SiteCreateForm() {
+export function SiteForm({
+  mode,
+  siteId,
+  initial,
+}: {
+  mode: 'create' | 'edit';
+  siteId?: string;
+  initial?: Partial<SiteFormValues>;
+}) {
   const router = useRouter();
-  const [values, setValues] = useState<Values>(EMPTY);
+  const [values, setValues] = useState<SiteFormValues>({
+    ...EMPTY,
+    ...initial,
+  });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
 
-  function set<K extends keyof Values>(key: K, value: string) {
+  function set<K extends keyof SiteFormValues>(key: K, value: string) {
     setValues((v) => ({ ...v, [key]: value }));
   }
 
@@ -60,11 +71,16 @@ export function SiteCreateForm() {
     setErrors({});
     setFormError(undefined);
     try {
-      const res = await fetch('/api/platform/sites', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
-      });
+      const res = await fetch(
+        mode === 'create'
+          ? '/api/platform/sites'
+          : `/api/platform/sites/${siteId}`,
+        {
+          method: mode === 'create' ? 'POST' : 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values),
+        },
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
         if (data.errors) setErrors(data.errors);
@@ -72,7 +88,8 @@ export function SiteCreateForm() {
           setFormError(data.error ?? 'Something went wrong. Please try again.');
         return;
       }
-      router.push(`/platform/dashboard/sites/${data.id}`);
+      const id = data.id ?? siteId;
+      router.push(`/platform/dashboard/sites/${id}`);
       router.refresh();
     } catch {
       setFormError('Network problem. Please try again.');
@@ -189,12 +206,22 @@ export function SiteCreateForm() {
 
       <div className="flex gap-3">
         <Button type="submit" variant="brand" disabled={busy}>
-          {busy ? 'Creating…' : 'Create site'}
+          {busy
+            ? 'Saving…'
+            : mode === 'create'
+              ? 'Create site'
+              : 'Save changes'}
         </Button>
         <Button
           type="button"
           variant="ghost"
-          onClick={() => router.push('/platform/dashboard/sites')}
+          onClick={() =>
+            router.push(
+              mode === 'edit' && siteId
+                ? `/platform/dashboard/sites/${siteId}`
+                : '/platform/dashboard/sites',
+            )
+          }
           disabled={busy}
         >
           Cancel

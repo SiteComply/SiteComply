@@ -69,112 +69,113 @@ const NONE: PermissionVerb[] = [];
  * The approved permission matrix (docs/RBAC.md §5). Rows are roles, values are
  * the allowed verbs per module. Director is the only organisation-wide role.
  */
-export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> = {
-  DIRECTOR: {
-    allSites: true,
-    modules: {
-      dashboard: V,
-      sites: VCEX,
-      checkins: VX,
-      documents: VCEX,
-      audits: VX,
-      reports: VCEX,
-      actions: VCEX,
-      platformUsers: NONE, // Platform Users are Admin-managed only.
+export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
+  {
+    DIRECTOR: {
+      allSites: true,
+      modules: {
+        dashboard: V,
+        sites: VCEX,
+        checkins: VX,
+        documents: VCEX,
+        audits: VX,
+        reports: VCEX,
+        actions: VCEX,
+        platformUsers: NONE, // Platform Users are Admin-managed only.
+      },
     },
-  },
-  PROJECT_MANAGER: {
-    allSites: false,
-    modules: {
-      dashboard: V,
-      sites: VCEX,
-      checkins: VX,
-      documents: VCEX,
-      audits: VCEX,
-      reports: VCEX,
-      actions: VCEX,
-      platformUsers: NONE,
+    PROJECT_MANAGER: {
+      allSites: false,
+      modules: {
+        dashboard: V,
+        sites: VCEX,
+        checkins: VX,
+        documents: VCEX,
+        audits: VCEX,
+        reports: VCEX,
+        actions: VCEX,
+        platformUsers: NONE,
+      },
     },
-  },
-  SITE_MANAGER: {
-    allSites: false,
-    modules: {
-      dashboard: V,
-      sites: VE,
-      checkins: VX,
-      documents: VCEX,
-      audits: VX,
-      reports: VX,
-      actions: VCE,
-      platformUsers: NONE,
+    SITE_MANAGER: {
+      allSites: false,
+      modules: {
+        dashboard: V,
+        sites: VE,
+        checkins: VX,
+        documents: VCEX,
+        audits: VX,
+        reports: VX,
+        actions: VCE,
+        platformUsers: NONE,
+      },
     },
-  },
-  CLIENT: {
-    allSites: false,
-    modules: {
-      dashboard: V,
-      sites: V,
-      checkins: V,
-      documents: V,
-      audits: V,
-      reports: V,
-      actions: V, // Read-only: no create/edit/export for Clients in v1.
-      platformUsers: NONE,
+    CLIENT: {
+      allSites: false,
+      modules: {
+        dashboard: V,
+        sites: V,
+        checkins: V,
+        documents: V,
+        audits: V,
+        reports: V,
+        actions: V, // Read-only: no create/edit/export for Clients in v1.
+        platformUsers: NONE,
+      },
     },
-  },
-  AUDITOR: {
-    allSites: false,
-    modules: {
-      dashboard: V,
-      sites: V,
-      checkins: VX,
-      documents: VX,
-      audits: VCEX,
-      reports: VCX,
-      actions: ['view', 'create'],
-      platformUsers: NONE,
+    AUDITOR: {
+      allSites: false,
+      modules: {
+        dashboard: V,
+        sites: V,
+        checkins: VX,
+        documents: VX,
+        audits: VCEX,
+        reports: VCX,
+        actions: ['view', 'create'],
+        platformUsers: NONE,
+      },
     },
-  },
-  ENGINEER: {
-    allSites: false,
-    modules: {
-      dashboard: V,
-      sites: V,
-      checkins: V, // No export of worker-level/personal data for Engineers.
-      documents: VCE,
-      audits: V,
-      reports: V,
-      actions: VCE,
-      platformUsers: NONE,
+    ENGINEER: {
+      allSites: false,
+      modules: {
+        dashboard: V,
+        sites: V,
+        checkins: V, // No export of worker-level/personal data for Engineers.
+        documents: VCE,
+        audits: V,
+        reports: V,
+        actions: VCE,
+        platformUsers: NONE,
+      },
     },
-  },
-  HS_CONSULTANT: {
-    allSites: false,
-    modules: {
-      dashboard: V,
-      sites: VE,
-      checkins: VX,
-      documents: VCEX,
-      audits: VCEX,
-      reports: VCX,
-      actions: VCE,
-      platformUsers: NONE,
+    HS_CONSULTANT: {
+      allSites: false,
+      modules: {
+        dashboard: V,
+        sites: VE,
+        checkins: VX,
+        documents: VCEX,
+        audits: VCEX,
+        reports: VCX,
+        actions: VCE,
+        platformUsers: NONE,
+      },
     },
-  },
-  PRINCIPAL_CONTRACTOR: {
-    allSites: false,
-    modules: {
-      dashboard: V,
-      sites: VCEX,
-      checkins: VX,
-      documents: VCEX,
-      audits: VCEX,
-      reports: VCX,
-      actions: VCEX,
-      platformUsers: NONE,
+    PRINCIPAL_CONTRACTOR: {
+      allSites: false,
+      modules: {
+        dashboard: V,
+        sites: VCEX,
+        checkins: VX,
+        documents: VCEX,
+        audits: VCEX,
+        reports: VCX,
+        actions: VCEX,
+        platformUsers: NONE,
+      },
     },
-  },
-};
+  };
 
 /**
  * Roles permitted to export datasets/files (check-in records, reports, audits,
@@ -230,6 +231,19 @@ export const SITE_CREATE_ROLES: PlatformRoleValue[] = ['DIRECTOR'];
 
 export function canCreateSite(role: PlatformRoleValue): boolean {
   return SITE_CREATE_ROLES.includes(role);
+}
+
+/**
+ * Edit an existing job site (details, address, and archive/reactivate via its
+ * status) from the Platform portal. Like creation, this is a Director-only
+ * capability — other roles keep their existing view/manage permissions and never
+ * see the edit affordance. Archiving and reactivating a site are status edits, so
+ * they are governed by this same capability.
+ */
+export const SITE_EDIT_ROLES: PlatformRoleValue[] = ['DIRECTOR'];
+
+export function canEditSite(role: PlatformRoleValue): boolean {
+  return SITE_EDIT_ROLES.includes(role);
 }
 
 // ---------------------------------------------------------------------------

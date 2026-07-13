@@ -9,7 +9,10 @@ import {
   requirePlatformViewer,
   assertModuleView,
 } from '@/services/platformUsers/platformAccess';
-import { permits } from '@/services/platformUsers/platformPermissions';
+import {
+  permits,
+  canEditSite,
+} from '@/services/platformUsers/platformPermissions';
 import { getSiteDetailForViewer } from '@/services/sites/siteDetailService';
 import { pct } from '@/services/reports/complianceReport';
 import { listAudits } from '@/services/audits/auditService';
@@ -51,6 +54,7 @@ export default async function SiteDetailPage({
   const canViewCheckins = permits(viewer.role, 'checkins', 'view');
   const canViewAudits = permits(viewer.role, 'audits', 'view');
   const canViewActions = permits(viewer.role, 'actions', 'view');
+  const canEdit = canEditSite(viewer.role);
 
   const audits = canViewAudits
     ? await listAudits(viewer, { siteId: params.id, take: 5 })
@@ -90,6 +94,14 @@ export default async function SiteDetailPage({
               Ref {site.jobReference} · {site.town}, {site.postcode}
             </p>
           </div>
+          {canEdit && (
+            <Link
+              href={`/platform/dashboard/sites/${site.id}/edit`}
+              className="touch-target inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white shadow-sm shadow-brand-600/20 transition-colors hover:bg-brand-600"
+            >
+              Edit site
+            </Link>
+          )}
         </div>
       </div>
 
@@ -108,17 +120,35 @@ export default async function SiteDetailPage({
               </div>
               {compliance.total > 0 && (
                 <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <Rate label="PPE" n={compliance.ppe} total={compliance.total} />
-                  <Rate label="Site rules" n={compliance.rules} total={compliance.total} />
-                  <Rate label="Safe working" n={compliance.safe} total={compliance.total} />
-                  <Rate label="GDPR consent" n={compliance.gdpr} total={compliance.total} />
+                  <Rate
+                    label="PPE"
+                    n={compliance.ppe}
+                    total={compliance.total}
+                  />
+                  <Rate
+                    label="Site rules"
+                    n={compliance.rules}
+                    total={compliance.total}
+                  />
+                  <Rate
+                    label="Safe working"
+                    n={compliance.safe}
+                    total={compliance.total}
+                  />
+                  <Rate
+                    label="GDPR consent"
+                    n={compliance.gdpr}
+                    total={compliance.total}
+                  />
                 </dl>
               )}
             </Section>
           )}
 
           {canViewCheckins && (
-            <Section title={`Current workers on site (${currentWorkers.length})`}>
+            <Section
+              title={`Current workers on site (${currentWorkers.length})`}
+            >
               {currentWorkers.length === 0 ? (
                 <Empty>No workers are currently checked in.</Empty>
               ) : (
@@ -133,8 +163,12 @@ export default async function SiteDetailPage({
                           </span>
                         }
                       >
-                        <span className="truncate font-medium text-brand-700">{w.fullName}</span>
-                        <span className="block truncate text-xs text-ink-subtle">{w.company}</span>
+                        <span className="truncate font-medium text-brand-700">
+                          {w.fullName}
+                        </span>
+                        <span className="block truncate text-xs text-ink-subtle">
+                          {w.company}
+                        </span>
                       </RowLink>
                     </li>
                   ))}
@@ -156,7 +190,11 @@ export default async function SiteDetailPage({
                         trailing={
                           <>
                             <StatusPill
-                              label={s.status === 'COMPLIANT' ? 'Compliant' : 'Incomplete'}
+                              label={
+                                s.status === 'COMPLIANT'
+                                  ? 'Compliant'
+                                  : 'Incomplete'
+                              }
                               tone={s.status === 'COMPLIANT' ? 'good' : 'warn'}
                             />
                             <span className="hidden text-xs tabular-nums text-ink-subtle sm:inline">
@@ -165,8 +203,12 @@ export default async function SiteDetailPage({
                           </>
                         }
                       >
-                        <span className="truncate font-medium text-brand-700">{s.workerName}</span>
-                        <span className="block truncate text-xs text-ink-subtle">{s.company}</span>
+                        <span className="truncate font-medium text-brand-700">
+                          {s.workerName}
+                        </span>
+                        <span className="block truncate text-xs text-ink-subtle">
+                          {s.company}
+                        </span>
                       </RowLink>
                     </li>
                   ))}
@@ -180,8 +222,14 @@ export default async function SiteDetailPage({
           <Section title="Site information">
             <dl className="space-y-3">
               <Detail label="Job reference" value={site.jobReference} />
-              <Detail label="Address" value={`${site.addressLine1}, ${site.town}, ${site.postcode}`} />
-              <Detail label="Status" value={site.status === 'ACTIVE' ? 'Active' : 'Archived'} />
+              <Detail
+                label="Address"
+                value={`${site.addressLine1}, ${site.town}, ${site.postcode}`}
+              />
+              <Detail
+                label="Status"
+                value={site.status === 'ACTIVE' ? 'Active' : 'Archived'}
+              />
               <Detail label="Created" value={formatDateUK(site.createdAt)} />
             </dl>
           </Section>
@@ -207,7 +255,9 @@ export default async function SiteDetailPage({
                           </span>
                         }
                       >
-                        <span className="block truncate font-medium text-brand-700">{a.title}</span>
+                        <span className="block truncate font-medium text-brand-700">
+                          {a.title}
+                        </span>
                       </RowLink>
                     </li>
                   ))}
@@ -231,7 +281,9 @@ export default async function SiteDetailPage({
                             <span
                               className={cn(
                                 'rounded-full px-2 py-0.5 text-xs font-semibold',
-                                ACTION_PRIORITY_BADGE[a.priority as ActionPriorityValue],
+                                ACTION_PRIORITY_BADGE[
+                                  a.priority as ActionPriorityValue
+                                ],
                               )}
                             >
                               {actionPriorityLabel(a.priority)}
@@ -239,7 +291,9 @@ export default async function SiteDetailPage({
                             <span
                               className={cn(
                                 'hidden rounded-full px-2 py-0.5 text-xs font-semibold sm:inline',
-                                ACTION_STATUS_BADGE[a.status as ActionStatusValue],
+                                ACTION_STATUS_BADGE[
+                                  a.status as ActionStatusValue
+                                ],
                               )}
                             >
                               {actionStatusLabel(a.status)}
@@ -247,7 +301,9 @@ export default async function SiteDetailPage({
                           </>
                         }
                       >
-                        <span className="block truncate font-medium text-brand-700">{a.title}</span>
+                        <span className="block truncate font-medium text-brand-700">
+                          {a.title}
+                        </span>
                       </RowLink>
                     </li>
                   ))}
@@ -261,7 +317,13 @@ export default async function SiteDetailPage({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-subtle">
@@ -275,7 +337,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-ink-subtle">{label}</dt>
+      <dt className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
+        {label}
+      </dt>
       <dd className="mt-0.5 break-words text-sm text-ink">{value}</dd>
     </div>
   );
@@ -290,11 +354,21 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Rate({ label, n, total }: { label: string; n: number; total: number }) {
+function Rate({
+  label,
+  n,
+  total,
+}: {
+  label: string;
+  n: number;
+  total: number;
+}) {
   return (
     <div>
       <dt className="text-xs text-ink-subtle">{label}</dt>
-      <dd className="text-sm font-semibold tabular-nums text-ink">{pct(n, total)}%</dd>
+      <dd className="text-sm font-semibold tabular-nums text-ink">
+        {pct(n, total)}%
+      </dd>
     </div>
   );
 }
@@ -316,7 +390,8 @@ function StatusPill({
         'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
         tone === 'good' && 'bg-safe-50 text-safe-700',
         tone === 'warn' && 'bg-hivis-400/25 text-ink',
-        tone === 'muted' && 'border border-line bg-surface-sunken text-ink-muted',
+        tone === 'muted' &&
+          'border border-line bg-surface-sunken text-ink-muted',
       )}
     >
       {label}
