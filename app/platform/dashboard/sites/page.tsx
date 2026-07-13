@@ -10,21 +10,40 @@ import {
   describeScope,
   assertModuleView,
 } from '@/services/platformUsers/platformAccess';
+import {
+  SITE_STATUS_FILTERS,
+  parseSiteStatusFilter,
+  filterSitesByStatus,
+  siteStatusCounts,
+} from '@/services/sites/siteStatusFilter';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * Platform → Sites. Lists only the sites the viewer may see: all sites for a
  * Director, otherwise their Assigned Sites. Non-assigned sites are never listed.
- * The Export button is shown only to roles permitted to export sites (Clients,
- * being read-only, do not see it).
+ *
+ * A status filter (All / Active / Archived, default All) narrows the visible
+ * sites via the `?status=` query param. It only ever narrows the already-scoped
+ * list, so RBAC and site-scoping are preserved; because the page is dynamic, an
+ * archive/reactivate is reflected in the filter immediately. The Export button is
+ * shown only to roles permitted to export sites (Clients, being read-only, do
+ * not see it).
  */
-export default async function PlatformSitesPage() {
+export default async function PlatformSitesPage({
+  searchParams,
+}: {
+  searchParams: { status?: string };
+}) {
   const viewer = await requirePlatformViewer();
   assertModuleView(viewer, 'sites');
 
   const canExport = permits(viewer.role, 'sites', 'export');
   const canCreate = canCreateSite(viewer.role);
+
+  const status = parseSiteStatusFilter(searchParams.status);
+  const counts = siteStatusCounts(viewer.sites);
+  const sites = filterSitesByStatus(viewer.sites, status);
 
   return (
     <PlatformShell>
@@ -68,31 +87,84 @@ export default async function PlatformSitesPage() {
             : 'You have no sites assigned yet. Ask an administrator to assign you to sites.'}
         </p>
       ) : (
-        <ul className="space-y-3">
-          {viewer.sites.map((site) => (
-            <li key={site.id}>
-              <Link
-                href={`/platform/dashboard/sites/${site.id}`}
-                className="hover:border-brand-300 flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 shadow-card transition-colors hover:bg-brand-50/40"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-semibold text-brand-700">
-                      {site.name}
+        <>
+          <nav
+            aria-label="Filter sites by status"
+            className="mb-4 inline-flex flex-wrap gap-1 rounded-xl border border-line bg-surface p-1 shadow-card"
+          >
+            {SITE_STATUS_FILTERS.map((f) => {
+              const active = f.value === status;
+              return (
+                <Link
+                  key={f.value}
+                  href={
+                    f.value === 'all'
+                      ? '/platform/dashboard/sites'
+                      : `/platform/dashboard/sites?status=${f.value}`
+                  }
+                  aria-current={active ? 'page' : undefined}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors',
+                    active
+                      ? 'bg-brand-500 text-white shadow-sm'
+                      : 'text-ink-muted hover:bg-surface-sunken',
+                  )}
+                >
+                  {f.label}
+                  <span
+                    className={cn(
+                      'rounded-full px-1.5 py-0.5 text-xs tabular-nums',
+                      active
+                        ? 'bg-white/25 text-white'
+                        : 'bg-surface-sunken text-ink-subtle',
+                    )}
+                  >
+                    {counts[f.value]}
+                  </span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          {sites.length === 0 ? (
+            <p className="rounded-xl border border-line bg-surface px-4 py-8 text-center text-ink-muted">
+              {status === 'active'
+                ? 'No active sites.'
+                : status === 'archived'
+                  ? 'No archived sites.'
+                  : 'No sites to show.'}
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {sites.map((site) => (
+                <li key={site.id}>
+                  <Link
+                    href={`/platform/dashboard/sites/${site.id}`}
+                    className="hover:border-brand-300 flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 shadow-card transition-colors hover:bg-brand-50/40"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-semibold text-brand-700">
+                          {site.name}
+                        </span>
+                        <StatusBadge status={site.status} />
+                      </div>
+                      <p className="mt-0.5 text-sm text-ink-subtle">
+                        Ref {site.jobReference} · {site.town}, {site.postcode}
+                      </p>
+                    </div>
+                    <span
+                      aria-hidden="true"
+                      className="text-brand-400 shrink-0"
+                    >
+                      →
                     </span>
-                    <StatusBadge status={site.status} />
-                  </div>
-                  <p className="mt-0.5 text-sm text-ink-subtle">
-                    Ref {site.jobReference} · {site.town}, {site.postcode}
-                  </p>
-                </div>
-                <span aria-hidden="true" className="text-brand-400 shrink-0">
-                  →
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </PlatformShell>
   );
