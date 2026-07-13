@@ -17,7 +17,7 @@ import {
 import { getSiteDetailForViewer } from '@/services/sites/siteDetailService';
 import { pct } from '@/services/reports/complianceReport';
 import { listAudits } from '@/services/audits/auditService';
-import { listActions } from '@/services/actions/actionService';
+import { listOutstandingActionsForSite } from '@/services/actions/actionService';
 import {
   auditStatusLabel,
   AUDIT_STATUS_BADGE,
@@ -28,6 +28,7 @@ import {
   actionPriorityLabel,
   ACTION_STATUS_BADGE,
   ACTION_PRIORITY_BADGE,
+  ACTION_OVERDUE_BADGE,
   type ActionStatusValue,
   type ActionPriorityValue,
 } from '@/services/actions/actionConstants';
@@ -56,12 +57,15 @@ export default async function SiteDetailPage({
   const canViewAudits = permits(viewer.role, 'audits', 'view');
   const canViewActions = permits(viewer.role, 'actions', 'view');
   const canEdit = canEditSite(viewer.role);
+  const now = new Date();
 
   const audits = canViewAudits
     ? await listAudits(viewer, { siteId: params.id, take: 5 })
     : [];
+  // Site Details focuses on outstanding work: only Open / In progress / Overdue,
+  // ordered by urgency then priority. Completed actions stay in the register.
   const actions = canViewActions
-    ? await listActions(viewer, { siteId: params.id, take: 5 })
+    ? await listOutstandingActionsForSite(viewer, params.id, 5, now)
     : [];
 
   const { site, currentWorkers, recentSubmissions, compliance } = detail;
@@ -271,48 +275,67 @@ export default async function SiteDetailPage({
           )}
 
           {canViewActions && (
-            <Section title="Actions">
+            <Section title="Outstanding actions">
               {actions.length === 0 ? (
-                <Empty>No actions for this site.</Empty>
+                <Empty>No outstanding actions for this site.</Empty>
               ) : (
                 <ul className="space-y-1">
-                  {actions.map((a) => (
-                    <li key={a.id}>
-                      <RowLink
-                        href={`/platform/dashboard/actions/${a.id}`}
-                        trailing={
-                          <>
-                            <span
-                              className={cn(
-                                'rounded-full px-2 py-0.5 text-xs font-semibold',
-                                ACTION_PRIORITY_BADGE[
-                                  a.priority as ActionPriorityValue
-                                ],
+                  {actions.map((a) => {
+                    const overdue = a.dueDate != null && a.dueDate < now;
+                    return (
+                      <li key={a.id}>
+                        <RowLink
+                          href={`/platform/dashboard/actions/${a.id}`}
+                          trailing={
+                            <>
+                              {overdue && (
+                                <span
+                                  className={cn(
+                                    'rounded-full px-2 py-0.5 text-xs font-semibold',
+                                    ACTION_OVERDUE_BADGE,
+                                  )}
+                                >
+                                  Overdue
+                                </span>
                               )}
-                            >
-                              {actionPriorityLabel(a.priority)}
-                            </span>
-                            <span
-                              className={cn(
-                                'hidden rounded-full px-2 py-0.5 text-xs font-semibold sm:inline',
-                                ACTION_STATUS_BADGE[
-                                  a.status as ActionStatusValue
-                                ],
-                              )}
-                            >
-                              {actionStatusLabel(a.status)}
-                            </span>
-                          </>
-                        }
-                      >
-                        <span className="block truncate font-medium text-brand-700">
-                          {a.title}
-                        </span>
-                      </RowLink>
-                    </li>
-                  ))}
+                              <span
+                                className={cn(
+                                  'rounded-full px-2 py-0.5 text-xs font-semibold',
+                                  ACTION_PRIORITY_BADGE[
+                                    a.priority as ActionPriorityValue
+                                  ],
+                                )}
+                              >
+                                {actionPriorityLabel(a.priority)}
+                              </span>
+                              <span
+                                className={cn(
+                                  'hidden rounded-full px-2 py-0.5 text-xs font-semibold sm:inline',
+                                  ACTION_STATUS_BADGE[
+                                    a.status as ActionStatusValue
+                                  ],
+                                )}
+                              >
+                                {actionStatusLabel(a.status)}
+                              </span>
+                            </>
+                          }
+                        >
+                          <span className="block truncate font-medium text-brand-700">
+                            {a.title}
+                          </span>
+                        </RowLink>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
+              <Link
+                href={`/platform/dashboard/actions?site=${site.id}`}
+                className="mt-3 inline-block text-sm font-semibold text-brand-700 hover:underline"
+              >
+                View all actions →
+              </Link>
             </Section>
           )}
         </div>

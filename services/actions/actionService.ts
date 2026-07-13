@@ -27,7 +27,11 @@ export type ActionMutation =
 function activityRow(
   viewer: PlatformViewer,
   type: ActionActivityType,
-  fields: { note?: string | null; fromValue?: string | null; toValue?: string | null } = {},
+  fields: {
+    note?: string | null;
+    fromValue?: string | null;
+    toValue?: string | null;
+  } = {},
 ) {
   return {
     type,
@@ -100,7 +104,8 @@ export function validateAction(
     errors.jobSiteId = 'That site is not in your access.';
 
   const priority = text(input.priority) || 'MEDIUM';
-  if (!isActionPriority(priority)) errors.priority = 'Please choose a priority.';
+  if (!isActionPriority(priority))
+    errors.priority = 'Please choose a priority.';
 
   const status = text(input.status) || 'OPEN';
   if (!isActionStatus(status)) errors.status = 'Please choose a status.';
@@ -157,6 +162,11 @@ export interface ActionListFilters {
   bucket?: string;
   siteId?: string;
   priority?: string;
+  /**
+   * Outstanding only = not completed (Open or In progress, which includes
+   * overdue). Ignored when an explicit `bucket` already constrains status.
+   */
+  outstanding?: boolean;
   /** Free-text search over title, description and assignee. */
   search?: string;
   /** Pagination (omit for the full list). */
@@ -181,6 +191,9 @@ function actionWhere(
       ? (filters.bucket as ActionBucket)
       : undefined;
   const where = bucketWhere(siteIds, bucket, now);
+  if (filters.outstanding && !bucket) {
+    where.status = { in: ['OPEN', 'IN_PROGRESS'] };
+  }
   if (filters.priority && isActionPriority(filters.priority))
     where.priority = filters.priority as ActionPriority;
 
@@ -206,6 +219,18 @@ export async function countActions(
   return prisma.action.count({ where });
 }
 
+const ACTION_LIST_SELECT = {
+  id: true,
+  title: true,
+  priority: true,
+  status: true,
+  dueDate: true,
+  assignedTo: true,
+  auditFindingId: true,
+  createdAt: true,
+  jobSite: { select: { id: true, name: true, jobReference: true } },
+} satisfies Prisma.ActionSelect;
+
 /** Site-scoped list of actions. Overdue first, then by due date, then newest. */
 export async function listActions(
   viewer: PlatformViewer,
@@ -220,17 +245,32 @@ export async function listActions(
     orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
     skip: filters.skip,
     take: filters.take,
-    select: {
-      id: true,
-      title: true,
-      priority: true,
-      status: true,
-      dueDate: true,
-      assignedTo: true,
-      auditFindingId: true,
-      createdAt: true,
-      jobSite: { select: { id: true, name: true, jobReference: true } },
-    },
+    select: ACTION_LIST_SELECT,
+  });
+}
+
+/**
+ * Outstanding (not-completed) actions for a single site, ordered for operational
+ * focus: most urgent first (overdue / soonest due, undated last), then by
+ * priority (Critical → Low), then newest. Powers the Site Details panel; the
+ * usual RBAC + site-scoping is enforced via `actionWhere` (returns [] if the
+ * site is out of scope). Completed actions are intentionally excluded — they stay
+ * reachable via the Actions register.
+ */
+export async function listOutstandingActionsForSite(
+  viewer: PlatformViewer,
+  siteId: string,
+  take: number,
+  now: Date = new Date(),
+) {
+  const where = actionWhere(viewer, { siteId, outstanding: true }, now);
+  if (!where) return [];
+
+  return prisma.action.findMany({
+    where,
+    orderBy: [{ dueDate: 'asc' }, { priority: 'desc' }, { createdAt: 'desc' }],
+    take,
+    select: ACTION_LIST_SELECT,
   });
 }
 
@@ -246,11 +286,20 @@ export async function actionCounts(
     prisma.action.count({ where: { ...site, status: 'OPEN' } }),
     prisma.action.count({ where: { ...site, status: 'IN_PROGRESS' } }),
     prisma.action.count({
-      where: { ...site, status: { in: ['OPEN', 'IN_PROGRESS'] }, dueDate: { lt: now } },
+      where: {
+        ...site,
+        status: { in: ['OPEN', 'IN_PROGRESS'] },
+        dueDate: { lt: now },
+      },
     }),
     prisma.action.count({ where: { ...site, status: 'COMPLETED' } }),
   ]);
-  return { OPEN: open, IN_PROGRESS: inProgress, OVERDUE: overdue, COMPLETED: completed };
+  return {
+    OPEN: open,
+    IN_PROGRESS: inProgress,
+    OVERDUE: overdue,
+    COMPLETED: completed,
+  };
 }
 
 /** A single action if within the viewer's scope; null otherwise. */
@@ -278,7 +327,11 @@ export async function createAction(
   // Seed the timeline: a CREATED entry, and an ASSIGNMENT entry if assigned now.
   const activities = [activityRow(viewer, ActionActivityType.CREATED)];
   if (value.assignedTo)
-    activities.push(activityRow(viewer, ActionActivityType.ASSIGNMENT, { toValue: value.assignedTo }));
+    activities.push(
+      activityRow(viewer, ActionActivityType.ASSIGNMENT, {
+        toValue: value.assignedTo,
+      }),
+    );
 
   const created = await prisma.action.create({
     data: {
@@ -304,12 +357,14 @@ export async function updateAction(
 
   const statusChanged = value.status !== existing.status;
   const completing =
-    value.status === ActionStatus.COMPLETED && existing.status !== ActionStatus.COMPLETED;
+    value.status === ActionStatus.COMPLETED &&
+    existing.status !== ActionStatus.COMPLETED;
   const note = (completionNote ?? '').trim();
   // A completion note is required when transitioning TO completed.
   if (completing && note === '') return { ok: false, reason: 'note_required' };
 
-  const assigneeChanged = (value.assignedTo ?? null) !== (existing.assignedTo ?? null);
+  const assigneeChanged =
+    (value.assignedTo ?? null) !== (existing.assignedTo ?? null);
 
   const activities = [];
   if (statusChanged)
@@ -384,7 +439,8 @@ export async function setActionStatus(
   if (status === existing.status) return { ok: true, id };
 
   const completing =
-    status === ActionStatus.COMPLETED && existing.status !== ActionStatus.COMPLETED;
+    status === ActionStatus.COMPLETED &&
+    existing.status !== ActionStatus.COMPLETED;
   const note = (completionNote ?? '').trim();
   if (completing && note === '') return { ok: false, reason: 'note_required' };
 
@@ -393,7 +449,9 @@ export async function setActionStatus(
     data: {
       status,
       completedAt:
-        status === ActionStatus.COMPLETED ? (existing.completedAt ?? new Date()) : null,
+        status === ActionStatus.COMPLETED
+          ? (existing.completedAt ?? new Date())
+          : null,
       completionNote: status === ActionStatus.COMPLETED ? note : null,
       activities: {
         create: [
@@ -414,7 +472,9 @@ export async function addActionComment(
   viewer: PlatformViewer,
   id: string,
   body: string,
-): Promise<{ ok: true } | { ok: false; reason: 'not_found' | 'empty' | 'too_long' }> {
+): Promise<
+  { ok: true } | { ok: false; reason: 'not_found' | 'empty' | 'too_long' }
+> {
   const text = (body ?? '').trim();
   if (text === '') return { ok: false, reason: 'empty' };
   if (text.length > ACTION_NOTE_MAX) return { ok: false, reason: 'too_long' };
@@ -423,7 +483,10 @@ export async function addActionComment(
   if (!existing) return { ok: false, reason: 'not_found' };
 
   await prisma.actionActivity.create({
-    data: { actionId: id, ...activityRow(viewer, ActionActivityType.COMMENT, { note: text }) },
+    data: {
+      actionId: id,
+      ...activityRow(viewer, ActionActivityType.COMMENT, { note: text }),
+    },
   });
   return { ok: true };
 }
