@@ -3,7 +3,10 @@ import { cn } from '@/lib/cn';
 import { prisma } from '@/lib/prisma';
 import { formatDateTimeUK } from '@/lib/datetime';
 import { PlatformShell } from '@/components/platform/PlatformShell';
-import { PlatformIcon, type PlatformIconName } from '@/components/platform/icons';
+import {
+  PlatformIcon,
+  type PlatformIconName,
+} from '@/components/platform/icons';
 import {
   requirePlatformViewer,
   assertModuleView,
@@ -13,7 +16,10 @@ import { actionCounts } from '@/services/actions/actionService';
 import { countDocuments } from '@/services/documents/documentService';
 import { countAudits } from '@/services/audits/auditService';
 import { countUnreadPlatformNotifications } from '@/services/notifications/platformNotifications';
-import { getRecentActivity, type ActivityKind } from '@/services/dashboard/recentActivity';
+import {
+  getRecentActivity,
+  type ActivityKind,
+} from '@/services/dashboard/recentActivity';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,8 +41,21 @@ const CHIP: Record<Chip, string> = {
   warn: 'bg-hivis-400/25 text-ink',
 };
 
+// Emphasis colour for a metric value inside a grouped summary card.
+type Tone = 'brand' | 'safe' | 'teal' | 'danger' | 'warn';
+const TONE_TEXT: Record<Tone, string> = {
+  brand: 'text-brand-700',
+  safe: 'text-safe-600',
+  teal: 'text-teal-600',
+  danger: 'text-danger-600',
+  warn: 'text-hivis-600',
+};
+
 // Icon + colour for each activity kind in the unified Recent activity feed.
-const ACTIVITY_META: Record<ActivityKind, { icon: PlatformIconName; tone: string }> = {
+const ACTIVITY_META: Record<
+  ActivityKind,
+  { icon: PlatformIconName; tone: string }
+> = {
   checkin: { icon: 'hardhat', tone: 'text-safe-600' },
   audit_created: { icon: 'shield', tone: 'text-brand-600' },
   audit_signed_off: { icon: 'shield', tone: 'text-safe-600' },
@@ -65,21 +84,87 @@ export default async function PlatformDashboardPage() {
   const canSites = permits(viewer.role, 'sites', 'view');
 
   // Real, viewer-scoped counts (an empty site scope yields 0). Run together.
-  const [actions, workersOnSite, expiredDocs, expiringDocs, auditsAwaiting, unread, activity] =
-    await Promise.all([
-      actionCounts(viewer, now),
-      prisma.submission.count({
-        where: { jobSiteId: { in: siteIds }, checkedOutAt: null },
-      }),
-      countDocuments(viewer, { expiry: 'expired' }),
-      countDocuments(viewer, { expiry: 'expiring' }),
-      countAudits(viewer, { status: 'COMPLETED' }),
-      countUnreadPlatformNotifications(viewer, now),
-      getRecentActivity(viewer, 12, now),
-    ]);
+  const [
+    actions,
+    workersOnSite,
+    expiredDocs,
+    expiringDocs,
+    auditsAwaiting,
+    unread,
+    activity,
+  ] = await Promise.all([
+    actionCounts(viewer, now),
+    prisma.submission.count({
+      where: { jobSiteId: { in: siteIds }, checkedOutAt: null },
+    }),
+    countDocuments(viewer, { expiry: 'expired' }),
+    countDocuments(viewer, { expiry: 'expiring' }),
+    countAudits(viewer, { status: 'COMPLETED' }),
+    countUnreadPlatformNotifications(viewer, now),
+    getRecentActivity(viewer, 12, now),
+  ]);
 
-  // Actionable metrics first (overdue / expired), then operational, then status.
-  const cards: {
+  // Grouped summary cards: related metrics live together in one business-focused
+  // card (each figure still links to its own filtered list), so Actions and
+  // Documents each read as a single card instead of two overlapping ones.
+  const groupCards: {
+    title: string;
+    icon: PlatformIconName;
+    chip: Chip;
+    metrics: { label: string; value: number; href: string; tone: Tone }[];
+    moreLabel: string;
+    moreHref: string;
+  }[] = [];
+
+  if (canActions) {
+    groupCards.push({
+      title: 'Actions',
+      icon: 'bolt',
+      chip: 'brand',
+      metrics: [
+        {
+          label: 'Open',
+          value: actions.OPEN,
+          href: '/platform/dashboard/actions?bucket=OPEN',
+          tone: 'brand',
+        },
+        {
+          label: 'Overdue',
+          value: actions.OVERDUE,
+          href: '/platform/dashboard/actions?bucket=OVERDUE',
+          tone: 'danger',
+        },
+      ],
+      moreLabel: 'View all actions',
+      moreHref: '/platform/dashboard/actions',
+    });
+  }
+  if (canDocs) {
+    groupCards.push({
+      title: 'Documents',
+      icon: 'doc',
+      chip: 'brand',
+      metrics: [
+        {
+          label: 'Expired',
+          value: expiredDocs,
+          href: '/platform/dashboard/documents?expiry=expired',
+          tone: 'danger',
+        },
+        {
+          label: 'Expiring soon',
+          value: expiringDocs,
+          href: '/platform/dashboard/documents?expiry=expiring',
+          tone: 'warn',
+        },
+      ],
+      moreLabel: 'View all documents',
+      moreHref: '/platform/dashboard/documents',
+    });
+  }
+
+  // Single-metric cards retained as separate cards.
+  const singleCards: {
     title: string;
     value: number;
     sub: string;
@@ -89,30 +174,8 @@ export default async function PlatformDashboardPage() {
     chip: Chip;
   }[] = [];
 
-  if (canActions) {
-    cards.push(
-      {
-        title: 'Overdue Actions',
-        value: actions.OVERDUE,
-        sub: 'past their due date',
-        cta: 'Review overdue',
-        href: '/platform/dashboard/actions?bucket=OVERDUE',
-        icon: 'bolt',
-        chip: 'danger',
-      },
-      {
-        title: 'Open Actions',
-        value: actions.OPEN,
-        sub: 'awaiting attention',
-        cta: 'See actions',
-        href: '/platform/dashboard/actions?bucket=OPEN',
-        icon: 'bolt',
-        chip: 'brand',
-      },
-    );
-  }
   if (canAudits) {
-    cards.push({
+    singleCards.push({
       title: 'Audits Awaiting Sign-Off',
       value: auditsAwaiting,
       sub: 'completed, not signed off',
@@ -122,39 +185,8 @@ export default async function PlatformDashboardPage() {
       chip: 'teal',
     });
   }
-  if (canDocs) {
-    cards.push(
-      {
-        title: 'Expired Documents',
-        value: expiredDocs,
-        sub: 'need replacing',
-        cta: 'View documents',
-        href: '/platform/dashboard/documents?expiry=expired',
-        icon: 'doc',
-        chip: 'danger',
-      },
-      {
-        title: 'Expiring Soon',
-        value: expiringDocs,
-        sub: 'within 30 days',
-        cta: 'View documents',
-        href: '/platform/dashboard/documents?expiry=expiring',
-        icon: 'doc',
-        chip: 'warn',
-      },
-    );
-  }
-  cards.push({
-    title: 'Unread Notifications',
-    value: unread,
-    sub: 'across your sites',
-    cta: 'Open notifications',
-    href: '/platform/dashboard/notifications',
-    icon: 'bell',
-    chip: 'brand',
-  });
   if (canCheckins) {
-    cards.push({
+    singleCards.push({
       title: 'Workers On Site',
       value: workersOnSite,
       sub: 'checked in right now',
@@ -165,7 +197,7 @@ export default async function PlatformDashboardPage() {
     });
   }
   if (canSites) {
-    cards.push({
+    singleCards.push({
       title: 'Active Sites',
       value: activeSites,
       sub: viewer.allSites ? 'across the organisation' : 'assigned to you',
@@ -175,6 +207,15 @@ export default async function PlatformDashboardPage() {
       chip: 'brand',
     });
   }
+  singleCards.push({
+    title: 'Unread Notifications',
+    value: unread,
+    sub: 'across your sites',
+    cta: 'Open notifications',
+    href: '/platform/dashboard/notifications',
+    icon: 'bell',
+    chip: 'brand',
+  });
 
   return (
     <PlatformShell>
@@ -188,7 +229,56 @@ export default async function PlatformDashboardPage() {
       <ScopeBanner viewer={viewer} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {cards.map((card) => (
+        {/* Grouped summary cards (Actions, Documents) span two columns and hold
+            two clickable figures each. */}
+        {groupCards.map((card) => (
+          <div
+            key={card.title}
+            className="flex flex-col rounded-xl border border-line bg-surface p-5 shadow-card sm:col-span-2"
+          >
+            <div className="flex items-center gap-2">
+              <span
+                className={cn(
+                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
+                  CHIP[card.chip],
+                )}
+              >
+                <PlatformIcon name={card.icon} />
+              </span>
+              <p className="text-sm font-semibold text-ink">{card.title}</p>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              {card.metrics.map((m) => (
+                <Link
+                  key={m.label}
+                  href={m.href}
+                  className="rounded-lg border border-line bg-surface-sunken p-3 transition-colors hover:border-brand-200 hover:bg-brand-50/40"
+                >
+                  <p
+                    className={cn(
+                      'text-2xl font-bold tabular-nums tracking-tight',
+                      TONE_TEXT[m.tone],
+                    )}
+                  >
+                    {m.value}
+                  </p>
+                  <p className="text-sm font-medium text-ink-muted">
+                    {m.label}
+                  </p>
+                </Link>
+              ))}
+            </div>
+            <Link
+              href={card.moreHref}
+              className="mt-3 text-sm font-semibold text-brand-700"
+            >
+              {card.moreLabel} →
+            </Link>
+          </div>
+        ))}
+
+        {/* Single-metric cards. */}
+        {singleCards.map((card) => (
           <Link
             key={card.title}
             href={card.href}
@@ -238,10 +328,11 @@ export default async function PlatformDashboardPage() {
                         className={cn('h-4 w-4 shrink-0', meta.tone)}
                       />
                       <span className="min-w-0 truncate text-ink">
-                        <span className="font-semibold">{item.title}</span> {item.detail}
+                        <span className="font-semibold">{item.title}</span>{' '}
+                        {item.detail}
                       </span>
                     </span>
-                    <span className="shrink-0 tabular-nums text-xs text-ink-subtle">
+                    <span className="shrink-0 text-xs tabular-nums text-ink-subtle">
                       {formatDateTimeUK(item.at)}
                     </span>
                   </Link>
@@ -265,13 +356,16 @@ function ScopeBanner({
     <div className="mb-6 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-ink">
       {viewer.allSites ? (
         <>
-          Showing <strong>all {n} site{n === 1 ? '' : 's'}</strong> across your
-          organisation (Director access).
+          Showing{' '}
+          <strong>
+            all {n} site{n === 1 ? '' : 's'}
+          </strong>{' '}
+          across your organisation (Director access).
         </>
       ) : n === 0 ? (
         <>
-          You have <strong>no sites assigned</strong> yet. Ask an administrator to
-          assign you to sites to see data here.
+          You have <strong>no sites assigned</strong> yet. Ask an administrator
+          to assign you to sites to see data here.
         </>
       ) : (
         <>
