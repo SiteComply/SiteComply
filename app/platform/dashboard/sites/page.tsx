@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import { cn } from '@/lib/cn';
 import { PlatformShell } from '@/components/platform/PlatformShell';
-import { permits } from '@/services/platformUsers/platformPermissions';
+import {
+  permits,
+  canCreateSite,
+} from '@/services/platformUsers/platformPermissions';
 import {
   requirePlatformViewer,
   describeScope,
@@ -21,6 +24,7 @@ export default async function PlatformSitesPage() {
   assertModuleView(viewer, 'sites');
 
   const canExport = permits(viewer.role, 'sites', 'export');
+  const canCreate = canCreateSite(viewer.role);
 
   return (
     <PlatformShell>
@@ -43,6 +47,17 @@ export default async function PlatformSitesPage() {
               Export CSV
             </a>
           )}
+          {canCreate && (
+            <Link
+              href="/platform/dashboard/sites/new"
+              className="touch-target inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white shadow-sm shadow-brand-600/20 transition-colors hover:bg-brand-600"
+            >
+              <span aria-hidden="true" className="text-base leading-none">
+                +
+              </span>
+              New Site
+            </Link>
+          )}
         </div>
       </header>
 
@@ -58,7 +73,7 @@ export default async function PlatformSitesPage() {
             <li key={site.id}>
               <Link
                 href={`/platform/dashboard/sites/${site.id}`}
-                className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 shadow-card transition-colors hover:border-brand-300 hover:bg-brand-50/40"
+                className="hover:border-brand-300 flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 shadow-card transition-colors hover:bg-brand-50/40"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -71,7 +86,7 @@ export default async function PlatformSitesPage() {
                     Ref {site.jobReference} · {site.town}, {site.postcode}
                   </p>
                 </div>
-                <span aria-hidden="true" className="shrink-0 text-brand-400">
+                <span aria-hidden="true" className="text-brand-400 shrink-0">
                   →
                 </span>
               </Link>

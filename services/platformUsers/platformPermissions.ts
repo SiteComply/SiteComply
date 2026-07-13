@@ -218,6 +218,20 @@ export function canSignOffAudit(role: PlatformRoleValue): boolean {
   return AUDIT_SIGNOFF_ROLES.includes(role);
 }
 
+/**
+ * Create a brand-new job site from the Platform portal. This is deliberately
+ * NARROWER than the `sites` "create" verb in the matrix (which several
+ * management roles hold for future within-site management affordances):
+ * spinning up a new site organisation-wide is a Director-only capability.
+ * Every other role keeps its existing view/manage permissions and never sees
+ * the create affordance.
+ */
+export const SITE_CREATE_ROLES: PlatformRoleValue[] = ['DIRECTOR'];
+
+export function canCreateSite(role: PlatformRoleValue): boolean {
+  return SITE_CREATE_ROLES.includes(role);
+}
+
 // ---------------------------------------------------------------------------
 // Pure lookup helpers — inert foundation, NOT called anywhere yet. A future
 // enforcement stage will use these; they perform no gating on their own.

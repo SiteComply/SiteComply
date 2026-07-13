@@ -1,7 +1,30 @@
-import { SiteStatus } from '@prisma/client';
+import { Prisma, SiteStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { normaliseUkPostcode } from '@/lib/postcode';
 import { UK_INDUCTION_TEMPLATE } from '@/services/checklists/ukInductionTemplate';
+
+/**
+ * Prisma nested-create for the default UK induction checklist (v1), seeded when
+ * a site is created so workers can induct immediately. Shared by admin creation
+ * and Platform (Director) creation so both paths seed an identical checklist.
+ */
+export function defaultInductionChecklistSeed(): Prisma.JobSiteCreateInput['checklists'] {
+  return {
+    create: {
+      title: 'Site induction & compliance checklist',
+      version: 1,
+      items: {
+        create: UK_INDUCTION_TEMPLATE.map((item, index) => ({
+          label: item.label,
+          helpText: item.helpText,
+          type: item.type,
+          required: item.required,
+          order: index,
+        })),
+      },
+    },
+  };
+}
 
 /**
  * Admin-side job site management (create / edit / archive).
@@ -104,21 +127,7 @@ export async function createSite(value: ValidatedSite, adminId: string) {
       createdByAdminId: adminId,
       status: SiteStatus.ACTIVE,
       // Seed a default UK induction checklist so workers can induct immediately.
-      checklists: {
-        create: {
-          title: 'Site induction & compliance checklist',
-          version: 1,
-          items: {
-            create: UK_INDUCTION_TEMPLATE.map((item, index) => ({
-              label: item.label,
-              helpText: item.helpText,
-              type: item.type,
-              required: item.required,
-              order: index,
-            })),
-          },
-        },
-      },
+      checklists: defaultInductionChecklistSeed(),
     },
   });
 }
