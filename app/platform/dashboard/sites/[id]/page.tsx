@@ -21,7 +21,6 @@ import { countDocuments } from '@/services/documents/documentService';
 import {
   DOCUMENT_EXPIRY_BADGE,
   DOCUMENT_EXPIRY_LABEL,
-  EXPIRING_SOON_DAYS,
 } from '@/services/documents/documentConstants';
 import { listOutstandingActionsForSite } from '@/services/actions/actionService';
 import {
@@ -377,7 +376,7 @@ export default async function SiteDetailPage({
                   />
                   <DocIssueRow
                     href={`/platform/dashboard/documents?site=${site.id}&expiry=expiring`}
-                    label={`${DOCUMENT_EXPIRY_LABEL.EXPIRING_SOON} · within ${EXPIRING_SOON_DAYS} days`}
+                    label={DOCUMENT_EXPIRY_LABEL.EXPIRING_SOON}
                     count={expiringDocs}
                     badge={DOCUMENT_EXPIRY_BADGE.EXPIRING_SOON}
                   />
@@ -445,7 +444,9 @@ function DocIssueRow({
           </span>
         }
       >
-        <span className="block truncate font-medium text-ink">{label}</span>
+        <span className="whitespace-nowrap text-sm font-medium text-ink">
+          {label}
+        </span>
       </RowLink>
     </li>
   );
