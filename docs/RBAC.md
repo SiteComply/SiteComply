@@ -69,6 +69,11 @@ Scope: Director = All sites; all others = Assigned Sites only.
    role edits the content of a check-in record.
 2. **Audit sign-off / approval** (a capability beyond Edit): Auditor, H&S
    Consultant, Principal Contractor.
+- **Director & Audits:** the Director row is **V X** — Directors **view and
+  export** audits for organisation-wide oversight but **cannot create, edit or
+  sign off** audits. Audit authoring belongs to the roles marked **C/E**
+  (Project Manager, Auditor, H&S Consultant, Principal Contractor); sign-off is
+  restricted to the roles in note 2.
 - **Platform Users** is empty for every platform role — managed exclusively by
   SiteComply **Admins**.
 - **Client & Engineer** carry no export (X) in any row, by policy.
@@ -77,7 +82,7 @@ Scope: Director = All sites; all others = Assigned Sites only.
 
 | Role | Scope | Can do | Cannot do |
 | --- | --- | --- | --- |
-| **Director** | All sites | View/create/edit/export across every module | Manage platform users |
+| **Director** | All sites | Organisation-wide oversight: view/create/edit/export **sites, documents, reports and actions**; **view & export audits and check-ins** (oversight only) | **Create, edit or sign off audits**; edit/override check-ins; manage platform users |
 | **Project Manager** | Assigned | Full site setup, docs, audits, reports, actions; export; check-out override | Manage platform users |
 | **Site Manager** | Assigned | Run the site: edit site/induction/emergency, docs, actions; export check-ins/reports; check-out override | Create sites; author/sign-off audits |
 | **Client** | Assigned | **View only** — dashboard, check-ins, docs, audits, reports on screen | Create/edit anything; **any export** |
@@ -102,8 +107,10 @@ Scope: Director = All sites; all others = Assigned Sites only.
   action; no export controls anywhere.
 - **Auditor:** creates an audit (assigned sites only), records findings, **signs
   off**, **exports** the report.
-- **Director:** org-wide dashboard across all sites; exports a portfolio
-  compliance report; **cannot** open the Platform Users screen (Admin-only).
+- **Director:** org-wide dashboard across all sites; **views and exports audits
+  (and check-ins/reports) for oversight but cannot create, edit or sign off
+  audits**; exports a portfolio compliance report; **cannot** open the Platform
+  Users screen (Admin-only).
 - **Lifecycle:** disabling a leaver refuses access on the next request (status
   checked per request); re-assigning sites updates scope on next load.
 
