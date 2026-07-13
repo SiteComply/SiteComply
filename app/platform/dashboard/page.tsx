@@ -41,16 +41,6 @@ const CHIP: Record<Chip, string> = {
   warn: 'bg-hivis-400/25 text-ink',
 };
 
-// Emphasis colour for a metric value inside a grouped summary card.
-type Tone = 'brand' | 'safe' | 'teal' | 'danger' | 'warn';
-const TONE_TEXT: Record<Tone, string> = {
-  brand: 'text-brand-700',
-  safe: 'text-safe-600',
-  teal: 'text-teal-600',
-  danger: 'text-danger-600',
-  warn: 'text-hivis-600',
-};
-
 // Icon + colour for each activity kind in the unified Recent activity feed.
 const ACTIVITY_META: Record<
   ActivityKind,
@@ -107,11 +97,18 @@ export default async function PlatformDashboardPage() {
   // Grouped summary cards: related metrics live together in one business-focused
   // card (each figure still links to its own filtered list), so Actions and
   // Documents each read as a single card instead of two overlapping ones.
+  // Within a grouped card the attention-required metric (Overdue / Expired) is
+  // listed FIRST so it reads first (left) and is styled with stronger emphasis.
   const groupCards: {
     title: string;
     icon: PlatformIconName;
     chip: Chip;
-    metrics: { label: string; value: number; href: string; tone: Tone }[];
+    metrics: {
+      label: string;
+      value: number;
+      href: string;
+      attention: boolean;
+    }[];
     moreLabel: string;
     moreHref: string;
   }[] = [];
@@ -123,16 +120,16 @@ export default async function PlatformDashboardPage() {
       chip: 'brand',
       metrics: [
         {
-          label: 'Open',
-          value: actions.OPEN,
-          href: '/platform/dashboard/actions?bucket=OPEN',
-          tone: 'brand',
-        },
-        {
           label: 'Overdue',
           value: actions.OVERDUE,
           href: '/platform/dashboard/actions?bucket=OVERDUE',
-          tone: 'danger',
+          attention: true,
+        },
+        {
+          label: 'Open',
+          value: actions.OPEN,
+          href: '/platform/dashboard/actions?bucket=OPEN',
+          attention: false,
         },
       ],
       moreLabel: 'View all actions',
@@ -149,13 +146,13 @@ export default async function PlatformDashboardPage() {
           label: 'Expired',
           value: expiredDocs,
           href: '/platform/dashboard/documents?expiry=expired',
-          tone: 'danger',
+          attention: true,
         },
         {
           label: 'Expiring soon',
           value: expiringDocs,
           href: '/platform/dashboard/documents?expiry=expiring',
-          tone: 'warn',
+          attention: false,
         },
       ],
       moreLabel: 'View all documents',
@@ -234,43 +231,65 @@ export default async function PlatformDashboardPage() {
         {groupCards.map((card) => (
           <div
             key={card.title}
-            className="flex flex-col rounded-xl border border-line bg-surface p-5 shadow-card sm:col-span-2"
+            className="flex flex-col rounded-xl border border-line bg-surface p-6 shadow-card sm:col-span-2"
           >
-            <div className="flex items-center gap-2">
+            {/* Summary header — bolder title + divider set the card apart from
+                the individual metrics below it. */}
+            <div className="flex items-center gap-2.5 border-b border-line pb-4">
               <span
                 className={cn(
-                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
+                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
                   CHIP[card.chip],
                 )}
               >
                 <PlatformIcon name={card.icon} />
               </span>
-              <p className="text-sm font-semibold text-ink">{card.title}</p>
+              <p className="text-lg font-bold leading-tight tracking-tight text-ink">
+                {card.title}
+              </p>
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              {card.metrics.map((m) => (
-                <Link
-                  key={m.label}
-                  href={m.href}
-                  className="rounded-lg border border-line bg-surface-sunken p-3 transition-colors hover:border-brand-200 hover:bg-brand-50/40"
-                >
-                  <p
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              {card.metrics.map((m) => {
+                // Attention items (Overdue / Expired) get the strong danger
+                // treatment ONLY when there is something to act on, so a clean
+                // state stays calm.
+                const urgent = m.attention && m.value > 0;
+                return (
+                  <Link
+                    key={m.label}
+                    href={m.href}
                     className={cn(
-                      'text-2xl font-bold tabular-nums tracking-tight',
-                      TONE_TEXT[m.tone],
+                      'rounded-xl border p-4 transition-colors',
+                      urgent
+                        ? 'border-danger-500/40 bg-danger-50 hover:border-danger-500/60'
+                        : 'border-line bg-surface-sunken hover:border-brand-200 hover:bg-brand-50/40',
                     )}
                   >
-                    {m.value}
-                  </p>
-                  <p className="text-sm font-medium text-ink-muted">
-                    {m.label}
-                  </p>
-                </Link>
-              ))}
+                    <p
+                      className={cn(
+                        'tabular-nums tracking-tight',
+                        urgent
+                          ? 'text-4xl font-extrabold text-danger-700'
+                          : 'text-3xl font-bold text-ink',
+                      )}
+                    >
+                      {m.value}
+                    </p>
+                    <p
+                      className={cn(
+                        'mt-1 text-xs font-bold uppercase tracking-wide',
+                        urgent ? 'text-danger-700' : 'text-ink-subtle',
+                      )}
+                    >
+                      {m.label}
+                    </p>
+                  </Link>
+                );
+              })}
             </div>
             <Link
               href={card.moreHref}
-              className="mt-3 text-sm font-semibold text-brand-700"
+              className="mt-4 text-sm font-semibold text-brand-700 hover:underline"
             >
               {card.moreLabel} →
             </Link>
