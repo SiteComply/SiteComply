@@ -17,6 +17,12 @@ import {
 import { getSiteDetailForViewer } from '@/services/sites/siteDetailService';
 import { pct } from '@/services/reports/complianceReport';
 import { listOutstandingAuditsForSite } from '@/services/audits/auditService';
+import { countDocuments } from '@/services/documents/documentService';
+import {
+  DOCUMENT_EXPIRY_BADGE,
+  DOCUMENT_EXPIRY_LABEL,
+  EXPIRING_SOON_DAYS,
+} from '@/services/documents/documentConstants';
 import { listOutstandingActionsForSite } from '@/services/actions/actionService';
 import {
   auditStatusLabel,
@@ -56,6 +62,7 @@ export default async function SiteDetailPage({
   const canViewCheckins = permits(viewer.role, 'checkins', 'view');
   const canViewAudits = permits(viewer.role, 'audits', 'view');
   const canViewActions = permits(viewer.role, 'actions', 'view');
+  const canViewDocuments = permits(viewer.role, 'documents', 'view');
   const canEdit = canEditSite(viewer.role);
   const now = new Date();
 
@@ -70,6 +77,14 @@ export default async function SiteDetailPage({
   const actions = canViewActions
     ? await listOutstandingActionsForSite(viewer, params.id, 5, now)
     : [];
+  // Document compliance for this site — expired + expiring-soon counts, scoped
+  // to the site (and to the viewer's access) via the shared documents service.
+  const [expiredDocs, expiringDocs] = canViewDocuments
+    ? await Promise.all([
+        countDocuments(viewer, { siteId: params.id, expiry: 'expired' }),
+        countDocuments(viewer, { siteId: params.id, expiry: 'expiring' }),
+      ])
+    : [0, 0];
 
   const { site, currentWorkers, recentSubmissions, compliance } = detail;
   const compliantPct = pct(compliance.compliant, compliance.total);
@@ -347,6 +362,35 @@ export default async function SiteDetailPage({
               </Link>
             </Section>
           )}
+
+          {canViewDocuments && (
+            <Section title="Documents">
+              {expiredDocs === 0 && expiringDocs === 0 ? (
+                <Empty>No document issues for this site.</Empty>
+              ) : (
+                <ul className="space-y-1">
+                  <DocIssueRow
+                    href={`/platform/dashboard/documents?site=${site.id}&expiry=expired`}
+                    label={DOCUMENT_EXPIRY_LABEL.EXPIRED}
+                    count={expiredDocs}
+                    badge={DOCUMENT_EXPIRY_BADGE.EXPIRED}
+                  />
+                  <DocIssueRow
+                    href={`/platform/dashboard/documents?site=${site.id}&expiry=expiring`}
+                    label={`${DOCUMENT_EXPIRY_LABEL.EXPIRING_SOON} · within ${EXPIRING_SOON_DAYS} days`}
+                    count={expiringDocs}
+                    badge={DOCUMENT_EXPIRY_BADGE.EXPIRING_SOON}
+                  />
+                </ul>
+              )}
+              <Link
+                href={`/platform/dashboard/documents?site=${site.id}`}
+                className="mt-3 inline-block text-sm font-semibold text-brand-700 hover:underline"
+              >
+                View documents →
+              </Link>
+            </Section>
+          )}
         </div>
       </div>
     </PlatformShell>
@@ -367,6 +411,43 @@ function Section({
       </h2>
       {children}
     </section>
+  );
+}
+
+/**
+ * One document-compliance row (Expired / Expiring soon): label + a count badge
+ * that only takes its status colour when the count is non-zero, so a site with no
+ * issues in that category reads calmly. Whole row links to the filtered list.
+ */
+function DocIssueRow({
+  href,
+  label,
+  count,
+  badge,
+}: {
+  href: string;
+  label: string;
+  count: number;
+  badge: string;
+}) {
+  return (
+    <li>
+      <RowLink
+        href={href}
+        trailing={
+          <span
+            className={cn(
+              'rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums',
+              count > 0 ? badge : 'bg-surface-sunken text-ink-subtle',
+            )}
+          >
+            {count}
+          </span>
+        }
+      >
+        <span className="block truncate font-medium text-ink">{label}</span>
+      </RowLink>
+    </li>
   );
 }
 
