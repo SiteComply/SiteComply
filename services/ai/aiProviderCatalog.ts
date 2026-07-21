@@ -99,5 +99,5 @@ export const AI_ELIGIBLE_ROLES: { value: string; label: string }[] = [
   { value: 'SITE_MANAGER', label: 'Site Manager' },
   { value: 'AUDITOR', label: 'Auditor' },
   { value: 'HS_CONSULTANT', label: 'H&S Consultant' },
-  { value: 'PRINCIPAL_CONTRACTOR', label: 'Principal Contractor' },
+  { value: 'PRINCIPAL_CONTRACTOR', label: 'Contractor' },
 ];

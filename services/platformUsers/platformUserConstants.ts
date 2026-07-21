@@ -26,7 +26,7 @@ export const PLATFORM_ROLES: { value: PlatformRoleValue; label: string }[] = [
   { value: 'AUDITOR', label: 'Auditor' },
   { value: 'ENGINEER', label: 'Engineer' },
   { value: 'HS_CONSULTANT', label: 'H&S Consultant' },
-  { value: 'PRINCIPAL_CONTRACTOR', label: 'Principal Contractor' },
+  { value: 'PRINCIPAL_CONTRACTOR', label: 'Contractor' },
   { value: 'SITE_MANAGER', label: 'Site Manager' },
 ];
 

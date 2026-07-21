@@ -82,8 +82,8 @@ export function AuditStatusControl({
               title={
                 blocked
                   ? isReopenTarget
-                    ? 'Only Auditors, H&S Consultants and Principal Contractors can reopen a signed-off audit.'
-                    : 'Only Auditors, H&S Consultants and Principal Contractors can sign off audits.'
+                    ? 'Only Auditors, H&S Consultants and Contractors can reopen a signed-off audit.'
+                    : 'Only Auditors, H&S Consultants and Contractors can sign off audits.'
                   : undefined
               }
               onClick={() => change(s.value)}
