@@ -26,6 +26,7 @@ export type PlatformModule =
   | 'audits'
   | 'reports'
   | 'actions'
+  | 'bulletins'
   | 'platformUsers';
 
 export const PERMISSION_VERBS: PermissionVerb[] = [
@@ -43,6 +44,7 @@ export const PLATFORM_MODULES: PlatformModule[] = [
   'audits',
   'reports',
   'actions',
+  'bulletins',
   'platformUsers',
 ];
 
@@ -81,6 +83,7 @@ export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
         audits: VX,
         reports: VCEX,
         actions: VCEX,
+        bulletins: VCEX,
         platformUsers: NONE, // Platform Users are Admin-managed only.
       },
     },
@@ -94,6 +97,7 @@ export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
         audits: VCEX,
         reports: VCEX,
         actions: VCEX,
+        bulletins: VCEX,
         platformUsers: NONE,
       },
     },
@@ -107,6 +111,7 @@ export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
         audits: VX,
         reports: VX,
         actions: VCE,
+        bulletins: VCE, // Site managers publish Daily Bulletins for their site.
         platformUsers: NONE,
       },
     },
@@ -120,6 +125,7 @@ export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
         audits: V,
         reports: V,
         actions: V, // Read-only: no create/edit/export for Clients in v1.
+        bulletins: V,
         platformUsers: NONE,
       },
     },
@@ -133,6 +139,7 @@ export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
         audits: VCEX,
         reports: VCX,
         actions: ['view', 'create'],
+        bulletins: V,
         platformUsers: NONE,
       },
     },
@@ -146,6 +153,7 @@ export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
         audits: V,
         reports: V,
         actions: VCE,
+        bulletins: V,
         platformUsers: NONE,
       },
     },
@@ -159,6 +167,7 @@ export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
         audits: VCEX,
         reports: VCX,
         actions: VCE,
+        bulletins: VCE,
         platformUsers: NONE,
       },
     },
@@ -172,6 +181,7 @@ export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
         audits: VCEX,
         reports: VCX,
         actions: VCEX,
+        bulletins: VCEX,
         platformUsers: NONE,
       },
     },

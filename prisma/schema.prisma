@@ -38,6 +38,14 @@ enum SiteStatus {
   ARCHIVED
 }
 
+/// Category of a site Daily Bulletin (SC-002) — drives the label/badge shown to
+/// workers and managers.
+enum BulletinCategory {
+  NOTICE //         General site notice
+  ANNOUNCEMENT //   Company/site announcement
+  SAFETY_ALERT //   Urgent safety alert
+}
+
 /// The kind of question presented on a digital induction checklist.
 enum ChecklistItemType {
   ACKNOWLEDGEMENT //  Read-and-acknowledge statement (e.g. site rules, RAMS)
@@ -195,7 +203,8 @@ model Worker {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  submissions Submission[]
+  submissions   Submission[]
+  bulletinReads SiteBulletinRead[]
 
   @@index([company])
   @@index([cscsExpiry])
@@ -233,8 +242,51 @@ model JobSite {
   documents     Document[]
   audits        Audit[]
   actions       Action[]
+  bulletins     SiteBulletin[]
 
   @@index([status])
+}
+
+/// A Daily Bulletin (SC-002): an important site notice, announcement or safety
+/// alert published by a site manager/administrator and shown to workers when they
+/// check in. Belongs to exactly one site (the access boundary). A bulletin stays
+/// active until archived; per-worker read state lives in SiteBulletinRead so a
+/// worker can identify and dismiss new bulletins.
+model SiteBulletin {
+  id        String           @id @default(cuid())
+  jobSite   JobSite          @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+  category  BulletinCategory @default(NOTICE)
+  title     String? // optional short heading
+  body      String //   the notice text shown to workers
+  active    Boolean          @default(true) // false = archived/retracted
+  publishedAt DateTime       @default(now())
+
+  // Who published it (nullable so a removed user doesn't orphan the bulletin);
+  // denormalised name so history survives if the user is deleted.
+  createdByUserId String?
+  createdByName   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reads SiteBulletinRead[]
+
+  @@index([jobSiteId, active, publishedAt])
+}
+
+/// Per-worker acknowledgement ("I've read this") of a Daily Bulletin. Presence of
+/// a row = the worker has read/dismissed that bulletin. One row per worker/bulletin.
+model SiteBulletinRead {
+  id             String       @id @default(cuid())
+  bulletin       SiteBulletin @relation(fields: [bulletinId], references: [id], onDelete: Cascade)
+  bulletinId     String
+  worker         Worker       @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  workerId       String
+  acknowledgedAt DateTime     @default(now())
+
+  @@unique([bulletinId, workerId])
+  @@index([workerId])
 }
 
 /// A versioned compliance checklist belonging to a site. Editing a checklist

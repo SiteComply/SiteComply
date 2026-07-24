@@ -3,12 +3,14 @@ import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { CheckOutButton } from '@/components/checkin/CheckOutButton';
+import { BulletinBoard } from '@/components/checkin/BulletinBoard';
 import { getWorkerSession } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import {
   getSubmissionForWorker,
   checkInReference,
 } from '@/services/submissions/submissionService';
+import { listActiveBulletinsForWorker } from '@/services/bulletins/bulletinService';
 import { formatDateTimeUK } from '@/lib/datetime';
 
 export const dynamic = 'force-dynamic';
@@ -39,6 +41,20 @@ export default async function ConfirmationPage({
   const reference = checkInReference(submission.id);
   const checkedOut = Boolean(submission.checkedOutAt);
 
+  // Daily Bulletins (SC-002): active bulletins for this site the worker hasn't
+  // yet read. Shown as dismissible cards below the success heading.
+  const newBulletins = (
+    await listActiveBulletinsForWorker(submission.jobSiteId, worker.id)
+  )
+    .filter((b) => !b.acknowledged)
+    .map((b) => ({
+      id: b.id,
+      category: b.category,
+      title: b.title,
+      body: b.body,
+      publishedAtLabel: formatDateTimeUK(b.publishedAt),
+    }));
+
   return (
     <AppShell>
       <section className="flex flex-col items-center gap-3 py-6 text-center">
@@ -68,6 +84,12 @@ export default async function ConfirmationPage({
           </span>
         </p>
       </section>
+
+      {newBulletins.length > 0 && (
+        <div className="mb-5">
+          <BulletinBoard bulletins={newBulletins} />
+        </div>
+      )}
 
       <section className="space-y-2">
         <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-ink-subtle">

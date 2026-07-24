@@ -17,6 +17,8 @@ import {
 import { getSiteDetailForViewer } from '@/services/sites/siteDetailService';
 import { pct } from '@/services/reports/complianceReport';
 import { listOutstandingAuditsForSite } from '@/services/audits/auditService';
+import { listBulletinsForSite } from '@/services/bulletins/bulletinService';
+import { SiteBulletins } from '@/components/platform/SiteBulletins';
 import { countDocuments } from '@/services/documents/documentService';
 import {
   DOCUMENT_EXPIRY_BADGE,
@@ -62,6 +64,9 @@ export default async function SiteDetailPage({
   const canViewAudits = permits(viewer.role, 'audits', 'view');
   const canViewActions = permits(viewer.role, 'actions', 'view');
   const canViewDocuments = permits(viewer.role, 'documents', 'view');
+  const canViewBulletins = permits(viewer.role, 'bulletins', 'view');
+  const canPublishBulletins = permits(viewer.role, 'bulletins', 'create');
+  const canManageBulletins = permits(viewer.role, 'bulletins', 'edit');
   const canEdit = canEditSite(viewer.role);
   const now = new Date();
 
@@ -84,6 +89,19 @@ export default async function SiteDetailPage({
         countDocuments(viewer, { siteId: params.id, expiry: 'expiring' }),
       ])
     : [0, 0];
+  // Daily Bulletins for this site (SC-002), formatted for the client panel.
+  const bulletins = canViewBulletins
+    ? (await listBulletinsForSite(viewer, params.id, 20)).map((b) => ({
+        id: b.id,
+        category: b.category,
+        title: b.title,
+        body: b.body,
+        active: b.active,
+        publishedAtLabel: formatDateTimeUK(b.publishedAt),
+        createdByName: b.createdByName,
+        readCount: b.readCount,
+      }))
+    : [];
 
   const { site, currentWorkers, recentSubmissions, compliance } = detail;
   const compliantPct = pct(compliance.compliant, compliance.total);
@@ -239,6 +257,17 @@ export default async function SiteDetailPage({
                   ))}
                 </ul>
               )}
+            </Section>
+          )}
+
+          {canViewBulletins && (
+            <Section title="Daily Bulletins">
+              <SiteBulletins
+                siteId={site.id}
+                bulletins={bulletins}
+                canPublish={canPublishBulletins}
+                canManage={canManageBulletins}
+              />
             </Section>
           )}
         </div>
