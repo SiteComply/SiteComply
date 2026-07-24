@@ -11,7 +11,7 @@ import {
 } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { getWorkerDetailForViewer } from '@/services/workers/workerDetailService';
-import { CSCS_CARD_LABELS } from '@/lib/cscs';
+import { CSCS_CARD_LABELS, cscsVerificationLabel } from '@/lib/cscs';
 
 export const dynamic = 'force-dynamic';
 
@@ -178,8 +178,54 @@ export default async function WorkerDetailPage({
                   }`}
                 />
               )}
+              {worker.cscsVerificationStatus && (
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
+                    Smart Check
+                  </dt>
+                  <dd className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-ink">
+                    <StatusPill
+                      label={cscsVerificationLabel(worker.cscsVerificationStatus)}
+                      tone={worker.cscsVerified ? 'good' : 'warn'}
+                    />
+                    {worker.cscsScheme && (
+                      <span className="text-ink-muted">{worker.cscsScheme}</span>
+                    )}
+                    {worker.cscsVerifiedAt && (
+                      <span className="text-xs text-ink-subtle">
+                        {formatDateUK(worker.cscsVerifiedAt)}
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              )}
+              {worker.cscsHolderName && (
+                <Detail label="Name on card" value={worker.cscsHolderName} />
+              )}
               <Detail label="First seen" value={formatDateUK(worker.createdAt)} />
             </dl>
+            {worker.cscsQualifications.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
+                  Verified competencies
+                </p>
+                <ul className="mt-1.5 space-y-1 text-sm text-ink">
+                  {worker.cscsQualifications.map((q, i) => (
+                    <li key={i} className="flex gap-1.5">
+                      <span aria-hidden="true" className="text-safe-600">
+                        ✓
+                      </span>
+                      <span>
+                        {q.title}
+                        {q.detail ? (
+                          <span className="text-ink-muted"> — {q.detail}</span>
+                        ) : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </Section>
 
           <Section title="Current site">

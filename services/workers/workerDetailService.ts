@@ -37,6 +37,13 @@ export interface WorkerDetail {
     cscsCardNumber: string | null;
     cscsCardType: CscsCardType | null;
     cscsExpiry: Date | null;
+    // CSCS Smart Check verification (SC-001).
+    cscsScheme: string | null;
+    cscsVerified: boolean;
+    cscsVerificationStatus: string | null;
+    cscsVerifiedAt: Date | null;
+    cscsHolderName: string | null;
+    cscsQualifications: { title: string; detail?: string }[];
     createdAt: Date;
   };
   complianceStatus: {
@@ -70,10 +77,33 @@ export async function getWorkerDetailForViewer(
       cscsCardNumber: true,
       cscsCardType: true,
       cscsExpiry: true,
+      cscsScheme: true,
+      cscsVerified: true,
+      cscsVerificationStatus: true,
+      cscsVerifiedAt: true,
+      cscsHolderName: true,
+      cscsQualifications: true,
       createdAt: true,
     },
   });
   if (!worker) return null;
+
+  // Normalise the stored competency JSON into a typed list for the view.
+  const qualifications = Array.isArray(worker.cscsQualifications)
+    ? (worker.cscsQualifications as unknown[]).flatMap((q) =>
+        q && typeof q === 'object' && 'title' in q
+          ? [
+              {
+                title: String((q as { title: unknown }).title),
+                detail:
+                  'detail' in q && (q as { detail?: unknown }).detail != null
+                    ? String((q as { detail?: unknown }).detail)
+                    : undefined,
+              },
+            ]
+          : [],
+      )
+    : [];
 
   // ALL data limited to the viewer's sites — the worker's activity elsewhere is invisible.
   const subs = await prisma.submission.findMany({
@@ -113,7 +143,7 @@ export async function getWorkerDetailForViewer(
     : null;
 
   return {
-    worker,
+    worker: { ...worker, cscsQualifications: qualifications },
     complianceStatus: {
       latestStatus: latest.status,
       ppe: latest.ppeConfirmed,

@@ -175,12 +175,25 @@ model Worker {
   fullName       String
   company        String
   mobile         String        @unique // E.164, normalised from a UK 07… number
-  // Optional CSCS card details, captured where relevant.
+  // Optional CSCS/ECS card details, captured where relevant.
   cscsCardNumber String?
   cscsCardType   CscsCardType?
   cscsExpiry     DateTime? // Stored as date (UTC midnight); displayed DD/MM/YYYY
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+
+  // CSCS Smart Check verification (SC-001). When a card number is captured it is
+  // verified against the CSCS Smart Check service; the verified result becomes
+  // the authoritative competency record (card grade, expiry and holder name are
+  // taken from the verified response rather than the worker's typed guess).
+  cscsScheme             String? //   Verified card scheme, e.g. "ECS", "CSCS"
+  cscsVerified           Boolean       @default(false) // True only when VALID & in date
+  cscsVerificationStatus String? //   VALID | EXPIRED | REVOKED | NOT_FOUND | ERROR | UNVERIFIED
+  cscsVerifiedAt         DateTime? //  When the Smart Check was last run
+  cscsHolderName         String? //   Name held on the card per Smart Check
+  cscsQualifications     Json? //      Competency/qualification records from Smart Check
+  cscsCardImagePath      String? //    Private blob path of the uploaded/photographed card
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   submissions Submission[]
 

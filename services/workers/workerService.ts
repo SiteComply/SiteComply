@@ -1,5 +1,7 @@
 import { CscsCardType, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { deleteCardImage } from '@/services/cscs/cardImageStorage';
+import type { CscsQualification } from '@/services/cscs';
 
 /**
  * Worker profile operations.
@@ -15,6 +17,15 @@ export interface WorkerProfileInput {
   cscsCardNumber?: string | null;
   cscsCardType?: CscsCardType | null;
   cscsExpiry?: Date | null;
+  /** CSCS Smart Check verification outcome (SC-001), where a check was run. */
+  cscsScheme?: string | null;
+  cscsVerified?: boolean;
+  cscsVerificationStatus?: string | null;
+  cscsVerifiedAt?: Date | null;
+  cscsHolderName?: string | null;
+  cscsQualifications?: CscsQualification[] | null;
+  /** Private blob path of an uploaded/photographed card image. */
+  cscsCardImagePath?: string | null;
 }
 
 /** Fetch a worker by E.164 mobile, or null if not yet known. */
@@ -33,6 +44,26 @@ export async function upsertWorkerProfile(
   const fullName = input.fullName.trim();
   const company = input.company.trim();
 
+  // JSON competency list: store the array, or clear to a real DB NULL.
+  const qualifications: Prisma.InputJsonValue | typeof Prisma.DbNull =
+    input.cscsQualifications && input.cscsQualifications.length > 0
+      ? (input.cscsQualifications as unknown as Prisma.InputJsonValue)
+      : Prisma.DbNull;
+
+  // Verification fields common to create/update. Only overwrite the card image
+  // path when a new one was supplied, so a returning worker keeps their image.
+  const verification = {
+    cscsScheme: input.cscsScheme ?? null,
+    cscsVerified: input.cscsVerified ?? false,
+    cscsVerificationStatus: input.cscsVerificationStatus ?? null,
+    cscsVerifiedAt: input.cscsVerifiedAt ?? null,
+    cscsHolderName: input.cscsHolderName ?? null,
+    cscsQualifications: qualifications,
+    ...(input.cscsCardImagePath !== undefined
+      ? { cscsCardImagePath: input.cscsCardImagePath }
+      : {}),
+  };
+
   const data: Prisma.WorkerUncheckedCreateInput = {
     mobile,
     fullName,
@@ -40,6 +71,7 @@ export async function upsertWorkerProfile(
     cscsCardNumber: input.cscsCardNumber?.trim() || null,
     cscsCardType: input.cscsCardType ?? null,
     cscsExpiry: input.cscsExpiry ?? null,
+    ...verification,
   };
 
   return prisma.worker.upsert({
@@ -51,6 +83,7 @@ export async function upsertWorkerProfile(
       cscsCardNumber: data.cscsCardNumber,
       cscsCardType: data.cscsCardType,
       cscsExpiry: data.cscsExpiry,
+      ...verification,
     },
   });
 }
@@ -70,6 +103,11 @@ export async function eraseWorkerPersonalData(workerId: string) {
 
   await prisma.otpChallenge.deleteMany({ where: { mobile: worker.mobile } });
 
+  // Remove any uploaded card image from blob storage (best-effort).
+  if (worker.cscsCardImagePath) {
+    await deleteCardImage(worker.cscsCardImagePath);
+  }
+
   return prisma.worker.update({
     where: { id: workerId },
     data: {
@@ -79,6 +117,13 @@ export async function eraseWorkerPersonalData(workerId: string) {
       cscsCardNumber: null,
       cscsCardType: null,
       cscsExpiry: null,
+      cscsScheme: null,
+      cscsVerified: false,
+      cscsVerificationStatus: null,
+      cscsVerifiedAt: null,
+      cscsHolderName: null,
+      cscsQualifications: Prisma.DbNull,
+      cscsCardImagePath: null,
     },
   });
 }
