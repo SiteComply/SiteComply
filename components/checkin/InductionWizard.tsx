@@ -30,8 +30,8 @@ interface PersistedState {
  * enforcement and a progress indicator. Progress is saved to localStorage so a
  * dropped connection or accidental reload doesn't lose the worker's place.
  *
- * Submitting the completed induction (writing the check-in record) is wired up
- * in Stage 6; here, completion hands off to the confirmation route.
+ * Submitting the completed induction writes the check-in record and then hands
+ * off to the Worker Dashboard (SC-003), the worker's landing page while on site.
  */
 export function InductionWizard({
   siteId,
@@ -132,7 +132,10 @@ export function InductionWizard({
         /* non-fatal */
       }
       toast.success('You’re checked in.');
-      router.push(`/check-in/confirmation/${data.submissionId}`);
+      // SC-003: a successful check-in lands on the Worker Dashboard, not a
+      // dead-end confirmation. The confirmation stays reachable as the check-in
+      // receipt (and is where checking out returns the worker).
+      router.push('/worker/dashboard');
     } catch {
       toast.error('Network problem. Check your signal and try again.');
     } finally {

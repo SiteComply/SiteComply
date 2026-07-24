@@ -72,6 +72,9 @@ export default async function EditSitePage({
           fireAssemblyPoint: site.fireAssemblyPoint ?? '',
           firstAiderName: site.firstAiderName ?? '',
           firstAiderNumber: site.firstAiderNumber ?? '',
+          firstAiderLocation: site.firstAiderLocation ?? '',
+          nearestHospital: site.nearestHospital ?? '',
+          emergencyNumber: site.emergencyNumber ?? '',
           inductionContent: site.inductionContent,
         }}
       />

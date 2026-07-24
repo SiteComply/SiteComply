@@ -18,6 +18,9 @@ export interface SiteFormValues {
   fireAssemblyPoint: string;
   firstAiderName: string;
   firstAiderNumber: string;
+  firstAiderLocation: string;
+  nearestHospital: string;
+  emergencyNumber: string;
   inductionContent: string;
 }
 
@@ -34,6 +37,9 @@ const EMPTY: SiteFormValues = {
   fireAssemblyPoint: '',
   firstAiderName: '',
   firstAiderNumber: '',
+  firstAiderLocation: '',
+  nearestHospital: '',
+  emergencyNumber: '',
   inductionContent: '',
 };
 
@@ -192,6 +198,27 @@ export function SiteForm({
             onChange={(e) => set('firstAiderNumber', e.target.value)}
           />
         </div>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <TextField
+            label="First aider location"
+            value={values.firstAiderLocation}
+            onChange={(e) => set('firstAiderLocation', e.target.value)}
+            hint="Where to find them, e.g. Site Office."
+          />
+          <TextField
+            label="Site emergency number"
+            type="tel"
+            value={values.emergencyNumber}
+            onChange={(e) => set('emergencyNumber', e.target.value)}
+            hint="Leave blank to show 999."
+          />
+        </div>
+        <TextField
+          label="Nearest A&E"
+          value={values.nearestHospital}
+          onChange={(e) => set('nearestHospital', e.target.value)}
+          hint="e.g. City Hospital — 2.4 miles. Shown on the Worker Dashboard."
+        />
       </Section>
 
       <Section title="Induction content (optional)">

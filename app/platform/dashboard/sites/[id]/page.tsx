@@ -19,6 +19,10 @@ import { pct } from '@/services/reports/complianceReport';
 import { listOutstandingAuditsForSite } from '@/services/audits/auditService';
 import { listBulletinsForSite } from '@/services/bulletins/bulletinService';
 import { SiteBulletins } from '@/components/platform/SiteBulletins';
+import { SiteContacts } from '@/components/platform/SiteContacts';
+import { WorkerDashboardConfig } from '@/components/platform/WorkerDashboardConfig';
+import { listSiteContactsForViewer } from '@/services/sites/siteContactService';
+import { getPanelVisibilityForViewer } from '@/services/workerDashboard/dashboardConfigService';
 import { countDocuments } from '@/services/documents/documentService';
 import {
   DOCUMENT_EXPIRY_BADGE,
@@ -68,6 +72,10 @@ export default async function SiteDetailPage({
   const canPublishBulletins = permits(viewer.role, 'bulletins', 'create');
   const canManageBulletins = permits(viewer.role, 'bulletins', 'edit');
   const canEdit = canEditSite(viewer.role);
+  // SC-003: configuring the Worker Dashboard and maintaining site contacts is
+  // day-to-day site management, so it follows the `sites` edit permission (which
+  // site managers hold) rather than the Director-only site-record capability.
+  const canConfigureDashboard = permits(viewer.role, 'sites', 'edit');
   const now = new Date();
 
   // Site Details focuses on outstanding audit work: only Draft / In progress /
@@ -102,6 +110,12 @@ export default async function SiteDetailPage({
         readCount: b.readCount,
       }))
     : [];
+
+  // Worker Dashboard (SC-003): the site's contacts and its panel configuration.
+  const [siteContacts, panelVisibility] = await Promise.all([
+    listSiteContactsForViewer(viewer, params.id),
+    getPanelVisibilityForViewer(viewer, params.id),
+  ]);
 
   const { site, currentWorkers, recentSubmissions, compliance } = detail;
   const compliantPct = pct(compliance.compliant, compliance.total);
@@ -270,6 +284,16 @@ export default async function SiteDetailPage({
               />
             </Section>
           )}
+
+          {panelVisibility && (
+            <Section title="Worker dashboard">
+              <WorkerDashboardConfig
+                siteId={site.id}
+                visibility={panelVisibility}
+                canEdit={canConfigureDashboard}
+              />
+            </Section>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -286,6 +310,14 @@ export default async function SiteDetailPage({
               />
               <Detail label="Created" value={formatDateUK(site.createdAt)} />
             </dl>
+          </Section>
+
+          <Section title="Site contacts">
+            <SiteContacts
+              siteId={site.id}
+              contacts={siteContacts}
+              canEdit={canConfigureDashboard}
+            />
           </Section>
 
           {canViewAudits && (

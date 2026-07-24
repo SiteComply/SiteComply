@@ -153,6 +153,30 @@ enum ActionStatus {
   COMPLETED
 }
 
+/// Panels the Worker Dashboard (SC-003) can display once a worker is checked in.
+/// Site managers control which of these each site shows — see SiteDashboardSetting.
+/// This enum is the single contract shared by the configuration UI and the
+/// dashboard renderer, and mirrors the SC-003 requirement list verbatim.
+///
+/// Two panels have no source system yet and are therefore OFF by default:
+/// ACTIVE_PERMITS (a digital permit-to-work register is a later REV-1 item) and
+/// MESSAGES (there is no worker-facing messaging/notification store). Both render
+/// an honest empty state when a manager switches them on.
+enum WorkerDashboardPanel {
+  SITE_INFORMATION
+  DAILY_BULLETIN
+  ACTIVE_PERMITS
+  RAMS
+  SITE_DOCUMENTS
+  EMERGENCY_INFORMATION
+  FIRST_AIDER
+  FIRE_ASSEMBLY_POINT
+  SITE_CONTACTS
+  OUTSTANDING_ACTIONS
+  MESSAGES
+  CHECK_OUT
+}
+
 /// Kind of entry in an action's activity timeline (Actions module).
 enum ActionActivityType {
   CREATED //        The action was created
@@ -230,19 +254,27 @@ model JobSite {
   firstAiderName    String?
   firstAiderNumber  String? // Contact number for the site first aider
 
+  // Additional emergency detail shown on the Worker Dashboard (SC-003). All
+  // optional — a panel simply omits any line the site hasn't filled in.
+  firstAiderLocation String? // Where to find the first aider, e.g. "Site Office"
+  nearestHospital    String? // Nearest A&E, e.g. "City Hospital – 2.4 miles"
+  emergencyNumber    String? // Site emergency number; the UI falls back to 999
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   createdByAdmin   Admin  @relation(fields: [createdByAdminId], references: [id])
   createdByAdminId String
 
-  checklists    ComplianceChecklist[]
-  submissions   Submission[]
-  platformUsers PlatformUser[]        @relation("PlatformUserSites")
-  documents     Document[]
-  audits        Audit[]
-  actions       Action[]
-  bulletins     SiteBulletin[]
+  checklists        ComplianceChecklist[]
+  submissions       Submission[]
+  platformUsers     PlatformUser[]         @relation("PlatformUserSites")
+  documents         Document[]
+  audits            Audit[]
+  actions           Action[]
+  bulletins         SiteBulletin[]
+  contacts          SiteContact[]
+  dashboardSettings SiteDashboardSetting[]
 
   @@index([status])
 }
@@ -287,6 +319,54 @@ model SiteBulletinRead {
 
   @@unique([bulletinId, workerId])
   @@index([workerId])
+}
+
+/// A named point of contact for a site (SC-003), e.g. "Site Manager — Michael
+/// Johnson" or "Site Office". Shown to checked-in workers on the Worker Dashboard
+/// Site Contacts panel and maintained by site managers. Kept separate from
+/// JobSite's single first-aider fields: those describe the emergency first aider,
+/// these are the day-to-day people a worker might need to call.
+model SiteContact {
+  id        String  @id @default(cuid())
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+  /// The person's role/label, e.g. "Site Manager", "Site Office".
+  role      String
+  /// The contact's name. Optional so a location-style contact ("Site Office")
+  /// can be listed with just a number.
+  name      String?
+  phone     String?
+  /// Display order within the site's contact list (ascending).
+  order     Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobSiteId, order])
+}
+
+/// Per-site visibility of one Worker Dashboard panel (SC-003). A row exists only
+/// where a site manager has overridden the default: absence of a row means "use
+/// the built-in default" (see services/workerDashboard/dashboardPanels). Storing
+/// only overrides keeps existing sites working with no backfill, and means a
+/// future change to a default automatically applies to every site that never
+/// touched that panel.
+model SiteDashboardSetting {
+  id        String               @id @default(cuid())
+  jobSite   JobSite              @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+  panel     WorkerDashboardPanel
+  enabled   Boolean
+
+  /// Who last changed it (denormalised name so history survives user deletion).
+  updatedByUserId String?
+  updatedByName   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([jobSiteId, panel])
+  @@index([jobSiteId])
 }
 
 /// A versioned compliance checklist belonging to a site. Editing a checklist

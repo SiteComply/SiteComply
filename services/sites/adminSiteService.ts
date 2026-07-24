@@ -45,6 +45,10 @@ export interface SiteInput {
   fireAssemblyPoint?: string;
   firstAiderName?: string;
   firstAiderNumber?: string;
+  // Additional emergency detail surfaced on the Worker Dashboard (SC-003).
+  firstAiderLocation?: string;
+  nearestHospital?: string;
+  emergencyNumber?: string;
 }
 
 export interface ValidatedSite {
@@ -58,6 +62,9 @@ export interface ValidatedSite {
   fireAssemblyPoint: string | null;
   firstAiderName: string | null;
   firstAiderNumber: string | null;
+  firstAiderLocation: string | null;
+  nearestHospital: string | null;
+  emergencyNumber: string | null;
 }
 
 export type FieldErrors = Partial<Record<keyof SiteInput, string>>;
@@ -99,6 +106,9 @@ export function validateSite(
       fireAssemblyPoint: text(input.fireAssemblyPoint) || null,
       firstAiderName: text(input.firstAiderName) || null,
       firstAiderNumber: text(input.firstAiderNumber) || null,
+      firstAiderLocation: text(input.firstAiderLocation) || null,
+      nearestHospital: text(input.nearestHospital) || null,
+      emergencyNumber: text(input.emergencyNumber) || null,
     },
   };
 }

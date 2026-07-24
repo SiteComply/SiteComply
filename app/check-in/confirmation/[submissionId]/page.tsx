@@ -139,6 +139,12 @@ export default async function ConfirmationPage({
                 Keep this screen as proof of your induction.
               </p>
             </div>
+            {/* SC-003: the dashboard is the worker's home while on site. */}
+            <Link href="/worker/dashboard" className="block">
+              <Button size="lg" fullWidth>
+                Go to your dashboard
+              </Button>
+            </Link>
             <CheckOutButton submissionId={submission.id} />
           </>
         )}

@@ -100,6 +100,9 @@ export interface EditableSite {
   fireAssemblyPoint: string | null;
   firstAiderName: string | null;
   firstAiderNumber: string | null;
+  firstAiderLocation: string | null;
+  nearestHospital: string | null;
+  emergencyNumber: string | null;
 }
 
 /**
@@ -127,6 +130,9 @@ export async function getSiteForEditByViewer(
       fireAssemblyPoint: true,
       firstAiderName: true,
       firstAiderNumber: true,
+      firstAiderLocation: true,
+      nearestHospital: true,
+      emergencyNumber: true,
     },
   });
 }
