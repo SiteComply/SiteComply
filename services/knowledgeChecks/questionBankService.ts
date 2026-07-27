@@ -469,8 +469,18 @@ async function generateBank(
           KNOWLEDGE_CHECK_DEFAULTS.poolTarget,
         ),
         schema: QUESTIONS_SCHEMA,
-        temperature: 0.4,
-        maxOutputTokens: 4000,
+        // No explicit temperature: the production deployment is a GPT-5 reasoning
+        // model, which rejects any temperature other than the default (1) with a
+        // 400. The provider only forwards temperature when a caller sets one, so
+        // omitting it uses the model default — matching the AI Summaries call.
+        //
+        // The budget must be generous: a reasoning model spends a large, variable
+        // share of it on hidden reasoning tokens BEFORE any visible answer, so a
+        // pool of ~18 questions needs headroom for reasoning (~2.5–4k) plus the
+        // JSON output (~4–5k). At 4000 the model consumed the entire budget on
+        // reasoning and returned empty content (finish_reason "length") → zero
+        // questions. 12000 leaves comfortable headroom and finishes cleanly.
+        maxOutputTokens: 12000,
       });
       model = result.model;
       const parsed = (result.json ?? safeParse(result.text)) as {
