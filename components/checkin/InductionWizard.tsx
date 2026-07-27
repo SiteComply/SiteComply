@@ -11,6 +11,11 @@ import {
   type FlowItem,
   type InductionAnswers,
 } from '@/services/checklists/inductionFlow';
+import { KnowledgeCheck } from '@/components/checkin/KnowledgeCheck';
+import type {
+  ClientQuestion,
+  ReviewContent,
+} from '@/services/knowledgeChecks/attemptService';
 
 interface InductionWizardProps {
   siteId: string;
@@ -49,6 +54,17 @@ export function InductionWizard({
   const [showError, setShowError] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  // SC-005: the AI knowledge check runs as a final phase after the checklist,
+  // before the check-in is recorded. `kc` holds the started attempt when a check
+  // is required for this site; null means we're still in the checklist phase.
+  const [kc, setKc] = useState<{
+    attemptId: string;
+    questions: ClientQuestion[];
+    review: ReviewContent;
+    answered: Record<string, boolean>;
+  } | null>(null);
+  const [blockedMessage, setBlockedMessage] = useState<string | null>(null);
 
   // Restore any saved progress for this site.
   useEffect(() => {
@@ -110,7 +126,47 @@ export function InductionWizard({
       setStepIndex((i) => i + 1);
       return;
     }
-    // Final step complete → record the check-in server-side (re-validated there).
+    // Final checklist step complete → run the SC-005 knowledge check (if the
+    // site has one), then record the check-in.
+    setShowError(false);
+    setBusy(true);
+    try {
+      const res = await fetch('/api/worker/knowledge-check/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        toast.error('We couldn’t start the knowledge check. Please try again.');
+        return;
+      }
+      if (data.state === 'ready') {
+        setKc({
+          attemptId: data.attemptId,
+          questions: data.questions,
+          review: data.review,
+          answered: data.answered ?? {},
+        });
+        return;
+      }
+      if (data.state === 'blocked') {
+        setBlockedMessage(
+          data.message ?? 'The knowledge check isn’t ready yet.',
+        );
+        return;
+      }
+      // not_required — no check for this site (or skipped under policy).
+      await submitCheckIn();
+    } catch {
+      toast.error('Network problem. Check your signal and try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Record the check-in server-side (re-validated there, incl. the SC-005 gate).
+  async function submitCheckIn() {
     setBusy(true);
     try {
       const res = await fetch('/api/worker/submission', {
@@ -125,22 +181,47 @@ export function InductionWizard({
         );
         return;
       }
-      // Clear the saved draft now it's safely persisted.
       try {
         localStorage.removeItem(storageKey);
       } catch {
         /* non-fatal */
       }
       toast.success('You’re checked in.');
-      // SC-003: a successful check-in lands on the Worker Dashboard, not a
-      // dead-end confirmation. The confirmation stays reachable as the check-in
-      // receipt (and is where checking out returns the worker).
+      // SC-003: a successful check-in lands on the Worker Dashboard.
       router.push('/worker/dashboard');
     } catch {
       toast.error('Network problem. Check your signal and try again.');
     } finally {
       setBusy(false);
     }
+  }
+
+  // SC-005 knowledge-check phase — replaces the checklist UI once started.
+  if (kc) {
+    return (
+      <KnowledgeCheck
+        siteName={siteName}
+        attemptId={kc.attemptId}
+        questions={kc.questions}
+        review={kc.review}
+        answered={kc.answered}
+        onPassed={submitCheckIn}
+      />
+    );
+  }
+
+  if (blockedMessage) {
+    return (
+      <div className="space-y-4 py-6 text-center">
+        <h2 className="text-xl font-bold text-ink">
+          Knowledge check not ready
+        </h2>
+        <p className="text-ink-muted">{blockedMessage}</p>
+        <Button size="lg" onClick={() => setBlockedMessage(null)}>
+          Back
+        </Button>
+      </div>
+    );
   }
 
   return (

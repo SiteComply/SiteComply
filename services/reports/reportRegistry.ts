@@ -41,7 +41,8 @@ export const REPORT_TYPES: ReportType[] = [
   {
     id: 'attendance',
     title: 'Site Attendance',
-    description: 'Check-in and check-out log across your sites over a date range.',
+    description:
+      'Check-in and check-out log across your sites over a date range.',
     icon: 'clipboard',
     directorOnly: false,
     personalData: true,
@@ -104,11 +105,23 @@ export const REPORT_TYPES: ReportType[] = [
   {
     id: 'org-overview',
     title: 'Organisation Overview',
-    description: 'Organisation-wide rollup and per-site comparison across all sites.',
+    description:
+      'Organisation-wide rollup and per-site comparison across all sites.',
     icon: 'chart',
     directorOnly: true,
     personalData: false,
     clientAggregateOnly: false,
+    built: true,
+  },
+  {
+    id: 'knowledge-checks',
+    title: 'Knowledge Checks',
+    description:
+      'AI knowledge-check results (SC-005): pass rates per site, worker attempts and first-try scores, plus questions workers have flagged.',
+    icon: 'shield',
+    directorOnly: false,
+    personalData: true,
+    clientAggregateOnly: true,
     built: true,
   },
 ];

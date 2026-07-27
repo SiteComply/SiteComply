@@ -21,8 +21,11 @@ import { listBulletinsForSite } from '@/services/bulletins/bulletinService';
 import { SiteBulletins } from '@/components/platform/SiteBulletins';
 import { SiteContacts } from '@/components/platform/SiteContacts';
 import { WorkerDashboardConfig } from '@/components/platform/WorkerDashboardConfig';
+import { KnowledgeCheckConfig } from '@/components/platform/KnowledgeCheckConfig';
 import { listSiteContactsForViewer } from '@/services/sites/siteContactService';
 import { getPanelVisibilityForViewer } from '@/services/workerDashboard/dashboardConfigService';
+import { getEffectiveConfig } from '@/services/knowledgeChecks/knowledgeCheckConfigService';
+import { getBankPreviewForViewer } from '@/services/knowledgeChecks/bankAdminService';
 import { countDocuments } from '@/services/documents/documentService';
 import {
   DOCUMENT_EXPIRY_BADGE,
@@ -116,6 +119,14 @@ export default async function SiteDetailPage({
     listSiteContactsForViewer(viewer, params.id),
     getPanelVisibilityForViewer(viewer, params.id),
   ]);
+
+  // Knowledge check (SC-005): effective config + generated question bank preview.
+  const [kcConfig, kcPreview] = canConfigureDashboard
+    ? await Promise.all([
+        getEffectiveConfig(params.id),
+        getBankPreviewForViewer(viewer, params.id),
+      ])
+    : [null, null];
 
   const { site, currentWorkers, recentSubmissions, compliance } = detail;
   const compliantPct = pct(compliance.compliant, compliance.total);
@@ -291,6 +302,22 @@ export default async function SiteDetailPage({
                 siteId={site.id}
                 visibility={panelVisibility}
                 canEdit={canConfigureDashboard}
+              />
+            </Section>
+          )}
+
+          {kcConfig && kcPreview && (
+            <Section title="Knowledge check">
+              <KnowledgeCheckConfig
+                siteId={site.id}
+                canEdit={canConfigureDashboard}
+                initial={{
+                  enabled: kcConfig.enabled,
+                  questionsPerAttempt: kcConfig.questionsPerAttempt,
+                  requireManagerApproval: kcConfig.requireManagerApproval,
+                  unavailablePolicy: kcConfig.unavailablePolicy,
+                }}
+                preview={kcPreview}
               />
             </Section>
           )}

@@ -196,6 +196,39 @@ enum AiSummaryTarget {
   ACTIONS_REGISTER //     register-level (all actions in scope)
 }
 
+/// Lifecycle of an AI-generated question bank for a site induction (SC-005).
+enum KnowledgeCheckBankStatus {
+  GENERATING //  a generation is in flight (also the lock)
+  READY //       questions validated and live (or awaiting approval — see approvedAt)
+  FAILED //      generation produced too few valid questions; falls back per policy
+}
+
+/// Category a knowledge-check question tests (SC-005). Drives stratified sampling
+/// so every attempt spans the key induction themes.
+enum KnowledgeQuestionCategory {
+  SAFETY //        key safety information
+  SITE_RULES //    site rules & signage
+  EMERGENCY //     emergency procedures (assembly point, first aid, numbers)
+  HAZARD //        significant site hazards
+  GENERAL //       anything else from the induction
+}
+
+/// Progress of a worker's knowledge-check attempt (SC-005). There is no FAILED
+/// state by design: the check is formative — a worker corrects wrong answers and
+/// finishes at 100%, so an attempt is either still in progress or passed.
+enum KnowledgeCheckAttemptStatus {
+  IN_PROGRESS
+  PASSED
+}
+
+/// What to do when a site has knowledge checks enabled but no READY bank at
+/// check-in time (SC-005). SKIP_FLAGGED (the global default) never blocks a
+/// worker on an AI outage; BLOCK requires the check.
+enum InductionUnavailablePolicy {
+  SKIP_FLAGGED
+  BLOCK
+}
+
 // ----------------------------------------------------------------------------
 // Models
 // ----------------------------------------------------------------------------
@@ -227,8 +260,9 @@ model Worker {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  submissions   Submission[]
-  bulletinReads SiteBulletinRead[]
+  submissions          Submission[]
+  bulletinReads        SiteBulletinRead[]
+  knowledgeCheckAttempts KnowledgeCheckAttempt[]
 
   @@index([company])
   @@index([cscsExpiry])
@@ -275,6 +309,9 @@ model JobSite {
   bulletins         SiteBulletin[]
   contacts          SiteContact[]
   dashboardSettings SiteDashboardSetting[]
+  questionBanks     InductionQuestionBank[]
+  knowledgeCheckAttempts KnowledgeCheckAttempt[]
+  inductionConfig   SiteInductionConfig?
 
   @@index([status])
 }
@@ -424,6 +461,15 @@ model Submission {
   status      SubmissionStatus @default(INCOMPLETE)
   checkedInAt DateTime         @default(now())
   checkedOutAt DateTime? // Set when the worker checks out / leaves site
+
+  // AI knowledge check (SC-005), mirrored out of KnowledgeCheckAttempt for easy
+  // compliance reporting. `passed` is true when the check was completed at 100%;
+  // `skipped` is true when the site had checks on but no bank was ready and the
+  // policy was SKIP_FLAGGED (recorded for admin visibility). Both false = the
+  // site had no knowledge check at the time.
+  knowledgeCheckPassed  Boolean @default(false)
+  knowledgeCheckSkipped Boolean @default(false)
+  knowledgeCheckAttempt KnowledgeCheckAttempt?
 
   @@index([jobSiteId, checkedInAt])
   @@index([workerId])
@@ -959,4 +1005,147 @@ model AiConfig {
   updatedByName    String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+// ----------------------------------------------------------------------------
+// AI Generated Knowledge Checks (SC-005)
+// ----------------------------------------------------------------------------
+
+/// Per-site knowledge-check configuration (SC-005). One row per site; absence =
+/// use the global defaults (services/knowledgeChecks/knowledgeCheckConstants).
+/// Deliberately extensible: SC-006 will add induction validity-period fields to
+/// THIS row rather than a new table. A change to which panels are shown lives in
+/// SiteDashboardSetting; this row governs the knowledge check only.
+model SiteInductionConfig {
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String  @id
+
+  /// null → inherit the global default (knowledgeCheckEnabledDefault).
+  knowledgeCheckEnabled Boolean?
+  /// null → inherit the global default (questionsPerAttemptDefault, 6).
+  questionsPerAttempt   Int?
+  /// When true, a freshly generated bank stays hidden from workers until a
+  /// manager approves it (approvedAt on the bank). Default false = auto-publish.
+  requireManagerApproval Boolean @default(false)
+  /// What to do when checks are on but no READY bank exists at check-in time.
+  /// null → inherit the global default (SKIP_FLAGGED).
+  unavailablePolicy InductionUnavailablePolicy?
+
+  updatedByUserId String?
+  updatedByName   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// A generated pool of knowledge-check questions for one exact induction state
+/// (SC-005): a (site, checklistVersion, contentHash) triple, where contentHash
+/// covers the checklist items AND the site's free-text induction + emergency
+/// fields. A worker attempt samples questionsPerAttempt from the READY bank, so
+/// steady-state check-ins make no live model call. Regenerated when the content
+/// hash changes; the unique key means one bank per exact induction state.
+model InductionQuestionBank {
+  id        String  @id @default(cuid())
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+  checklistVersion Int
+  contentHash      String
+
+  status        KnowledgeCheckBankStatus @default(GENERATING)
+  provider      String? //  'azure-openai' | 'openai' | 'mock'
+  model         String?
+  promptVersion String?
+  error         String? //  set when status = FAILED
+
+  /// Auto-publish (requireManagerApproval=false) sets this at generation time;
+  /// otherwise a manager sets it on approval. Only an approved READY bank is
+  /// served to workers.
+  approvedAt      DateTime?
+  approvedByName  String?
+
+  questions InductionQuestion[]
+  attempts  KnowledgeCheckAttempt[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([jobSiteId, checklistVersion, contentHash])
+  @@index([jobSiteId, status])
+}
+
+/// One multiple-choice question in a bank (SC-005). Exactly four options, exactly
+/// one correct. `options` is [{ id, text }]; `correctOptionId` references one of
+/// them. `sourceRef` records which induction section the question came from, for
+/// the worker's "Review induction section" link. `active` false = withdrawn
+/// (e.g. after a flag), so it is no longer sampled.
+model InductionQuestion {
+  id       String                @id @default(cuid())
+  bank     InductionQuestionBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  bankId   String
+  order    Int
+  category KnowledgeQuestionCategory @default(GENERAL)
+
+  prompt          String
+  options         Json //   [{ id: string, text: string }] (length 4)
+  correctOptionId String
+  sourceRef       String? // label/anchor of the induction section tested
+  explanation     String? // short why-this-is-correct, shown after answering
+
+  active Boolean @default(true)
+
+  flags QuestionFlag[]
+
+  createdAt DateTime @default(now())
+
+  @@index([bankId, active, order])
+}
+
+/// A worker's attempt at a site's knowledge check (SC-005). Created when the
+/// worker reaches the check; `questionIds` is the sampled set, `answers` records
+/// the per-question option chosen and how many tries it took (formative — the
+/// worker corrects until all are right). Linked to the Submission once the
+/// check-in is recorded. No FAILED status: an attempt is IN_PROGRESS or PASSED.
+model KnowledgeCheckAttempt {
+  id       String @id @default(cuid())
+  worker   Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  workerId String
+  jobSite   JobSite               @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+  bank     InductionQuestionBank  @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  bankId   String
+  checklistVersion Int
+
+  /// The check-in this attempt gated. Nullable (set when the submission is
+  /// recorded); unique so an attempt backs at most one check-in.
+  submission   Submission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+  submissionId String?     @unique
+
+  questionIds Json //  string[] — the sampled question ids, in presentation order
+  answers     Json @default("{}") // { [questionId]: { selectedOptionId, tries, correct } }
+
+  status                KnowledgeCheckAttemptStatus @default(IN_PROGRESS)
+  questionCount         Int
+  incorrectFirstTryCount Int @default(0)
+  durationSeconds       Int?
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([workerId, startedAt])
+  @@index([jobSiteId, status, completedAt])
+}
+
+/// A worker-reported flag on a knowledge-check question (SC-005) — the mockup's
+/// "Flag question". Feeds the manager review list and question-quality reporting.
+model QuestionFlag {
+  id         String            @id @default(cuid())
+  question   InductionQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId String
+  workerId     String?
+  submissionId String?
+  reason       String?
+  resolvedAt   DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([questionId])
+  @@index([resolvedAt])
 }

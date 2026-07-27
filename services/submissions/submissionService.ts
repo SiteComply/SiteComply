@@ -1,6 +1,7 @@
 import { SubmissionStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getActiveSiteWithChecklist } from '@/services/sites/siteService';
+import { evaluateGate } from '@/services/knowledgeChecks/attemptService';
 import {
   buildInductionSteps,
   isStepComplete,
@@ -84,6 +85,21 @@ export async function createCheckIn(
     };
   }
 
+  // SC-005: an induction is only complete once its AI knowledge check is passed.
+  // The gate is authoritative and server-side — it re-derives, never trusting the
+  // client — and reports how the check was satisfied (passed vs skipped under the
+  // site's SKIP_FLAGGED policy when no bank is available).
+  const gate = await evaluateGate(input.workerId, input.siteId);
+  if (!gate.satisfied) {
+    return {
+      ok: false,
+      error:
+        gate.reason === 'blocked'
+          ? 'The site knowledge check isn’t available right now. Please try again shortly or speak to the site manager.'
+          : 'Please complete the knowledge check before finishing your induction.',
+    };
+  }
+
   // Idempotency: if already checked in (and not yet out) here, reuse it.
   const open = await prisma.submission.findFirst({
     where: {
@@ -112,8 +128,18 @@ export async function createCheckIn(
       ...gates,
       gdprConsent: input.gdprConsent,
       status: SubmissionStatus.COMPLIANT,
+      knowledgeCheckPassed: gate.attemptId !== null,
+      knowledgeCheckSkipped: gate.skipped,
     },
   });
+
+  // Link the passed attempt to this check-in (for audit + reporting).
+  if (gate.attemptId) {
+    await prisma.knowledgeCheckAttempt.update({
+      where: { id: gate.attemptId },
+      data: { submissionId: submission.id },
+    });
+  }
 
   return {
     ok: true,
