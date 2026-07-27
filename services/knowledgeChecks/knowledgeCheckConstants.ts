@@ -73,10 +73,14 @@ export const QUESTIONS_PER_ATTEMPT_MAX = 12;
  * mixed into the content hash), so a prompt change regenerates rather than serves
  * questions written by the old template — same discipline as AI_SUMMARY_PROMPT_VERSION.
  */
-// v2: tightened grounding — questions must come only from facts explicitly
-// stated in the induction/emergency info, never induction structure or general
-// knowledge. Bumping this invalidates every cached v1 bank so they regenerate.
-export const KNOWLEDGE_CHECK_PROMPT_VERSION = 'v2';
+// v2: tightened grounding — questions only from facts explicitly stated in the
+//     induction/emergency info, never induction structure or general knowledge.
+// v3: question quality — prioritise safety-critical content, drop administrative
+//     trivia, and require plausible same-type distractors (correct answer stays
+//     strictly grounded; distractors are realistic same-kind alternatives that
+//     are false for this site).
+// Bumping this invalidates every cached bank so they regenerate.
+export const KNOWLEDGE_CHECK_PROMPT_VERSION = 'v3';
 
 /** Exactly four options per question (matches the worker UI + mockup). */
 export const OPTIONS_PER_QUESTION = 4;
