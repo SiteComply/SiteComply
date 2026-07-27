@@ -167,6 +167,36 @@ export function clearWorkerOtpMobileCookie(): void {
   cookies().delete(OTP_MOBILE_COOKIE);
 }
 
+// --- Active worker site (SC-004) --------------------------------------------
+
+/**
+ * The site whose Worker Dashboard the worker is currently viewing, when they are
+ * checked into more than one at once (SC-004). This is a NON-authoritative hint:
+ * the value is always re-validated against the worker's own open check-ins
+ * server-side (see workerDashboardService.getWorkerContext), so a tampered or
+ * stale cookie can never surface a site the worker isn't checked into — it just
+ * falls back to their most recent check-in. Scoped to the worker session's life.
+ */
+const ACTIVE_SITE_COOKIE = 'sc_worker_site';
+
+export function setActiveWorkerSiteCookie(siteId: string): void {
+  cookies().set(ACTIVE_SITE_COOKIE, siteId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: WORKER_TTL_SECONDS,
+  });
+}
+
+export function getActiveWorkerSiteId(): string | null {
+  return cookies().get(ACTIVE_SITE_COOKIE)?.value || null;
+}
+
+export function clearActiveWorkerSiteCookie(): void {
+  cookies().delete(ACTIVE_SITE_COOKIE);
+}
+
 // --- Admin session helpers --------------------------------------------------
 
 const ADMIN_COOKIE = 'sc_admin';

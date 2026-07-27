@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getWorkerSession } from '@/lib/session';
+import { getWorkerSession, setActiveWorkerSiteCookie } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { createCheckIn } from '@/services/submissions/submissionService';
 import type { InductionAnswers } from '@/services/checklists/inductionFlow';
@@ -62,5 +62,10 @@ export async function POST(req: NextRequest) {
   if (!result.ok) {
     return NextResponse.json(result, { status: 400 });
   }
+
+  // Make the site just checked into the active one, so landing on the dashboard
+  // (SC-004) shows this site even if the worker is checked into others.
+  setActiveWorkerSiteCookie(body.siteId);
+
   return NextResponse.json(result);
 }

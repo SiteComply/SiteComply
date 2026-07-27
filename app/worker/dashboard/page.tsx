@@ -30,7 +30,8 @@ export const dynamic = 'force-dynamic';
  * worker is actually checked into.
  */
 export default async function WorkerDashboardPage() {
-  const { worker, submission, site, panels } = await requireWorkerContext();
+  const { worker, submission, site, panels, openCheckIns, activeSiteId } =
+    await requireWorkerContext();
 
   const counts = await getWorkerDashboardCounts(site.id, worker.id);
 
@@ -65,6 +66,8 @@ export default async function WorkerDashboardPage() {
       siteName={site.name}
       checkedInAt={submission.checkedInAt}
       panels={panels}
+      sites={openCheckIns}
+      activeSiteId={activeSiteId}
       unreadBulletins={counts.unreadBulletins}
     >
       <header className="mb-5 flex flex-wrap items-start justify-between gap-3">

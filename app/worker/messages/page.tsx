@@ -16,7 +16,8 @@ export const dynamic = 'force-dynamic';
  * rather than showing an empty inbox that implies nobody has written to them.
  */
 export default async function WorkerMessagesPage() {
-  const { worker, submission, site, panels } = await requireWorkerContext();
+  const { worker, submission, site, panels, openCheckIns, activeSiteId } =
+    await requireWorkerContext();
   if (!panels.MESSAGES) redirect('/worker/dashboard');
 
   const unread = await countUnreadBulletinsForWorker(site.id, worker.id);
@@ -26,6 +27,8 @@ export default async function WorkerMessagesPage() {
       siteName={site.name}
       checkedInAt={submission.checkedInAt}
       panels={panels}
+      sites={openCheckIns}
+      activeSiteId={activeSiteId}
       unreadBulletins={unread}
     >
       <WorkerPageHeader title="Messages and notifications" />

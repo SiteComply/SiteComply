@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
-import { clearWorkerSessionCookie } from '@/lib/session';
+import {
+  clearWorkerSessionCookie,
+  clearActiveWorkerSiteCookie,
+} from '@/lib/session';
 import { appConfig } from '@/lib/config';
 
 export const runtime = 'nodejs';
@@ -15,5 +18,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET() {
   clearWorkerSessionCookie();
+  // Don't leave the active-site hint for the next worker on a shared device.
+  clearActiveWorkerSiteCookie();
   return NextResponse.redirect(new URL('/', appConfig.baseUrl));
 }

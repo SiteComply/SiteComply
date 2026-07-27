@@ -13,7 +13,8 @@ export const dynamic = 'force-dynamic';
 
 /** Worker Dashboard → RAMS (SC-003): the site's risk assessments & method statements. */
 export default async function WorkerRamsPage() {
-  const { worker, submission, site, panels } = await requireWorkerContext();
+  const { worker, submission, site, panels, openCheckIns, activeSiteId } =
+    await requireWorkerContext();
   if (!panels.RAMS) redirect('/worker/dashboard');
 
   const [unread, documents] = await Promise.all([
@@ -26,6 +27,8 @@ export default async function WorkerRamsPage() {
       siteName={site.name}
       checkedInAt={submission.checkedInAt}
       panels={panels}
+      sites={openCheckIns}
+      activeSiteId={activeSiteId}
       unreadBulletins={unread}
     >
       <WorkerPageHeader

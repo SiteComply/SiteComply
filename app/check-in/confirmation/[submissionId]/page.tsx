@@ -121,11 +121,12 @@ export default async function ConfirmationPage({
         {checkedOut ? (
           <>
             <p className="rounded-xl border border-line bg-surface-sunken px-4 py-3 text-center text-sm text-ink-muted">
-              You’ve checked out. Stay safe.
+              You’ve checked out. Stay safe. You’re still signed in.
             </p>
-            <Link href="/" className="block">
+            {/* SC-004: checking out isn't a dead end — the worker keeps access. */}
+            <Link href="/worker" className="block">
               <Button size="lg" fullWidth>
-                Finish
+                Back to worker home
               </Button>
             </Link>
           </>

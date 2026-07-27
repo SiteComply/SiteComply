@@ -10,10 +10,11 @@ import { WorkerIcon } from './icons';
 /**
  * "Check out of site" — the Worker Dashboard's primary exit action (SC-003).
  *
- * Distinct from the confirmation screen's button in one respect: because the
- * dashboard only exists while a check-in is open, ending the check-in here would
- * bounce the worker to the site selector. Instead we send them to their check-in
- * confirmation, which renders its checked-out state and doubles as their receipt.
+ * On success it returns the worker to their worker home (SC-004): if they are
+ * still checked into another site, home forwards to that site's dashboard; if
+ * not, home keeps them signed in with continued access instead of dropping them
+ * out of the app. The check-out receipt stays reachable from home under "recent
+ * check-ins". `router.refresh()` clears the now-stale dashboard from the cache.
  */
 export function CheckOutOfSiteButton({
   submissionId,
@@ -42,7 +43,8 @@ export function CheckOutOfSiteButton({
       }
       toast.success('You’ve checked out. Stay safe.');
       setConfirming(false);
-      router.push(`/check-in/confirmation/${submissionId}`);
+      router.push('/worker');
+      router.refresh();
     } catch {
       toast.error('Network problem. Check your signal and try again.');
     } finally {

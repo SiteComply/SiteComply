@@ -10,7 +10,8 @@ export const dynamic = 'force-dynamic';
 
 /** Worker Dashboard → Site information (SC-003). */
 export default async function WorkerSiteInformationPage() {
-  const { worker, submission, site, panels } = await requireWorkerContext();
+  const { worker, submission, site, panels, openCheckIns, activeSiteId } =
+    await requireWorkerContext();
   if (!panels.SITE_INFORMATION) redirect('/worker/dashboard');
 
   const unread = await countUnreadBulletinsForWorker(site.id, worker.id);
@@ -28,6 +29,8 @@ export default async function WorkerSiteInformationPage() {
       siteName={site.name}
       checkedInAt={submission.checkedInAt}
       panels={panels}
+      sites={openCheckIns}
+      activeSiteId={activeSiteId}
       unreadBulletins={unread}
     >
       <WorkerPageHeader

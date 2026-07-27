@@ -15,7 +15,8 @@ export const dynamic = 'force-dynamic';
  * force on site.
  */
 export default async function WorkerPermitsPage() {
-  const { worker, submission, site, panels } = await requireWorkerContext();
+  const { worker, submission, site, panels, openCheckIns, activeSiteId } =
+    await requireWorkerContext();
   if (!panels.ACTIVE_PERMITS) redirect('/worker/dashboard');
 
   const unread = await countUnreadBulletinsForWorker(site.id, worker.id);
@@ -25,6 +26,8 @@ export default async function WorkerPermitsPage() {
       siteName={site.name}
       checkedInAt={submission.checkedInAt}
       panels={panels}
+      sites={openCheckIns}
+      activeSiteId={activeSiteId}
       unreadBulletins={unread}
     >
       <WorkerPageHeader title="Active permits" />

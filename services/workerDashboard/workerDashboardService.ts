@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { DocumentCategory } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { getWorkerSession } from '@/lib/session';
+import { getWorkerSession, getActiveWorkerSiteId } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { listSiteContacts } from '@/services/sites/siteContactService';
 import { listActiveBulletinsForWorker } from '@/services/bulletins/bulletinService';
@@ -11,15 +11,28 @@ import {
 } from '@/services/workerDashboard/dashboardConfigService';
 
 /**
- * Worker Dashboard data access (SC-003).
+ * Worker Dashboard data access (SC-003 / SC-004).
  *
- * Everything here is keyed by the worker's OPEN check-in — the submission with no
- * `checkedOutAt`. That single fact is the access boundary for the whole worker
- * dashboard: a worker sees a site's bulletins, documents, contacts, emergency
- * information and actions only while they are actually checked into that site.
- * Nothing is scoped by a platform role, and there is no way to name a different
- * site: the site is derived from the check-in, never taken from the request.
+ * Everything here is keyed by the worker's OPEN check-ins — submissions with no
+ * `checkedOutAt`. That set is the access boundary for the whole worker area: a
+ * worker sees a site's bulletins, documents, contacts, emergency information and
+ * actions only while they are actually checked into that site. Nothing is scoped
+ * by a platform role.
+ *
+ * A worker may be checked into more than one site at once (SC-004). The "active"
+ * site is chosen from an `sc_worker_site` cookie, but that cookie is only a hint:
+ * it is ALWAYS re-validated against the worker's own open check-ins here, so it
+ * can never surface a site they aren't checked into — an unknown/stale value
+ * just falls back to their most recent check-in.
  */
+
+export interface WorkerCheckIn {
+  submissionId: string;
+  siteId: string;
+  siteName: string;
+  jobReference: string;
+  checkedInAt: Date;
+}
 
 export interface WorkerContext {
   worker: { id: string; fullName: string; company: string };
@@ -43,8 +56,12 @@ export interface WorkerContext {
     nearestHospital: string | null;
     emergencyNumber: string | null;
   };
-  /** Which panels this site displays (defaults overlaid with site overrides). */
+  /** Which panels the active site displays (defaults overlaid with overrides). */
   panels: PanelVisibility;
+  /** Every site the worker is currently checked into (most recent first). */
+  openCheckIns: WorkerCheckIn[];
+  /** The active site's id (one of `openCheckIns`). */
+  activeSiteId: string;
 }
 
 const SITE_SELECT = {
@@ -63,9 +80,95 @@ const SITE_SELECT = {
   emergencyNumber: true,
 } as const;
 
+/** The signed-in worker record (identity only), or null. No check-in required. */
+export async function getWorkerIdentity(): Promise<{
+  id: string;
+  fullName: string;
+  company: string;
+} | null> {
+  const session = getWorkerSession();
+  if (!session) return null;
+  const worker = await getWorkerByMobile(session.mobile);
+  if (!worker) return null;
+  return { id: worker.id, fullName: worker.fullName, company: worker.company };
+}
+
+/** Require a signed-in worker (identity only); redirect to check-in otherwise. */
+export async function requireWorkerIdentity(): Promise<{
+  id: string;
+  fullName: string;
+  company: string;
+}> {
+  if (!getWorkerSession()) redirect('/check-in');
+  const worker = await getWorkerIdentity();
+  if (!worker) redirect('/check-in/details');
+  return worker;
+}
+
+/** Every site the given worker is currently checked into, most recent first. */
+export async function listOpenCheckIns(
+  workerId: string,
+): Promise<WorkerCheckIn[]> {
+  const rows = await prisma.submission.findMany({
+    where: { workerId, checkedOutAt: null },
+    orderBy: { checkedInAt: 'desc' },
+    select: {
+      id: true,
+      checkedInAt: true,
+      jobSiteId: true,
+      jobSite: { select: { name: true, jobReference: true } },
+    },
+  });
+  return rows.map((r) => ({
+    submissionId: r.id,
+    siteId: r.jobSiteId,
+    siteName: r.jobSite.name,
+    jobReference: r.jobSite.jobReference,
+    checkedInAt: r.checkedInAt,
+  }));
+}
+
+export interface WorkerRecentCheckIn extends WorkerCheckIn {
+  checkedOutAt: Date | null;
+}
+
 /**
- * The worker's current on-site context, or null when they have no open check-in.
- * The most recent open check-in wins if a worker somehow has more than one.
+ * A worker's recent check-ins (open and closed), most recent first — for the
+ * worker home hub, so a checked-out worker can still reach a site's check-out
+ * receipt and see where they've been.
+ */
+export async function listRecentCheckIns(
+  workerId: string,
+  take = 5,
+): Promise<WorkerRecentCheckIn[]> {
+  const rows = await prisma.submission.findMany({
+    where: { workerId },
+    orderBy: { checkedInAt: 'desc' },
+    take,
+    select: {
+      id: true,
+      checkedInAt: true,
+      checkedOutAt: true,
+      jobSiteId: true,
+      jobSite: { select: { name: true, jobReference: true } },
+    },
+  });
+  return rows.map((r) => ({
+    submissionId: r.id,
+    siteId: r.jobSiteId,
+    siteName: r.jobSite.name,
+    jobReference: r.jobSite.jobReference,
+    checkedInAt: r.checkedInAt,
+    checkedOutAt: r.checkedOutAt,
+  }));
+}
+
+/**
+ * The worker's active on-site context, or null when they have no open check-in.
+ *
+ * The active site is the one named by the `sc_worker_site` cookie IF the worker
+ * still holds an open check-in there; otherwise their most recent check-in. The
+ * cookie is never trusted on its own — this validation is the access boundary.
  */
 export async function getWorkerContext(): Promise<WorkerContext | null> {
   const session = getWorkerSession();
@@ -74,7 +177,7 @@ export async function getWorkerContext(): Promise<WorkerContext | null> {
   const worker = await getWorkerByMobile(session.mobile);
   if (!worker) return null;
 
-  const submission = await prisma.submission.findFirst({
+  const open = await prisma.submission.findMany({
     where: { workerId: worker.id, checkedOutAt: null },
     orderBy: { checkedInAt: 'desc' },
     select: {
@@ -84,7 +187,11 @@ export async function getWorkerContext(): Promise<WorkerContext | null> {
       jobSite: { select: SITE_SELECT },
     },
   });
-  if (!submission) return null;
+  if (open.length === 0) return null;
+
+  const preferred = getActiveWorkerSiteId();
+  const active =
+    (preferred && open.find((s) => s.jobSiteId === preferred)) || open[0];
 
   return {
     worker: {
@@ -93,28 +200,36 @@ export async function getWorkerContext(): Promise<WorkerContext | null> {
       company: worker.company,
     },
     submission: {
-      id: submission.id,
-      checkedInAt: submission.checkedInAt,
-      jobSiteId: submission.jobSiteId,
+      id: active.id,
+      checkedInAt: active.checkedInAt,
+      jobSiteId: active.jobSiteId,
     },
-    site: submission.jobSite,
-    panels: await getPanelVisibility(submission.jobSiteId),
+    site: active.jobSite,
+    panels: await getPanelVisibility(active.jobSiteId),
+    openCheckIns: open.map((s) => ({
+      submissionId: s.id,
+      siteId: s.jobSiteId,
+      siteName: s.jobSite.name,
+      jobReference: s.jobSite.jobReference,
+      checkedInAt: s.checkedInAt,
+    })),
+    activeSiteId: active.jobSiteId,
   };
 }
 
 /**
- * Require an on-site worker for a Worker Dashboard page.
+ * Require an active on-site worker for a Worker Dashboard page.
  *
- * No session → the check-in journey. Session but no open check-in (they've
- * checked out, or the session outlived the visit) → the site selector, so the
- * worker can check in again rather than land on a dead end.
+ * No session → the check-in journey. Session but no open check-in (they've just
+ * checked out, or the session outlived the visit) → the worker home hub, which
+ * keeps them signed in with continued access (SC-004) rather than a dead end.
  */
 export async function requireWorkerContext(): Promise<WorkerContext> {
   const session = getWorkerSession();
   if (!session) redirect('/check-in');
 
   const context = await getWorkerContext();
-  if (!context) redirect('/check-in/site');
+  if (!context) redirect('/worker');
   return context;
 }
 
