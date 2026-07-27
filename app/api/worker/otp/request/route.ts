@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requestCode } from '@/services/auth/otpService';
+import { normaliseUkMobile } from '@/lib/phone';
+import { setWorkerOtpMobileCookie } from '@/lib/session';
 
 // Uses Node crypto + Prisma, so force the Node.js runtime (not Edge).
 export const runtime = 'nodejs';
@@ -27,5 +29,14 @@ export async function POST(req: NextRequest) {
     const status = result.resendInSeconds ? 429 : 400;
     return NextResponse.json(result, { status });
   }
+
+  // Remember (server-side) the exact number this code was sent to, so verify
+  // never depends on the client still holding the mobile in component state.
+  // `requestCode` succeeded, so this re-normalisation is guaranteed to parse.
+  const normalised = normaliseUkMobile(body.mobile ?? '');
+  if (normalised.ok && normalised.e164) {
+    setWorkerOtpMobileCookie(normalised.e164);
+  }
+
   return NextResponse.json(result);
 }

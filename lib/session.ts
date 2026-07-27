@@ -111,6 +111,62 @@ export function clearWorkerSessionCookie(): void {
   cookies().delete(WORKER_COOKIE);
 }
 
+// --- Pending OTP mobile -----------------------------------------------------
+
+/**
+ * A signed, short-lived cookie holding the normalised (E.164) mobile a code was
+ * sent to, set when a worker requests an OTP and read back when they verify it.
+ *
+ * This is the server-side source of truth for "which number is this code for",
+ * so verification never depends on the mobile still sitting in the check-in
+ * page's React state — which is lost if that component remounts (e.g. a deploy
+ * swaps the client bundle mid-flow). It is NOT a login: it only remembers the
+ * destination number between the two OTP steps, and is cleared once the worker
+ * session is established.
+ */
+const OTP_MOBILE_COOKIE = 'sc_otp_mobile';
+// Comfortably longer than the OTP TTL so the number outlives the code itself.
+const OTP_MOBILE_TTL_SECONDS = 60 * 15; // 15 minutes
+
+interface OtpMobileToken {
+  typ: 'otp';
+  /** SMS destination in E.164 form. */
+  mobile: string;
+  iat: number;
+  exp: number;
+}
+
+/** Remember the E.164 mobile a code was just sent to (call from a route). */
+export function setWorkerOtpMobileCookie(mobile: string): void {
+  const now = Math.floor(Date.now() / 1000);
+  const token = signSession<OtpMobileToken>({
+    typ: 'otp',
+    mobile,
+    iat: now,
+    exp: now + OTP_MOBILE_TTL_SECONDS,
+  });
+  cookies().set(OTP_MOBILE_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: OTP_MOBILE_TTL_SECONDS,
+  });
+}
+
+/** The pending OTP mobile (E.164) if one is set and unexpired, else null. */
+export function getWorkerOtpMobile(): string | null {
+  const token = cookies().get(OTP_MOBILE_COOKIE)?.value;
+  const payload = verifySession<OtpMobileToken>(token);
+  if (!payload || payload.typ !== 'otp') return null;
+  if (payload.exp * 1000 < Date.now()) return null;
+  return payload.mobile || null;
+}
+
+export function clearWorkerOtpMobileCookie(): void {
+  cookies().delete(OTP_MOBILE_COOKIE);
+}
+
 // --- Admin session helpers --------------------------------------------------
 
 const ADMIN_COOKIE = 'sc_admin';
@@ -189,7 +245,9 @@ export function createPlatformSessionToken(input: {
 }): string {
   const now = Math.floor(Date.now() / 1000);
   const ttl =
-    input.ttlSeconds && input.ttlSeconds > 0 ? input.ttlSeconds : PLATFORM_TTL_SECONDS;
+    input.ttlSeconds && input.ttlSeconds > 0
+      ? input.ttlSeconds
+      : PLATFORM_TTL_SECONDS;
   const session: PlatformSession = {
     typ: 'platform',
     userId: input.userId,
@@ -208,13 +266,17 @@ export function getPlatformSession(): PlatformSession | null {
   return session;
 }
 
-export function setPlatformSessionCookie(token: string, maxAgeSeconds?: number): void {
+export function setPlatformSessionCookie(
+  token: string,
+  maxAgeSeconds?: number,
+): void {
   cookies().set(PLATFORM_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: maxAgeSeconds && maxAgeSeconds > 0 ? maxAgeSeconds : PLATFORM_TTL_SECONDS,
+    maxAge:
+      maxAgeSeconds && maxAgeSeconds > 0 ? maxAgeSeconds : PLATFORM_TTL_SECONDS,
   });
 }
 

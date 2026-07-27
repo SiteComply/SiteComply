@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyCode } from '@/services/auth/otpService';
+import { normaliseUkMobile } from '@/lib/phone';
 import {
   createWorkerSessionToken,
   setWorkerSessionCookie,
+  getWorkerOtpMobile,
+  clearWorkerOtpMobileCookie,
 } from '@/lib/session';
 
 export const runtime = 'nodejs';
@@ -11,8 +14,16 @@ export const dynamic = 'force-dynamic';
 /**
  * POST /api/worker/otp/verify
  * Body: { mobile: string, code: string }
+ *
  * On success, establishes a short-lived worker session (httpOnly cookie) and
  * reports whether the worker is already known (so the next step can pre-fill).
+ *
+ * The mobile is resolved COOKIE-FIRST: the number the code was actually sent to
+ * was recorded server-side at request time, so verification works even if the
+ * check-in page lost its `mobile` state (e.g. a deploy swapped the client bundle
+ * mid-flow). The request body is only a fallback. If neither yields a valid UK
+ * mobile, we return a `field: 'mobile'` error so the UI can send the worker back
+ * to the number step instead of showing a phone error under the code box.
  */
 export async function POST(req: NextRequest) {
   let body: { mobile?: string; code?: string };
@@ -25,7 +36,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const result = await verifyCode(body.mobile ?? '', body.code ?? '');
+  // Cookie (server-remembered, tamper-proof) wins over the client-sent value.
+  const resolved = getWorkerOtpMobile() ?? body.mobile ?? '';
+  const normalised = normaliseUkMobile(resolved);
+  if (!normalised.ok || !normalised.e164) {
+    return NextResponse.json(
+      {
+        ok: false,
+        field: 'mobile',
+        error:
+          'We’ve lost track of your mobile number. Please enter it again to get a new code.',
+      },
+      { status: 400 },
+    );
+  }
+
+  const result = await verifyCode(normalised.e164, body.code ?? '');
   if (!result.ok || !result.mobile) {
     return NextResponse.json(result, { status: 401 });
   }
@@ -35,6 +61,8 @@ export async function POST(req: NextRequest) {
     workerId: result.workerId,
   });
   setWorkerSessionCookie(token);
+  // The worker session now carries the identity; the pending-OTP cookie is done.
+  clearWorkerOtpMobileCookie();
 
   return NextResponse.json({
     ok: true,

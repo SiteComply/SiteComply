@@ -8,6 +8,11 @@ import { TextField } from '@/components/ui/TextField';
 
 type Step = 'phone' | 'code';
 
+// Remembers the number and which step the worker reached, so a remount mid-flow
+// (e.g. a deploy swaps the client bundle) doesn't drop them or lose the number.
+// The authoritative record lives in a server cookie; this is UX resilience only.
+const FLOW_KEY = 'sitecomply.checkin.otp';
+
 /**
  * Worker SMS one-time passcode (MFA) screen.
  *
@@ -21,11 +26,28 @@ export default function CheckInPage() {
   const [code, setCode] = useState('');
   const [maskedMobile, setMaskedMobile] = useState('');
   const [devCode, setDevCode] = useState<string | undefined>();
-  const [error, setError] = useState<string | undefined>();
+  // Errors are kept per field: a mobile-number problem belongs on the phone
+  // step, a wrong/expired code on the code step. Sharing one value put phone
+  // errors under the code box, which read as "the code was rejected".
+  const [mobileError, setMobileError] = useState<string | undefined>();
+  const [codeError, setCodeError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [resendIn, setResendIn] = useState(0);
 
   const codeInputRef = useRef<HTMLInputElement>(null);
+
+  // Restore an in-progress flow (number + step) after a reload/remount.
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(FLOW_KEY);
+      if (!saved) return;
+      const s = JSON.parse(saved) as { mobile?: string; step?: Step };
+      if (s.mobile) setMobile(s.mobile);
+      if (s.step === 'code' && s.mobile) setStep('code');
+    } catch {
+      /* ignore malformed state */
+    }
+  }, []);
 
   // Count down the resend cooldown.
   useEffect(() => {
@@ -34,8 +56,25 @@ export default function CheckInPage() {
     return () => clearTimeout(t);
   }, [resendIn]);
 
+  function persistFlow(next: { mobile: string; step: Step }) {
+    try {
+      sessionStorage.setItem(FLOW_KEY, JSON.stringify(next));
+    } catch {
+      /* storage unavailable (private mode) — non-fatal */
+    }
+  }
+
+  function clearFlow() {
+    try {
+      sessionStorage.removeItem(FLOW_KEY);
+    } catch {
+      /* non-fatal */
+    }
+  }
+
   async function sendCode() {
-    setError(undefined);
+    setMobileError(undefined);
+    setCodeError(undefined);
     setBusy(true);
     try {
       const res = await fetch('/api/worker/otp/request', {
@@ -45,7 +84,9 @@ export default function CheckInPage() {
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        setError(data.error ?? 'Something went wrong. Please try again.');
+        // A failed request is always a phone-step problem (bad number or a
+        // rate limit), so the message stays on the mobile field.
+        setMobileError(data.error ?? 'Something went wrong. Please try again.');
         if (data.resendInSeconds) setResendIn(data.resendInSeconds);
         return;
       }
@@ -54,16 +95,17 @@ export default function CheckInPage() {
       setResendIn(data.resendInSeconds ?? 30);
       setStep('code');
       setCode('');
+      persistFlow({ mobile, step: 'code' });
       setTimeout(() => codeInputRef.current?.focus(), 50);
     } catch {
-      setError('Network problem. Check your signal and try again.');
+      setMobileError('Network problem. Check your signal and try again.');
     } finally {
       setBusy(false);
     }
   }
 
   async function verify() {
-    setError(undefined);
+    setCodeError(undefined);
     setBusy(true);
     try {
       const res = await fetch('/api/worker/otp/verify', {
@@ -73,13 +115,25 @@ export default function CheckInPage() {
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        setError(data.error ?? 'That code didn’t work. Please try again.');
+        if (data.field === 'mobile') {
+          // The number couldn't be resolved — send the worker back to fix it,
+          // with the message on the mobile field where it belongs.
+          setStep('phone');
+          setCode('');
+          setMobileError(
+            data.error ?? 'Please enter your mobile number again.',
+          );
+          clearFlow();
+          return;
+        }
+        setCodeError(data.error ?? 'That code didn’t work. Please try again.');
         return;
       }
       // MFA passed — continue into identity & site selection (Stage 4).
+      clearFlow();
       router.push('/check-in/details');
     } catch {
-      setError('Network problem. Check your signal and try again.');
+      setCodeError('Network problem. Check your signal and try again.');
     } finally {
       setBusy(false);
     }
@@ -111,9 +165,12 @@ export default function CheckInPage() {
             autoFocus
             placeholder="07700 900123"
             value={mobile}
-            onChange={(e) => setMobile(e.target.value)}
+            onChange={(e) => {
+              setMobile(e.target.value);
+              if (mobileError) setMobileError(undefined);
+            }}
             hint="A UK mobile, starting 07."
-            error={error}
+            error={mobileError}
           />
 
           <Button type="submit" size="lg" fullWidth disabled={busy}>
@@ -158,8 +215,11 @@ export default function CheckInPage() {
             placeholder="••••••"
             className="text-center text-3xl font-bold tracking-[0.5em]"
             value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-            error={error}
+            onChange={(e) => {
+              setCode(e.target.value.replace(/\D/g, ''));
+              if (codeError) setCodeError(undefined);
+            }}
+            error={codeError}
           />
 
           <Button
@@ -177,8 +237,10 @@ export default function CheckInPage() {
               className="font-semibold text-brand-700"
               onClick={() => {
                 setStep('phone');
-                setError(undefined);
+                setCodeError(undefined);
+                setMobileError(undefined);
                 setCode('');
+                clearFlow();
               }}
             >
               Change number
