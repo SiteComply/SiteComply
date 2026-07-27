@@ -45,10 +45,19 @@ export const KNOWLEDGE_CHECK_DEFAULTS = {
   enabled: false,
   /** Questions shown per attempt (mockup: "Question 2 of 6"). */
   questionsPerAttempt: 6,
-  /** Target size of the generated pool the attempt samples from. */
-  poolTarget: 18,
-  /** Minimum valid questions for a bank to be usable; below this → FAILED. */
-  poolMinimum: 6,
+  /**
+   * Upper bound on the generated pool. The model is told to produce ONLY as many
+   * well-grounded questions as the induction genuinely supports, up to this — so
+   * a rich induction gives variety while a thin one yields fewer rather than
+   * padding with ungrounded questions.
+   */
+  poolTarget: 12,
+  /**
+   * Minimum valid questions for a bank to be usable; below this → FAILED (and the
+   * site's unavailable policy applies). Kept low so a modest but genuine induction
+   * still produces a usable check instead of forcing the model to invent facts.
+   */
+  poolMinimum: 4,
   /** When no READY bank exists at check-in: never block the worker by default. */
   unavailablePolicy: 'SKIP_FLAGGED' as InductionUnavailablePolicyValue,
   /** Auto-publish generated banks unless a site opts into manager approval. */
@@ -64,7 +73,10 @@ export const QUESTIONS_PER_ATTEMPT_MAX = 12;
  * mixed into the content hash), so a prompt change regenerates rather than serves
  * questions written by the old template — same discipline as AI_SUMMARY_PROMPT_VERSION.
  */
-export const KNOWLEDGE_CHECK_PROMPT_VERSION = 'v1';
+// v2: tightened grounding — questions must come only from facts explicitly
+// stated in the induction/emergency info, never induction structure or general
+// knowledge. Bumping this invalidates every cached v1 bank so they regenerate.
+export const KNOWLEDGE_CHECK_PROMPT_VERSION = 'v2';
 
 /** Exactly four options per question (matches the worker UI + mockup). */
 export const OPTIONS_PER_QUESTION = 4;

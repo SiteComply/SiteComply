@@ -42,7 +42,10 @@ interface InductionCorpus {
     nearestHospital: string | null;
     emergencyNumber: string | null;
   };
-  checklistItems: { label: string; helpText: string | null; type: string }[];
+  // Site rules the worker confirms at induction. The internal item `type` is
+  // deliberately NOT included: it is implementation metadata, not an induction
+  // fact, and exposing it produced questions like "what type is this item?".
+  checklistItems: { label: string; helpText: string | null }[];
 }
 
 export interface BankInduction {
@@ -103,7 +106,6 @@ export async function loadBankInduction(
     checklistItems: checklist.items.map((i) => ({
       label: i.label,
       helpText: i.helpText,
-      type: i.type,
     })),
   };
 
@@ -163,32 +165,89 @@ const QUESTIONS_SCHEMA: Record<string, unknown> = {
 
 const SYSTEM_PROMPT = [
   'You are a UK construction health-and-safety trainer writing a short knowledge',
-  'check that verifies a worker understood a specific site induction.',
+  'check that verifies a worker understood THIS specific site induction.',
   '',
-  'Rules you MUST follow:',
-  '- Use ONLY the induction material provided. Never invent site facts.',
-  '- Every question must be answerable directly from that material, and the',
-  '  correct answer must be grounded in it. If a fact is not in the material, do',
-  '  not ask about it.',
-  `- Each question has exactly ${OPTIONS_PER_QUESTION} options, ONE correct.`,
-  '- Distractors must be plausible but clearly wrong to someone who read the',
-  '  induction. Never use "all/none of the above".',
-  '- Prefer the topics that keep workers safe: key safety information, site rules,',
-  '  emergency procedures (assembly point, first aider, emergency numbers) and',
-  '  significant hazards. Set `category` accordingly.',
+  'GROUNDING — the single most important rule:',
+  '- Every question, its correct answer AND every option must come from a fact',
+  '  EXPLICITLY STATED in the briefing below. Quote or closely paraphrase that',
+  '  fact. If something is not written in the briefing, you do not know it — do',
+  '  not ask about it and do not assume it.',
+  '- Do NOT use general construction, health-and-safety or CSCS knowledge, common',
+  '  practice, regulations, or anything a worker would need outside knowledge to',
+  '  answer. Test comprehension of THIS briefing only.',
+  '- A worker who has carefully read the briefing must be able to answer every',
+  '  question with certainty. If you cannot write such a question from the stated',
+  '  facts, write fewer questions.',
+  '',
+  'NEVER ask about (these are not induction facts):',
+  '- whether something is or is not "listed", present, included or missing;',
+  '- the wording, structure, layout, phrasing, categories or format of the',
+  '  induction, checklist or briefing itself;',
+  '- what a rule "asks", how it is worded, or its help text;',
+  '- anything requiring a fact the briefing does not state (e.g. do not ask',
+  '  whether an item is "mandatory" unless the briefing says so).',
+  '',
+  'Style:',
+  `- Each question has exactly ${OPTIONS_PER_QUESTION} options, exactly ONE correct.`,
+  '- The three wrong options must be clearly wrong given the briefing, not merely',
+  '  "not mentioned". Never use "all/none of the above".',
+  '- Categorise each: SAFETY, SITE_RULES, EMERGENCY, HAZARD or GENERAL.',
   '- Plain UK English, short sentences, low reading age. No trick wording.',
-  '- `sourceRef` names the induction section the question tests (e.g. "Emergency',
-  '  information", "Site rules", or the checklist item), so the worker can review it.',
-  '- `explanation` is one short sentence on why the correct answer is right.',
-  '- Vary the questions so repeated inductions are not identical.',
+  '- `sourceRef`: quote the exact sentence/fact from the briefing the question tests.',
+  '- `explanation`: one short sentence citing that stated fact.',
+  '- Vary questions between runs.',
+  '',
+  'Quality over quantity: generate ONLY as many well-grounded questions as the',
+  'briefing genuinely supports, up to the requested number. Returning fewer solid',
+  'questions is REQUIRED — never pad with weak, generic or ungrounded questions.',
 ].join('\n');
+
+/** Render the corpus as a plain briefing — never raw JSON/DB structure, so the
+ *  model cannot quiz field names, item types or the induction's own format. */
+function renderBriefing(corpus: InductionCorpus): string {
+  const lines: string[] = [
+    `SITE: ${corpus.siteName} (ref ${corpus.jobReference})`,
+  ];
+
+  lines.push('', 'INDUCTION NOTES:');
+  lines.push(corpus.inductionContent.trim() || '(no free-text notes provided)');
+
+  const e = corpus.emergency;
+  const em: string[] = [];
+  if (e.fireAssemblyPoint)
+    em.push(`- Fire assembly point: ${e.fireAssemblyPoint}`);
+  if (e.firstAiderName) {
+    const bits = [e.firstAiderName];
+    if (e.firstAiderLocation) bits.push(`at ${e.firstAiderLocation}`);
+    if (e.firstAiderNumber) bits.push(`on ${e.firstAiderNumber}`);
+    em.push(`- First aider: ${bits.join(', ')}`);
+  }
+  if (e.nearestHospital) em.push(`- Nearest A&E: ${e.nearestHospital}`);
+  if (e.emergencyNumber) em.push(`- Emergency number: ${e.emergencyNumber}`);
+  if (em.length) lines.push('', 'EMERGENCY INFORMATION:', ...em);
+
+  if (corpus.checklistItems.length) {
+    lines.push(
+      '',
+      'SITE RULES THE WORKER CONFIRMS (each is a rule/requirement in force on this site):',
+    );
+    for (const item of corpus.checklistItems) {
+      lines.push(
+        `- ${item.label}${item.helpText ? ` (${item.helpText})` : ''}`,
+      );
+    }
+  }
+  return lines.join('\n');
+}
 
 function buildUserPrompt(corpus: InductionCorpus, target: number): string {
   return [
-    `Generate ${target} varied multiple-choice questions for this site induction.`,
+    `Write up to ${target} multiple-choice questions that test whether a worker`,
+    'understood the briefing below. Use ONLY facts stated in it. Fewer,',
+    'well-grounded questions are better than more — do not invent or pad.',
     '',
-    'INDUCTION MATERIAL (the only source of truth):',
-    JSON.stringify(corpus, null, 2),
+    '--- SITE INDUCTION BRIEFING (the only source of truth) ---',
+    renderBriefing(corpus),
   ].join('\n');
 }
 
@@ -222,6 +281,27 @@ const CATEGORIES = new Set([
   'GENERAL',
 ]);
 
+/**
+ * Prompts/answers that test the induction's STRUCTURE rather than its content —
+ * exactly the meta questions the prompt forbids. A cheap defence-in-depth filter
+ * so any that slip past the model are dropped rather than shown to a worker.
+ */
+const META_PATTERNS = [
+  /\bchecklist\b/i,
+  /\bhelp ?text\b/i,
+  /\bwhat (type|kind|category|format)\b/i,
+  /\bnot (listed|included|mentioned|shown|present)\b/i,
+  /\bwhich .*\bnot\b.*\b(listed|included|among|one of)\b/i,
+  /\bhow (is|are) .* (worded|phrased|listed|written|labelled)\b/i,
+  /\bwhat does the (checklist|induction|briefing|list) (ask|say|state)\b/i,
+  /\b(PPE_CONFIRM|YES_NO|ACKNOWLEDGEMENT)\b/,
+];
+
+function isMetaQuestion(prompt: string, optionTexts: string[]): boolean {
+  const haystack = [prompt, ...optionTexts].join('  ');
+  return META_PATTERNS.some((re) => re.test(haystack));
+}
+
 function validateQuestion(raw: RawQuestion): ValidatedQuestion | null {
   const prompt = typeof raw.prompt === 'string' ? raw.prompt.trim() : '';
   if (prompt.length < 8) return null;
@@ -243,6 +323,9 @@ function validateQuestion(raw: RawQuestion): ValidatedQuestion | null {
   const idx = typeof raw.correctIndex === 'number' ? raw.correctIndex : -1;
   if (!Number.isInteger(idx) || idx < 0 || idx >= OPTIONS_PER_QUESTION)
     return null;
+
+  // Drop structural/meta questions (defence-in-depth over the prompt rules).
+  if (isMetaQuestion(prompt, opts)) return null;
 
   const category = (
     typeof raw.category === 'string' ? raw.category : 'GENERAL'
