@@ -335,6 +335,7 @@ model JobSite {
   questionBanks     InductionQuestionBank[]
   knowledgeCheckAttempts KnowledgeCheckAttempt[]
   inductionConfig   SiteInductionConfig?
+  siteInformation   SiteInformation?
   checkInOverrides  CheckInOverride[]
 
   @@index([status])
@@ -1097,6 +1098,42 @@ model SiteInductionConfig {
   /// worker to complete the latest induction before their next check-in.
   inductionsInvalidatedAt DateTime?
   invalidatedByName       String?
+
+  updatedByUserId String?
+  updatedByName   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Structured, worker-facing Site Information (SC-008). A dedicated 1:1 record
+/// (like SiteInductionConfig) that a Site Manager maintains and that a checked-in
+/// worker sees on their persistent "Site information" page, updating in real time
+/// without re-induction. Kept separate from the JobSite record so it is editable
+/// under the site-manager `sites:edit` permission rather than the Director-only
+/// site-record gate. Emergency fields (fire assembly, first aider, A&E, emergency
+/// number) deliberately stay on JobSite and are NOT duplicated here — they remain
+/// managed on the site record and are only DISPLAYED read-only alongside these.
+/// All fields optional so the feature ships dark: an empty section renders nothing.
+model SiteInformation {
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String  @id
+
+  /// Free text with line breaks preserved on render (no rich text in v1).
+  workingHours        String?
+  siteRules           String? @db.Text
+  welfareFacilities   String? @db.Text
+  siteHazards         String? @db.Text
+  emergencyProcedures String? @db.Text
+
+  /// Site map image, stored in the same private Azure Blob container as the
+  /// Documents module (via services/documents/blobStorage). Metadata only; the
+  /// bytes are streamed to a checked-in worker through an authenticated route,
+  /// never a public URL. Kept off the Document table so it never appears in the
+  /// Documents lists / RAMS counts.
+  siteMapBlobPath   String?
+  siteMapFileName   String?
+  siteMapMimeType   String?
+  siteMapSizeBytes  Int?
 
   updatedByUserId String?
   updatedByName   String?

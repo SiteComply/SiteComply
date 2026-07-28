@@ -9,6 +9,7 @@ import {
 } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { getSiteDetailForViewer } from '@/services/sites/siteDetailService';
+import { getSiteInformationForViewer } from '@/services/sites/siteInformationService';
 import { pct } from '@/services/reports/complianceReport';
 
 export const dynamic = 'force-dynamic';
@@ -33,6 +34,10 @@ export default async function SiteOverviewPage({
   const { site, compliance } = detail;
   const canViewCheckins = permits(viewer.role, 'checkins', 'view');
   const compliantPct = pct(compliance.compliant, compliance.total);
+
+  // Site information completeness (SC-008) — a gentle nudge on the Overview.
+  const siteInfo = await getSiteInformationForViewer(viewer, params.id);
+  const infoComplete = siteInfo?.completeness ?? null;
 
   return (
     <PlatformShell>
@@ -70,6 +75,31 @@ export default async function SiteOverviewPage({
               <Detail label="Created" value={formatDateUK(site.createdAt)} />
             </dl>
           </Section>
+
+          {infoComplete && (
+            <Section title="Site information">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm text-ink-muted">Worker-facing content</p>
+                <span className="text-sm font-semibold tabular-nums text-ink">
+                  {infoComplete.complete}/{infoComplete.total} sections
+                </span>
+              </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line">
+                <div
+                  className="h-full rounded-full bg-safe-500"
+                  style={{
+                    width: `${(infoComplete.complete / infoComplete.total) * 100}%`,
+                  }}
+                />
+              </div>
+              {infoComplete.missing.length > 0 && (
+                <p className="mt-2 text-xs text-ink-subtle">
+                  Add on the Worker Experience tab:{' '}
+                  {infoComplete.missing.join(', ')}.
+                </p>
+              )}
+            </Section>
+          )}
         </div>
       </div>
     </PlatformShell>

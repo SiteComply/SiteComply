@@ -8,6 +8,7 @@ import { WorkerDashboardConfig } from '@/components/platform/WorkerDashboardConf
 import { KnowledgeCheckConfig } from '@/components/platform/KnowledgeCheckConfig';
 import { InductionValidityConfig } from '@/components/platform/InductionValidityConfig';
 import { GpsCheckInConfig } from '@/components/platform/GpsCheckInConfig';
+import { SiteInformationConfig } from '@/components/platform/SiteInformationConfig';
 import { formatDateTimeUK } from '@/lib/datetime';
 import {
   requirePlatformViewer,
@@ -29,6 +30,7 @@ import {
   listRecentWorkersForViewer,
   listOverridesForViewer,
 } from '@/services/geo/geoConfigService';
+import { getSiteInformationForViewer } from '@/services/sites/siteInformationService';
 
 export const dynamic = 'force-dynamic';
 
@@ -90,6 +92,11 @@ export default async function SiteExperiencePage({
       ])
     : [null, [], []];
 
+  // Site information (SC-008): structured worker-facing content + completeness.
+  const siteInfo = canConfigureDashboard
+    ? await getSiteInformationForViewer(viewer, params.id)
+    : null;
+
   const hasEmergency =
     site &&
     (site.fireAssemblyPoint ||
@@ -125,6 +132,43 @@ export default async function SiteExperiencePage({
               siteId={params.id}
               visibility={panelVisibility}
               canEdit={canConfigureDashboard}
+            />
+          </Section>
+        )}
+
+        {siteInfo && (
+          <Section title="Site information">
+            <SiteInformationConfig
+              siteId={params.id}
+              canEdit={canConfigureDashboard}
+              siteEditHref={`/platform/dashboard/sites/${params.id}/edit`}
+              initial={{
+                workingHours: siteInfo.fields.workingHours ?? '',
+                siteRules: siteInfo.fields.siteRules ?? '',
+                welfareFacilities: siteInfo.fields.welfareFacilities ?? '',
+                siteHazards: siteInfo.fields.siteHazards ?? '',
+                emergencyProcedures: siteInfo.fields.emergencyProcedures ?? '',
+                hasSiteMap: siteInfo.fields.hasSiteMap,
+                siteMapFileName: siteInfo.fields.siteMapFileName,
+                updatedByName: siteInfo.fields.updatedByName,
+                updatedAtLabel: siteInfo.fields.updatedAt
+                  ? formatDateTimeUK(siteInfo.fields.updatedAt)
+                  : null,
+              }}
+              emergency={{
+                fireAssemblyPoint: siteInfo.emergency.fireAssemblyPoint,
+                firstAider:
+                  [
+                    siteInfo.emergency.firstAiderName,
+                    siteInfo.emergency.firstAiderLocation,
+                    siteInfo.emergency.firstAiderNumber,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || null,
+                nearestHospital: siteInfo.emergency.nearestHospital,
+                emergencyNumber: siteInfo.emergency.emergencyNumber,
+              }}
+              completeness={siteInfo.completeness}
             />
           </Section>
         )}
