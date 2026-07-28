@@ -67,11 +67,37 @@ export default async function WorkerHomePage() {
         </Button>
       </Link>
 
+      {/* SC-010: keep attendance discoverable after check-out — a checked-out
+          worker has no worker nav, so surface it here (mirrors the dashboard card). */}
+      <Link
+        href="/worker/attendance"
+        className="mt-4 flex items-center gap-4 rounded-xl border border-line bg-surface p-4 shadow-card transition-colors hover:border-brand-200 hover:bg-brand-50"
+      >
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+          <WorkerIcon name="clock" className="h-6 w-6" />
+        </span>
+        <div className="flex-1">
+          <p className="text-base font-semibold text-ink">My attendance</p>
+          <p className="text-sm text-ink-muted">
+            View your hours and check-in history.
+          </p>
+        </div>
+        <span className="shrink-0 text-ink-subtle">›</span>
+      </Link>
+
       {recent.length > 0 && (
         <section className="mt-8">
-          <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-ink-subtle">
-            Recent check-ins
-          </h2>
+          <div className="mb-2 flex items-center justify-between px-1">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">
+              Recent check-ins
+            </h2>
+            <Link
+              href="/worker/attendance/history"
+              className="text-sm font-semibold text-brand-700 hover:underline"
+            >
+              View all
+            </Link>
+          </div>
           <ul className="space-y-3">
             {recent.map((c) => {
               const onSite = c.checkedOutAt === null;
