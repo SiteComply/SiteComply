@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { SiteDetailHeader } from '@/components/platform/SiteDetailHeader';
 import { Section, Detail, Empty } from '@/components/platform/siteDetailUi';
+import { CollapsibleSection } from '@/components/platform/CollapsibleSection';
 import { SiteBulletins } from '@/components/platform/SiteBulletins';
 import { SiteContacts } from '@/components/platform/SiteContacts';
 import { WorkerDashboardConfig } from '@/components/platform/WorkerDashboardConfig';
@@ -33,6 +34,39 @@ import {
 export const dynamic = 'force-dynamic';
 
 /**
+ * PROTOTYPE — Worker Experience layout experiment (reversible).
+ *
+ * `?layout=v2` renders the optimised prototype: Worker dashboard settings become a
+ * compact checkbox grid, and Knowledge check / Induction validity / Check-in
+ * location / Emergency information collapse to a compact index (closed by default).
+ * Any other value (or no param) renders the original layout unchanged. The env var
+ * WORKER_EXPERIENCE_LAYOUT=v2 flips the site-wide default when no param is present.
+ * Removing the experiment is a one-line revert of `optimised`.
+ */
+function isOptimisedLayout(layout: string | undefined): boolean {
+  if (layout === 'v2') return true;
+  if (layout === 'classic') return false;
+  return process.env.WORKER_EXPERIENCE_LAYOUT === 'v2';
+}
+
+/** Renders a section as collapsible (prototype) or as the original always-open card. */
+function ExpSection({
+  optimised,
+  title,
+  children,
+}: {
+  optimised: boolean;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return optimised ? (
+    <CollapsibleSection title={title}>{children}</CollapsibleSection>
+  ) : (
+    <Section title={title}>{children}</Section>
+  );
+}
+
+/**
  * Platform → Site Details — Worker Experience tab: everything that shapes what a
  * worker sees on site — Daily Bulletins (SC-002), Worker Dashboard settings
  * (SC-003), Knowledge Checks (SC-005), Induction Validity (SC-006), Site Contacts
@@ -41,11 +75,16 @@ export const dynamic = 'force-dynamic';
  */
 export default async function SiteExperiencePage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams?: { layout?: string };
 }) {
   const viewer = await requirePlatformViewer();
   assertModuleView(viewer, 'sites');
+
+  // Reversible layout experiment — see isOptimisedLayout above.
+  const optimised = isOptimisedLayout(searchParams?.layout);
 
   const canViewBulletins = permits(viewer.role, 'bulletins', 'view');
   const canPublishBulletins = permits(viewer.role, 'bulletins', 'create');
@@ -125,12 +164,13 @@ export default async function SiteExperiencePage({
               siteId={params.id}
               visibility={panelVisibility}
               canEdit={canConfigureDashboard}
+              variant={optimised ? 'compact' : 'rows'}
             />
           </Section>
         )}
 
         {kcConfig && kcPreview && (
-          <Section title="Knowledge check">
+          <ExpSection optimised={optimised} title="Knowledge check">
             <KnowledgeCheckConfig
               siteId={params.id}
               canEdit={canConfigureDashboard}
@@ -142,11 +182,11 @@ export default async function SiteExperiencePage({
               }}
               preview={kcPreview}
             />
-          </Section>
+          </ExpSection>
         )}
 
         {inductionValidity && (
-          <Section title="Induction validity">
+          <ExpSection optimised={optimised} title="Induction validity">
             <InductionValidityConfig
               siteId={params.id}
               canEdit={canConfigureDashboard}
@@ -158,11 +198,11 @@ export default async function SiteExperiencePage({
                 invalidatedByName: inductionValidity.invalidatedByName,
               }}
             />
-          </Section>
+          </ExpSection>
         )}
 
         {gpsConfig && (
-          <Section title="Check-in location">
+          <ExpSection optimised={optimised} title="Check-in location">
             <GpsCheckInConfig
               siteId={params.id}
               canEdit={canConfigureDashboard}
@@ -181,7 +221,7 @@ export default async function SiteExperiencePage({
                 status: o.status,
               }))}
             />
-          </Section>
+          </ExpSection>
         )}
 
         <Section title="Site contacts">
@@ -192,7 +232,7 @@ export default async function SiteExperiencePage({
           />
         </Section>
 
-        <Section title="Emergency information">
+        <ExpSection optimised={optimised} title="Emergency information">
           {hasEmergency ? (
             <dl className="space-y-3">
               {site!.fireAssemblyPoint && (
@@ -240,7 +280,7 @@ export default async function SiteExperiencePage({
               Edit emergency information →
             </Link>
           )}
-        </Section>
+        </ExpSection>
       </div>
     </PlatformShell>
   );
