@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
@@ -16,6 +17,8 @@ export interface InductionValidityInitial {
   inductionValidityDays: number | null;
   invalidatedAtLabel: string | null;
   invalidatedByName: string | null;
+  /** SC-011: require a digital signature to complete the induction. */
+  signatureRequired: boolean;
 }
 
 /**
@@ -56,6 +59,39 @@ export function InductionValidityConfig({
   );
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [signatureRequired, setSignatureRequired] = useState(
+    initial.signatureRequired,
+  );
+  const [sigBusy, setSigBusy] = useState(false);
+
+  async function toggleSignature(next: boolean) {
+    setSignatureRequired(next);
+    setSigBusy(true);
+    try {
+      const res = await fetch(
+        `/api/platform/sites/${siteId}/induction-validity`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'signature', required: next }),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        setSignatureRequired(!next);
+        toast.error(data.error ?? 'Could not save.');
+        return;
+      }
+      toast.success(
+        next
+          ? 'Digital signature now required.'
+          : 'Digital signature turned off.',
+      );
+      router.refresh();
+    } finally {
+      setSigBusy(false);
+    }
+  }
 
   function selectedDays(): number | null {
     if (mode === 'none') return null;
@@ -188,6 +224,42 @@ export function InductionValidityConfig({
             {busy ? 'Saving…' : 'Save validity'}
           </Button>
         )}
+      </div>
+
+      {/* SC-011: digital induction acceptance (signature) */}
+      <div className="flex items-start justify-between gap-3 rounded-lg border border-line p-3">
+        <div>
+          <p className="text-sm font-semibold text-ink">
+            Require a digital signature
+          </p>
+          <p className="text-xs text-ink-subtle">
+            Workers accept a declaration and sign to complete their induction
+            (SC-011). Off by default.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={signatureRequired}
+          aria-label="Require a digital signature"
+          disabled={!canEdit || sigBusy}
+          onClick={() => toggleSignature(!signatureRequired)}
+          className={cn(
+            'relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
+            signatureRequired ? 'bg-safe-500' : 'bg-line',
+            !canEdit || sigBusy
+              ? 'cursor-not-allowed opacity-60'
+              : 'cursor-pointer',
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
+              signatureRequired ? 'translate-x-[1.375rem]' : 'translate-x-0.5',
+            )}
+          />
+        </button>
       </div>
 
       <div className="space-y-2 rounded-lg border border-line p-3">

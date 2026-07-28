@@ -16,6 +16,8 @@ import {
   LocationCheck,
   type ConfirmLocation,
 } from '@/components/checkin/LocationCheck';
+import { AcceptSignStep } from '@/components/checkin/AcceptSignStep';
+import type { SignatureInput } from '@/services/inductionSignature/signatureService';
 import type {
   ClientQuestion,
   ReviewContent,
@@ -25,6 +27,10 @@ interface InductionWizardProps {
   siteId: string;
   siteName: string;
   items: FlowItem[];
+  workerName: string;
+  inductionVersion: number;
+  /** SC-011: whether this site requires a digital signature to complete. */
+  signatureRequired: boolean;
 }
 
 interface PersistedState {
@@ -46,6 +52,9 @@ export function InductionWizard({
   siteId,
   siteName,
   items,
+  workerName,
+  inductionVersion,
+  signatureRequired,
 }: InductionWizardProps) {
   const router = useRouter();
   const toast = useToast();
@@ -69,9 +78,22 @@ export function InductionWizard({
     answered: Record<string, boolean>;
   } | null>(null);
   const [blockedMessage, setBlockedMessage] = useState<string | null>(null);
+  // SC-011: the Accept & Sign step runs after the knowledge check (when the site
+  // requires a signature), before the location check. `signing` shows the step;
+  // `signature`/`kcPassed` are captured for the check-in POST + the summary.
+  const [signing, setSigning] = useState(false);
+  const [signature, setSignature] = useState<SignatureInput | null>(null);
+  const [kcPassed, setKcPassed] = useState(false);
   // SC-007: the GPS Location Check runs as the final phase before the check-in is
   // recorded (it resolves immediately on sites without GPS validation).
   const [locating, setLocating] = useState(false);
+
+  // After the induction (+ knowledge check) is complete: go to Accept & Sign when
+  // the site requires a signature, otherwise straight to the location check.
+  function proceedAfterInduction() {
+    if (signatureRequired) setSigning(true);
+    else setLocating(true);
+  }
 
   // Restore any saved progress for this site.
   useEffect(() => {
@@ -163,8 +185,8 @@ export function InductionWizard({
         );
         return;
       }
-      // not_required — no knowledge check → go to the location check.
-      setLocating(true);
+      // not_required — no knowledge check → Accept & Sign (or location).
+      proceedAfterInduction();
     } catch {
       toast.error('Network problem. Check your signal and try again.');
     } finally {
@@ -181,7 +203,13 @@ export function InductionWizard({
       const res = await fetch('/api/worker/submission', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteId, answers, gdprConsent, location }),
+        body: JSON.stringify({
+          siteId,
+          answers,
+          gdprConsent,
+          location,
+          signature,
+        }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -196,8 +224,13 @@ export function InductionWizard({
         /* non-fatal */
       }
       toast.success('You’re checked in.');
-      // SC-003: a successful check-in lands on the Worker Dashboard.
-      router.push('/worker/dashboard');
+      // SC-011: a signed induction lands on its formal completion record;
+      // otherwise (SC-003) straight to the Worker Dashboard.
+      if (signature && data.submissionId) {
+        router.push(`/worker/inductions/${data.submissionId}?completed=1`);
+      } else {
+        router.push('/worker/dashboard');
+      }
     } catch {
       toast.error('Network problem. Check your signal and try again.');
     } finally {
@@ -217,6 +250,25 @@ export function InductionWizard({
     );
   }
 
+  // SC-011 Accept & Sign — the formal signature step (when the site requires it).
+  if (signing) {
+    return (
+      <AcceptSignStep
+        siteName={siteName}
+        workerName={workerName}
+        inductionVersion={inductionVersion}
+        knowledgeCheckPassed={kcPassed}
+        busy={busy}
+        onSigned={(sig) => {
+          setSignature(sig);
+          setSigning(false);
+          setLocating(true);
+        }}
+        onBack={() => setSigning(false)}
+      />
+    );
+  }
+
   // SC-005 knowledge-check phase — replaces the checklist UI once started.
   if (kc) {
     return (
@@ -226,7 +278,10 @@ export function InductionWizard({
         questions={kc.questions}
         review={kc.review}
         answered={kc.answered}
-        onPassed={() => setLocating(true)}
+        onPassed={() => {
+          setKcPassed(true);
+          proceedAfterInduction();
+        }}
       />
     );
   }

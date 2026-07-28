@@ -4,6 +4,7 @@ import { permits } from '@/services/platformUsers/platformPermissions';
 import {
   saveValidity,
   invalidateInductions,
+  saveSignatureRequired,
 } from '@/services/induction/inductionConfigService';
 
 export const runtime = 'nodejs';
@@ -35,7 +36,7 @@ export async function PATCH(
     );
   }
 
-  let body: { action?: string; days?: number | null };
+  let body: { action?: string; days?: number | null; required?: boolean };
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -56,6 +57,22 @@ export async function PATCH(
           : result.reason === 'not_found'
             ? 404
             : 400;
+      return NextResponse.json(
+        { ok: false, error: 'Could not save.' },
+        { status },
+      );
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (body.action === 'signature') {
+    const result = await saveSignatureRequired(
+      viewer,
+      params.id,
+      Boolean(body.required),
+    );
+    if (!result.ok) {
+      const status = result.reason === 'forbidden' ? 403 : 404;
       return NextResponse.json(
         { ok: false, error: 'Could not save.' },
         { status },

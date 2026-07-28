@@ -3,6 +3,7 @@ import { getWorkerSession, setActiveWorkerSiteCookie } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { createCheckIn } from '@/services/submissions/submissionService';
 import { parseLocationFix } from '@/services/geo/geoValidationService';
+import { parseSignatureInput } from '@/services/inductionSignature/signatureService';
 import type { InductionAnswers } from '@/services/checklists/inductionFlow';
 
 export const runtime = 'nodejs';
@@ -13,6 +14,7 @@ interface SubmissionBody {
   answers?: InductionAnswers;
   gdprConsent?: boolean;
   location?: unknown; // SC-007 location fix (validated server-side)
+  signature?: unknown; // SC-011 induction signature (validated server-side)
 }
 
 /**
@@ -60,6 +62,7 @@ export async function POST(req: NextRequest) {
     answers: body.answers ?? {},
     gdprConsent: Boolean(body.gdprConsent),
     location: parseLocationFix(body.location),
+    signature: parseSignatureInput(body.signature),
   });
 
   if (!result.ok) {

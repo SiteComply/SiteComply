@@ -5,6 +5,7 @@ import { InductionWizard } from '@/components/checkin/InductionWizard';
 import { getWorkerSession } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { getActiveSiteWithChecklist } from '@/services/sites/siteService';
+import { getInductionSignatureRequired } from '@/services/inductionSignature/signatureService';
 import type { FlowItem } from '@/services/checklists/inductionFlow';
 
 export const dynamic = 'force-dynamic';
@@ -38,10 +39,20 @@ export default async function InductionPage({
     required: i.required,
   }));
 
+  // SC-011: does this site require a digital signature to complete the induction?
+  const signatureRequired = await getInductionSignatureRequired(site.id);
+
   return (
     <AppShell>
       <Steps current="Induction" />
-      <InductionWizard siteId={site.id} siteName={site.name} items={items} />
+      <InductionWizard
+        siteId={site.id}
+        siteName={site.name}
+        items={items}
+        workerName={worker.fullName}
+        inductionVersion={site.checklist?.version ?? 1}
+        signatureRequired={signatureRequired}
+      />
     </AppShell>
   );
 }

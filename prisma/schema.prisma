@@ -210,6 +210,12 @@ enum PermitQuestionType {
   DATE //             A date/time value
 }
 
+/// How a worker provided their induction-acceptance signature (SC-011).
+enum SignatureType {
+  DRAWN //  Hand-drawn on a canvas, stored as a PNG in blob storage
+  TYPED //  Typed their name, rendered in a signature font (no image stored)
+}
+
 /// Kind of entry in a permit's activity timeline (SC-009). Mirrors
 /// ActionActivityType; gives the worker-facing status timeline + the audit trail.
 enum PermitActivityType {
@@ -565,6 +571,18 @@ model Submission {
   checkOutLng       Float?
   checkOutAccuracyM Float?
   checkOutDistanceM Float?
+
+  // Digital Induction Acceptance (SC-011). Captured on a FULL induction when the
+  // site requires a signature: a declaration acceptance + a digital signature.
+  // WRITE-ONCE — set at induction completion and never mutated (the signed record
+  // is immutable evidence). An express (reused) check-in inherits its source
+  // induction's signature and does not re-sign, so these stay null on reuses.
+  declarationAccepted Boolean        @default(false)
+  declarationText     String? // snapshot of the exact wording the worker agreed to
+  signedName          String? // the worker's name as signed (drawn or typed)
+  signatureType       SignatureType?
+  signatureBlobPath   String? // drawn signature PNG in private blob storage (null for TYPED)
+  signedAt            DateTime?
 
   @@index([jobSiteId, checkedInAt])
   @@index([workerId])
@@ -1271,6 +1289,12 @@ model SiteInductionConfig {
   /// worker to complete the latest induction before their next check-in.
   inductionsInvalidatedAt DateTime?
   invalidatedByName       String?
+
+  /// Digital Induction Acceptance (SC-011). When true, a worker completing a FULL
+  /// induction at this site must accept the declaration and provide a digital
+  /// signature before their check-in is recorded. Ships dark: false = the
+  /// pre-SC-011 tick-box completion (no signature required).
+  inductionSignatureRequired Boolean @default(false)
 
   updatedByUserId String?
   updatedByName   String?

@@ -34,6 +34,13 @@ const WORKER_NAV: {
     panels: [],
   },
   {
+    // Always visible (SC-011) — the worker's own signed induction records.
+    href: '/worker/inductions',
+    label: 'Inductions',
+    icon: 'clipboard',
+    panels: [],
+  },
+  {
     href: '/worker/site-information',
     label: 'Site information',
     icon: 'building',

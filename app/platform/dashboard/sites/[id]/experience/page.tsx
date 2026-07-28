@@ -200,6 +200,7 @@ export default async function SiteExperiencePage({
                   ? formatDateTimeUK(inductionValidity.inductionsInvalidatedAt)
                   : null,
                 invalidatedByName: inductionValidity.invalidatedByName,
+                signatureRequired: inductionValidity.signatureRequired,
               }}
             />
           </Section>

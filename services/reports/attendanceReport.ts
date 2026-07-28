@@ -30,6 +30,8 @@ export interface AttendanceRow {
   locationOverridden: boolean;
   gpsUnavailable: boolean;
   checkInDistanceM: number | null;
+  /** SC-011: the induction was completed with a signed declaration. */
+  inductionSigned: boolean;
   workerName: string;
   workerCompany: string;
   siteName: string;
@@ -86,6 +88,7 @@ export async function getAttendanceRows(
       locationOverridden: true,
       gpsUnavailable: true,
       checkInDistanceM: true,
+      declarationAccepted: true,
       worker: { select: { fullName: true, company: true } },
       jobSite: { select: { name: true, jobReference: true } },
     },
@@ -100,6 +103,7 @@ export async function getAttendanceRows(
     locationOverridden: s.locationOverridden,
     gpsUnavailable: s.gpsUnavailable,
     checkInDistanceM: s.checkInDistanceM,
+    inductionSigned: s.declarationAccepted,
     workerName: s.worker.fullName,
     workerCompany: s.worker.company,
     siteName: s.jobSite.name,

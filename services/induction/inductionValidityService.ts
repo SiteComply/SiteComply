@@ -65,6 +65,14 @@ async function lastFullInduction(workerId: string, siteId: string) {
       safeWorkingAgreed: true,
       gdprConsent: true,
       knowledgeCheckPassed: true,
+      // SC-011: carried forward so an express check-in inherits the signed
+      // induction without the worker re-signing.
+      declarationAccepted: true,
+      declarationText: true,
+      signedName: true,
+      signatureType: true,
+      signatureBlobPath: true,
+      signedAt: true,
     },
   });
 }
@@ -225,6 +233,13 @@ export async function expressCheckIn(
       knowledgeCheckSkipped: false,
       inductionReused: true,
       inductionSourceSubmissionId: source.id,
+      // SC-011: inherit the source induction's signed acceptance (no re-signing).
+      declarationAccepted: source.declarationAccepted,
+      declarationText: source.declarationText,
+      signedName: source.signedName,
+      signatureType: source.signatureType,
+      signatureBlobPath: source.signatureBlobPath,
+      signedAt: source.signedAt,
       ...geo.record,
     },
     select: { id: true },

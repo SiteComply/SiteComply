@@ -61,6 +61,7 @@ export async function GET(req: NextRequest) {
       'Checked out',
       'Total time on site',
       'Induction',
+      'Signed',
       'Location',
       'Distance (m)',
       'Status',
@@ -76,6 +77,7 @@ export async function GET(req: NextRequest) {
         r.checkedOutAt ? formatDateTimeUK(r.checkedOutAt) : '',
         mins != null ? formatHoursMinutes(mins) : '',
         r.inductionReused ? 'Express (reused)' : 'Full',
+        r.inductionSigned ? 'Signed' : 'No',
         attendanceLocationLabel(r),
         r.checkInDistanceM != null
           ? String(Math.round(r.checkInDistanceM))

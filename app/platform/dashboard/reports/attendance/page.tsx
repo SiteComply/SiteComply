@@ -167,6 +167,7 @@ export default async function AttendanceReportPage({
                     <th className="px-5 py-2 font-medium">Checked out</th>
                     <th className="px-5 py-2 font-medium">Total time</th>
                     <th className="px-5 py-2 font-medium">Induction</th>
+                    <th className="px-5 py-2 font-medium">Signed</th>
                     <th className="px-5 py-2 font-medium">Location</th>
                     <th className="px-5 py-2 font-medium">Status</th>
                   </tr>
@@ -199,6 +200,15 @@ export default async function AttendanceReportPage({
                       </td>
                       <td className="px-5 py-2 text-ink-subtle">
                         {r.inductionReused ? 'Express (reused)' : 'Full'}
+                      </td>
+                      <td className="px-5 py-2">
+                        {r.inductionSigned ? (
+                          <span className="font-semibold text-safe-700">
+                            Signed
+                          </span>
+                        ) : (
+                          <span className="text-ink-subtle">—</span>
+                        )}
                       </td>
                       <td className="px-5 py-2 text-ink-subtle">
                         {attendanceLocationLabel(r)}

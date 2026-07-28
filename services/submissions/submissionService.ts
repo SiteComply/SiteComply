@@ -13,6 +13,12 @@ import {
   type FlowItem,
   type InductionAnswers,
 } from '@/services/checklists/inductionFlow';
+import {
+  getInductionSignatureRequired,
+  buildSignatureRecord,
+  type SignatureInput,
+  type SignatureRecord,
+} from '@/services/inductionSignature/signatureService';
 
 /**
  * Check-in (Submission) operations.
@@ -54,6 +60,8 @@ export interface CreateCheckInInput {
   gdprConsent: boolean;
   /** SC-007: the worker's location fix (or explicit "no fix"), if GPS applies. */
   location?: LocationFix | null;
+  /** SC-011: the digital signature captured at Accept & Sign (if provided). */
+  signature?: SignatureInput | null;
 }
 
 export type CreateCheckInResult =
@@ -157,6 +165,23 @@ export async function createCheckIn(
     };
   }
 
+  // SC-011: digital induction acceptance. When the site requires a signature, one
+  // must be provided; otherwise a supplied signature is still stored. Written once
+  // here, on the fresh induction record — never mutated afterwards.
+  let signatureRecord: SignatureRecord | undefined;
+  const signatureRequired = await getInductionSignatureRequired(input.siteId);
+  if (signatureRequired && !input.signature) {
+    return {
+      ok: false,
+      error: 'Please sign the induction declaration to complete your check-in.',
+    };
+  }
+  if (input.signature) {
+    const built = await buildSignatureRecord(input.siteId, input.signature);
+    if (!built.ok) return { ok: false, error: built.error };
+    signatureRecord = built.record;
+  }
+
   const gates = deriveGates(items, input.answers);
   const submission = await prisma.submission.create({
     data: {
@@ -170,6 +195,7 @@ export async function createCheckIn(
       knowledgeCheckPassed: gate.attemptId !== null,
       knowledgeCheckSkipped: gate.skipped,
       ...geo.record,
+      ...(signatureRecord ?? {}),
     },
   });
 
