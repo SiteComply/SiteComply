@@ -5,6 +5,7 @@
  */
 
 export type NotificationGroup =
+  | 'PERMIT_AWAITING'
   | 'ACTION_OVERDUE'
   | 'DOC_EXPIRED'
   | 'ACTION_DUE'
@@ -38,11 +39,28 @@ export const NOTIFICATION_GROUP_META: Record<
   NotificationGroup,
   { title: string; accent: string; order: number }
 > = {
-  ACTION_OVERDUE: { title: 'Overdue actions', accent: 'text-danger-700', order: 1 },
+  PERMIT_AWAITING: {
+    title: 'Permits awaiting approval',
+    accent: 'text-hivis-600',
+    order: 0,
+  },
+  ACTION_OVERDUE: {
+    title: 'Overdue actions',
+    accent: 'text-danger-700',
+    order: 1,
+  },
   DOC_EXPIRED: { title: 'Expired', accent: 'text-danger-700', order: 2 },
   ACTION_DUE: { title: 'Actions due soon', accent: 'text-hivis-600', order: 3 },
   DOC_EXPIRING: { title: 'Expiring soon', accent: 'text-hivis-600', order: 4 },
-  ACTION_ASSIGNED: { title: 'Newly assigned actions', accent: 'text-brand-700', order: 5 },
+  ACTION_ASSIGNED: {
+    title: 'Newly assigned actions',
+    accent: 'text-brand-700',
+    order: 5,
+  },
   AUDIT_CREATED: { title: 'New audits', accent: 'text-brand-700', order: 6 },
-  AUDIT_SIGNED_OFF: { title: 'Audits signed off', accent: 'text-safe-700', order: 7 },
+  AUDIT_SIGNED_OFF: {
+    title: 'Audits signed off',
+    accent: 'text-safe-700',
+    order: 7,
+  },
 };

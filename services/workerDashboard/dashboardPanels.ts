@@ -73,9 +73,10 @@ export const WORKER_DASHBOARD_PANELS: WorkerDashboardPanelMeta[] = [
   {
     value: 'ACTIVE_PERMITS',
     label: 'Active permits',
-    description: 'Permits currently in force on site.',
+    description:
+      'Let workers request Permits to Work and track approval (SC-009).',
+    // Real feature as of SC-009, but ships dark: a manager opts each site in.
     defaultEnabled: false,
-    awaitingSourceSystem: true,
   },
   {
     value: 'RAMS',

@@ -50,6 +50,17 @@ export const REPORT_TYPES: ReportType[] = [
     built: true,
   },
   {
+    id: 'permits',
+    title: 'Permits to Work',
+    description:
+      'Permit requests and their approval history across your sites (SC-009).',
+    icon: 'permit',
+    directorOnly: false,
+    personalData: true,
+    clientAggregateOnly: true,
+    built: true,
+  },
+  {
     id: 'compliance',
     title: 'Compliance',
     description:

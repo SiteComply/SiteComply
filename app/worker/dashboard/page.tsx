@@ -112,10 +112,11 @@ export default async function WorkerDashboardPage() {
             href="/worker/permits"
             linkLabel="View permits"
           >
-            <PanelEmpty>
-              Permits are not yet issued through SiteComply. Ask site management
-              about any permit you need.
-            </PanelEmpty>
+            <PanelMetric
+              value={counts.activePermits}
+              label="Your active permits"
+              tone="safe"
+            />
           </PanelCard>
         )}
 

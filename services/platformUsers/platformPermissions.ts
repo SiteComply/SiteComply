@@ -27,6 +27,7 @@ export type PlatformModule =
   | 'reports'
   | 'actions'
   | 'bulletins'
+  | 'permits'
   | 'platformUsers';
 
 export const PERMISSION_VERBS: PermissionVerb[] = [
@@ -45,6 +46,7 @@ export const PLATFORM_MODULES: PlatformModule[] = [
   'reports',
   'actions',
   'bulletins',
+  'permits',
   'platformUsers',
 ];
 
@@ -84,6 +86,7 @@ export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
         reports: VCEX,
         actions: VCEX,
         bulletins: VCEX,
+        permits: VE,
         platformUsers: NONE, // Platform Users are Admin-managed only.
       },
     },
@@ -98,6 +101,7 @@ export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
         reports: VCEX,
         actions: VCEX,
         bulletins: VCEX,
+        permits: VE,
         platformUsers: NONE,
       },
     },
@@ -112,6 +116,7 @@ export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
         reports: VX,
         actions: VCE,
         bulletins: VCE, // Site managers publish Daily Bulletins for their site.
+        permits: VE,
         platformUsers: NONE,
       },
     },
@@ -126,6 +131,7 @@ export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
         reports: V,
         actions: V, // Read-only: no create/edit/export for Clients in v1.
         bulletins: V,
+        permits: V,
         platformUsers: NONE,
       },
     },
@@ -140,6 +146,7 @@ export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
         reports: VCX,
         actions: ['view', 'create'],
         bulletins: V,
+        permits: V,
         platformUsers: NONE,
       },
     },
@@ -154,6 +161,7 @@ export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
         reports: V,
         actions: VCE,
         bulletins: V,
+        permits: V,
         platformUsers: NONE,
       },
     },
@@ -168,6 +176,7 @@ export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
         reports: VCX,
         actions: VCE,
         bulletins: VCE,
+        permits: VE,
         platformUsers: NONE,
       },
     },
@@ -182,6 +191,7 @@ export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
         reports: VCX,
         actions: VCEX,
         bulletins: VCEX,
+        permits: VE,
         platformUsers: NONE,
       },
     },
@@ -227,6 +237,23 @@ export const AUDIT_SIGNOFF_ROLES: PlatformRoleValue[] = [
  */
 export function canSignOffAudit(role: PlatformRoleValue): boolean {
   return AUDIT_SIGNOFF_ROLES.includes(role);
+}
+
+/**
+ * Approve or reject a Permit to Work (SC-009). A deliberate business rule
+ * separate from the `permits` "edit" verb: an edit-capable role (e.g. H&S
+ * Consultant) may review, comment and close permits, but only these roles may
+ * formally approve/reject one — mirroring the audit sign-off allow-list.
+ */
+export const PERMIT_APPROVAL_ROLES: PlatformRoleValue[] = [
+  'SITE_MANAGER',
+  'PROJECT_MANAGER',
+  'DIRECTOR',
+  'PRINCIPAL_CONTRACTOR',
+];
+
+export function canApprovePermit(role: PlatformRoleValue): boolean {
+  return PERMIT_APPROVAL_ROLES.includes(role);
 }
 
 /**

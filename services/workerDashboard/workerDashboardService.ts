@@ -247,6 +247,8 @@ export interface WorkerDashboardCounts {
   otherDocuments: number;
   outstandingActions: number;
   siteContacts: number;
+  /** The worker's active permits (SC-009) for this site. */
+  activePermits: number;
 }
 
 /**
@@ -264,6 +266,7 @@ export async function getWorkerDashboardCounts(
     otherDocuments,
     outstandingActions,
     siteContacts,
+    activePermits,
   ] = await Promise.all([
     prisma.siteBulletin.count({
       where: { jobSiteId: siteId, active: true, reads: { none: { workerId } } },
@@ -279,6 +282,13 @@ export async function getWorkerDashboardCounts(
       where: { jobSiteId: siteId, status: { in: ['OPEN', 'IN_PROGRESS'] } },
     }),
     prisma.siteContact.count({ where: { jobSiteId: siteId } }),
+    prisma.permit.count({
+      where: {
+        jobSiteId: siteId,
+        workerId,
+        status: { in: ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED'] },
+      },
+    }),
   ]);
 
   return {
@@ -288,6 +298,7 @@ export async function getWorkerDashboardCounts(
     otherDocuments,
     outstandingActions,
     siteContacts,
+    activePermits,
   };
 }
 

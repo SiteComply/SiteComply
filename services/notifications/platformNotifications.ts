@@ -8,6 +8,7 @@ import {
 import { deriveDocumentNotifications } from '@/services/documents/documentExpiryNotifications';
 import { deriveActionNotifications } from '@/services/actions/actionNotifications';
 import { deriveAuditNotifications } from '@/services/audits/auditNotifications';
+import { derivePermitNotifications } from '@/services/permits/permitNotifications';
 
 /**
  * Unified in-app notifications for a platform user.
@@ -31,13 +32,20 @@ export async function getPlatformNotifications(
   if (viewer.siteIds.length === 0) return [];
 
   const raw: RawNotification[] = [
+    ...(await derivePermitNotifications(viewer, now)),
     ...(await deriveActionNotifications(viewer, now)),
     ...(await deriveDocumentNotifications(viewer, now)),
     ...(await deriveAuditNotifications(viewer, now)),
   ];
 
-  const readKeys = await getReadNotificationKeys(viewer.id, raw.map((r) => r.key));
-  const list: PlatformNotification[] = raw.map((r) => ({ ...r, read: readKeys.has(r.key) }));
+  const readKeys = await getReadNotificationKeys(
+    viewer.id,
+    raw.map((r) => r.key),
+  );
+  const list: PlatformNotification[] = raw.map((r) => ({
+    ...r,
+    read: readKeys.has(r.key),
+  }));
 
   list.sort((a, b) => {
     const oa = NOTIFICATION_GROUP_META[a.group].order;

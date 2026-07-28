@@ -21,14 +21,60 @@ export const PLATFORM_NAV: {
   icon: PlatformIconName;
   module: PlatformModule;
 }[] = [
-  { href: '/platform/dashboard', label: 'Dashboard', icon: 'grid', module: 'dashboard' },
-  { href: '/platform/dashboard/notifications', label: 'Notifications', icon: 'bell', module: 'dashboard' },
-  { href: '/platform/dashboard/sites', label: 'Sites', icon: 'pin', module: 'sites' },
-  { href: '/platform/dashboard/submissions', label: 'Check-ins', icon: 'clipboard', module: 'checkins' },
-  { href: '/platform/dashboard/reports', label: 'Reports', icon: 'chart', module: 'reports' },
-  { href: '/platform/dashboard/documents', label: 'Documents', icon: 'doc', module: 'documents' },
-  { href: '/platform/dashboard/audits', label: 'Audits', icon: 'shield', module: 'audits' },
-  { href: '/platform/dashboard/actions', label: 'Actions', icon: 'bolt', module: 'actions' },
+  {
+    href: '/platform/dashboard',
+    label: 'Dashboard',
+    icon: 'grid',
+    module: 'dashboard',
+  },
+  {
+    href: '/platform/dashboard/notifications',
+    label: 'Notifications',
+    icon: 'bell',
+    module: 'dashboard',
+  },
+  {
+    href: '/platform/dashboard/sites',
+    label: 'Sites',
+    icon: 'pin',
+    module: 'sites',
+  },
+  {
+    href: '/platform/dashboard/submissions',
+    label: 'Check-ins',
+    icon: 'clipboard',
+    module: 'checkins',
+  },
+  {
+    href: '/platform/dashboard/reports',
+    label: 'Reports',
+    icon: 'chart',
+    module: 'reports',
+  },
+  {
+    href: '/platform/dashboard/documents',
+    label: 'Documents',
+    icon: 'doc',
+    module: 'documents',
+  },
+  {
+    href: '/platform/dashboard/audits',
+    label: 'Audits',
+    icon: 'shield',
+    module: 'audits',
+  },
+  {
+    href: '/platform/dashboard/actions',
+    label: 'Actions',
+    icon: 'bolt',
+    module: 'actions',
+  },
+  {
+    href: '/platform/dashboard/permits',
+    label: 'Permits',
+    icon: 'permit',
+    module: 'permits',
+  },
 ];
 
 const NOTIFICATIONS_HREF = '/platform/dashboard/notifications';
@@ -74,7 +120,9 @@ export function PlatformNav({
                 aria-label={`${notificationCount} notifications`}
                 className={cn(
                   'inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-xs font-bold',
-                  active ? 'bg-white text-brand-700' : 'bg-danger-500 text-white',
+                  active
+                    ? 'bg-white text-brand-700'
+                    : 'bg-danger-500 text-white',
                 )}
               >
                 {notificationCount > 99 ? '99+' : notificationCount}

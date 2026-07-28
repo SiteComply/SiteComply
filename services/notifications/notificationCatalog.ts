@@ -47,6 +47,14 @@ export interface NotificationTypeDescriptor {
 
 export const NOTIFICATION_TYPES: NotificationTypeDescriptor[] = [
   {
+    key: 'permit_awaiting',
+    label: 'Permits awaiting approval',
+    description:
+      'A worker has submitted a permit to work on one of your sites that is awaiting review or approval.',
+    defaultEnabled: true,
+    defaultChannels: { email: false, sms: false },
+  },
+  {
     key: 'platform_access_request',
     label: 'New platform access requests',
     description:
@@ -73,8 +81,7 @@ export const NOTIFICATION_TYPES: NotificationTypeDescriptor[] = [
   {
     key: 'audit_created',
     label: 'New audits',
-    description:
-      'A new audit has been created on one of your sites.',
+    description: 'A new audit has been created on one of your sites.',
     defaultEnabled: true,
     defaultChannels: { email: false, sms: false },
   },

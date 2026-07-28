@@ -185,6 +185,43 @@ enum ActionActivityType {
   ASSIGNMENT //     Assignee set or changed
 }
 
+/// Lifecycle status of a Permit to Work (SC-009). Values match the PERMIT_STATUSES
+/// option list in services/permits/permitConstants. "Expired" is derived for
+/// display (an APPROVED permit past its validUntil) — the stored status only moves
+/// to EXPIRED if a sweep/close records it; the register is advisory and never
+/// blocks check-in.
+enum PermitStatus {
+  SUBMITTED //     Requested by a worker, awaiting review
+  UNDER_REVIEW //  A manager has started reviewing
+  APPROVED //      Approved, with a validity window
+  REJECTED //      Declined by a manager (reason recorded)
+  CANCELLED //     Withdrawn by the worker
+  EXPIRED //       Past its validUntil (may also be derived)
+  CLOSED //        Work complete / permit closed out
+}
+
+/// Answer type of a permit-type question (SC-009). Mirrors ChecklistItemType; the
+/// worker request wizard renders each generically so new question types/permit
+/// types are pure data. Values match services/permits/permitConstants.
+enum PermitQuestionType {
+  ACKNOWLEDGEMENT //  Must tick to confirm
+  YES_NO //           Yes / No answer
+  TEXT //             Short free text
+  DATE //             A date/time value
+}
+
+/// Kind of entry in a permit's activity timeline (SC-009). Mirrors
+/// ActionActivityType; gives the worker-facing status timeline + the audit trail.
+enum PermitActivityType {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  CANCELLED
+  CLOSED
+  COMMENT
+}
+
 /// Target of an AI-generated executive summary (AI Summaries — see
 /// docs/AI_REPORT_SUMMARIES.md). Phase 1a foundation only; not yet user-facing.
 enum AiSummaryTarget {
@@ -260,7 +297,7 @@ model Worker {
   // the authoritative competency record (card grade, expiry and holder name are
   // taken from the verified response rather than the worker's typed guess).
   cscsScheme             String? //   Verified card scheme, e.g. "ECS", "CSCS"
-  cscsVerified           Boolean       @default(false) // True only when VALID & in date
+  cscsVerified           Boolean   @default(false) // True only when VALID & in date
   cscsVerificationStatus String? //   VALID | EXPIRED | REVOKED | NOT_FOUND | ERROR | UNVERIFIED
   cscsVerifiedAt         DateTime? //  When the Smart Check was last run
   cscsHolderName         String? //   Name held on the card per Smart Check
@@ -270,10 +307,11 @@ model Worker {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  submissions          Submission[]
-  bulletinReads        SiteBulletinRead[]
+  submissions            Submission[]
+  bulletinReads          SiteBulletinRead[]
   knowledgeCheckAttempts KnowledgeCheckAttempt[]
-  checkInOverrides     CheckInOverride[]
+  checkInOverrides       CheckInOverride[]
+  permits                Permit[]
 
   @@index([company])
   @@index([cscsExpiry])
@@ -311,10 +349,10 @@ model JobSite {
   // are set — so the feature ships dark and a misconfigured site never traps a
   // worker. `gpsUnavailablePolicy` decides what happens when a location can't be
   // obtained (no permission / no fix / poor accuracy).
-  gpsCheckInEnabled  Boolean            @default(false)
-  latitude           Float? //             site check-in point, decimal degrees
-  longitude          Float?
-  checkInRadiusM     Int? //               permitted distance in metres (default applied in code)
+  gpsCheckInEnabled    Boolean              @default(false)
+  latitude             Float? //             site check-in point, decimal degrees
+  longitude            Float?
+  checkInRadiusM       Int? //               permitted distance in metres (default applied in code)
   gpsUnavailablePolicy GpsUnavailablePolicy @default(BLOCK)
 
   createdAt DateTime @default(now())
@@ -323,20 +361,21 @@ model JobSite {
   createdByAdmin   Admin  @relation(fields: [createdByAdminId], references: [id])
   createdByAdminId String
 
-  checklists        ComplianceChecklist[]
-  submissions       Submission[]
-  platformUsers     PlatformUser[]         @relation("PlatformUserSites")
-  documents         Document[]
-  audits            Audit[]
-  actions           Action[]
-  bulletins         SiteBulletin[]
-  contacts          SiteContact[]
-  dashboardSettings SiteDashboardSetting[]
-  questionBanks     InductionQuestionBank[]
+  checklists             ComplianceChecklist[]
+  submissions            Submission[]
+  platformUsers          PlatformUser[]          @relation("PlatformUserSites")
+  documents              Document[]
+  audits                 Audit[]
+  actions                Action[]
+  bulletins              SiteBulletin[]
+  contacts               SiteContact[]
+  dashboardSettings      SiteDashboardSetting[]
+  questionBanks          InductionQuestionBank[]
   knowledgeCheckAttempts KnowledgeCheckAttempt[]
-  inductionConfig   SiteInductionConfig?
-  siteInformation   SiteInformation?
-  checkInOverrides  CheckInOverride[]
+  inductionConfig        SiteInductionConfig?
+  siteInformation        SiteInformation?
+  checkInOverrides       CheckInOverride[]
+  permits                Permit[]
 
   @@index([status])
 }
@@ -347,14 +386,14 @@ model JobSite {
 /// active until archived; per-worker read state lives in SiteBulletinRead so a
 /// worker can identify and dismiss new bulletins.
 model SiteBulletin {
-  id        String           @id @default(cuid())
-  jobSite   JobSite          @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
-  jobSiteId String
-  category  BulletinCategory @default(NOTICE)
-  title     String? // optional short heading
-  body      String //   the notice text shown to workers
-  active    Boolean          @default(true) // false = archived/retracted
-  publishedAt DateTime       @default(now())
+  id          String           @id @default(cuid())
+  jobSite     JobSite          @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId   String
+  category    BulletinCategory @default(NOTICE)
+  title       String? // optional short heading
+  body        String //   the notice text shown to workers
+  active      Boolean          @default(true) // false = archived/retracted
+  publishedAt DateTime         @default(now())
 
   // Who published it (nullable so a removed user doesn't orphan the bulletin);
   // denormalised name so history survives if the user is deleted.
@@ -468,11 +507,11 @@ model ChecklistItem {
 /// as JSON keyed by ChecklistItem id, capturing the checklist as it was at the
 /// recorded `checklistVersion`.
 model Submission {
-  id              String  @id @default(cuid())
-  worker          Worker  @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  workerId        String
-  jobSite         JobSite @relation(fields: [jobSiteId], references: [id])
-  jobSiteId       String
+  id               String  @id @default(cuid())
+  worker           Worker  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  workerId         String
+  jobSite          JobSite @relation(fields: [jobSiteId], references: [id])
+  jobSiteId        String
   checklistVersion Int // Version of the site checklist answered (for traceability)
 
   answers Json @default("{}") // { [checklistItemId]: boolean | "yes" | "no" | ... }
@@ -483,8 +522,8 @@ model Submission {
   safeWorkingAgreed Boolean @default(false)
   gdprConsent       Boolean @default(false) // UK GDPR consent captured at check-in
 
-  status      SubmissionStatus @default(INCOMPLETE)
-  checkedInAt DateTime         @default(now())
+  status       SubmissionStatus @default(INCOMPLETE)
+  checkedInAt  DateTime         @default(now())
   checkedOutAt DateTime? // Set when the worker checks out / leaves site
 
   // AI knowledge check (SC-005), mirrored out of KnowledgeCheckAttempt for easy
@@ -492,18 +531,18 @@ model Submission {
   // `skipped` is true when the site had checks on but no bank was ready and the
   // policy was SKIP_FLAGGED (recorded for admin visibility). Both false = the
   // site had no knowledge check at the time.
-  knowledgeCheckPassed  Boolean @default(false)
-  knowledgeCheckSkipped Boolean @default(false)
+  knowledgeCheckPassed  Boolean                @default(false)
+  knowledgeCheckSkipped Boolean                @default(false)
   knowledgeCheckAttempt KnowledgeCheckAttempt?
 
   // Induction validity (SC-006). An "express" check-in is an attendance record
   // created by reusing a still-valid earlier induction (the worker did not redo
   // the induction/knowledge check). `inductionReused` marks it; the optional
   // self-relation points at the induction submission it relied on.
-  inductionReused           Boolean      @default(false)
-  inductionSource           Submission?  @relation("InductionReuse", fields: [inductionSourceSubmissionId], references: [id], onDelete: SetNull)
+  inductionReused             Boolean      @default(false)
+  inductionSource             Submission?  @relation("InductionReuse", fields: [inductionSourceSubmissionId], references: [id], onDelete: SetNull)
   inductionSourceSubmissionId String?
-  inductionReuses           Submission[] @relation("InductionReuse")
+  inductionReuses             Submission[] @relation("InductionReuse")
 
   // GPS check-in validation (SC-007). Location captured at each action, plus the
   // outcome of the check-in validation. All nullable: a site without GPS
@@ -512,15 +551,15 @@ model Submission {
   // accuracy margin); `gpsUnavailable` = allowed in under ALLOW_FLAGGED with no
   // usable fix; `locationOverridden` = allowed in out-of-range via a manager
   // override (reason mandatory, recorded here for audit).
-  checkInLat        Float?
-  checkInLng        Float?
-  checkInAccuracyM  Float?
-  checkInDistanceM  Float?
-  locationVerified  Boolean @default(false)
-  gpsUnavailable    Boolean @default(false)
+  checkInLat         Float?
+  checkInLng         Float?
+  checkInAccuracyM   Float?
+  checkInDistanceM   Float?
+  locationVerified   Boolean @default(false)
+  gpsUnavailable     Boolean @default(false)
   locationOverridden Boolean @default(false)
-  overrideByName    String?
-  overrideReason    String?
+  overrideByName     String?
+  overrideReason     String?
 
   checkOutLat       Float?
   checkOutLng       Float?
@@ -902,7 +941,7 @@ model ActionActivity {
   type     ActionActivityType
 
   // Free text — the comment body or completion note (nullable for pure events).
-  note String?
+  note      String?
   // For STATUS_CHANGE / ASSIGNMENT: the previous and new values (labels/enum).
   fromValue String?
   toValue   String?
@@ -914,6 +953,140 @@ model ActionActivity {
   createdAt DateTime @default(now())
 
   @@index([actionId, createdAt])
+}
+
+/// Permit to Work — type catalogue (SC-009). DATA-DRIVEN so new permit types are
+/// added by inserting rows (seed or a future admin UI), never a schema change or
+/// redeploy. Seeded with the REV-1 standard types (Hot Works, Working at Height,
+/// etc.). `key` is the stable identifier; `referencePrefix` builds permit refs.
+model PermitType {
+  id              String  @id @default(cuid())
+  key             String  @unique // e.g. HOT_WORKS
+  name            String // e.g. "Hot Works"
+  referencePrefix String // e.g. "HW" — used in the permit reference code
+  iconKey         String  @default("permit") // worker icon name
+  description     String?
+  order           Int     @default(0)
+  active          Boolean @default(true)
+  /// System types ship in the seed; kept so a future admin UI can distinguish
+  /// built-ins from bespoke site-added types.
+  isSystem        Boolean @default(true)
+
+  questions PermitTypeQuestion[]
+  permits   Permit[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, order])
+}
+
+/// A question attached to a permit type (SC-009). Rendered generically by the
+/// worker request wizard (see services/permits/permitFlow), so adding questions
+/// is pure data. A worker's answers are stored on Permit.answers keyed by id.
+model PermitTypeQuestion {
+  id           String             @id @default(cuid())
+  permitType   PermitType         @relation(fields: [permitTypeId], references: [id], onDelete: Cascade)
+  permitTypeId String
+  label        String
+  helpText     String?
+  type         PermitQuestionType
+  required     Boolean            @default(true)
+  order        Int
+
+  @@index([permitTypeId, order])
+}
+
+/// A Permit to Work request/record (SC-009). Raised by a worker for the site they
+/// are checked into, reviewed and approved/rejected by a site manager. An advisory
+/// register — it never blocks check-in. Actor names are denormalised so the audit
+/// trail survives user deletion; the full chronological history lives in
+/// PermitActivity.
+model Permit {
+  id        String @id @default(cuid())
+  reference String @unique // human code, e.g. "HW-260728-001"
+
+  // Owning site — the access boundary for site-scoping.
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+
+  // Requesting worker.
+  worker   Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  workerId String
+
+  // Permit type (relation kept for questions; key/name snapshotted for history).
+  permitType     PermitType @relation(fields: [permitTypeId], references: [id], onDelete: Restrict)
+  permitTypeId   String
+  permitTypeKey  String // snapshot of PermitType.key at request time
+  permitTypeName String // snapshot of PermitType.name at request time
+
+  status PermitStatus @default(SUBMITTED)
+
+  // Core request details.
+  workActivity   String
+  workLocation   String?
+  proposedStart  DateTime?
+  proposedFinish DateTime?
+  // Per-question answers, keyed by PermitTypeQuestion id (boolean | 'yes'|'no' | string).
+  answers        Json
+
+  // Requested (worker name denormalised).
+  submittedByName String
+  submittedAt     DateTime @default(now())
+
+  // Review / approval (manager actor denormalised).
+  reviewedByUserId String?
+  reviewedByName   String?
+  reviewedAt       DateTime?
+
+  approvedByUserId String?
+  approvedByName   String?
+  approvedAt       DateTime?
+  validFrom        DateTime?
+  validUntil       DateTime?
+
+  rejectedByUserId String?
+  rejectedByName   String?
+  rejectedAt       DateTime?
+  rejectionReason  String?
+
+  cancelledAt DateTime?
+
+  closedByUserId String?
+  closedByName   String?
+  closedAt       DateTime?
+
+  activities PermitActivity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobSiteId, status])
+  @@index([workerId, status])
+}
+
+/// One entry in a permit's activity timeline (SC-009). Mirrors ActionActivity —
+/// gives the worker-facing status timeline and the full "who did what when" audit
+/// trail. Append-only.
+model PermitActivity {
+  id       String             @id @default(cuid())
+  permit   Permit             @relation(fields: [permitId], references: [id], onDelete: Cascade)
+  permitId String
+  type     PermitActivityType
+
+  note      String? // free text — comment / rejection reason
+  fromValue String? // previous status (label)
+  toValue   String? // new status (label)
+
+  // Who performed it (name denormalised so history survives user deletion).
+  // actorKind distinguishes a worker action from a platform-user action.
+  actorKind    String // 'worker' | 'platform'
+  authorUserId String?
+  authorName   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([permitId, createdAt])
 }
 
 /// Audit + cache record for an AI-generated executive summary (AI Summaries,
@@ -1048,10 +1221,10 @@ model AuthConfig {
 /// Secret field values inside `settings` are encrypted at rest (lib/secretBox)
 /// and never returned to the client. Falls back to env when no row exists.
 model AiConfig {
-  id             String   @id // fixed singleton key ("ai")
-  enabled        Boolean  @default(false)
-  activeProvider String   @default("mock")
-  settings       Json     @default("{}") // { [providerId]: { [field]: value|ciphertext } }
+  id             String  @id // fixed singleton key ("ai")
+  enabled        Boolean @default(false)
+  activeProvider String  @default("mock")
+  settings       Json    @default("{}") // { [providerId]: { [field]: value|ciphertext } }
 
   // Feature settings.
   allowedRoles  Json @default("[]") // PlatformRole[] permitted to use AI summaries
@@ -1078,21 +1251,21 @@ model SiteInductionConfig {
   jobSiteId String  @id
 
   /// null → inherit the global default (knowledgeCheckEnabledDefault).
-  knowledgeCheckEnabled Boolean?
+  knowledgeCheckEnabled  Boolean?
   /// null → inherit the global default (questionsPerAttemptDefault, 6).
-  questionsPerAttempt   Int?
+  questionsPerAttempt    Int?
   /// When true, a freshly generated bank stays hidden from workers until a
   /// manager approves it (approvedAt on the bank). Default false = auto-publish.
-  requireManagerApproval Boolean @default(false)
+  requireManagerApproval Boolean                     @default(false)
   /// What to do when checks are on but no READY bank exists at check-in time.
   /// null → inherit the global default (SKIP_FLAGGED).
-  unavailablePolicy InductionUnavailablePolicy?
+  unavailablePolicy      InductionUnavailablePolicy?
 
   /// Induction validity (SC-006). How many days a completed induction for this
   /// site remains valid, so a returning worker checks in without re-inducting
   /// until it expires. null → no validity window: re-induct on every check-in
   /// (the pre-SC-006 behaviour), so the feature ships dark.
-  inductionValidityDays Int?
+  inductionValidityDays   Int?
   /// Manager "invalidate previous inductions" cutoff (SC-006): any induction
   /// completed at or before this instant is treated as expired, forcing every
   /// worker to complete the latest induction before their next check-in.
@@ -1101,8 +1274,8 @@ model SiteInductionConfig {
 
   updatedByUserId String?
   updatedByName   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 /// Structured, worker-facing Site Information (SC-008). A dedicated 1:1 record
@@ -1130,15 +1303,15 @@ model SiteInformation {
   /// bytes are streamed to a checked-in worker through an authenticated route,
   /// never a public URL. Kept off the Document table so it never appears in the
   /// Documents lists / RAMS counts.
-  siteMapBlobPath   String?
-  siteMapFileName   String?
-  siteMapMimeType   String?
-  siteMapSizeBytes  Int?
+  siteMapBlobPath  String?
+  siteMapFileName  String?
+  siteMapMimeType  String?
+  siteMapSizeBytes Int?
 
   updatedByUserId String?
   updatedByName   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 /// A generated pool of knowledge-check questions for one exact induction state
@@ -1148,9 +1321,9 @@ model SiteInformation {
 /// steady-state check-ins make no live model call. Regenerated when the content
 /// hash changes; the unique key means one bank per exact induction state.
 model InductionQuestionBank {
-  id        String  @id @default(cuid())
-  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
-  jobSiteId String
+  id               String  @id @default(cuid())
+  jobSite          JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId        String
   checklistVersion Int
   contentHash      String
 
@@ -1163,8 +1336,8 @@ model InductionQuestionBank {
   /// Auto-publish (requireManagerApproval=false) sets this at generation time;
   /// otherwise a manager sets it on approval. Only an approved READY bank is
   /// served to workers.
-  approvedAt      DateTime?
-  approvedByName  String?
+  approvedAt     DateTime?
+  approvedByName String?
 
   questions InductionQuestion[]
   attempts  KnowledgeCheckAttempt[]
@@ -1182,8 +1355,8 @@ model InductionQuestionBank {
 /// the worker's "Review induction section" link. `active` false = withdrawn
 /// (e.g. after a flag), so it is no longer sampled.
 model InductionQuestion {
-  id       String                @id @default(cuid())
-  bank     InductionQuestionBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  id       String                    @id @default(cuid())
+  bank     InductionQuestionBank     @relation(fields: [bankId], references: [id], onDelete: Cascade)
   bankId   String
   order    Int
   category KnowledgeQuestionCategory @default(GENERAL)
@@ -1209,13 +1382,13 @@ model InductionQuestion {
 /// worker corrects until all are right). Linked to the Submission once the
 /// check-in is recorded. No FAILED status: an attempt is IN_PROGRESS or PASSED.
 model KnowledgeCheckAttempt {
-  id       String @id @default(cuid())
-  worker   Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  workerId String
-  jobSite   JobSite               @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
-  jobSiteId String
-  bank     InductionQuestionBank  @relation(fields: [bankId], references: [id], onDelete: Cascade)
-  bankId   String
+  id               String                @id @default(cuid())
+  worker           Worker                @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  workerId         String
+  jobSite          JobSite               @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId        String
+  bank             InductionQuestionBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  bankId           String
   checklistVersion Int
 
   /// The check-in this attempt gated. Nullable (set when the submission is
@@ -1226,10 +1399,10 @@ model KnowledgeCheckAttempt {
   questionIds Json //  string[] — the sampled question ids, in presentation order
   answers     Json @default("{}") // { [questionId]: { selectedOptionId, tries, correct } }
 
-  status                KnowledgeCheckAttemptStatus @default(IN_PROGRESS)
-  questionCount         Int
-  incorrectFirstTryCount Int @default(0)
-  durationSeconds       Int?
+  status                 KnowledgeCheckAttemptStatus @default(IN_PROGRESS)
+  questionCount          Int
+  incorrectFirstTryCount Int                         @default(0)
+  durationSeconds        Int?
 
   startedAt   DateTime  @default(now())
   completedAt DateTime?
@@ -1241,14 +1414,14 @@ model KnowledgeCheckAttempt {
 /// A worker-reported flag on a knowledge-check question (SC-005) — the mockup's
 /// "Flag question". Feeds the manager review list and question-quality reporting.
 model QuestionFlag {
-  id         String            @id @default(cuid())
-  question   InductionQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  questionId String
+  id           String            @id @default(cuid())
+  question     InductionQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId   String
   workerId     String?
   submissionId String?
   reason       String?
   resolvedAt   DateTime?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime          @default(now())
 
   @@index([questionId])
   @@index([resolvedAt])
@@ -1267,7 +1440,7 @@ model CheckInOverride {
   jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
   jobSiteId String
 
-  reason         String //   mandatory — why off-site check-in was authorised
+  reason          String //   mandatory — why off-site check-in was authorised
   grantedByUserId String?
   grantedByName   String?
 
