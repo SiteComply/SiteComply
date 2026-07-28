@@ -24,14 +24,10 @@ export function WorkerDashboardConfig({
   siteId,
   visibility,
   canEdit,
-  variant = 'rows',
 }: {
   siteId: string;
   visibility: PanelVisibility;
   canEdit: boolean;
-  // 'rows' is the original long-row layout; 'compact' is the prototype
-  // checkbox/grid layout (Worker Experience layout experiment, ?layout=v2).
-  variant?: 'rows' | 'compact';
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -62,66 +58,6 @@ export function WorkerDashboardConfig({
     } finally {
       setBusy(null);
     }
-  }
-
-  if (variant === 'compact') {
-    return (
-      <div className="space-y-3">
-        <p className="text-sm text-ink-muted">
-          Tick what workers see on their dashboard after checking into this
-          site.
-        </p>
-
-        <div className="grid gap-2 sm:grid-cols-2">
-          {WORKER_DASHBOARD_PANELS.map((panel) => {
-            const on = panels[panel.value];
-            const disabled = !canEdit || panel.locked || busy === panel.value;
-            return (
-              <label
-                key={panel.value}
-                className={cn(
-                  'flex items-start gap-2.5 rounded-lg border border-line px-3 py-2.5',
-                  disabled
-                    ? 'opacity-70'
-                    : 'cursor-pointer hover:bg-surface-sunken',
-                )}
-                title={panel.description}
-              >
-                <input
-                  type="checkbox"
-                  checked={on}
-                  disabled={disabled}
-                  aria-label={`${panel.label} on the worker dashboard`}
-                  onChange={(e) => toggle(panel.value, e.target.checked)}
-                  className="mt-0.5 h-4 w-4 shrink-0 accent-safe-500"
-                />
-                <span className="min-w-0">
-                  <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-ink">
-                    {panel.label}
-                    {panel.locked && (
-                      <span className="rounded-full border border-line px-1.5 py-0.5 text-[10px] font-semibold text-ink-subtle">
-                        Always shown
-                      </span>
-                    )}
-                    {panel.awaitingSourceSystem && (
-                      <span className="rounded-full bg-hivis-400/25 px-1.5 py-0.5 text-[10px] font-semibold text-ink">
-                        No data yet
-                      </span>
-                    )}
-                  </span>
-                </span>
-              </label>
-            );
-          })}
-        </div>
-
-        {!canEdit && (
-          <p className="text-xs text-ink-subtle">
-            You don’t have permission to change this site’s dashboard.
-          </p>
-        )}
-      </div>
-    );
   }
 
   return (
