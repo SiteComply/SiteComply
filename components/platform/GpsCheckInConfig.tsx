@@ -68,6 +68,13 @@ export function GpsCheckInConfig({
   const [radius, setRadius] = useState(
     initial.checkInRadiusM ?? DEFAULT_CHECKIN_RADIUS_M,
   );
+  // The radius is a single control: a preset dropdown that only reveals a numeric
+  // field when "Custom…" is chosen — so a preset value never appears twice.
+  const [customRadius, setCustomRadius] = useState(
+    !RADIUS_PRESETS_M.includes(
+      initial.checkInRadiusM ?? DEFAULT_CHECKIN_RADIUS_M,
+    ),
+  );
   const [policy, setPolicy] = useState(initial.gpsUnavailablePolicy);
   const [busy, setBusy] = useState(false);
 
@@ -256,14 +263,17 @@ export function GpsCheckInConfig({
             Check-in radius
           </span>
           <select
+            aria-label="Check-in radius"
             className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink disabled:opacity-60"
-            value={
-              RADIUS_PRESETS_M.includes(radius) ? String(radius) : 'custom'
-            }
+            value={customRadius ? 'custom' : String(radius)}
             disabled={!canEdit || busy}
             onChange={(e) => {
-              if (e.target.value !== 'custom')
+              if (e.target.value === 'custom') {
+                setCustomRadius(true);
+              } else {
+                setCustomRadius(false);
                 setRadius(Number(e.target.value));
+              }
             }}
           >
             {RADIUS_PRESETS_M.map((m) => (
@@ -273,16 +283,21 @@ export function GpsCheckInConfig({
             ))}
             <option value="custom">Custom…</option>
           </select>
-          <input
-            type="number"
-            min={RADIUS_MIN_M}
-            max={RADIUS_MAX_M}
-            className="w-24 rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink disabled:opacity-60"
-            value={radius}
-            disabled={!canEdit || busy}
-            onChange={(e) => setRadius(Number(e.target.value))}
-          />
-          <span className="text-sm text-ink-subtle">metres</span>
+          {customRadius && (
+            <>
+              <input
+                type="number"
+                min={RADIUS_MIN_M}
+                max={RADIUS_MAX_M}
+                aria-label="Custom check-in radius in metres"
+                className="w-24 rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink disabled:opacity-60"
+                value={radius}
+                disabled={!canEdit || busy}
+                onChange={(e) => setRadius(Number(e.target.value))}
+              />
+              <span className="text-sm text-ink-subtle">metres</span>
+            </>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
