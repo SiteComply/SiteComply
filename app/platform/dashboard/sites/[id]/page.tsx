@@ -22,10 +22,12 @@ import { SiteBulletins } from '@/components/platform/SiteBulletins';
 import { SiteContacts } from '@/components/platform/SiteContacts';
 import { WorkerDashboardConfig } from '@/components/platform/WorkerDashboardConfig';
 import { KnowledgeCheckConfig } from '@/components/platform/KnowledgeCheckConfig';
+import { InductionValidityConfig } from '@/components/platform/InductionValidityConfig';
 import { listSiteContactsForViewer } from '@/services/sites/siteContactService';
 import { getPanelVisibilityForViewer } from '@/services/workerDashboard/dashboardConfigService';
 import { getEffectiveConfig } from '@/services/knowledgeChecks/knowledgeCheckConfigService';
 import { getBankPreviewForViewer } from '@/services/knowledgeChecks/bankAdminService';
+import { getValidityForViewer } from '@/services/induction/inductionConfigService';
 import { countDocuments } from '@/services/documents/documentService';
 import {
   DOCUMENT_EXPIRY_BADGE,
@@ -121,12 +123,14 @@ export default async function SiteDetailPage({
   ]);
 
   // Knowledge check (SC-005): effective config + generated question bank preview.
-  const [kcConfig, kcPreview] = canConfigureDashboard
+  // Induction validity (SC-006): stored validity + invalidation state.
+  const [kcConfig, kcPreview, inductionValidity] = canConfigureDashboard
     ? await Promise.all([
         getEffectiveConfig(params.id),
         getBankPreviewForViewer(viewer, params.id),
+        getValidityForViewer(viewer, params.id),
       ])
-    : [null, null];
+    : [null, null, null];
 
   const { site, currentWorkers, recentSubmissions, compliance } = detail;
   const compliantPct = pct(compliance.compliant, compliance.total);
@@ -318,6 +322,25 @@ export default async function SiteDetailPage({
                   unavailablePolicy: kcConfig.unavailablePolicy,
                 }}
                 preview={kcPreview}
+              />
+            </Section>
+          )}
+
+          {inductionValidity && (
+            <Section title="Induction validity">
+              <InductionValidityConfig
+                siteId={site.id}
+                canEdit={canConfigureDashboard}
+                initial={{
+                  inductionValidityDays:
+                    inductionValidity.inductionValidityDays,
+                  invalidatedAtLabel: inductionValidity.inductionsInvalidatedAt
+                    ? formatDateTimeUK(
+                        inductionValidity.inductionsInvalidatedAt,
+                      )
+                    : null,
+                  invalidatedByName: inductionValidity.invalidatedByName,
+                }}
               />
             </Section>
           )}

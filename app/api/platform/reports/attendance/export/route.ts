@@ -23,7 +23,10 @@ const REPORT = getReportType('attendance')!;
 export async function GET(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
-    return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: 'Not signed in.' },
+      { status: 401 },
+    );
   }
   if (!canExportReport(viewer, REPORT)) {
     return NextResponse.json(
@@ -34,13 +37,26 @@ export async function GET(req: NextRequest) {
 
   const sp = req.nextUrl.searchParams;
   const filters = parseReportFilters(
-    { from: sp.get('from') ?? undefined, to: sp.get('to') ?? undefined, sites: sp.getAll('sites') },
+    {
+      from: sp.get('from') ?? undefined,
+      to: sp.get('to') ?? undefined,
+      sites: sp.getAll('sites'),
+    },
     viewer,
   );
 
   const rows = await getAttendanceRows(filters.siteIds, filters.range);
   const csv = toCsv(
-    ['Worker', 'Company', 'Site', 'Site reference', 'Checked in', 'Checked out', 'Status'],
+    [
+      'Worker',
+      'Company',
+      'Site',
+      'Site reference',
+      'Checked in',
+      'Checked out',
+      'Induction',
+      'Status',
+    ],
     rows.map((r) => [
       r.workerName,
       r.workerCompany,
@@ -48,6 +64,7 @@ export async function GET(req: NextRequest) {
       r.siteRef,
       formatDateTimeUK(r.checkedInAt),
       r.checkedOutAt ? formatDateTimeUK(r.checkedOutAt) : '',
+      r.inductionReused ? 'Express (reused)' : 'Full',
       r.status,
     ]),
   );

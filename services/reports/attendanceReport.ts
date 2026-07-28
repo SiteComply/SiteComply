@@ -23,6 +23,8 @@ export interface AttendanceRow {
   checkedInAt: Date;
   checkedOutAt: Date | null;
   status: SubmissionStatus;
+  /** SC-006: true when this check-in reused a still-valid earlier induction. */
+  inductionReused: boolean;
   workerName: string;
   workerCompany: string;
   siteName: string;
@@ -45,6 +47,7 @@ export async function getAttendanceRows(
       checkedInAt: true,
       checkedOutAt: true,
       status: true,
+      inductionReused: true,
       worker: { select: { fullName: true, company: true } },
       jobSite: { select: { name: true, jobReference: true } },
     },
@@ -54,6 +57,7 @@ export async function getAttendanceRows(
     checkedInAt: s.checkedInAt,
     checkedOutAt: s.checkedOutAt,
     status: s.status,
+    inductionReused: s.inductionReused,
     workerName: s.worker.fullName,
     workerCompany: s.worker.company,
     siteName: s.jobSite.name,

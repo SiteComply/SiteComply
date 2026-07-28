@@ -471,9 +471,19 @@ model Submission {
   knowledgeCheckSkipped Boolean @default(false)
   knowledgeCheckAttempt KnowledgeCheckAttempt?
 
+  // Induction validity (SC-006). An "express" check-in is an attendance record
+  // created by reusing a still-valid earlier induction (the worker did not redo
+  // the induction/knowledge check). `inductionReused` marks it; the optional
+  // self-relation points at the induction submission it relied on.
+  inductionReused           Boolean      @default(false)
+  inductionSource           Submission?  @relation("InductionReuse", fields: [inductionSourceSubmissionId], references: [id], onDelete: SetNull)
+  inductionSourceSubmissionId String?
+  inductionReuses           Submission[] @relation("InductionReuse")
+
   @@index([jobSiteId, checkedInAt])
   @@index([workerId])
   @@index([status])
+  @@index([workerId, jobSiteId, checkedInAt])
 }
 
 /// An administrator who signs in via Microsoft (Azure AD) SSO.
@@ -1030,6 +1040,17 @@ model SiteInductionConfig {
   /// What to do when checks are on but no READY bank exists at check-in time.
   /// null → inherit the global default (SKIP_FLAGGED).
   unavailablePolicy InductionUnavailablePolicy?
+
+  /// Induction validity (SC-006). How many days a completed induction for this
+  /// site remains valid, so a returning worker checks in without re-inducting
+  /// until it expires. null → no validity window: re-induct on every check-in
+  /// (the pre-SC-006 behaviour), so the feature ships dark.
+  inductionValidityDays Int?
+  /// Manager "invalidate previous inductions" cutoff (SC-006): any induction
+  /// completed at or before this instant is treated as expired, forcing every
+  /// worker to complete the latest induction before their next check-in.
+  inductionsInvalidatedAt DateTime?
+  invalidatedByName       String?
 
   updatedByUserId String?
   updatedByName   String?

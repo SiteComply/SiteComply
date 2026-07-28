@@ -17,7 +17,10 @@ import {
   canExportReport,
   isAggregateOnly,
 } from '@/services/reports/reportAccess';
-import { parseReportFilters, reportFiltersQuery } from '@/services/reports/reportFilters';
+import {
+  parseReportFilters,
+  reportFiltersQuery,
+} from '@/services/reports/reportFilters';
 import {
   getAttendanceSummary,
   getAttendanceRows,
@@ -42,11 +45,16 @@ export default async function AttendanceReportPage({
   assertModuleView(viewer, 'reports');
   if (!canRunReport(viewer, REPORT)) redirect('/platform/dashboard/reports');
 
-  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const one = (v: string | string[] | undefined) =>
+    Array.isArray(v) ? v[0] : v;
   const many = (v: string | string[] | undefined) =>
     v == null ? [] : Array.isArray(v) ? v : [v];
   const filters = parseReportFilters(
-    { from: one(searchParams.from), to: one(searchParams.to), sites: many(searchParams.sites) },
+    {
+      from: one(searchParams.from),
+      to: one(searchParams.to),
+      sites: many(searchParams.sites),
+    },
     viewer,
   );
 
@@ -80,7 +88,11 @@ export default async function AttendanceReportPage({
         items={[
           { label: 'Check-ins', value: summary.total },
           { label: 'Unique workers', value: summary.uniqueWorkers },
-          { label: 'Still on site', value: summary.onSite, sub: 'no check-out recorded' },
+          {
+            label: 'Still on site',
+            value: summary.onSite,
+            sub: 'no check-out recorded',
+          },
           { label: 'Checked out', value: summary.checkedOut },
         ]}
       />
@@ -95,22 +107,26 @@ export default async function AttendanceReportPage({
           </p>
         ) : (
           <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-line text-left text-ink-subtle">
-                <th className="px-5 py-2 font-medium">Site</th>
-                <th className="px-5 py-2 text-right font-medium">Check-ins</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {summary.bySite.map((s) => (
-                <tr key={s.name}>
-                  <td className="px-5 py-2 text-ink">{s.name}</td>
-                  <td className="px-5 py-2 text-right tabular-nums text-ink">{s.count}</td>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-ink-subtle">
+                  <th className="px-5 py-2 font-medium">Site</th>
+                  <th className="px-5 py-2 text-right font-medium">
+                    Check-ins
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {summary.bySite.map((s) => (
+                  <tr key={s.name}>
+                    <td className="px-5 py-2 text-ink">{s.name}</td>
+                    <td className="px-5 py-2 text-right tabular-nums text-ink">
+                      {s.count}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </section>
@@ -123,7 +139,9 @@ export default async function AttendanceReportPage({
       ) : (
         <section className="mt-6 rounded-xl border border-line bg-surface shadow-card">
           <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
-            <h2 className="text-base font-semibold text-ink">Check-in records</h2>
+            <h2 className="text-base font-semibold text-ink">
+              Check-in records
+            </h2>
             {summary.total > rows.length && (
               <span className="text-xs text-ink-subtle">
                 Showing {rows.length} of {summary.total} — export CSV for all
@@ -144,20 +162,32 @@ export default async function AttendanceReportPage({
                     <th className="px-5 py-2 font-medium">Site</th>
                     <th className="px-5 py-2 font-medium">Checked in</th>
                     <th className="px-5 py-2 font-medium">Checked out</th>
+                    <th className="px-5 py-2 font-medium">Induction</th>
                     <th className="px-5 py-2 font-medium">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
                   {rows.map((r) => (
                     <tr key={r.id}>
-                      <td className="px-5 py-2 font-medium text-ink">{r.workerName}</td>
-                      <td className="px-5 py-2 text-ink-subtle">{r.workerCompany}</td>
-                      <td className="px-5 py-2 text-ink-subtle">{r.siteName}</td>
+                      <td className="px-5 py-2 font-medium text-ink">
+                        {r.workerName}
+                      </td>
+                      <td className="px-5 py-2 text-ink-subtle">
+                        {r.workerCompany}
+                      </td>
+                      <td className="px-5 py-2 text-ink-subtle">
+                        {r.siteName}
+                      </td>
                       <td className="whitespace-nowrap px-5 py-2 tabular-nums text-ink-subtle">
                         {formatDateTimeUK(r.checkedInAt)}
                       </td>
                       <td className="whitespace-nowrap px-5 py-2 tabular-nums text-ink-subtle">
-                        {r.checkedOutAt ? formatDateTimeUK(r.checkedOutAt) : '—'}
+                        {r.checkedOutAt
+                          ? formatDateTimeUK(r.checkedOutAt)
+                          : '—'}
+                      </td>
+                      <td className="px-5 py-2 text-ink-subtle">
+                        {r.inductionReused ? 'Express (reused)' : 'Full'}
                       </td>
                       <td className="px-5 py-2">
                         <span
@@ -167,7 +197,9 @@ export default async function AttendanceReportPage({
                               : 'font-semibold text-hivis-600'
                           }
                         >
-                          {r.status === 'COMPLIANT' ? 'Compliant' : 'Incomplete'}
+                          {r.status === 'COMPLIANT'
+                            ? 'Compliant'
+                            : 'Incomplete'}
                         </span>
                       </td>
                     </tr>
