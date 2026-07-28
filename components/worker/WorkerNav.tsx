@@ -26,6 +26,14 @@ const WORKER_NAV: {
 }[] = [
   { href: '/worker/dashboard', label: 'Dashboard', icon: 'grid', panels: [] },
   {
+    // Always visible (panels: []) — a worker's own attendance record is never
+    // hidden by a site's panel config (SC-010).
+    href: '/worker/attendance',
+    label: 'Attendance',
+    icon: 'clock',
+    panels: [],
+  },
+  {
     href: '/worker/site-information',
     label: 'Site information',
     icon: 'building',

@@ -87,6 +87,48 @@ export function ukDateRangeToUtc(
   return range;
 }
 
+/** e.g. "Mon 14 Jul" — a short weekday + day + month, in Europe/London. */
+export function formatWeekdayShortUK(value: Date | string | number): string {
+  return new Intl.DateTimeFormat(LOCALE, {
+    timeZone: TZ,
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  }).format(toDate(value));
+}
+
+/** e.g. "Monday 17 July 2026" — a full weekday date, in Europe/London. */
+export function formatWeekdayLongUK(value: Date | string | number): string {
+  return new Intl.DateTimeFormat(LOCALE, {
+    timeZone: TZ,
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(toDate(value));
+}
+
+/** Format a whole-minute duration as "8h 33m" (hours can exceed 24, e.g. "128h 42m"). */
+export function formatHoursMinutes(totalMinutes: number): string {
+  const m = Math.max(0, Math.round(totalMinutes));
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return `${h}h ${String(mm).padStart(2, '0')}m`;
+}
+
+/**
+ * The Monday (week-commencing) date string for a given yyyy-mm-dd, as a
+ * yyyy-mm-dd string. Calendar arithmetic (timezone-agnostic), so pass a date
+ * string already resolved in Europe/London (e.g. via toDateInputValue).
+ */
+export function weekCommencingMonday(yyyyMmDd: string): string {
+  const [y, m, d] = yyyyMmDd.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const dow = dt.getUTCDay(); // 0=Sun..6=Sat
+  const backToMonday = (dow + 6) % 7; // 0 if Monday
+  return addDaysToDateStr(yyyyMmDd, -backToMonday);
+}
+
 /**
  * Convert a date to the yyyy-mm-dd value an <input type="date"> expects,
  * evaluated in Europe/London. Returns '' for nullish input.

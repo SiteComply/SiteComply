@@ -9,7 +9,9 @@ import { parseReportFilters } from '@/services/reports/reportFilters';
 import {
   getAttendanceRows,
   attendanceLocationLabel,
+  attendanceTotalMinutes,
 } from '@/services/reports/attendanceReport';
+import { formatHoursMinutes } from '@/lib/datetime';
 import { logReportExport } from '@/services/reports/reportExportLog';
 
 export const runtime = 'nodejs';
@@ -57,23 +59,30 @@ export async function GET(req: NextRequest) {
       'Site reference',
       'Checked in',
       'Checked out',
+      'Total time on site',
       'Induction',
       'Location',
       'Distance (m)',
       'Status',
     ],
-    rows.map((r) => [
-      r.workerName,
-      r.workerCompany,
-      r.siteName,
-      r.siteRef,
-      formatDateTimeUK(r.checkedInAt),
-      r.checkedOutAt ? formatDateTimeUK(r.checkedOutAt) : '',
-      r.inductionReused ? 'Express (reused)' : 'Full',
-      attendanceLocationLabel(r),
-      r.checkInDistanceM != null ? String(Math.round(r.checkInDistanceM)) : '',
-      r.status,
-    ]),
+    rows.map((r) => {
+      const mins = attendanceTotalMinutes(r);
+      return [
+        r.workerName,
+        r.workerCompany,
+        r.siteName,
+        r.siteRef,
+        formatDateTimeUK(r.checkedInAt),
+        r.checkedOutAt ? formatDateTimeUK(r.checkedOutAt) : '',
+        mins != null ? formatHoursMinutes(mins) : '',
+        r.inductionReused ? 'Express (reused)' : 'Full',
+        attendanceLocationLabel(r),
+        r.checkInDistanceM != null
+          ? String(Math.round(r.checkInDistanceM))
+          : '',
+        r.status,
+      ];
+    }),
   );
 
   await logReportExport({

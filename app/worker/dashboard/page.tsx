@@ -8,7 +8,8 @@ import {
   PanelMetric,
 } from '@/components/worker/PanelCard';
 import { WorkerIcon } from '@/components/worker/icons';
-import { formatDateTimeUK } from '@/lib/datetime';
+import Link from 'next/link';
+import { formatDateTimeUK, formatHoursMinutes } from '@/lib/datetime';
 import { checkInReference } from '@/services/submissions/submissionService';
 import {
   requireWorkerContext,
@@ -16,6 +17,11 @@ import {
   getWorkerBulletins,
   getWorkerSiteContacts,
 } from '@/services/workerDashboard/workerDashboardService';
+import {
+  listWorkerAttendance,
+  summarise,
+  currentWeekRange,
+} from '@/services/attendance/attendanceHistoryService';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +40,11 @@ export default async function WorkerDashboardPage() {
     await requireWorkerContext();
 
   const counts = await getWorkerDashboardCounts(site.id, worker.id);
+
+  // SC-010: this week's attendance at a glance (across all the worker's sites).
+  const weekAttendance = summarise(
+    await listWorkerAttendance(worker.id, currentWeekRange()),
+  );
 
   // Unacknowledged bulletins lead the page as dismissible cards, exactly as they
   // do on the check-in confirmation (SC-002).
@@ -321,6 +332,32 @@ export default async function WorkerDashboardPage() {
           <SummaryRow label="Your name" value={worker.fullName} />
         </dl>
       </section>
+
+      {/* SC-010: this-week attendance summary → full attendance history. */}
+      <Link
+        href="/worker/attendance"
+        className="mt-4 flex items-center gap-4 rounded-xl border border-line bg-surface p-4 shadow-card hover:bg-surface-sunken"
+      >
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+          <WorkerIcon name="clock" className="h-6 w-6" />
+        </span>
+        <div className="flex-1">
+          <p className="text-sm font-bold text-ink">My attendance</p>
+          <p className="text-sm text-ink-muted">
+            This week: {formatHoursMinutes(weekAttendance.totalMinutes)} ·{' '}
+            {weekAttendance.daysOnSite} day
+            {weekAttendance.daysOnSite === 1 ? '' : 's'}
+            {weekAttendance.incompleteCount > 0 && (
+              <span className="font-semibold text-hivis-600">
+                {' '}
+                · {weekAttendance.incompleteCount} missing check-out
+                {weekAttendance.incompleteCount === 1 ? '' : 's'}
+              </span>
+            )}
+          </p>
+        </div>
+        <span className="shrink-0 text-ink-subtle">›</span>
+      </Link>
 
       <section className="mt-4 flex items-center gap-3 rounded-xl border border-safe-500/40 bg-safe-50 px-4 py-3">
         <span aria-hidden="true" className="shrink-0 text-safe-600">

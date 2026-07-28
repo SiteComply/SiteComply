@@ -36,6 +36,21 @@ export interface AttendanceRow {
   siteRef: string;
 }
 
+/**
+ * Total minutes on site for a row (SC-010): checkedOut − checkedIn, or null when
+ * the worker hasn't checked out. GROSS time (breaks aren't tracked in v1).
+ */
+export function attendanceTotalMinutes(r: {
+  checkedInAt: Date;
+  checkedOutAt: Date | null;
+}): number | null {
+  if (!r.checkedOutAt) return null;
+  return Math.max(
+    0,
+    Math.round((r.checkedOutAt.getTime() - r.checkedInAt.getTime()) / 60000),
+  );
+}
+
 /** Human label for the location outcome of a check-in row (SC-007). */
 export function attendanceLocationLabel(r: {
   locationVerified: boolean;

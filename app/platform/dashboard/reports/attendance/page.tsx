@@ -25,7 +25,9 @@ import {
   getAttendanceSummary,
   getAttendanceRows,
   attendanceLocationLabel,
+  attendanceTotalMinutes,
 } from '@/services/reports/attendanceReport';
+import { formatHoursMinutes } from '@/lib/datetime';
 
 export const dynamic = 'force-dynamic';
 
@@ -163,6 +165,7 @@ export default async function AttendanceReportPage({
                     <th className="px-5 py-2 font-medium">Site</th>
                     <th className="px-5 py-2 font-medium">Checked in</th>
                     <th className="px-5 py-2 font-medium">Checked out</th>
+                    <th className="px-5 py-2 font-medium">Total time</th>
                     <th className="px-5 py-2 font-medium">Induction</th>
                     <th className="px-5 py-2 font-medium">Location</th>
                     <th className="px-5 py-2 font-medium">Status</th>
@@ -187,6 +190,12 @@ export default async function AttendanceReportPage({
                         {r.checkedOutAt
                           ? formatDateTimeUK(r.checkedOutAt)
                           : '—'}
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-2 tabular-nums text-ink-subtle">
+                        {(() => {
+                          const mins = attendanceTotalMinutes(r);
+                          return mins != null ? formatHoursMinutes(mins) : '—';
+                        })()}
                       </td>
                       <td className="px-5 py-2 text-ink-subtle">
                         {r.inductionReused ? 'Express (reused)' : 'Full'}
