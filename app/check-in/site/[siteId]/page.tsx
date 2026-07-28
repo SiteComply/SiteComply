@@ -170,7 +170,7 @@ export default async function SiteInductionPage({
             <span className="font-semibold text-ink">{worker.fullName}</span> (
             {worker.company}).
           </p>
-          <ExpressCheckInButton siteId={site.id} />
+          <ExpressCheckInButton siteId={site.id} siteName={site.name} />
           <p className="mt-3 text-center text-xs text-ink-subtle">
             Need to run through the induction again?{' '}
             <Link href={startHref} className="font-semibold text-brand-700">

@@ -6,7 +6,10 @@ import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { getReportType } from '@/services/reports/reportRegistry';
 import { canExportReport } from '@/services/reports/reportAccess';
 import { parseReportFilters } from '@/services/reports/reportFilters';
-import { getAttendanceRows } from '@/services/reports/attendanceReport';
+import {
+  getAttendanceRows,
+  attendanceLocationLabel,
+} from '@/services/reports/attendanceReport';
 import { logReportExport } from '@/services/reports/reportExportLog';
 
 export const runtime = 'nodejs';
@@ -55,6 +58,8 @@ export async function GET(req: NextRequest) {
       'Checked in',
       'Checked out',
       'Induction',
+      'Location',
+      'Distance (m)',
       'Status',
     ],
     rows.map((r) => [
@@ -65,6 +70,8 @@ export async function GET(req: NextRequest) {
       formatDateTimeUK(r.checkedInAt),
       r.checkedOutAt ? formatDateTimeUK(r.checkedOutAt) : '',
       r.inductionReused ? 'Express (reused)' : 'Full',
+      attendanceLocationLabel(r),
+      r.checkInDistanceM != null ? String(Math.round(r.checkInDistanceM)) : '',
       r.status,
     ]),
   );

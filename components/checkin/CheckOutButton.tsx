@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
+import { captureLocation } from '@/lib/clientGeolocation';
 
 /**
  * "Check out" affordance shown on the confirmation screen while the worker is
@@ -20,10 +21,12 @@ export function CheckOutButton({ submissionId }: { submissionId: string }) {
   async function checkOut() {
     setBusy(true);
     try {
+      // SC-007: record the check-out location if already permitted (never blocks).
+      const location = await captureLocation({ onlyIfGranted: true });
       const res = await fetch('/api/worker/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ submissionId }),
+        body: JSON.stringify({ submissionId, location }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {

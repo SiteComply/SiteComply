@@ -7,6 +7,7 @@ import { SiteContacts } from '@/components/platform/SiteContacts';
 import { WorkerDashboardConfig } from '@/components/platform/WorkerDashboardConfig';
 import { KnowledgeCheckConfig } from '@/components/platform/KnowledgeCheckConfig';
 import { InductionValidityConfig } from '@/components/platform/InductionValidityConfig';
+import { GpsCheckInConfig } from '@/components/platform/GpsCheckInConfig';
 import { formatDateTimeUK } from '@/lib/datetime';
 import {
   requirePlatformViewer,
@@ -23,6 +24,11 @@ import { getPanelVisibilityForViewer } from '@/services/workerDashboard/dashboar
 import { getEffectiveConfig } from '@/services/knowledgeChecks/knowledgeCheckConfigService';
 import { getBankPreviewForViewer } from '@/services/knowledgeChecks/bankAdminService';
 import { getValidityForViewer } from '@/services/induction/inductionConfigService';
+import {
+  getGpsConfigForViewer,
+  listRecentWorkersForViewer,
+  listOverridesForViewer,
+} from '@/services/geo/geoConfigService';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,6 +80,15 @@ export default async function SiteExperiencePage({
         getValidityForViewer(viewer, params.id),
       ])
     : [null, null, null];
+
+  // GPS check-in validation (SC-007): config + override management data.
+  const [gpsConfig, gpsWorkers, gpsOverrides] = canConfigureDashboard
+    ? await Promise.all([
+        getGpsConfigForViewer(viewer, params.id),
+        listRecentWorkersForViewer(viewer, params.id),
+        listOverridesForViewer(viewer, params.id),
+      ])
+    : [null, [], []];
 
   const hasEmergency =
     site &&
@@ -142,6 +157,29 @@ export default async function SiteExperiencePage({
                   : null,
                 invalidatedByName: inductionValidity.invalidatedByName,
               }}
+            />
+          </Section>
+        )}
+
+        {gpsConfig && (
+          <Section title="Check-in location">
+            <GpsCheckInConfig
+              siteId={params.id}
+              canEdit={canConfigureDashboard}
+              initial={gpsConfig}
+              workers={gpsWorkers}
+              overrides={gpsOverrides.map((o) => ({
+                id: o.id,
+                workerName: o.workerName,
+                company: o.company,
+                reason: o.reason,
+                grantedByName: o.grantedByName,
+                createdAtLabel: formatDateTimeUK(o.createdAt),
+                expiresAtLabel: o.expiresAt
+                  ? formatDateTimeUK(o.expiresAt)
+                  : null,
+                status: o.status,
+              }))}
             />
           </Section>
         )}

@@ -3,6 +3,11 @@ import { prisma } from '@/lib/prisma';
 import { getActiveSiteWithChecklist } from '@/services/sites/siteService';
 import { evaluateGate } from '@/services/knowledgeChecks/attemptService';
 import {
+  evaluateCheckInGate,
+  computeCheckOutLocation,
+  type LocationFix,
+} from '@/services/geo/geoValidationService';
+import {
   buildInductionSteps,
   isStepComplete,
   type FlowItem,
@@ -47,11 +52,22 @@ export interface CreateCheckInInput {
   siteId: string;
   answers: InductionAnswers;
   gdprConsent: boolean;
+  /** SC-007: the worker's location fix (or explicit "no fix"), if GPS applies. */
+  location?: LocationFix | null;
 }
 
 export type CreateCheckInResult =
   | { ok: true; submissionId: string; reference: string; reused: boolean }
-  | { ok: false; error: string };
+  | { ok: false; error: string }
+  | {
+      ok: false;
+      error: string;
+      gps: {
+        reason: 'outside' | 'unavailable' | 'poor_accuracy';
+        distanceM: number | null;
+        radiusM: number;
+      };
+    };
 
 export async function createCheckIn(
   input: CreateCheckInInput,
@@ -100,6 +116,29 @@ export async function createCheckIn(
     };
   }
 
+  // SC-007: GPS location validation. Authoritative and server-side — it
+  // recomputes distance from the site's coordinates, honours a manager override
+  // and the site's GPS-unavailable policy, and returns the location fields to
+  // record. A site without GPS validation passes through recording nothing.
+  const geoFix: LocationFix = input.location ?? { unavailable: true };
+  const geo = await evaluateCheckInGate(input.siteId, input.workerId, geoFix);
+  if (!geo.allow) {
+    return {
+      ok: false,
+      error:
+        geo.reason === 'outside'
+          ? 'You’re outside this site’s check-in area. Move closer to the site entrance, or ask your site manager to authorise an off-site check-in.'
+          : geo.reason === 'poor_accuracy'
+            ? 'We couldn’t get an accurate location. Move to an open area and try again.'
+            : 'We couldn’t confirm your location. Please enable location access and try again, or ask your site manager to authorise a check-in.',
+      gps: {
+        reason: geo.reason,
+        distanceM: geo.distanceM,
+        radiusM: geo.radiusM,
+      },
+    };
+  }
+
   // Idempotency: if already checked in (and not yet out) here, reuse it.
   const open = await prisma.submission.findFirst({
     where: {
@@ -130,10 +169,17 @@ export async function createCheckIn(
       status: SubmissionStatus.COMPLIANT,
       knowledgeCheckPassed: gate.attemptId !== null,
       knowledgeCheckSkipped: gate.skipped,
+      ...geo.record,
     },
   });
 
-  // Link the passed attempt to this check-in (for audit + reporting).
+  // Consume a used override + link the passed attempt (for audit + reporting).
+  if (geo.consumeOverrideId) {
+    await prisma.checkInOverride.update({
+      where: { id: geo.consumeOverrideId },
+      data: { usedAt: new Date() },
+    });
+  }
   if (gate.attemptId) {
     await prisma.knowledgeCheckAttempt.update({
       where: { id: gate.attemptId },
@@ -162,11 +208,26 @@ export async function getSubmissionForWorker(
   return submission;
 }
 
-/** Check a worker out of a site. Only affects their own open check-in. */
-export async function checkOut(submissionId: string, workerId: string) {
-  const result = await prisma.submission.updateMany({
+/**
+ * Check a worker out of a site. Only affects their own open check-in. SC-007:
+ * the check-out location is recorded for the attendance audit trail but NEVER
+ * blocks — a worker can always leave site.
+ */
+export async function checkOut(
+  submissionId: string,
+  workerId: string,
+  location?: LocationFix | null,
+) {
+  const target = await prisma.submission.findFirst({
     where: { id: submissionId, workerId, checkedOutAt: null },
-    data: { checkedOutAt: new Date() },
+    select: { id: true, jobSiteId: true },
   });
-  return result.count > 0;
+  if (!target) return false;
+
+  const loc = await computeCheckOutLocation(target.jobSiteId, location ?? null);
+  await prisma.submission.update({
+    where: { id: target.id },
+    data: { checkedOutAt: new Date(), ...loc },
+  });
+  return true;
 }

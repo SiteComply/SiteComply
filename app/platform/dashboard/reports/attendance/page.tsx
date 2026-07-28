@@ -24,6 +24,7 @@ import {
 import {
   getAttendanceSummary,
   getAttendanceRows,
+  attendanceLocationLabel,
 } from '@/services/reports/attendanceReport';
 
 export const dynamic = 'force-dynamic';
@@ -163,6 +164,7 @@ export default async function AttendanceReportPage({
                     <th className="px-5 py-2 font-medium">Checked in</th>
                     <th className="px-5 py-2 font-medium">Checked out</th>
                     <th className="px-5 py-2 font-medium">Induction</th>
+                    <th className="px-5 py-2 font-medium">Location</th>
                     <th className="px-5 py-2 font-medium">Status</th>
                   </tr>
                 </thead>
@@ -188,6 +190,12 @@ export default async function AttendanceReportPage({
                       </td>
                       <td className="px-5 py-2 text-ink-subtle">
                         {r.inductionReused ? 'Express (reused)' : 'Full'}
+                      </td>
+                      <td className="px-5 py-2 text-ink-subtle">
+                        {attendanceLocationLabel(r)}
+                        {r.checkInDistanceM != null && !r.locationVerified
+                          ? ` · ${Math.round(r.checkInDistanceM)}m`
+                          : ''}
                       </td>
                       <td className="px-5 py-2">
                         <span

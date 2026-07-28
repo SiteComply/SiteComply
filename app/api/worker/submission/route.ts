@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getWorkerSession, setActiveWorkerSiteCookie } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { createCheckIn } from '@/services/submissions/submissionService';
+import { parseLocationFix } from '@/services/geo/geoValidationService';
 import type { InductionAnswers } from '@/services/checklists/inductionFlow';
 
 export const runtime = 'nodejs';
@@ -11,6 +12,7 @@ interface SubmissionBody {
   siteId?: string;
   answers?: InductionAnswers;
   gdprConsent?: boolean;
+  location?: unknown; // SC-007 location fix (validated server-side)
 }
 
 /**
@@ -57,6 +59,7 @@ export async function POST(req: NextRequest) {
     siteId: body.siteId,
     answers: body.answers ?? {},
     gdprConsent: Boolean(body.gdprConsent),
+    location: parseLocationFix(body.location),
   });
 
   if (!result.ok) {

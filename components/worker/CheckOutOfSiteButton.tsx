@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/cn';
 import { WorkerIcon } from './icons';
+import { captureLocation } from '@/lib/clientGeolocation';
 
 /**
  * "Check out of site" — the Worker Dashboard's primary exit action (SC-003).
@@ -31,10 +32,12 @@ export function CheckOutOfSiteButton({
   async function checkOut() {
     setBusy(true);
     try {
+      // SC-007: record the check-out location if already permitted (never blocks).
+      const location = await captureLocation({ onlyIfGranted: true });
       const res = await fetch('/api/worker/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ submissionId }),
+        body: JSON.stringify({ submissionId, location }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {

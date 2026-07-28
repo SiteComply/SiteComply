@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getWorkerSession, setActiveWorkerSiteCookie } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { expressCheckIn } from '@/services/induction/inductionValidityService';
+import { parseLocationFix } from '@/services/geo/geoValidationService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,9 +31,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { siteId?: string };
+  let body: { siteId?: string; location?: unknown };
   try {
-    body = (await req.json()) as { siteId?: string };
+    body = (await req.json()) as { siteId?: string; location?: unknown };
   } catch {
     return NextResponse.json(
       { ok: false, error: 'Invalid request.' },
@@ -46,7 +47,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const result = await expressCheckIn(worker.id, body.siteId);
+  const result = await expressCheckIn(
+    worker.id,
+    body.siteId,
+    parseLocationFix(body.location),
+  );
   if (!result.ok) {
     return NextResponse.json(result, { status: 400 });
   }

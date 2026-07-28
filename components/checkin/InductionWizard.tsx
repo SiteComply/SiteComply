@@ -12,6 +12,10 @@ import {
   type InductionAnswers,
 } from '@/services/checklists/inductionFlow';
 import { KnowledgeCheck } from '@/components/checkin/KnowledgeCheck';
+import {
+  LocationCheck,
+  type ConfirmLocation,
+} from '@/components/checkin/LocationCheck';
 import type {
   ClientQuestion,
   ReviewContent,
@@ -65,6 +69,9 @@ export function InductionWizard({
     answered: Record<string, boolean>;
   } | null>(null);
   const [blockedMessage, setBlockedMessage] = useState<string | null>(null);
+  // SC-007: the GPS Location Check runs as the final phase before the check-in is
+  // recorded (it resolves immediately on sites without GPS validation).
+  const [locating, setLocating] = useState(false);
 
   // Restore any saved progress for this site.
   useEffect(() => {
@@ -156,8 +163,8 @@ export function InductionWizard({
         );
         return;
       }
-      // not_required — no check for this site (or skipped under policy).
-      await submitCheckIn();
+      // not_required — no knowledge check → go to the location check.
+      setLocating(true);
     } catch {
       toast.error('Network problem. Check your signal and try again.');
     } finally {
@@ -165,14 +172,16 @@ export function InductionWizard({
     }
   }
 
-  // Record the check-in server-side (re-validated there, incl. the SC-005 gate).
-  async function submitCheckIn() {
+  // Record the check-in server-side (re-validated there: SC-005 gate + SC-007
+  // GPS gate). `location` comes from the Location Check phase (null on GPS-off
+  // sites).
+  async function submitCheckIn(location: ConfirmLocation = null) {
     setBusy(true);
     try {
       const res = await fetch('/api/worker/submission', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteId, answers, gdprConsent }),
+        body: JSON.stringify({ siteId, answers, gdprConsent, location }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -196,6 +205,18 @@ export function InductionWizard({
     }
   }
 
+  // SC-007 GPS Location Check — the final phase before the check-in is recorded.
+  if (locating) {
+    return (
+      <LocationCheck
+        siteId={siteId}
+        siteName={siteName}
+        busy={busy}
+        onConfirmed={(location) => submitCheckIn(location)}
+      />
+    );
+  }
+
   // SC-005 knowledge-check phase — replaces the checklist UI once started.
   if (kc) {
     return (
@@ -205,7 +226,7 @@ export function InductionWizard({
         questions={kc.questions}
         review={kc.review}
         answered={kc.answered}
-        onPassed={submitCheckIn}
+        onPassed={() => setLocating(true)}
       />
     );
   }

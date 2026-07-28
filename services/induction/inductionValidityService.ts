@@ -1,6 +1,10 @@
 import { SubmissionStatus, SiteStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { checkInReference } from '@/services/submissions/submissionService';
+import {
+  evaluateCheckInGate,
+  type LocationFix,
+} from '@/services/geo/geoValidationService';
 
 /**
  * Induction validity & re-induction (SC-006).
@@ -122,7 +126,16 @@ export async function getInductionValidity(
 
 export type ExpressCheckInResult =
   | { ok: true; submissionId: string; reference: string; reused: boolean }
-  | { ok: false; error: string };
+  | { ok: false; error: string }
+  | {
+      ok: false;
+      error: string;
+      gps: {
+        reason: 'outside' | 'unavailable' | 'poor_accuracy';
+        distanceM: number | null;
+        radiusM: number;
+      };
+    };
 
 /**
  * Record an attendance check-in by reusing the worker's still-valid induction
@@ -135,6 +148,7 @@ export type ExpressCheckInResult =
 export async function expressCheckIn(
   workerId: string,
   siteId: string,
+  location?: LocationFix | null,
 ): Promise<ExpressCheckInResult> {
   const site = await prisma.jobSite.findFirst({
     where: { id: siteId, status: SiteStatus.ACTIVE },
@@ -147,6 +161,29 @@ export async function expressCheckIn(
     return {
       ok: false,
       error: 'Please complete the site induction before checking in.',
+    };
+  }
+
+  // SC-007: an express check-in is still a check-in action — GPS-validate it.
+  const geo = await evaluateCheckInGate(
+    siteId,
+    workerId,
+    location ?? { unavailable: true },
+  );
+  if (!geo.allow) {
+    return {
+      ok: false,
+      error:
+        geo.reason === 'outside'
+          ? 'You’re outside this site’s check-in area. Move closer to the site entrance, or ask your site manager to authorise an off-site check-in.'
+          : geo.reason === 'poor_accuracy'
+            ? 'We couldn’t get an accurate location. Move to an open area and try again.'
+            : 'We couldn’t confirm your location. Please enable location access and try again, or ask your site manager to authorise a check-in.',
+      gps: {
+        reason: geo.reason,
+        distanceM: geo.distanceM,
+        radiusM: geo.radiusM,
+      },
     };
   }
 
@@ -188,9 +225,17 @@ export async function expressCheckIn(
       knowledgeCheckSkipped: false,
       inductionReused: true,
       inductionSourceSubmissionId: source.id,
+      ...geo.record,
     },
     select: { id: true },
   });
+
+  if (geo.consumeOverrideId) {
+    await prisma.checkInOverride.update({
+      where: { id: geo.consumeOverrideId },
+      data: { usedAt: new Date() },
+    });
+  }
 
   return {
     ok: true,

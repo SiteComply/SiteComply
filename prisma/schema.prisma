@@ -229,6 +229,16 @@ enum InductionUnavailablePolicy {
   BLOCK
 }
 
+/// What to do when GPS check-in validation is on for a site but a usable
+/// location can't be obtained — permission denied, no fix, or poor accuracy
+/// (SC-007). BLOCK (the default) stops the check-in and offers retry + the
+/// manager-granted override path; ALLOW_FLAGGED lets the worker in and records
+/// the check-in with `gpsUnavailable = true` for audit.
+enum GpsUnavailablePolicy {
+  BLOCK
+  ALLOW_FLAGGED
+}
+
 // ----------------------------------------------------------------------------
 // Models
 // ----------------------------------------------------------------------------
@@ -263,6 +273,7 @@ model Worker {
   submissions          Submission[]
   bulletinReads        SiteBulletinRead[]
   knowledgeCheckAttempts KnowledgeCheckAttempt[]
+  checkInOverrides     CheckInOverride[]
 
   @@index([company])
   @@index([cscsExpiry])
@@ -294,6 +305,18 @@ model JobSite {
   nearestHospital    String? // Nearest A&E, e.g. "City Hospital – 2.4 miles"
   emergencyNumber    String? // Site emergency number; the UI falls back to 999
 
+  // GPS check-in validation (SC-007). The check-in "point" (typically the site
+  // entrance) the worker's distance is measured against, and the permitted
+  // radius. GPS validation is OFF unless a manager enables it AND coordinates
+  // are set — so the feature ships dark and a misconfigured site never traps a
+  // worker. `gpsUnavailablePolicy` decides what happens when a location can't be
+  // obtained (no permission / no fix / poor accuracy).
+  gpsCheckInEnabled  Boolean            @default(false)
+  latitude           Float? //             site check-in point, decimal degrees
+  longitude          Float?
+  checkInRadiusM     Int? //               permitted distance in metres (default applied in code)
+  gpsUnavailablePolicy GpsUnavailablePolicy @default(BLOCK)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -312,6 +335,7 @@ model JobSite {
   questionBanks     InductionQuestionBank[]
   knowledgeCheckAttempts KnowledgeCheckAttempt[]
   inductionConfig   SiteInductionConfig?
+  checkInOverrides  CheckInOverride[]
 
   @@index([status])
 }
@@ -479,6 +503,28 @@ model Submission {
   inductionSource           Submission?  @relation("InductionReuse", fields: [inductionSourceSubmissionId], references: [id], onDelete: SetNull)
   inductionSourceSubmissionId String?
   inductionReuses           Submission[] @relation("InductionReuse")
+
+  // GPS check-in validation (SC-007). Location captured at each action, plus the
+  // outcome of the check-in validation. All nullable: a site without GPS
+  // validation records none of it. Distances are metres from the site point at
+  // the time of the action. `locationVerified` = inside the radius (within the
+  // accuracy margin); `gpsUnavailable` = allowed in under ALLOW_FLAGGED with no
+  // usable fix; `locationOverridden` = allowed in out-of-range via a manager
+  // override (reason mandatory, recorded here for audit).
+  checkInLat        Float?
+  checkInLng        Float?
+  checkInAccuracyM  Float?
+  checkInDistanceM  Float?
+  locationVerified  Boolean @default(false)
+  gpsUnavailable    Boolean @default(false)
+  locationOverridden Boolean @default(false)
+  overrideByName    String?
+  overrideReason    String?
+
+  checkOutLat       Float?
+  checkOutLng       Float?
+  checkOutAccuracyM Float?
+  checkOutDistanceM Float?
 
   @@index([jobSiteId, checkedInAt])
   @@index([workerId])
@@ -1169,4 +1215,31 @@ model QuestionFlag {
 
   @@index([questionId])
   @@index([resolvedAt])
+}
+
+/// A manager-granted authorisation for a worker to check in to a site while
+/// OUTSIDE the GPS radius (SC-007). Server-authoritative: an out-of-range
+/// check-in is only allowed when a matching override is still valid (not expired,
+/// not yet used). A reason is mandatory (captured on the grant and copied onto
+/// the resulting Submission) for audit. Single-use by default: `usedAt` is
+/// stamped when consumed; an optional `expiresAt` time-boxes it.
+model CheckInOverride {
+  id        String  @id @default(cuid())
+  worker    Worker  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  workerId  String
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+
+  reason         String //   mandatory — why off-site check-in was authorised
+  grantedByUserId String?
+  grantedByName   String?
+
+  expiresAt DateTime? // null = no expiry (still single-use)
+  usedAt    DateTime? // set when a check-in consumes it
+  revokedAt DateTime? // set if a manager cancels it before use
+
+  createdAt DateTime @default(now())
+
+  @@index([workerId, jobSiteId, usedAt])
+  @@index([jobSiteId, createdAt])
 }

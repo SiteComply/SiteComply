@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getWorkerSession } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { checkOut } from '@/services/submissions/submissionService';
+import { parseLocationFix } from '@/services/geo/geoValidationService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { submissionId?: string };
+  let body: { submissionId?: string; location?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -44,7 +45,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const done = await checkOut(body.submissionId, worker.id);
+  // SC-007: record the check-out location (best-effort — never blocks leaving).
+  const done = await checkOut(
+    body.submissionId,
+    worker.id,
+    parseLocationFix(body.location),
+  );
   if (!done) {
     return NextResponse.json(
       {

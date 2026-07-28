@@ -25,10 +25,29 @@ export interface AttendanceRow {
   status: SubmissionStatus;
   /** SC-006: true when this check-in reused a still-valid earlier induction. */
   inductionReused: boolean;
+  // SC-007: GPS check-in location outcome.
+  locationVerified: boolean;
+  locationOverridden: boolean;
+  gpsUnavailable: boolean;
+  checkInDistanceM: number | null;
   workerName: string;
   workerCompany: string;
   siteName: string;
   siteRef: string;
+}
+
+/** Human label for the location outcome of a check-in row (SC-007). */
+export function attendanceLocationLabel(r: {
+  locationVerified: boolean;
+  locationOverridden: boolean;
+  gpsUnavailable: boolean;
+  checkInDistanceM: number | null;
+}): string {
+  if (r.locationVerified) return 'Verified';
+  if (r.locationOverridden) return 'Override';
+  if (r.gpsUnavailable) return 'No GPS';
+  if (r.checkInDistanceM != null) return 'Off-site';
+  return '—';
 }
 
 /** Worker-level check-in rows (newest first). `limit` caps for on-screen tables. */
@@ -48,6 +67,10 @@ export async function getAttendanceRows(
       checkedOutAt: true,
       status: true,
       inductionReused: true,
+      locationVerified: true,
+      locationOverridden: true,
+      gpsUnavailable: true,
+      checkInDistanceM: true,
       worker: { select: { fullName: true, company: true } },
       jobSite: { select: { name: true, jobReference: true } },
     },
@@ -58,6 +81,10 @@ export async function getAttendanceRows(
     checkedOutAt: s.checkedOutAt,
     status: s.status,
     inductionReused: s.inductionReused,
+    locationVerified: s.locationVerified,
+    locationOverridden: s.locationOverridden,
+    gpsUnavailable: s.gpsUnavailable,
+    checkInDistanceM: s.checkInDistanceM,
     workerName: s.worker.fullName,
     workerCompany: s.worker.company,
     siteName: s.jobSite.name,
