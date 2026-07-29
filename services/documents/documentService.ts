@@ -228,6 +228,10 @@ export async function listDocuments(
       uploadedByName: true,
       createdAt: true,
       jobSite: { select: { id: true, name: true, jobReference: true } },
+      // SC-017 UX: so the register can mark an annotated copy and the original
+      // it came from, rather than showing two near-identical rows.
+      annotated: true,
+      originalDocumentId: true,
     },
   });
 }

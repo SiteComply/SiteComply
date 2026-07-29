@@ -37,11 +37,13 @@ function toView(e: {
   mimeType: string;
   size: number;
   annotated: boolean;
+  originalEvidenceId: string | null;
   uploadedByName: string | null;
   createdAt: Date;
 }): EvidenceView {
   return {
     annotated: e.annotated,
+    originalEvidenceId: e.originalEvidenceId,
     id: e.id,
     fileName: e.fileName,
     mimeType: e.mimeType,

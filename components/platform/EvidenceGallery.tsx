@@ -16,6 +16,8 @@ export interface EvidenceItem {
   isImage: boolean;
   /** SC-017: true for the annotated copy of a photo. */
   annotated?: boolean;
+  /** SC-017: on the annotated copy, the id of the original it came from. */
+  originalEvidenceId?: string | null;
   uploadedByName: string | null;
   createdAt: string; // ISO
 }
@@ -137,6 +139,42 @@ export function EvidenceGallery({
     }
   }
 
+  /**
+   * SC-017 UX: an annotated photo and the original it was made from are ONE
+   * piece of evidence in two files. Listing them as unrelated rows was confusing
+   * once a finding had several photos, so they are grouped into a single card
+   * and each part is explicitly labelled. Purely presentational — the storage
+   * model (original untouched, annotated copy linked to it) is unchanged.
+   */
+  type Group = {
+    key: string;
+    original: EvidenceItem;
+    annotated?: EvidenceItem;
+  };
+  const byId = new Map(evidence.map((e) => [e.id, e]));
+  const pairedOriginalIds = new Set(
+    evidence
+      .filter((e) => e.annotated && e.originalEvidenceId)
+      .map((e) => e.originalEvidenceId as string)
+      .filter((id) => byId.has(id)),
+  );
+
+  const groups: Group[] = [];
+  for (const e of evidence) {
+    // The original of a pair is rendered inside its annotated card, not twice.
+    if (pairedOriginalIds.has(e.id)) continue;
+    if (e.annotated && e.originalEvidenceId && byId.has(e.originalEvidenceId)) {
+      groups.push({
+        key: e.id,
+        original: byId.get(e.originalEvidenceId)!,
+        annotated: e,
+      });
+    } else {
+      // An annotated copy whose original was removed still renders on its own.
+      groups.push({ key: e.id, original: e });
+    }
+  }
+
   return (
     <div>
       {annotating && (
@@ -189,84 +227,57 @@ export function EvidenceGallery({
         </p>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
-          {evidence.map((e) => (
-            <li
-              key={e.id}
-              className="flex gap-3 rounded-xl border border-line bg-surface-sunken p-3"
-            >
-              <a
-                href={src(e.id)}
-                target="_blank"
-                rel="noopener noreferrer"
-                // SC-017: printable views are browser print-to-PDF, so an
-                // annotated photo must print big enough to read the annotations
-                // rather than as a 64px thumbnail.
-                className="block h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-line bg-surface print:h-auto print:w-64"
-                title={e.isImage ? 'Open image' : 'Download file'}
-              >
-                {e.isImage ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={src(e.id)}
-                    alt={e.fileName}
-                    className="h-full w-full object-cover print:h-auto print:w-full print:object-contain"
-                  />
-                ) : (
-                  <span
-                    className="flex h-full w-full items-center justify-center text-2xl"
-                    aria-hidden
-                  >
-                    📄
-                  </span>
+          {groups.map((g) => {
+            const pair = Boolean(g.annotated);
+            return (
+              <li
+                key={g.key}
+                className={cn(
+                  'rounded-xl border bg-surface-sunken p-3',
+                  pair ? 'border-brand-200 bg-brand-50/30' : 'border-line',
                 )}
-              </a>
-              <div className="min-w-0 flex-1">
-                <a
-                  href={src(e.id)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block truncate text-sm font-semibold text-brand-700 hover:underline"
-                  title={e.fileName}
+              >
+                {pair && (
+                  <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-700">
+                    <span aria-hidden>🔗</span> Annotated photo · 2 files
+                  </p>
+                )}
+                <div
+                  className={cn(
+                    'space-y-2',
+                    pair && 'divide-y divide-brand-200',
+                  )}
                 >
-                  {e.fileName}
-                </a>
-                <p className="text-xs text-ink-subtle">
-                  {formatBytes(e.size)}
-                  {e.annotated && (
-                    <span className="ml-2 inline-flex rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">
-                      Annotated
-                    </span>
+                  {/* Annotated version first — it is the one people look at. */}
+                  {g.annotated && (
+                    <EvidenceRow
+                      item={g.annotated}
+                      role="Annotated"
+                      src={src}
+                      canManage={canManage}
+                      deletingId={deletingId}
+                      onRemove={remove}
+                    />
                   )}
-                </p>
-                <p className="mt-1 text-xs text-ink-subtle">
-                  {e.uploadedByName ?? 'Unknown'} ·{' '}
-                  {formatDateTimeUK(e.createdAt)}
-                </p>
-                <div className="mt-1.5 flex items-center gap-3">
-                  <a
-                    href={src(e.id)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs font-semibold text-brand-700 hover:underline"
-                  >
-                    {e.isImage ? 'View' : 'Download'}
-                  </a>
-                  {canManage && (
-                    <button
-                      type="button"
-                      disabled={deletingId === e.id}
-                      onClick={() => remove(e.id)}
-                      className={cn(
-                        'text-xs font-semibold text-danger-700 hover:underline disabled:opacity-50',
-                      )}
-                    >
-                      {deletingId === e.id ? 'Removing…' : 'Remove'}
-                    </button>
-                  )}
+                  <div className={cn(pair && 'pt-2')}>
+                    <EvidenceRow
+                      item={g.original}
+                      role={pair ? 'Original' : undefined}
+                      src={src}
+                      canManage={canManage}
+                      deletingId={deletingId}
+                      onRemove={remove}
+                    />
+                  </div>
                 </div>
-              </div>
-            </li>
-          ))}
+                {pair && (
+                  <p className="mt-2 text-[11px] text-ink-subtle">
+                    The original is kept unchanged as the source record.
+                  </p>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
@@ -277,4 +288,100 @@ function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * One evidence file. `role` is set only when the file is part of an
+ * original/annotated pair, so a lone upload is unlabelled as before.
+ */
+function EvidenceRow({
+  item,
+  role,
+  src,
+  canManage,
+  deletingId,
+  onRemove,
+}: {
+  item: EvidenceItem;
+  role?: 'Original' | 'Annotated';
+  src: (id: string) => string;
+  canManage: boolean;
+  deletingId: string | undefined;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <div className="flex gap-3">
+      <a
+        href={src(item.id)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-line bg-surface print:h-auto print:w-64"
+        title={item.isImage ? 'Open image' : 'Download file'}
+      >
+        {item.isImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={src(item.id)}
+            alt={item.fileName}
+            className="h-full w-full object-cover print:h-auto print:w-full print:object-contain"
+          />
+        ) : (
+          <span
+            className="flex h-full w-full items-center justify-center text-2xl"
+            aria-hidden
+          >
+            📄
+          </span>
+        )}
+      </a>
+      <div className="min-w-0 flex-1">
+        {role && (
+          <span
+            className={cn(
+              'mb-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide',
+              role === 'Annotated'
+                ? 'bg-brand-600 text-white'
+                : 'bg-surface text-ink-muted ring-1 ring-line',
+            )}
+          >
+            {role}
+          </span>
+        )}
+        <a
+          href={src(item.id)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block truncate text-sm font-semibold text-brand-700 hover:underline"
+          title={item.fileName}
+        >
+          {item.fileName}
+        </a>
+        <p className="text-xs text-ink-subtle">{formatBytes(item.size)}</p>
+        <p className="mt-1 text-xs text-ink-subtle">
+          {item.uploadedByName ?? 'Unknown'} ·{' '}
+          {formatDateTimeUK(item.createdAt)}
+        </p>
+        <div className="mt-1.5 flex items-center gap-3 print:hidden">
+          <a
+            href={src(item.id)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-semibold text-brand-700 hover:underline"
+          >
+            {item.isImage ? 'View' : 'Download'}
+          </a>
+          {canManage && (
+            <button
+              type="button"
+              disabled={deletingId === item.id}
+              onClick={() => onRemove(item.id)}
+              className="text-xs font-semibold text-danger-700 hover:underline disabled:opacity-50"
+            >
+              {deletingId === item.id ? 'Removing…' : 'Remove'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }

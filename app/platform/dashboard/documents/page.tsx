@@ -7,7 +7,10 @@ import {
   assertModuleView,
 } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
-import { listDocuments, countDocuments } from '@/services/documents/documentService';
+import {
+  listDocuments,
+  countDocuments,
+} from '@/services/documents/documentService';
 import {
   DOCUMENT_CATEGORIES,
   documentCategoryLabel,
@@ -31,7 +34,13 @@ export const dynamic = 'force-dynamic';
 export default async function PlatformDocumentsPage({
   searchParams,
 }: {
-  searchParams: { category?: string; site?: string; expiry?: string; q?: string; page?: string };
+  searchParams: {
+    category?: string;
+    site?: string;
+    expiry?: string;
+    q?: string;
+    page?: string;
+  };
 }) {
   const viewer = await requirePlatformViewer();
   assertModuleView(viewer, 'documents');
@@ -48,7 +57,11 @@ export default async function PlatformDocumentsPage({
   };
   const total = await countDocuments(viewer, filters);
   const pg = resolvePage(searchParams.page, total);
-  const documents = await listDocuments(viewer, { ...filters, skip: pg.skip, take: pg.take });
+  const documents = await listDocuments(viewer, {
+    ...filters,
+    skip: pg.skip,
+    take: pg.take,
+  });
   const now = new Date();
   const canCreate = permits(viewer.role, 'documents', 'create');
   const canDelete = canDeleteDocument(viewer.role);
@@ -166,8 +179,9 @@ export default async function PlatformDocumentsPage({
           </p>
         ) : documents.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-ink-subtle">
-            No documents{category ? ` in ${documentCategoryLabel(category)}` : ''}{' '}
-            for your sites yet.
+            No documents
+            {category ? ` in ${documentCategoryLabel(category)}` : ''} for your
+            sites yet.
             {canCreate && ' Use “Upload document” to add one.'}
           </p>
         ) : (
@@ -196,13 +210,24 @@ export default async function PlatformDocumentsPage({
                       >
                         {d.title}
                       </Link>
-                      <div className="text-xs text-ink-subtle">{d.fileName}</div>
+                      <div className="text-xs text-ink-subtle">
+                        {d.fileName}
+                        {d.annotated && (
+                          <span className="ml-2 inline-flex rounded-full bg-brand-600 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                            Annotated
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-5 py-3 text-ink">
                       {documentCategoryLabel(d.category)}
                     </td>
                     <td className="px-5 py-3">
-                      <DocumentExpiryBadge expiresAt={d.expiresAt} now={now} showDate />
+                      <DocumentExpiryBadge
+                        expiresAt={d.expiresAt}
+                        now={now}
+                        showDate
+                      />
                     </td>
                     <td className="px-5 py-3 text-ink">{d.jobSite.name}</td>
                     <td className="px-5 py-3 text-ink-muted">

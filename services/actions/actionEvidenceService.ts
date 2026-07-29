@@ -53,6 +53,8 @@ function buildEvidenceBlobPath(actionId: string, fileName: string): string {
 export interface EvidenceView {
   /** SC-017: true for the annotated copy of a photo. */
   annotated: boolean;
+  /** SC-017: on the annotated copy, the id of the original it was made from. */
+  originalEvidenceId: string | null;
   id: string;
   fileName: string;
   mimeType: string;
@@ -69,11 +71,13 @@ function toView(e: {
   mimeType: string;
   size: number;
   annotated: boolean;
+  originalEvidenceId: string | null;
   uploadedByName: string | null;
   createdAt: Date;
 }): EvidenceView {
   return {
     annotated: e.annotated,
+    originalEvidenceId: e.originalEvidenceId,
     id: e.id,
     fileName: e.fileName,
     mimeType: e.mimeType,
