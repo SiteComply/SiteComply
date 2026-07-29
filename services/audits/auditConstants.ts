@@ -45,10 +45,10 @@ export const OBSERVATIONS_MAX = 8000;
 
 /**
  * Roles permitted to permanently DELETE an audit (and its findings). This is a
- * deliberate business rule, not the standard edit permission: Director has org-
- * wide oversight and may delete even though they can't edit audit content, while
- * Site Manager (also view/export) may not. So it's an explicit allow-list rather
- * than a `permits(...)` check.
+ * deliberate business rule, not the standard edit permission: Site Manager can
+ * create and edit audits (SC-013) but may NOT delete them, while Director — who
+ * gained create/edit in the SC-013 follow-up — retains delete for org-wide
+ * oversight. So it stays an explicit allow-list rather than a `permits(...)` check.
  */
 export const AUDIT_DELETE_ROLES = [
   'DIRECTOR',

@@ -82,7 +82,11 @@ export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
         sites: VCEX,
         checkins: VX,
         documents: VCEX,
-        audits: VX,
+        // SC-013 follow-up: Directors may now create + edit audits and create
+        // templates (template create is gated on this `create` verb). Sign-off
+        // stays restricted to AUDIT_SIGNOFF_ROLES — Director is deliberately
+        // excluded, and reopening a signed-off audit remains a sign-off-only act.
+        audits: VCEX,
         reports: VCEX,
         actions: VCEX,
         bulletins: VCEX,

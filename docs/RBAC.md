@@ -57,7 +57,7 @@ Scope: Director = All sites; all others = Assigned Sites only.
 | **Sites** | V C E X | V C E X | V E | V | V | V | V E | V C E X |
 | **Check-ins** | V X | V X¹ | V X¹ | V | V X | V | V X | V X¹ |
 | **Documents** | V C E X | V C E X | V C E X | V | V X | V C E | V C E X | V C E X |
-| **Audits** | V X | V C E X | V X | V | V C E X² | V | V C E X² | V C E X² |
+| **Audits** | V C E X³ | V C E X | V C E X³ | V | V C E X² | V | V C E X² | V C E X² |
 | **Reports** | V C E X | V C E X | V X | V | V C X | V | V C X | V C X |
 | **Actions** | V C E X | V C E X | V C E | V | V C | V C E | V C E | V C E X |
 | **Platform Users** | — | — | — | — | — | — | — | — |
@@ -69,22 +69,48 @@ Scope: Director = All sites; all others = Assigned Sites only.
    role edits the content of a check-in record.
 2. **Audit sign-off / approval** (a capability beyond Edit): Auditor, H&S
    Consultant, Principal Contractor.
-- **Director & Audits:** the Director row is **V X** — Directors **view and
-  export** audits for organisation-wide oversight but **cannot create, edit or
-  sign off** audits. Audit authoring belongs to the roles marked **C/E**
-  (Project Manager, Auditor, H&S Consultant, Principal Contractor); sign-off is
-  restricted to the roles in note 2.
+3. **Create/edit without sign-off.** Director and Site Manager may author audits
+   but are **not** in `AUDIT_SIGNOFF_ROLES` — the same profile Project Manager
+   has always had. Editing an audit never confers approving it.
+- **Director & Audits:** Directors **create, edit, view and export** audits
+  organisation-wide, and manage the shared template library (§5a). They are
+  **excluded from sign-off**: that is where the separation of duties sits, so
+  the executive layer cannot approve its own audit. Reopening a signed-off audit
+  is likewise a sign-off-only act and stays closed to Directors.
+  _(Superseded the original v1 rule, which was Director **V X**, audit
+  authoring excluded — changed as an approved follow-up to SC-013.)_
+- **Site Manager & Audits:** Site Managers gained **create + edit** in SC-013 so
+  audits can be raised on site. Sign-off and delete remain excluded.
 - **Platform Users** is empty for every platform role — managed exclusively by
   SiteComply **Admins**.
 - **Client & Engineer** carry no export (X) in any row, by policy.
+
+## 5a. Audit template library (SC-013)
+
+The `AuditTemplate` library is **organisation-level and shared** — not site-scoped
+— so a template edit affects every site. Two distinct gates apply:
+
+| Action | Gate | Roles |
+| --- | --- | --- |
+| Use a template; save an audit as a new template | `audits:create` | Director, Project Mgr, Site Mgr, Auditor, H&S Consultant, Principal Contractor |
+| Create a template directly | `audits:create` | as above |
+| **Edit / activate / deactivate / delete** a template | `AUDIT_TEMPLATE_MANAGE_ROLES` | **Director, Project Mgr, Auditor, H&S Consultant** |
+
+Curation is deliberately narrower than authoring: any audit-creating role may
+contribute a template, but changing or removing a shared one is restricted so a
+single site-scoped user cannot break an org-wide format. Director is included
+because Director is the **only** `allSites` role — an organisation-wide artefact
+needs an organisation-wide curator. Starter (`isSystem`) templates can never be
+deleted, only deactivated. Audits **snapshot** template items and
+name/version at creation, so template edits never alter historic audits.
 
 ## 6. Per-role summary
 
 | Role | Scope | Can do | Cannot do |
 | --- | --- | --- | --- |
-| **Director** | All sites | Organisation-wide oversight: view/create/edit/export **sites, documents, reports and actions**; **view & export audits and check-ins** (oversight only) | **Create, edit or sign off audits**; edit/override check-ins; manage platform users |
+| **Director** | All sites | Organisation-wide: view/create/edit/export **sites, documents, reports, actions and audits**; **create/edit/deactivate audit templates** and save audits as templates; delete audits; view & export check-ins | **Sign off audits** (or reopen a signed-off audit); edit/override check-ins; manage platform users |
 | **Project Manager** | Assigned | Full site setup, docs, audits, reports, actions; export; check-out override | Manage platform users |
-| **Site Manager** | Assigned | Run the site: edit site/induction/emergency, docs, actions; export check-ins/reports; check-out override | Create sites; author/sign-off audits |
+| **Site Manager** | Assigned | Run the site: edit site/induction/emergency, docs, actions; **create + edit audits** and use/save templates; export check-ins/reports; check-out override | Create sites; **sign off or delete audits**; edit/delete shared templates |
 | **Client** | Assigned | **View only** — dashboard, check-ins, docs, audits, reports on screen | Create/edit anything; **any export** |
 | **Auditor** | Assigned | View; create/edit/**sign-off audits**; export audits/reports/check-ins | Edit sites; create actions beyond audit follow-ups |
 | **Engineer** | Assigned | View; author documents; raise/close actions | **Any export**; audits; site config |
@@ -107,10 +133,11 @@ Scope: Director = All sites; all others = Assigned Sites only.
   action; no export controls anywhere.
 - **Auditor:** creates an audit (assigned sites only), records findings, **signs
   off**, **exports** the report.
-- **Director:** org-wide dashboard across all sites; **views and exports audits
-  (and check-ins/reports) for oversight but cannot create, edit or sign off
-  audits**; exports a portfolio compliance report; **cannot** open the Platform
-  Users screen (Admin-only).
+- **Director:** org-wide dashboard across all sites; **creates, edits, views and
+  exports audits** and curates the shared template library, **but cannot sign
+  off** an audit or reopen a signed-off one — that stays with the roles in note
+  2; exports a portfolio compliance report; **cannot** open the Platform Users
+  screen (Admin-only).
 - **Lifecycle:** disabling a leaver refuses access on the next request (status
   checked per request); re-assigning sites updates scope on next load.
 
