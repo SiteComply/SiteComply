@@ -70,7 +70,6 @@ export default async function PlatformDashboardPage() {
   const canActions = permits(viewer.role, 'actions', 'view');
   const canDocs = permits(viewer.role, 'documents', 'view');
   const canAudits = permits(viewer.role, 'audits', 'view');
-  const canCreateAudit = permits(viewer.role, 'audits', 'create');
   const canCheckins = permits(viewer.role, 'checkins', 'view');
   const canSites = permits(viewer.role, 'sites', 'view');
 
@@ -225,16 +224,10 @@ export default async function PlatformDashboardPage() {
             A high-level view across your organisation’s sites and compliance.
           </p>
         </div>
-        {/* SC-013: prominent "Start New Audit" — quick audit creation on site. */}
-        {canCreateAudit && (
-          <Link
-            href="/platform/dashboard/audits/new"
-            className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
-          >
-            <PlatformIcon name="shield" />
-            Start new audit
-          </Link>
-        )}
+        {/* The dashboard is a high-level monitoring and reporting screen, not an
+            operational task-creation one. SC-013's "Start new audit" shortcut was
+            removed deliberately: audit creation lives in the Audits module, where
+            users expect to find it. Do not reintroduce quick-create actions here. */}
       </header>
 
       <ScopeBanner viewer={viewer} />
