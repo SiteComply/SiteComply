@@ -8,6 +8,10 @@ import { getWorkerSession } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { getActiveSiteWithChecklist } from '@/services/sites/siteService';
 import { getInductionValidity } from '@/services/induction/inductionValidityService';
+import {
+  CscsCompetencyBanner,
+  workerCscsCompetency,
+} from '@/components/checkin/CscsCompetencyBanner';
 import { formatDateTimeUK, formatDateUK } from '@/lib/datetime';
 
 export const dynamic = 'force-dynamic';
@@ -51,6 +55,15 @@ export default async function SiteInductionPage({
           Ref {site.jobReference} · {site.town}, {site.postcode}
         </p>
       </header>
+
+      {/* SC-012: CSCS/ECS competency status from the verified record (SC-001) —
+          reassurance when valid, a prominent advisory warning otherwise. */}
+      <CscsCompetencyBanner
+        status={workerCscsCompetency(worker)}
+        scheme={worker.cscsScheme}
+        cardType={worker.cscsCardType}
+        expiry={worker.cscsExpiry}
+      />
 
       {/* SC-006 validity banners */}
       {validity.enabled && validity.state === 'valid' && (

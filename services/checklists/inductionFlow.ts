@@ -12,6 +12,27 @@
 
 export type InductionItemType = 'ACKNOWLEDGEMENT' | 'YES_NO' | 'PPE_CONFIRM';
 
+/**
+ * SC-012: the seeded duplicate CSCS induction question. Its details are already
+ * captured and verified in the worker's competency record (SC-001), so it is
+ * filtered out of the live induction rather than asked again. Matched by the
+ * seeded label + YES_NO type so existing site checklists are handled without a
+ * data migration; the pre-induction landing surfaces the competency status
+ * instead.
+ */
+export const CSCS_INDUCTION_LABEL =
+  'Do you hold a valid CSCS card for your trade?';
+
+export function isCscsCompetencyItem(item: {
+  label: string;
+  type: string;
+}): boolean {
+  return (
+    item.type === 'YES_NO' &&
+    item.label.trim().toLowerCase() === CSCS_INDUCTION_LABEL.toLowerCase()
+  );
+}
+
 export interface FlowItem {
   id: string;
   label: string;

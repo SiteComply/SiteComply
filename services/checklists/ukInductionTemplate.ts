@@ -56,12 +56,9 @@ export const UK_INDUCTION_TEMPLATE: ChecklistItemTemplate[] = [
     type: ChecklistItemType.ACKNOWLEDGEMENT,
     required: true,
   },
-  {
-    label: 'Do you hold a valid CSCS card for your trade?',
-    helpText: 'You may be asked to show your card to the site manager.',
-    type: ChecklistItemType.YES_NO,
-    required: true,
-  },
+  // SC-012: the CSCS card question has been removed — a worker's card details are
+  // already captured and verified in their competency record (SC-001), and the
+  // pre-induction landing surfaces the status. Asking again duplicated the data.
   // PPE confirmation items.
   {
     label: 'Hard hat',

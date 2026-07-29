@@ -1,5 +1,6 @@
 import { SiteStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { isCscsCompetencyItem } from '@/services/checklists/inductionFlow';
 
 /**
  * Job-site queries used by the worker flow.
@@ -36,5 +37,14 @@ export async function getActiveSiteWithChecklist(id: string) {
     },
   });
   if (!site) return null;
-  return { ...site, checklist: site.checklists[0] ?? null };
+  const checklist = site.checklists[0] ?? null;
+  // SC-012: drop the duplicate CSCS competency question from the live induction
+  // (its status comes from the verified SC-001 record, shown pre-induction).
+  const filtered = checklist
+    ? {
+        ...checklist,
+        items: checklist.items.filter((i) => !isCscsCompetencyItem(i)),
+      }
+    : null;
+  return { ...site, checklist: filtered };
 }
