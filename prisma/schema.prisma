@@ -770,12 +770,23 @@ model Document {
   // Audits that reference this document (Audits module — many-to-many).
   audits Audit[] @relation("AuditDocuments")
 
+  // SC-017 photo annotation. The ORIGINAL upload is never overwritten: an
+  // annotated copy is stored as its own row linked back here, so an audit record
+  // always retains what the camera actually captured.
+  annotated          Boolean @default(false)
+  originalDocumentId String?
+  /// Vector annotation list (shapes, arrows, text, colours) for the annotated
+  /// copy, so annotations can be REOPENED and edited. The flattened image stays
+  /// authoritative for display and print; this is the editable source.
+  annotationData     Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([jobSiteId, category, createdAt])
   @@index([category])
   @@index([jobSiteId, expiresAt])
+  @@index([originalDocumentId])
 }
 
 /// A site audit / inspection (Audits module, Phase 1). Each audit belongs to
@@ -1099,9 +1110,20 @@ model FindingEvidence {
   uploadedByUserId String?
   uploadedByName   String?
 
+  // SC-017 photo annotation. The ORIGINAL upload is never overwritten: an
+  // annotated copy is stored as its own row linked back here, so an audit record
+  // always retains what the camera actually captured.
+  annotated          Boolean @default(false)
+  originalEvidenceId String?
+  /// Vector annotation list (shapes, arrows, text, colours) for the annotated
+  /// copy, so annotations can be REOPENED and edited. The flattened image stays
+  /// authoritative for display and print; this is the editable source.
+  annotationData     Json?
+
   createdAt DateTime @default(now())
 
   @@index([findingId, createdAt])
+  @@index([originalEvidenceId])
 }
 
 /// A corrective action / follow-up task (Actions module, Phase 1). Each action
@@ -1186,9 +1208,20 @@ model ActionEvidence {
   uploadedByUserId String?
   uploadedByName   String?
 
+  // SC-017 photo annotation. The ORIGINAL upload is never overwritten: an
+  // annotated copy is stored as its own row linked back here, so an audit record
+  // always retains what the camera actually captured.
+  annotated          Boolean @default(false)
+  originalEvidenceId String?
+  /// Vector annotation list (shapes, arrows, text, colours) for the annotated
+  /// copy, so annotations can be REOPENED and edited. The flattened image stays
+  /// authoritative for display and print; this is the editable source.
+  annotationData     Json?
+
   createdAt DateTime @default(now())
 
   @@index([actionId, createdAt])
+  @@index([originalEvidenceId])
 }
 
 /// One entry in an action's activity timeline: creation, assignment change,

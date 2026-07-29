@@ -1,5 +1,7 @@
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
+import type { AnnotationMeta } from '@/services/annotations/annotationUpload';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { getActionForViewer } from '@/services/actions/actionService';
 import {
@@ -28,7 +30,8 @@ import {
 export function validateEvidenceFile(
   file: { size: number; type: string } | null,
 ): { ok: true } | { ok: false; error: string } {
-  if (!file || file.size === 0) return { ok: false, error: 'Please choose a file to upload.' };
+  if (!file || file.size === 0)
+    return { ok: false, error: 'Please choose a file to upload.' };
   if (file.size > MAX_DOCUMENT_BYTES)
     return { ok: false, error: 'That file is too large (max 20 MB).' };
   if (!ACCEPTED_DOCUMENT_MIME_TYPES.includes(file.type as never))
@@ -41,11 +44,15 @@ export function validateEvidenceFile(
 }
 
 function buildEvidenceBlobPath(actionId: string, fileName: string): string {
-  const safe = (fileName || 'evidence').replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-80);
+  const safe = (fileName || 'evidence')
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .slice(-80);
   return `actions/${actionId}/${randomUUID()}-${safe}`;
 }
 
 export interface EvidenceView {
+  /** SC-017: true for the annotated copy of a photo. */
+  annotated: boolean;
   id: string;
   fileName: string;
   mimeType: string;
@@ -61,10 +68,12 @@ function toView(e: {
   fileName: string;
   mimeType: string;
   size: number;
+  annotated: boolean;
   uploadedByName: string | null;
   createdAt: Date;
 }): EvidenceView {
   return {
+    annotated: e.annotated,
     id: e.id,
     fileName: e.fileName,
     mimeType: e.mimeType,
@@ -77,7 +86,9 @@ function toView(e: {
 
 /** Evidence for an action, newest first. Not site-scoped itself — callers must
  *  have resolved the action for the viewer first (page/route does). */
-export async function listActionEvidence(actionId: string): Promise<EvidenceView[]> {
+export async function listActionEvidence(
+  actionId: string,
+): Promise<EvidenceView[]> {
   const rows = await prisma.actionEvidence.findMany({
     where: { actionId },
     orderBy: { createdAt: 'desc' },
@@ -89,6 +100,7 @@ export async function addActionEvidence(
   viewer: PlatformViewer,
   actionId: string,
   file: { buffer: Buffer; fileName: string; mimeType: string; size: number },
+  annotation?: AnnotationMeta,
 ): Promise<{ ok: true; id: string } | { ok: false; reason: 'not_found' }> {
   // Scope + existence: the action must be in the viewer's Assigned Sites.
   const action = await getActionForViewer(viewer, actionId);
@@ -106,6 +118,14 @@ export async function addActionEvidence(
       size: file.size,
       uploadedByUserId: viewer.id,
       uploadedByName: viewer.name,
+      // SC-017 — set only for the annotated copy; the original row is untouched.
+      annotated: annotation?.annotated ?? false,
+      originalEvidenceId: annotation?.originalEvidenceId ?? null,
+      // Prisma's Json input type doesn't accept a typed interface directly;
+      // the shape is validated by isAnnotationDocument before it gets here.
+      annotationData: annotation?.annotationData
+        ? (annotation.annotationData as unknown as Prisma.InputJsonValue)
+        : undefined,
     },
     select: { id: true },
   });

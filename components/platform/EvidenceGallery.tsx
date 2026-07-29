@@ -4,6 +4,9 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/cn';
 import { formatDateTimeUK } from '@/lib/datetime';
+import { PhotoAnnotator } from '@/components/platform/PhotoAnnotator';
+import { isAnnotatable } from '@/lib/imagePrep';
+import type { AnnotationDocument } from '@/services/annotations/annotationTypes';
 
 export interface EvidenceItem {
   id: string;
@@ -11,6 +14,8 @@ export interface EvidenceItem {
   mimeType: string;
   size: number;
   isImage: boolean;
+  /** SC-017: true for the annotated copy of a photo. */
+  annotated?: boolean;
   uploadedByName: string | null;
   createdAt: string; // ISO
 }
@@ -44,28 +49,74 @@ export function EvidenceGallery({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [deletingId, setDeletingId] = useState<string | undefined>();
+  // SC-017: the photo currently open in the annotator (null = annotator closed).
+  const [annotating, setAnnotating] = useState<File | null>(null);
 
   const src = (id: string) => `${basePath}/${id}/download`;
 
-  async function upload(file: File) {
+  async function upload(file: File, extra?: Record<string, string>) {
     setBusy(true);
     setError(undefined);
     try {
       const fd = new FormData();
       fd.append('file', file);
+      for (const [k, v] of Object.entries(extra ?? {})) fd.append(k, v);
       const res = await fetch(basePath, { method: 'POST', body: fd });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
         setError(data.error ?? 'Upload failed. Please try again.');
-        return;
+        return null;
       }
-      router.refresh();
+      return (data.id as string) ?? null;
     } catch {
       setError('Network problem. Please try again.');
+      return null;
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = '';
     }
+  }
+
+  /**
+   * SC-017: a chosen photo goes through the annotator first; anything else (PDF,
+   * Word, …) uploads straight away as before.
+   */
+  function chooseFile(file: File) {
+    if (isAnnotatable(file)) {
+      setAnnotating(file);
+      return;
+    }
+    void upload(file).then((id) => {
+      if (id) router.refresh();
+    });
+  }
+
+  /**
+   * Save order matters: the ORIGINAL is uploaded first so the annotated copy can
+   * point back at it. Both are kept — the untouched photo stays part of the
+   * record, and the annotated copy carries the editable annotation data.
+   */
+  async function saveAnnotated(result: {
+    annotatedBlob: Blob;
+    originalFile: File;
+    document: AnnotationDocument;
+  }) {
+    const originalId = await upload(result.originalFile);
+    if (!originalId) return;
+
+    const base = result.originalFile.name.replace(/\.[^.]+$/, '') || 'photo';
+    const annotatedFile = new File(
+      [result.annotatedBlob],
+      `${base}-annotated.jpg`,
+      { type: 'image/jpeg' },
+    );
+    await upload(annotatedFile, {
+      annotated: 'true',
+      originalEvidenceId: originalId,
+      annotationData: JSON.stringify(result.document),
+    });
+    setAnnotating(null);
+    router.refresh();
   }
 
   async function remove(id: string) {
@@ -88,6 +139,16 @@ export function EvidenceGallery({
 
   return (
     <div>
+      {annotating && (
+        <PhotoAnnotator
+          file={annotating}
+          onCancel={() => {
+            setAnnotating(null);
+            if (fileRef.current) fileRef.current.value = '';
+          }}
+          onSave={saveAnnotated}
+        />
+      )}
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-ink-subtle">
           {label}
@@ -101,7 +162,7 @@ export function EvidenceGallery({
               disabled={busy}
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) upload(f);
+                if (f) chooseFile(f);
               }}
               className="hidden"
             />
@@ -109,7 +170,7 @@ export function EvidenceGallery({
               type="button"
               disabled={busy}
               onClick={() => fileRef.current?.click()}
-              className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 disabled:opacity-50"
+              className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 disabled:opacity-50 print:hidden"
             >
               {busy ? 'Uploading…' : 'Upload evidence'}
             </button>
@@ -117,7 +178,9 @@ export function EvidenceGallery({
         )}
       </div>
 
-      {error && <p className="mb-3 text-sm font-medium text-danger-600">{error}</p>}
+      {error && (
+        <p className="mb-3 text-sm font-medium text-danger-600">{error}</p>
+      )}
 
       {evidence.length === 0 ? (
         <p className="text-sm text-ink-subtle">
@@ -135,14 +198,24 @@ export function EvidenceGallery({
                 href={src(e.id)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-line bg-surface"
+                // SC-017: printable views are browser print-to-PDF, so an
+                // annotated photo must print big enough to read the annotations
+                // rather than as a 64px thumbnail.
+                className="block h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-line bg-surface print:h-auto print:w-64"
                 title={e.isImage ? 'Open image' : 'Download file'}
               >
                 {e.isImage ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={src(e.id)} alt={e.fileName} className="h-full w-full object-cover" />
+                  <img
+                    src={src(e.id)}
+                    alt={e.fileName}
+                    className="h-full w-full object-cover print:h-auto print:w-full print:object-contain"
+                  />
                 ) : (
-                  <span className="flex h-full w-full items-center justify-center text-2xl" aria-hidden>
+                  <span
+                    className="flex h-full w-full items-center justify-center text-2xl"
+                    aria-hidden
+                  >
                     📄
                   </span>
                 )}
@@ -157,9 +230,17 @@ export function EvidenceGallery({
                 >
                   {e.fileName}
                 </a>
-                <p className="text-xs text-ink-subtle">{formatBytes(e.size)}</p>
+                <p className="text-xs text-ink-subtle">
+                  {formatBytes(e.size)}
+                  {e.annotated && (
+                    <span className="ml-2 inline-flex rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">
+                      Annotated
+                    </span>
+                  )}
+                </p>
                 <p className="mt-1 text-xs text-ink-subtle">
-                  {e.uploadedByName ?? 'Unknown'} · {formatDateTimeUK(e.createdAt)}
+                  {e.uploadedByName ?? 'Unknown'} ·{' '}
+                  {formatDateTimeUK(e.createdAt)}
                 </p>
                 <div className="mt-1.5 flex items-center gap-3">
                   <a

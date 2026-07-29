@@ -1,5 +1,7 @@
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
+import type { AnnotationMeta } from '@/services/annotations/annotationUpload';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { getFindingForViewer } from '@/services/audits/findingService';
 import {
@@ -34,10 +36,12 @@ function toView(e: {
   fileName: string;
   mimeType: string;
   size: number;
+  annotated: boolean;
   uploadedByName: string | null;
   createdAt: Date;
 }): EvidenceView {
   return {
+    annotated: e.annotated,
     id: e.id,
     fileName: e.fileName,
     mimeType: e.mimeType,
@@ -79,6 +83,7 @@ export async function addFindingEvidence(
   viewer: PlatformViewer,
   findingId: string,
   file: { buffer: Buffer; fileName: string; mimeType: string; size: number },
+  annotation?: AnnotationMeta,
 ): Promise<{ ok: true; id: string } | { ok: false; reason: 'not_found' }> {
   const finding = await getFindingForViewer(viewer, findingId);
   if (!finding) return { ok: false, reason: 'not_found' };
@@ -95,6 +100,14 @@ export async function addFindingEvidence(
       size: file.size,
       uploadedByUserId: viewer.id,
       uploadedByName: viewer.name,
+      // SC-017 — set only for the annotated copy; the original row is untouched.
+      annotated: annotation?.annotated ?? false,
+      originalEvidenceId: annotation?.originalEvidenceId ?? null,
+      // Prisma's Json input type doesn't accept a typed interface directly;
+      // the shape is validated by isAnnotationDocument before it gets here.
+      annotationData: annotation?.annotationData
+        ? (annotation.annotationData as unknown as Prisma.InputJsonValue)
+        : undefined,
     },
     select: { id: true },
   });

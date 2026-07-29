@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
+import { parseAnnotationMeta } from '@/services/annotations/annotationUpload';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import {
   validateEvidenceFile,
@@ -21,7 +22,10 @@ export async function POST(
 ) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
-    return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: 'Not signed in.' },
+      { status: 401 },
+    );
   }
   if (!permits(viewer.role, 'audits', 'edit')) {
     return NextResponse.json(
@@ -34,14 +38,22 @@ export async function POST(
   try {
     form = await req.formData();
   } catch {
-    return NextResponse.json({ ok: false, error: 'Invalid upload.' }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: 'Invalid upload.' },
+      { status: 400 },
+    );
   }
 
   const entry = form.get('file');
   const file = entry instanceof File ? entry : null;
-  const check = validateEvidenceFile(file ? { size: file.size, type: file.type } : null);
+  const check = validateEvidenceFile(
+    file ? { size: file.size, type: file.type } : null,
+  );
   if (!check.ok) {
-    return NextResponse.json({ ok: false, error: check.error }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: check.error },
+      { status: 400 },
+    );
   }
 
   const buffer = Buffer.from(await file!.arrayBuffer());
@@ -52,7 +64,10 @@ export async function POST(
     size: file!.size,
   });
   if (!result.ok) {
-    return NextResponse.json({ ok: false, error: 'Finding not found.' }, { status: 404 });
+    return NextResponse.json(
+      { ok: false, error: 'Finding not found.' },
+      { status: 404 },
+    );
   }
 
   return NextResponse.json({ ok: true, id: result.id });
