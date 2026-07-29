@@ -57,6 +57,24 @@
 
   /* Lines / borders */
   --line: 226 232 240;
+
+  /* Categorical chart series (SC-014 audit score breakdown).
+     A FIXED order — assign slot 1, 2, 3… never cycle, and never let a filter
+     repaint the survivors: colour follows the entity, not its rank.
+     Deliberately separate from the status colours (safe / hivis / danger), which
+     stay reserved for compliance state and must never mean "series 4".
+     Validated as a categorical palette on the light surface: lightness band PASS,
+     chroma floor PASS, CVD adjacent-pair separation PASS (worst ΔE 10.2 deutan),
+     normal-vision separation PASS (worst ΔE 28.4). Two slots sit under 3:1
+     contrast, which is why every chart using these MUST carry visible labels or
+     an adjacent table — the donut ships with both a legend and the section
+     weightings table. The app is light-only (no dark surface to re-step for). */
+  --chart-1: 0 174 239;
+  --chart-2: 225 29 72;
+  --chart-3: 13 148 136;
+  --chart-4: 245 158 11;
+  --chart-5: 139 92 246;
+  --chart-6: 22 163 74;
 }
 
 @layer base {

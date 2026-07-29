@@ -1,4 +1,10 @@
-import { AuditStatus, FindingCategory, Prisma } from '@prisma/client';
+import {
+  AuditStatus,
+  FindingCategory,
+  Prisma,
+  QuestionScoringRule,
+  ScoringMethod,
+} from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import {
@@ -211,7 +217,45 @@ const AUDIT_LIST_SELECT = {
   createdAt: true,
   jobSite: { select: { id: true, name: true, jobReference: true } },
   _count: { select: { documents: true } },
+  // SC-014: the calculated score supersedes the manual one in the register when
+  // scoring is enabled for that audit.
+  scoringEnabled: true,
+  calculatedPercent: true,
+  calculatedScore: true,
+  calculatedPassed: true,
+  totalPossibleScore: true,
+  showAsPercentage: true,
 } satisfies Prisma.AuditSelect;
+
+/**
+ * SC-014 — how an audit's score should read in a list, register or export. One
+ * helper so the register, CSV and any report present the score identically.
+ */
+export function auditScoreLabel(audit: {
+  scoringEnabled: boolean;
+  overallScore: number | null;
+  calculatedPercent: number | null;
+  calculatedScore: number | null;
+  totalPossibleScore: number;
+  showAsPercentage: boolean;
+}): string {
+  if (!audit.scoringEnabled) {
+    return audit.overallScore === null ? '—' : `${audit.overallScore}%`;
+  }
+  if (audit.calculatedPercent === null) return 'Not yet scored';
+  return audit.showAsPercentage
+    ? `${audit.calculatedPercent}%`
+    : `${audit.calculatedScore} / ${audit.totalPossibleScore}`;
+}
+
+/** SC-014 — Pass / Fail / — for registers and exports. */
+export function auditResultLabel(audit: {
+  scoringEnabled: boolean;
+  calculatedPassed: boolean | null;
+}): string {
+  if (!audit.scoringEnabled || audit.calculatedPassed === null) return '—';
+  return audit.calculatedPassed ? 'Pass' : 'Fail';
+}
 
 /** Site-scoped list of audits for the viewer, newest first. */
 export async function listAudits(
@@ -267,6 +311,9 @@ export async function getAuditForViewer(viewer: PlatformViewer, id: string) {
       },
       // SC-013: the audit's checklist items (copied from a template at creation).
       items: { orderBy: { order: 'asc' } },
+      // SC-014: weighted sections + custom score bands for the scoring panel.
+      sections: { orderBy: { order: 'asc' } },
+      scoreBands: { orderBy: { order: 'asc' } },
     },
   });
 }
@@ -285,10 +332,34 @@ export async function createAudit(
   // SC-013: when creating from a template, copy its items onto the audit as its
   // checklist and snapshot the template's identity/version for provenance. The
   // copy means later template edits never alter this audit (snapshot-on-use).
+  // SC-014 extends the same snapshot to the template's SECTIONS and scoring
+  // configuration, so a template captures a whole audit format — structure,
+  // weightings and how it scores — not just a list of questions.
   let items: {
     label: string;
     helpText: string | null;
     category: FindingCategory;
+    order: number;
+    /** Index into `sections` below; resolved to a real id after creation. */
+    sectionIndex: number | null;
+    scoringRule: QuestionScoringRule;
+    points: number;
+    mandatory: boolean;
+  }[] = [];
+  let sections: { name: string; weightPercent: number; order: number }[] = [];
+  let scoring: {
+    scoringEnabled: boolean;
+    scoringMethod: ScoringMethod;
+    totalPossibleScore: number;
+    passingScore: number;
+    showAsPercentage: boolean;
+    roundScores: boolean;
+  } | null = null;
+  let bands: {
+    label: string;
+    minScore: number;
+    maxScore: number;
+    tone: string;
     order: number;
   }[] = [];
   let snapshot: {
@@ -299,13 +370,47 @@ export async function createAudit(
   if (value.templateId) {
     const template = await prisma.auditTemplate.findFirst({
       where: { id: value.templateId, active: true },
-      include: { items: { orderBy: { order: 'asc' } } },
+      include: {
+        items: { orderBy: { order: 'asc' } },
+        sections: { orderBy: { order: 'asc' } },
+        scoreBands: { orderBy: { order: 'asc' } },
+      },
     });
     if (template) {
+      sections = template.sections.map((s, idx) => ({
+        name: s.name,
+        weightPercent: s.weightPercent,
+        order: idx,
+      }));
+      const sectionIndexById = new Map(
+        template.sections.map((s, idx) => [s.id, idx]),
+      );
       items = template.items.map((it, idx) => ({
         label: it.label,
         helpText: it.helpText,
         category: it.category,
+        order: idx,
+        sectionIndex:
+          it.sectionId !== null
+            ? (sectionIndexById.get(it.sectionId) ?? null)
+            : null,
+        scoringRule: it.scoringRule,
+        points: it.points,
+        mandatory: it.mandatory,
+      }));
+      scoring = {
+        scoringEnabled: template.scoringEnabled,
+        scoringMethod: template.scoringMethod,
+        totalPossibleScore: template.totalPossibleScore,
+        passingScore: template.passingScore,
+        showAsPercentage: template.showAsPercentage,
+        roundScores: template.roundScores,
+      };
+      bands = template.scoreBands.map((b, idx) => ({
+        label: b.label,
+        minScore: b.minScore,
+        maxScore: b.maxScore,
+        tone: b.tone,
         order: idx,
       }));
       snapshot = {
@@ -327,10 +432,39 @@ export async function createAudit(
       createdByName: viewer.name,
       documents: { connect: docs.ids.map((id) => ({ id })) },
       ...(snapshot ?? {}),
-      ...(items.length ? { items: { create: items } } : {}),
+      ...(scoring ?? {}),
+      ...(sections.length ? { sections: { create: sections } } : {}),
+      ...(bands.length ? { scoreBands: { create: bands } } : {}),
     },
     select: { id: true },
   });
+
+  // Items are created after the audit so they can be linked to the sections we
+  // just created (nested creates can't cross-reference sibling records).
+  if (items.length > 0) {
+    const createdSections = await prisma.auditSection.findMany({
+      where: { auditId: created.id },
+      orderBy: { order: 'asc' },
+      select: { id: true },
+    });
+    await prisma.auditItem.createMany({
+      data: items.map((it) => ({
+        auditId: created.id,
+        label: it.label,
+        helpText: it.helpText,
+        category: it.category,
+        order: it.order,
+        sectionId:
+          it.sectionIndex !== null
+            ? (createdSections[it.sectionIndex]?.id ?? null)
+            : null,
+        scoringRule: it.scoringRule,
+        points: it.points,
+        mandatory: it.mandatory,
+      })),
+    });
+  }
+
   return { ok: true, id: created.id };
 }
 

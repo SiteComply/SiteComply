@@ -16,6 +16,7 @@ import { canDeleteAudit } from '@/services/audits/auditConstants';
 import { findingCategoryLabel } from '@/services/audits/findingConstants';
 import { AuditDeleteButton } from '@/components/platform/AuditDeleteButton';
 import { SaveAuditAsTemplateButton } from '@/components/platform/SaveAuditAsTemplateButton';
+import { AuditChecklistPanel } from '@/components/platform/AuditChecklistPanel';
 import { listFindingsForAudit } from '@/services/audits/findingService';
 import { listEvidenceForFindings } from '@/services/audits/findingEvidenceService';
 import {
@@ -182,22 +183,35 @@ export default async function AuditDetailPage({
 
           {audit.items.length > 0 && (
             <Section title={`Audit checklist (${audit.items.length})`}>
-              <ul className="divide-y divide-line">
-                {audit.items.map((it) => (
-                  <li key={it.id} className="flex items-start gap-3 py-2.5">
-                    <span className="bg-brand-400 mt-0.5 h-2 w-2 shrink-0 rounded-full" />
-                    <div className="min-w-0">
-                      <p className="text-sm text-ink">{it.label}</p>
-                      {it.helpText && (
-                        <p className="text-xs text-ink-subtle">{it.helpText}</p>
-                      )}
-                    </div>
-                    <span className="ml-auto shrink-0 rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-medium text-ink-subtle">
-                      {findingCategoryLabel(it.category)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              {canEdit && audit.status !== 'SIGNED_OFF' && (
+                <p className="mb-3 text-xs">
+                  <Link
+                    href={`/platform/dashboard/audits/${audit.id}/scoring`}
+                    className="font-medium text-brand-700 hover:underline"
+                  >
+                    Configure scoring →
+                  </Link>
+                </p>
+              )}
+              <AuditChecklistPanel
+                auditId={audit.id}
+                scoringEnabled={audit.scoringEnabled}
+                canEdit={canEdit && audit.status !== 'SIGNED_OFF'}
+                items={audit.items.map((it) => ({
+                  id: it.id,
+                  label: it.label,
+                  helpText: it.helpText,
+                  categoryLabel: findingCategoryLabel(it.category),
+                  sectionName:
+                    audit.sections.find((s) => s.id === it.sectionId)?.name ??
+                    null,
+                  scoringRule: it.scoringRule,
+                  points: it.points,
+                  mandatory: it.mandatory,
+                  result: it.result,
+                  pointsAwarded: it.pointsAwarded,
+                }))}
+              />
             </Section>
           )}
 
@@ -212,12 +226,43 @@ export default async function AuditDetailPage({
         <div className="space-y-6">
           <Section title="Summary">
             <dl className="space-y-3">
-              <Detail
-                label="Overall score"
-                value={
-                  audit.overallScore === null ? '—' : `${audit.overallScore}%`
-                }
-              />
+              {/* SC-014: when scoring is enabled the score is calculated from the
+                  checklist; otherwise the legacy manually-entered score stands. */}
+              {audit.scoringEnabled ? (
+                <>
+                  <Detail
+                    label="Calculated score"
+                    value={
+                      audit.calculatedPercent === null
+                        ? 'Not yet scored'
+                        : audit.showAsPercentage
+                          ? `${audit.calculatedPercent}%`
+                          : `${audit.calculatedScore} / ${audit.totalPossibleScore} pts`
+                    }
+                  />
+                  <Detail
+                    label="Result"
+                    value={
+                      audit.calculatedPassed === null
+                        ? '—'
+                        : audit.calculatedPassed
+                          ? 'Pass'
+                          : 'Fail'
+                    }
+                  />
+                  <Detail
+                    label="Passing score"
+                    value={`${audit.passingScore} / ${audit.totalPossibleScore} pts`}
+                  />
+                </>
+              ) : (
+                <Detail
+                  label="Overall score"
+                  value={
+                    audit.overallScore === null ? '—' : `${audit.overallScore}%`
+                  }
+                />
+              )}
               <Detail label="Status" value={auditStatusLabel(audit.status)} />
               <Detail
                 label="Site"

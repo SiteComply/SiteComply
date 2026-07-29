@@ -7,7 +7,12 @@ import {
   assertModuleView,
 } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
-import { listAudits, countAudits } from '@/services/audits/auditService';
+import {
+  listAudits,
+  countAudits,
+  auditScoreLabel,
+  auditResultLabel,
+} from '@/services/audits/auditService';
 import {
   AUDIT_STATUSES,
   auditStatusLabel,
@@ -166,6 +171,7 @@ export default async function PlatformAuditsPage({
                   <th className="px-5 py-2.5 font-medium">Site</th>
                   <th className="px-5 py-2.5 font-medium">Status</th>
                   <th className="px-5 py-2.5 text-right font-medium">Score</th>
+                  <th className="px-5 py-2.5 font-medium">Result</th>
                   <th className="px-5 py-2.5 font-medium">Created</th>
                 </tr>
               </thead>
@@ -197,7 +203,22 @@ export default async function PlatformAuditsPage({
                       </span>
                     </td>
                     <td className="px-5 py-3 text-right tabular-nums text-ink">
-                      {a.overallScore === null ? '—' : `${a.overallScore}%`}
+                      {auditScoreLabel(a)}
+                    </td>
+                    <td className="px-5 py-3">
+                      {a.scoringEnabled && a.calculatedPassed !== null ? (
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            a.calculatedPassed
+                              ? 'bg-safe-50 text-safe-700'
+                              : 'bg-danger-50 text-danger-700'
+                          }`}
+                        >
+                          {auditResultLabel(a)}
+                        </span>
+                      ) : (
+                        <span className="text-ink-subtle">—</span>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-ink-muted">
                       {formatDateUK(a.createdAt)}

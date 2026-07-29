@@ -14,7 +14,14 @@ export type PlatformIconName =
   | 'bolt'
   | 'hardhat'
   | 'permit'
-  | 'bell';
+  | 'bell'
+  // SC-014 audit scoring: method cards + question scoring rule cards.
+  | 'percent'
+  | 'sliders'
+  | 'weight'
+  | 'check'
+  | 'alert'
+  | 'info';
 
 const PATHS: Record<PlatformIconName, ReactNode> = {
   permit: (
@@ -79,6 +86,44 @@ const PATHS: Record<PlatformIconName, ReactNode> = {
     <>
       <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z" />
       <path d="M10.5 20a1.8 1.8 0 0 0 3 0" />
+    </>
+  ),
+  percent: (
+    <>
+      <path d="M19 5 5 19" />
+      <circle cx="7.5" cy="7.5" r="2.5" />
+      <circle cx="16.5" cy="16.5" r="2.5" />
+    </>
+  ),
+  sliders: (
+    <>
+      <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
+      <circle cx="16" cy="7" r="2" />
+      <circle cx="10" cy="17" r="2" />
+    </>
+  ),
+  weight: (
+    <>
+      <path d="M12 3v4M5 21h14l-2-11H7L5 21z" />
+      <circle cx="12" cy="5" r="2" />
+    </>
+  ),
+  check: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8.5 12.5 2.5 2.5 4.5-5" />
+    </>
+  ),
+  alert: (
+    <>
+      <path d="M12 4.5 2.8 20h18.4L12 4.5z" />
+      <path d="M12 10v4M12 17.2v.1" />
+    </>
+  ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5M12 7.8v.1" />
     </>
   ),
 };

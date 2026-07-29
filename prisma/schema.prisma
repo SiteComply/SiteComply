@@ -819,6 +819,32 @@ model Audit {
   sourceTemplateName    String?
   sourceTemplateVersion Int?
 
+  // SC-014: weighted sections this audit's items are grouped under, copied from
+  // the template at creation (snapshot-on-use, same rule as items).
+  sections AuditSection[]
+
+  // SC-014: named score ranges, used only when scoringMethod is CUSTOM.
+  scoreBands AuditScoreBand[]
+
+  // SC-014 scoring configuration. Ships DARK: `scoringEnabled` defaults false, so
+  // existing audits keep the manual `overallScore` and behave exactly as before.
+  scoringEnabled     Boolean       @default(false)
+  scoringMethod      ScoringMethod @default(PERCENTAGE)
+  /// Maximum points available across all sections (the mockup's "Total Possible Score").
+  totalPossibleScore Int           @default(100)
+  /// Minimum points required to pass.
+  passingScore       Int           @default(80)
+  showAsPercentage   Boolean       @default(true)
+  roundScores        Boolean       @default(true)
+
+  /// SC-014 computed results, written by auditScoringService — never hand-edited.
+  /// Distinct from the legacy manual `overallScore`, which is retained for audits
+  /// created before scoring existed (and whenever scoringEnabled is false).
+  calculatedScore   Int?
+  calculatedPercent Int?
+  calculatedPassed  Boolean?
+  scoredAt          DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -826,9 +852,59 @@ model Audit {
   @@index([status])
 }
 
+/// SC-014 — how an audit's overall score is produced.
+enum ScoringMethod {
+  /// Points earned over points available, expressed as a percentage.
+  PERCENTAGE
+  /// The whole audit simply passes or fails; no percentage is presented.
+  PASS_FAIL
+  /// Percentage scoring, then mapped to named bands (see AuditScoreBand).
+  CUSTOM
+}
+
+/// SC-014 — how an individual checklist item contributes to the score.
+/// NOTE: "mandatory" is deliberately NOT a member here. A mandatory question is a
+/// separate boolean flag on the item, because the requirement is that it "must be
+/// passed regardless of the overall score" — a gate, orthogonal to how the item
+/// scores. That lets a question be both weighted AND mandatory.
+enum QuestionScoringRule {
+  /// Carries points; contributes proportionally to its section.
+  WEIGHTED
+  /// All-or-nothing: full points on pass, zero on fail.
+  PASS_FAIL
+  /// Recorded for information only — excluded from both earned and available points.
+  INFO_ONLY
+}
+
+/// SC-014 — the auditor's answer to a checklist item.
+enum ItemResult {
+  PASS
+  FAIL
+  /// Not applicable — excluded from the available-points denominator.
+  NA
+}
+
+/// A weighted group of checklist items on an audit (SC-014), e.g. "Site Access &
+/// Security". Copied from an AuditTemplateSection at audit creation, so later
+/// template edits never alter a historic audit's structure or score.
+model AuditSection {
+  id      String @id @default(cuid())
+  audit   Audit  @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  auditId String
+  name    String
+  /// Share of totalPossibleScore this section contributes. Across one audit these
+  /// must sum to 100 — enforced in auditScoringService, not by the database.
+  weightPercent Int @default(0)
+  order         Int
+
+  items AuditItem[]
+
+  @@index([auditId, order])
+}
+
 /// A single checklist item on an audit (SC-013) — a thing the auditor inspects.
-/// Copied from an AuditTemplateItem at audit creation, or added ad-hoc. Kept lean
-/// on purpose: scoring is layered on by SC-014, not stored here yet.
+/// Copied from an AuditTemplateItem at audit creation, or added ad-hoc. SC-014
+/// layered scoring configuration and the auditor's result onto it.
 model AuditItem {
   id       String          @id @default(cuid())
   audit    Audit           @relation(fields: [auditId], references: [id], onDelete: Cascade)
@@ -840,7 +916,47 @@ model AuditItem {
   note     String?
   order    Int
 
+  // SC-014 — grouping. Nullable so SC-013 audits (which have no sections) still
+  // load; ungrouped items are treated as an implicit "Ungrouped" section.
+  section   AuditSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  sectionId String?
+
+  // SC-014 — scoring configuration for this item.
+  scoringRule QuestionScoringRule @default(WEIGHTED)
+  /// Relative weight of this item within its section (WEIGHTED/PASS_FAIL only).
+  points      Int                 @default(1)
+  /// Must be passed for the audit to pass, whatever the percentage says.
+  mandatory   Boolean             @default(false)
+
+  // SC-014 — the auditor's answer. Null until answered.
+  result         ItemResult?
+  pointsAwarded  Int?
+  answeredAt     DateTime?
+  answeredByName String?
+
   @@index([auditId, order])
+  @@index([sectionId, order])
+}
+
+/// A named score range for the CUSTOM scoring method (SC-014), e.g. "Gold 90–100".
+/// Belongs to either an audit or a template — exactly one of the two FKs is set.
+model AuditScoreBand {
+  id         String         @id @default(cuid())
+  audit      Audit?         @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  auditId    String?
+  template   AuditTemplate? @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateId String?
+
+  label    String
+  minScore Int
+  maxScore Int
+  /// Design-token name (e.g. "safe", "hivis", "danger") — never a raw hex value,
+  /// so bands re-theme with the rest of the design system.
+  tone     String @default("brand")
+  order    Int    @default(0)
+
+  @@index([auditId, order])
+  @@index([templateId, order])
 }
 
 /// A reusable Audit Template (SC-013) — an ORGANISATION-LEVEL library entry that
@@ -862,10 +978,38 @@ model AuditTemplate {
 
   items AuditTemplateItem[]
 
+  // SC-014: weighted sections and scoring config travel WITH the template, so a
+  // template captures a whole audit format (structure + how it scores), not just
+  // a list of questions. Copied onto the audit at creation (snapshot-on-use).
+  sections   AuditTemplateSection[]
+  scoreBands AuditScoreBand[]
+
+  scoringEnabled     Boolean       @default(false)
+  scoringMethod      ScoringMethod @default(PERCENTAGE)
+  totalPossibleScore Int           @default(100)
+  passingScore       Int           @default(80)
+  showAsPercentage   Boolean       @default(true)
+  roundScores        Boolean       @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([active, order])
+}
+
+/// A weighted section on an audit template (SC-014). Copied onto an AuditSection
+/// when an audit is created from the template.
+model AuditTemplateSection {
+  id            String        @id @default(cuid())
+  template      AuditTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateId    String
+  name          String
+  weightPercent Int           @default(0)
+  order         Int
+
+  items AuditTemplateItem[]
+
+  @@index([templateId, order])
 }
 
 /// One reusable check item on an audit template (SC-013). Copied onto an
@@ -880,7 +1024,15 @@ model AuditTemplateItem {
   defaultSeverity FindingSeverity?
   order           Int
 
+  // SC-014 — grouping + scoring, copied onto the AuditItem at audit creation.
+  section     AuditTemplateSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  sectionId   String?
+  scoringRule QuestionScoringRule   @default(WEIGHTED)
+  points      Int                   @default(1)
+  mandatory   Boolean               @default(false)
+
   @@index([templateId, order])
+  @@index([sectionId, order])
 }
 
 /// A finding raised during an audit (Audits Phase 2): an issue with a title,
