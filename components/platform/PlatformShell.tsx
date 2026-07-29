@@ -8,6 +8,7 @@ import {
   describeScope,
 } from '@/services/platformUsers/platformAccess';
 import { countUnreadPlatformNotifications } from '@/services/notifications/platformNotifications';
+import { NotificationPoller } from '@/components/platform/NotificationPoller';
 import { PlatformNav } from './PlatformNav';
 
 /**
@@ -29,6 +30,8 @@ export async function PlatformShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-dvh flex-col bg-surface-sunken">
+      {/* SC-016: keeps the badge live without a manual refresh. */}
+      {viewer && <NotificationPoller initialCount={notificationCount} />}
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-30 focus:rounded-lg focus:bg-brand-600 focus:px-4 focus:py-2 focus:font-semibold focus:text-white"
@@ -76,7 +79,10 @@ export async function PlatformShell({ children }: { children: ReactNode }) {
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 md:flex-row">
         <aside className="shrink-0 md:w-52">
           <div className="rounded-xl border border-line bg-surface p-2 shadow-card md:sticky md:top-6">
-            <PlatformNav role={viewer?.role} notificationCount={notificationCount} />
+            <PlatformNav
+              role={viewer?.role}
+              notificationCount={notificationCount}
+            />
           </div>
         </aside>
 

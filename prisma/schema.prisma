@@ -667,6 +667,8 @@ model PlatformUser {
   @@index([company])
   // SC-015: actions assigned to this platform user (fallback assignee).
   assignedActions Action[] @relation("ActionAssignee")
+  // SC-016: notification events addressed to this user.
+  notificationEvents NotificationEvent[] @relation("NotificationRecipient")
 }
 
 /// Per-user read state for in-app notifications. Notifications are derived (e.g.
@@ -1162,6 +1164,8 @@ model Action {
   @@index([status, dueDate])
   @@index([assignedWorkerId])
   @@index([assignedPlatformUserId])
+  // SC-016: notifications raised about this action.
+  notificationEvents NotificationEvent[]
 }
 
 /// A photo or document uploaded as evidence against an Action. The bytes live in
@@ -1714,4 +1718,57 @@ model CheckInOverride {
 
   @@index([workerId, jobSiteId, usedAt])
   @@index([jobSiteId, createdAt])
+}
+
+/// SC-016 — a notification EVENT actually addressed to a person.
+///
+/// The rest of the notification framework DERIVES notifications from current data
+/// on each read, which is right for state ("this is overdue") but cannot answer
+/// "was this person told, and when". Assignment and meaningful-change
+/// notifications are discrete occurrences, so they are STORED — that makes them
+/// auditable, survives later edits to the action, and gives future reporting a
+/// delivery record that could never be reconstructed after the fact.
+///
+/// V1 recipients are PLATFORM USERS only. Worker assignees are deliberately not
+/// notified until worker-side action visibility exists (deferred from SC-015) —
+/// notifying someone who has no way to open the action would be noise.
+model NotificationEvent {
+  id   String                @id @default(cuid())
+  type NotificationEventType
+
+  recipient       PlatformUser @relation("NotificationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
+  recipientUserId String
+
+  action   Action? @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  actionId String?
+
+  /// Payload SNAPSHOT — what the person was told at the time. Deliberately not
+  /// re-read from the action, so the record stays true if the action changes.
+  title       String
+  message     String
+  siteName    String
+  priority    String?
+  dueDate     DateTime?
+  description String?
+  href        String
+  /// Who caused it (denormalised so history survives user deletion).
+  actorName   String?
+
+  createdAt DateTime  @default(now())
+  /// Set when the recipient opens/marks it read. Read state for these events is
+  /// still ALSO tracked via NotificationRead so one mechanism drives the badge.
+  readAt    DateTime?
+
+  @@index([recipientUserId, createdAt])
+  @@index([actionId])
+}
+
+/// SC-016 — the meaningful changes worth telling an assignee about. Deliberately
+/// NOT every edit: a typo fix should not notify anyone.
+enum NotificationEventType {
+  ACTION_ASSIGNED
+  ACTION_REASSIGNED
+  ACTION_STATUS_CHANGED
+  ACTION_PRIORITY_CHANGED
+  ACTION_DUE_DATE_CHANGED
 }

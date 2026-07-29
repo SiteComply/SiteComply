@@ -9,6 +9,11 @@ import {
   resolveAssignee,
   type AssigneeKind,
 } from '@/services/actions/actionAssigneeService';
+import {
+  notifyAssigned,
+  notifyMeaningfulChange,
+  type ActionSnapshot,
+} from '@/services/notifications/notificationEventService';
 import { zonedMidnightToUtc } from '@/lib/datetime';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import {
@@ -412,9 +417,45 @@ export async function createAction(
       completedAt: value.status === ActionStatus.COMPLETED ? new Date() : null,
       activities: { create: activities },
     },
-    select: { id: true },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      priority: true,
+      status: true,
+      dueDate: true,
+      assignedPlatformUserId: true,
+      jobSite: { select: { name: true } },
+    },
   });
+
+  // SC-016: tell the assignee they now own this.
+  await notifyAssigned(toSnapshot(created), viewer);
+
   return { ok: true, id: created.id };
+}
+
+/** Shape an action row for the SC-016 notification payload. */
+function toSnapshot(a: {
+  id: string;
+  title: string;
+  description: string | null;
+  priority: ActionPriority;
+  status: ActionStatus;
+  dueDate: Date | null;
+  assignedPlatformUserId: string | null;
+  jobSite: { name: string };
+}): ActionSnapshot {
+  return {
+    id: a.id,
+    title: a.title,
+    description: a.description,
+    priority: a.priority,
+    status: a.status,
+    dueDate: a.dueDate,
+    siteName: a.jobSite.name,
+    assignedPlatformUserId: a.assignedPlatformUserId,
+  };
 }
 
 export async function updateAction(
@@ -500,6 +541,39 @@ export async function updateAction(
       ...(activities.length ? { activities: { create: activities } } : {}),
     },
   });
+
+  // SC-016: notify the assignee. A NEW assignee is told they now own it;
+  // otherwise the current assignee is told only about MEANINGFUL changes
+  // (status, priority, due date) — never about a description or title tweak.
+  const updatedRow = await prisma.action.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      priority: true,
+      status: true,
+      dueDate: true,
+      assignedPlatformUserId: true,
+      jobSite: { select: { name: true } },
+    },
+  });
+  if (updatedRow) {
+    const snapshot = toSnapshot(updatedRow);
+    if (assignee) {
+      await notifyAssigned(snapshot, viewer, true);
+    }
+    await notifyMeaningfulChange(
+      {
+        status: existing.status,
+        priority: existing.priority,
+        dueDate: existing.dueDate,
+      },
+      snapshot,
+      viewer,
+    );
+  }
+
   return { ok: true, id };
 }
 
@@ -558,6 +632,34 @@ export async function setActionStatus(
       },
     },
   });
+
+  // SC-016: a status change is a meaningful change, so the assignee is told —
+  // this is the quick status control, a separate path from the edit form.
+  const row = await prisma.action.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      priority: true,
+      status: true,
+      dueDate: true,
+      assignedPlatformUserId: true,
+      jobSite: { select: { name: true } },
+    },
+  });
+  if (row) {
+    await notifyMeaningfulChange(
+      {
+        status: existing.status,
+        priority: existing.priority,
+        dueDate: existing.dueDate,
+      },
+      toSnapshot(row),
+      viewer,
+    );
+  }
+
   return { ok: true, id };
 }
 
@@ -649,7 +751,21 @@ export async function createActionFromFinding(
         ],
       },
     },
-    select: { id: true },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      priority: true,
+      status: true,
+      dueDate: true,
+      assignedPlatformUserId: true,
+      jobSite: { select: { name: true } },
+    },
   });
+
+  // SC-016: audit findings are the main generator of actions now SC-013/SC-014
+  // are live, so this path notifies the assignee like any other.
+  await notifyAssigned(toSnapshot(created), viewer);
+
   return { ok: true, id: created.id };
 }

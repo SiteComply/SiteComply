@@ -11,6 +11,10 @@ export type NotificationGroup =
   | 'ACTION_DUE'
   | 'DOC_EXPIRING'
   | 'ACTION_ASSIGNED'
+  // SC-016: addressed to the assignee personally, distinct from the site-scoped
+  // manager types above.
+  | 'ACTION_ASSIGNED_TO_ME'
+  | 'ACTION_UPDATED'
   | 'AUDIT_CREATED'
   | 'AUDIT_SIGNED_OFF';
 
@@ -52,6 +56,18 @@ export const NOTIFICATION_GROUP_META: Record<
   DOC_EXPIRED: { title: 'Expired', accent: 'text-danger-700', order: 2 },
   ACTION_DUE: { title: 'Actions due soon', accent: 'text-hivis-600', order: 3 },
   DOC_EXPIRING: { title: 'Expiring soon', accent: 'text-hivis-600', order: 4 },
+  // SC-016 — your own items come FIRST: being personally responsible outranks
+  // site-wide awareness.
+  ACTION_ASSIGNED_TO_ME: {
+    title: 'Assigned to you',
+    accent: 'text-brand-700',
+    order: -2,
+  },
+  ACTION_UPDATED: {
+    title: 'Your actions were updated',
+    accent: 'text-ink-muted',
+    order: -1,
+  },
   ACTION_ASSIGNED: {
     title: 'Newly assigned actions',
     accent: 'text-brand-700',

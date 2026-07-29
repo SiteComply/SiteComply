@@ -9,6 +9,10 @@ import { deriveDocumentNotifications } from '@/services/documents/documentExpiry
 import { deriveActionNotifications } from '@/services/actions/actionNotifications';
 import { deriveAuditNotifications } from '@/services/audits/auditNotifications';
 import { derivePermitNotifications } from '@/services/permits/permitNotifications';
+import {
+  deriveAssigneeNotifications,
+  deriveAssigneeDueSoon,
+} from '@/services/notifications/notificationEventService';
 
 /**
  * Unified in-app notifications for a platform user.
@@ -29,17 +33,35 @@ export async function getPlatformNotifications(
   viewer: PlatformViewer,
   now: Date = new Date(),
 ): Promise<PlatformNotification[]> {
-  if (viewer.siteIds.length === 0) return [];
+  // SC-016: assignee-addressed events are fetched even for a viewer with no
+  // assigned sites — they are addressed to the PERSON, and the event is only ever
+  // created for the assignee, so the recipient id is the authorisation.
+  const addressed = [
+    ...(await deriveAssigneeNotifications(viewer, now)),
+    ...(await deriveAssigneeDueSoon(viewer, now)),
+  ];
+  if (viewer.siteIds.length === 0) {
+    return applyReadState(viewer.id, addressed);
+  }
 
   const raw: RawNotification[] = [
+    ...addressed,
     ...(await derivePermitNotifications(viewer, now)),
     ...(await deriveActionNotifications(viewer, now)),
     ...(await deriveDocumentNotifications(viewer, now)),
     ...(await deriveAuditNotifications(viewer, now)),
   ];
 
+  return applyReadState(viewer.id, raw);
+}
+
+/** Apply per-user read state and group ordering. One place, all sources. */
+async function applyReadState(
+  userId: string,
+  raw: RawNotification[],
+): Promise<PlatformNotification[]> {
   const readKeys = await getReadNotificationKeys(
-    viewer.id,
+    userId,
     raw.map((r) => r.key),
   );
   const list: PlatformNotification[] = raw.map((r) => ({
