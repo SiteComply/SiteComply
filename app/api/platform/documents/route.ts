@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
+import { parseDocumentAnnotationMeta } from '@/services/annotations/annotationUpload';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import {
   validateDocumentMeta,
@@ -20,7 +21,10 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
-    return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: 'Not signed in.' },
+      { status: 401 },
+    );
   }
   if (!permits(viewer.role, 'documents', 'create')) {
     return NextResponse.json(
@@ -33,7 +37,10 @@ export async function POST(req: NextRequest) {
   try {
     form = await req.formData();
   } catch {
-    return NextResponse.json({ ok: false, error: 'Invalid upload.' }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: 'Invalid upload.' },
+      { status: 400 },
+    );
   }
 
   const fileEntry = form.get('file');
@@ -57,16 +64,26 @@ export async function POST(req: NextRequest) {
   };
   const result = validateDocumentMeta(meta, viewer);
   if (!result.ok) {
-    return NextResponse.json({ ok: false, errors: result.errors }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, errors: result.errors },
+      { status: 400 },
+    );
   }
 
   const buffer = Buffer.from(await file!.arrayBuffer());
-  const created = await createDocument(viewer, result.value, {
-    buffer,
-    fileName: file!.name || 'document',
-    mimeType: file!.type,
-    size: file!.size,
-  });
+  const created = await createDocument(
+    viewer,
+    result.value,
+    {
+      buffer,
+      fileName: file!.name || 'document',
+      mimeType: file!.type,
+      size: file!.size,
+    },
+    // SC-017: set only when this upload IS the annotated copy of a document
+    // uploaded moments earlier; the original row is created first, untouched.
+    parseDocumentAnnotationMeta(form),
+  );
 
   return NextResponse.json({ ok: true, id: created.id });
 }

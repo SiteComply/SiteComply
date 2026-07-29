@@ -1,5 +1,6 @@
 import { DocumentCategory, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import type { DocumentAnnotationMeta } from '@/services/annotations/annotationUpload';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import {
   isDocumentCategory,
@@ -112,13 +113,15 @@ export function validateDocumentMeta(
 export function validateUploadFile(
   file: { size: number; type: string } | null,
 ): { ok: true } | { ok: false; error: string } {
-  if (!file || file.size === 0) return { ok: false, error: 'Please choose a file to upload.' };
+  if (!file || file.size === 0)
+    return { ok: false, error: 'Please choose a file to upload.' };
   if (file.size > MAX_DOCUMENT_BYTES)
     return { ok: false, error: 'That file is too large (max 20 MB).' };
   if (!ACCEPTED_DOCUMENT_MIME_TYPES.includes(file.type as never))
     return {
       ok: false,
-      error: 'That file type is not supported. Use PDF, image, Word, Excel or text.',
+      error:
+        'That file type is not supported. Use PDF, image, Word, Excel or text.',
     };
   return { ok: true };
 }
@@ -140,7 +143,9 @@ function expiryBoundaries(now = new Date()) {
   const today = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
   );
-  const soon = new Date(today.getTime() + EXPIRING_SOON_DAYS * 24 * 60 * 60 * 1000);
+  const soon = new Date(
+    today.getTime() + EXPIRING_SOON_DAYS * 24 * 60 * 60 * 1000,
+  );
   return { today, soon };
 }
 
@@ -169,7 +174,8 @@ function documentWhere(
   if (filters.expiry && isDocumentExpiryFilter(filters.expiry)) {
     const { today, soon } = expiryBoundaries();
     if (filters.expiry === 'expired') expiresAt = { lt: today };
-    else if (filters.expiry === 'expiring') expiresAt = { gte: today, lte: soon };
+    else if (filters.expiry === 'expiring')
+      expiresAt = { gte: today, lte: soon };
     else if (filters.expiry === 'valid') expiresAt = { gt: soon };
     else expiresAt = null; // none — documents with no expiry date
   }
@@ -249,6 +255,7 @@ export async function createDocument(
   viewer: PlatformViewer,
   meta: ValidatedDocumentMeta,
   file: { buffer: Buffer; fileName: string; mimeType: string; size: number },
+  annotation?: DocumentAnnotationMeta,
 ): Promise<{ id: string }> {
   const blobPath = buildBlobPath(meta.jobSiteId, file.fileName);
   await uploadDocumentBlob(blobPath, file.buffer, file.mimeType);
@@ -267,6 +274,13 @@ export async function createDocument(
         blobPath,
         uploadedByUserId: viewer.id,
         uploadedByName: viewer.name,
+        // SC-017 — set only on the annotated COPY. The original document row is
+        // created first and left untouched, exactly as for evidence.
+        annotated: annotation?.annotated ?? false,
+        originalDocumentId: annotation?.originalDocumentId ?? null,
+        annotationData: annotation?.annotationData
+          ? (annotation.annotationData as unknown as Prisma.InputJsonValue)
+          : undefined,
       },
       select: { id: true },
     });

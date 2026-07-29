@@ -38,3 +38,23 @@ export function parseAnnotationMeta(form: {
   }
   return { annotated: true, originalEvidenceId, annotationData };
 }
+
+/** Document variant — same rules, but the link column is originalDocumentId. */
+export interface DocumentAnnotationMeta {
+  annotated: boolean;
+  originalDocumentId: string | null;
+  annotationData: AnnotationDocument | null;
+}
+
+export function parseDocumentAnnotationMeta(form: {
+  get(name: string): unknown;
+}): DocumentAnnotationMeta {
+  const base = parseAnnotationMeta(form);
+  const raw = form.get('originalDocumentId');
+  return {
+    annotated: base.annotated,
+    originalDocumentId:
+      base.annotated && typeof raw === 'string' && raw ? raw : null,
+    annotationData: base.annotationData,
+  };
+}
