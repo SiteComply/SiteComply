@@ -112,6 +112,9 @@ export function AuditScoringConfig({
     [method, totalPossible, passing, asPercent, rounded, sections, items],
   );
 
+  /** Per-row name problems, keyed by section id — drives the inline row error. */
+  const sectionIssues = issues.sections ?? {};
+
   const total = Math.round(
     weightTotal(sections.map((s, i) => ({ ...s, order: i }))),
   );
@@ -142,10 +145,26 @@ export function AuditScoringConfig({
     setSections(next);
   }
 
+  /**
+   * New sections are named "Section 1", "Section 2"… so a freshly added row is
+   * valid immediately and the user renames rather than fills in a blank. Skips
+   * names already taken, so adding after a delete doesn't duplicate.
+   */
+  function nextSectionName(): string {
+    const taken = new Set(sections.map((s) => s.name.trim()));
+    let n = sections.length + 1;
+    while (taken.has(`Section ${n}`)) n += 1;
+    return `Section ${n}`;
+  }
+
   function addSection() {
     setSections([
       ...sections,
-      { id: `new-${sections.length}`, name: '', weightPercent: 0 },
+      {
+        id: `new-${sections.length}`,
+        name: nextSectionName(),
+        weightPercent: 0,
+      },
     ]);
   }
 
@@ -244,6 +263,22 @@ export function AuditScoringConfig({
           </button>
         </div>
       </div>
+
+      {/* Say WHY Save is disabled — a greyed-out button with the problem further
+          down the page was the original complaint. */}
+      {blocked && (
+        <p className="rounded-lg border border-hivis-500/40 bg-hivis-500/10 px-4 py-2 text-sm text-ink-muted">
+          <span className="font-semibold text-ink">
+            Save Scoring is disabled:
+          </span>{' '}
+          {issues.sections
+            ? Object.values(issues.sections)[0]
+            : (issues.weights ??
+              issues.totalPossibleScore ??
+              issues.passingScore ??
+              issues.items)}
+        </p>
+      )}
 
       {message && (
         <p
@@ -556,8 +591,24 @@ export function AuditScoringConfig({
                                   )
                                 }
                                 placeholder="Section name"
-                                className="w-full rounded border border-transparent bg-transparent px-1 py-1 font-medium text-ink hover:border-line focus:border-line"
+                                aria-label={`Name for section ${idx + 1}`}
+                                aria-invalid={
+                                  sectionIssues[section.id] ? true : undefined
+                                }
+                                // A visible field: the borderless variant this
+                                // started as read as static text, so users could
+                                // not tell the name was editable.
+                                className={`w-full rounded-lg border bg-surface px-2 py-1.5 text-sm font-medium text-ink ${
+                                  sectionIssues[section.id]
+                                    ? 'border-danger-500'
+                                    : 'border-line'
+                                }`}
                               />
+                              {sectionIssues[section.id] && (
+                                <p className="mt-0.5 px-1 text-xs font-medium text-danger-600">
+                                  {sectionIssues[section.id]}
+                                </p>
+                              )}
                               <span className="px-1 text-xs text-ink-subtle">
                                 {itemsInSection(section.id)} questions
                               </span>

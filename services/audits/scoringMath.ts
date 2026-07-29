@@ -10,6 +10,7 @@
 import {
   ITEM_POINTS_MAX,
   ITEM_POINTS_MIN,
+  SECTION_NAME_MAX,
   TOTAL_SCORE_MAX,
   TOTAL_SCORE_MIN,
   WEIGHT_TOTAL,
@@ -238,6 +239,32 @@ export interface ConfigIssues {
   passingScore?: string;
   weights?: string;
   items?: string;
+  /**
+   * Per-section problems keyed by section id, so the config screen can mark the
+   * offending ROW rather than showing an unattributed banner. Only present when
+   * at least one section has a problem — an empty object would make hasIssues()
+   * report a problem that isn't there.
+   */
+  sections?: Record<string, string>;
+}
+
+/**
+ * Validate one section's name. Shared so the screen, the shared validator and the
+ * API's error message all describe the rule identically.
+ */
+export function sectionNameIssue(name: string): string | null {
+  const trimmed = (name ?? '').trim();
+  if (!trimmed) return 'Enter a section name.';
+  if (trimmed.length > SECTION_NAME_MAX) {
+    return `Section name must be ${SECTION_NAME_MAX} characters or fewer.`;
+  }
+  return null;
+}
+
+/** Human label for a section in an error message: its name, else its position. */
+export function sectionLabel(section: ScoringSection, index: number): string {
+  const trimmed = (section.name ?? '').trim();
+  return trimmed ? `"${trimmed}"` : `Section ${index + 1}`;
 }
 
 export function weightTotal(sections: ScoringSection[]): number {
@@ -273,6 +300,18 @@ export function validateScoringConfig(
     if (Math.round(total) !== WEIGHT_TOTAL) {
       issues.weights = `Section weights must total ${WEIGHT_TOTAL}% — currently ${Math.round(total)}%.`;
     }
+  }
+
+  // Section names live HERE, in the shared validator, so the screen can block
+  // Save on exactly the same rule the API enforces. Keeping this server-only was
+  // the SC-014 defect: Save looked enabled and failed after a round-trip.
+  const sectionIssues: Record<string, string> = {};
+  for (const section of sections) {
+    const issue = sectionNameIssue(section.name);
+    if (issue) sectionIssues[section.id] = issue;
+  }
+  if (Object.keys(sectionIssues).length > 0) {
+    issues.sections = sectionIssues;
   }
 
   const badPoints = items.some(

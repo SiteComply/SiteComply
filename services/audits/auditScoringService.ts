@@ -5,7 +5,6 @@ import { permits } from '@/services/platformUsers/platformPermissions';
 import {
   MAX_SCORE_BANDS,
   MAX_SECTIONS,
-  SECTION_NAME_MAX,
   isItemResult,
   isQuestionScoringRule,
   isScoringMethod,
@@ -15,6 +14,8 @@ import {
 import {
   hasIssues,
   scoreAudit,
+  sectionLabel,
+  sectionNameIssue,
   validateScoringConfig,
   type ScoringConfig,
   type ScoringItem,
@@ -222,13 +223,16 @@ export async function saveScoringConfig(
       error: `A maximum of ${MAX_SCORE_BANDS} score bands is allowed.`,
     };
   }
-  for (const section of input.sections) {
-    const name = section.name.trim();
-    if (!name || name.length > SECTION_NAME_MAX) {
+  // Section names are validated by the SHARED validator below (alongside weights
+  // and points) so the screen and the API agree; this loop only turns the first
+  // failure into a message that names the offending section.
+  for (const [idx, section] of input.sections.entries()) {
+    const issue = sectionNameIssue(section.name);
+    if (issue) {
       return {
         ok: false,
         reason: 'invalid',
-        error: `Section names must be 1–${SECTION_NAME_MAX} characters.`,
+        error: `${sectionLabel({ id: section.id ?? `new-${idx}`, name: section.name, weightPercent: section.weightPercent, order: idx }, idx)}: ${issue}`,
       };
     }
   }
@@ -299,6 +303,7 @@ export async function saveScoringConfig(
       ok: false,
       reason: 'invalid',
       error:
+        (issues.sections ? Object.values(issues.sections)[0] : undefined) ??
         issues.weights ??
         issues.totalPossibleScore ??
         issues.passingScore ??
