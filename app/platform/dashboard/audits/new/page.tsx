@@ -8,6 +8,7 @@ import {
 } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { listReferenceableDocuments } from '@/services/audits/auditService';
+import { listActiveTemplates } from '@/services/audits/auditTemplateService';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +28,12 @@ export default async function NewAuditPage() {
     .filter((s) => s.status === 'ACTIVE')
     .map((s) => ({ id: s.id, name: s.name, jobReference: s.jobReference }));
   const documents = await listReferenceableDocuments(viewer);
+  const templates = (await listActiveTemplates()).map((t) => ({
+    id: t.id,
+    name: t.name,
+    description: t.description,
+    itemCount: t.itemCount,
+  }));
 
   return (
     <PlatformShell>
@@ -39,8 +46,8 @@ export default async function NewAuditPage() {
         </Link>
         <h1 className="mt-1 text-2xl font-bold text-ink">New audit</h1>
         <p className="text-ink-muted">
-          Start an audit for one of your sites. Findings, actions and photos come
-          in a later phase.
+          Start an audit for one of your sites. Findings, actions and photos
+          come in a later phase.
         </p>
       </div>
 
@@ -49,7 +56,12 @@ export default async function NewAuditPage() {
           You have no active sites to audit.
         </p>
       ) : (
-        <AuditForm mode="create" sites={sites} documents={documents} />
+        <AuditForm
+          mode="create"
+          sites={sites}
+          documents={documents}
+          templates={templates}
+        />
       )}
     </PlatformShell>
   );

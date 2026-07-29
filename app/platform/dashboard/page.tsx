@@ -70,6 +70,7 @@ export default async function PlatformDashboardPage() {
   const canActions = permits(viewer.role, 'actions', 'view');
   const canDocs = permits(viewer.role, 'documents', 'view');
   const canAudits = permits(viewer.role, 'audits', 'view');
+  const canCreateAudit = permits(viewer.role, 'audits', 'create');
   const canCheckins = permits(viewer.role, 'checkins', 'view');
   const canSites = permits(viewer.role, 'sites', 'view');
 
@@ -217,11 +218,23 @@ export default async function PlatformDashboardPage() {
 
   return (
     <PlatformShell>
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold text-ink">Platform Dashboard</h1>
-        <p className="text-ink-muted">
-          A high-level view across your organisation’s sites and compliance.
-        </p>
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-ink">Platform Dashboard</h1>
+          <p className="text-ink-muted">
+            A high-level view across your organisation’s sites and compliance.
+          </p>
+        </div>
+        {/* SC-013: prominent "Start New Audit" — quick audit creation on site. */}
+        {canCreateAudit && (
+          <Link
+            href="/platform/dashboard/audits/new"
+            className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
+          >
+            <PlatformIcon name="shield" />
+            Start new audit
+          </Link>
+        )}
       </header>
 
       <ScopeBanner viewer={viewer} />

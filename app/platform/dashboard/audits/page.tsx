@@ -43,7 +43,11 @@ export default async function PlatformAuditsPage({
   };
   const total = await countAudits(viewer, filters);
   const pg = resolvePage(searchParams.page, total);
-  const audits = await listAudits(viewer, { ...filters, skip: pg.skip, take: pg.take });
+  const audits = await listAudits(viewer, {
+    ...filters,
+    skip: pg.skip,
+    take: pg.take,
+  });
   const canCreate = permits(viewer.role, 'audits', 'create');
 
   return (
@@ -59,6 +63,12 @@ export default async function PlatformAuditsPage({
           <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
             {describeScope(viewer)}
           </span>
+          <Link
+            href="/platform/dashboard/audits/templates"
+            className="rounded-xl border border-line px-4 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken"
+          >
+            Templates
+          </Link>
           {canCreate && (
             <Link
               href="/platform/dashboard/audits/new"
@@ -142,7 +152,8 @@ export default async function PlatformAuditsPage({
           </p>
         ) : audits.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-ink-subtle">
-            No audits{status ? ` with status “${auditStatusLabel(status)}”` : ''} for
+            No audits
+            {status ? ` with status “${auditStatusLabel(status)}”` : ''} for
             your sites yet.
             {canCreate && ' Use “New audit” to start one.'}
           </p>

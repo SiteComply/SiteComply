@@ -19,6 +19,12 @@ export interface AuditFormDocument {
   jobSiteId: string;
   category: string;
 }
+export interface AuditFormTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  itemCount: number;
+}
 
 interface Values {
   title: string;
@@ -42,12 +48,14 @@ export function AuditForm({
   auditId,
   sites,
   documents,
+  templates = [],
   initial,
 }: {
   mode: 'create' | 'edit';
   auditId?: string;
   sites: AuditFormSite[];
   documents: AuditFormDocument[];
+  templates?: AuditFormTemplate[];
   initial?: Partial<Values>;
 }) {
   const router = useRouter();
@@ -59,9 +67,19 @@ export function AuditForm({
     overallScore: initial?.overallScore ?? '',
     documentIds: initial?.documentIds ?? [],
   });
+  // SC-013: when creating, start blank or from a template (its items are copied in).
+  const [templateId, setTemplateId] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
+  const chosenTemplate = templates.find((t) => t.id === templateId) ?? null;
+
+  function chooseTemplate(id: string) {
+    setTemplateId(id);
+    const t = templates.find((x) => x.id === id);
+    // Prefill the title from the template name if the user hasn't typed one.
+    if (t && !values.title.trim()) set('title', t.name);
+  }
 
   function set<K extends keyof Values>(key: K, value: Values[K]) {
     setValues((v) => ({ ...v, [key]: value }));
@@ -96,9 +114,12 @@ export function AuditForm({
         observations: values.observations,
         overallScore: values.overallScore,
         documentIds: values.documentIds.filter((id) => validIds.has(id)),
+        ...(mode === 'create' && templateId ? { templateId } : {}),
       };
       const res = await fetch(
-        mode === 'create' ? '/api/platform/audits' : `/api/platform/audits/${auditId}`,
+        mode === 'create'
+          ? '/api/platform/audits'
+          : `/api/platform/audits/${auditId}`,
         {
           method: mode === 'create' ? 'POST' : 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -108,7 +129,8 @@ export function AuditForm({
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
         if (data.errors) setErrors(data.errors);
-        else setFormError(data.error ?? 'Something went wrong. Please try again.');
+        else
+          setFormError(data.error ?? 'Something went wrong. Please try again.');
         return;
       }
       const id = data.id ?? auditId;
@@ -138,6 +160,41 @@ export function AuditForm({
         </p>
       )}
 
+      {/* SC-013: start blank or from a template. */}
+      {mode === 'create' && templates.length > 0 && (
+        <div className="rounded-xl border border-line bg-surface-sunken p-4">
+          <label className="block text-sm font-semibold text-ink">
+            Start from
+          </label>
+          <p className="mb-2 text-xs text-ink-subtle">
+            Use a template to standardise the audit, or start with a blank
+            audit.
+          </p>
+          <select
+            value={templateId}
+            onChange={(e) => chooseTemplate(e.target.value)}
+            className="w-full rounded-xl border border-line bg-surface px-4 py-3 text-base text-ink"
+          >
+            <option value="">Blank audit (start from scratch)</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} · {t.itemCount} item{t.itemCount === 1 ? '' : 's'}
+              </option>
+            ))}
+          </select>
+          {chosenTemplate && (
+            <p className="mt-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs text-brand-700">
+              {chosenTemplate.description
+                ? `${chosenTemplate.description} `
+                : ''}
+              Its {chosenTemplate.itemCount} checklist item
+              {chosenTemplate.itemCount === 1 ? '' : 's'} will be added to the
+              new audit.
+            </p>
+          )}
+        </div>
+      )}
+
       <TextField
         label="Audit title"
         value={values.title}
@@ -152,7 +209,11 @@ export function AuditForm({
           value={values.jobSiteId}
           onChange={(e) => {
             // Changing site clears document refs (they're site-specific).
-            setValues((v) => ({ ...v, jobSiteId: e.target.value, documentIds: [] }));
+            setValues((v) => ({
+              ...v,
+              jobSiteId: e.target.value,
+              documentIds: [],
+            }));
           }}
           error={errors.jobSiteId}
           hint="Only sites you have access to are listed."
@@ -204,7 +265,9 @@ export function AuditForm({
           Referenced documents (optional)
         </label>
         {!values.jobSiteId ? (
-          <p className="text-sm text-ink-subtle">Choose a site to list its documents.</p>
+          <p className="text-sm text-ink-subtle">
+            Choose a site to list its documents.
+          </p>
         ) : siteDocuments.length === 0 ? (
           <p className="text-sm text-ink-subtle">
             No documents on this site to reference yet.
@@ -239,7 +302,9 @@ export function AuditForm({
           </div>
         )}
         {errors.documentIds && (
-          <p className="text-sm font-medium text-danger-600">{errors.documentIds}</p>
+          <p className="text-sm font-medium text-danger-600">
+            {errors.documentIds}
+          </p>
         )}
       </div>
 
@@ -253,7 +318,12 @@ export function AuditForm({
               ? 'Create audit'
               : 'Save changes'}
         </Button>
-        <Button type="button" variant="ghost" onClick={() => router.back()} disabled={busy}>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => router.back()}
+          disabled={busy}
+        >
           Cancel
         </Button>
       </div>

@@ -7,10 +7,15 @@ import {
   requirePlatformViewer,
   assertModuleView,
 } from '@/services/platformUsers/platformAccess';
-import { permits, canSignOffAudit } from '@/services/platformUsers/platformPermissions';
+import {
+  permits,
+  canSignOffAudit,
+} from '@/services/platformUsers/platformPermissions';
 import { getAuditForViewer } from '@/services/audits/auditService';
 import { canDeleteAudit } from '@/services/audits/auditConstants';
+import { findingCategoryLabel } from '@/services/audits/findingConstants';
 import { AuditDeleteButton } from '@/components/platform/AuditDeleteButton';
+import { SaveAuditAsTemplateButton } from '@/components/platform/SaveAuditAsTemplateButton';
 import { listFindingsForAudit } from '@/services/audits/findingService';
 import { listEvidenceForFindings } from '@/services/audits/findingEvidenceService';
 import {
@@ -46,12 +51,15 @@ export default async function AuditDetailPage({
   if (!audit) notFound();
 
   const canEdit = permits(viewer.role, 'audits', 'edit');
+  const canCreate = permits(viewer.role, 'audits', 'create');
   const canDelete = canDeleteAudit(viewer.role);
   const canSignOff = canSignOffAudit(viewer.role);
   const canCreateAction = permits(viewer.role, 'actions', 'create');
   const showAiSummary = await canUseAiSummaries(viewer.role);
   const findings = await listFindingsForAudit(audit.id);
-  const evidenceByFinding = await listEvidenceForFindings(findings.map((f) => f.id));
+  const evidenceByFinding = await listEvidenceForFindings(
+    findings.map((f) => f.id),
+  );
   const findingRows: FindingRow[] = findings.map((f) => ({
     id: f.id,
     title: f.title,
@@ -94,7 +102,7 @@ export default async function AuditDetailPage({
             </div>
             <p className="text-ink-muted">{audit.jobSite.name}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-start gap-2">
             {canEdit && (
               <Link
                 href={`/platform/dashboard/audits/${audit.id}/edit`}
@@ -102,6 +110,12 @@ export default async function AuditDetailPage({
               >
                 Edit audit
               </Link>
+            )}
+            {canCreate && (
+              <SaveAuditAsTemplateButton
+                auditId={audit.id}
+                defaultName={audit.title}
+              />
             )}
             {canDelete && (
               <AuditDeleteButton auditId={audit.id} title={audit.title} />
@@ -133,11 +147,16 @@ export default async function AuditDetailPage({
 
           <Section title="Referenced documents">
             {audit.documents.length === 0 ? (
-              <p className="text-sm text-ink-subtle">No documents referenced.</p>
+              <p className="text-sm text-ink-subtle">
+                No documents referenced.
+              </p>
             ) : (
               <ul className="divide-y divide-line">
                 {audit.documents.map((d) => (
-                  <li key={d.id} className="flex items-center justify-between py-2">
+                  <li
+                    key={d.id}
+                    className="flex items-center justify-between py-2"
+                  >
                     <span className="min-w-0">
                       <Link
                         href={`/platform/dashboard/documents/${d.id}`}
@@ -161,6 +180,27 @@ export default async function AuditDetailPage({
             )}
           </Section>
 
+          {audit.items.length > 0 && (
+            <Section title={`Audit checklist (${audit.items.length})`}>
+              <ul className="divide-y divide-line">
+                {audit.items.map((it) => (
+                  <li key={it.id} className="flex items-start gap-3 py-2.5">
+                    <span className="bg-brand-400 mt-0.5 h-2 w-2 shrink-0 rounded-full" />
+                    <div className="min-w-0">
+                      <p className="text-sm text-ink">{it.label}</p>
+                      {it.helpText && (
+                        <p className="text-xs text-ink-subtle">{it.helpText}</p>
+                      )}
+                    </div>
+                    <span className="ml-auto shrink-0 rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-medium text-ink-subtle">
+                      {findingCategoryLabel(it.category)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
           <AuditFindingsPanel
             auditId={audit.id}
             findings={findingRows}
@@ -174,18 +214,36 @@ export default async function AuditDetailPage({
             <dl className="space-y-3">
               <Detail
                 label="Overall score"
-                value={audit.overallScore === null ? '—' : `${audit.overallScore}%`}
+                value={
+                  audit.overallScore === null ? '—' : `${audit.overallScore}%`
+                }
               />
               <Detail label="Status" value={auditStatusLabel(audit.status)} />
               <Detail
                 label="Site"
                 value={`${audit.jobSite.name} · ${audit.jobSite.jobReference}`}
               />
-              <Detail label="Created by" value={audit.createdByName ?? 'Unknown'} />
-              <Detail label="Created" value={formatDateTimeUK(audit.createdAt)} />
+              <Detail
+                label="Created by"
+                value={audit.createdByName ?? 'Unknown'}
+              />
+              <Detail
+                label="Created"
+                value={formatDateTimeUK(audit.createdAt)}
+              />
+              {audit.sourceTemplateName && (
+                <Detail
+                  label="From template"
+                  value={`${audit.sourceTemplateName} (v${audit.sourceTemplateVersion ?? 1})`}
+                />
+              )}
               {audit.signedOffAt && (
                 <Detail
-                  label={audit.status === 'SIGNED_OFF' ? 'Signed off' : 'Last signed off'}
+                  label={
+                    audit.status === 'SIGNED_OFF'
+                      ? 'Signed off'
+                      : 'Last signed off'
+                  }
                   value={`${audit.signedOffByName ?? 'Unknown'} · ${formatDateTimeUK(
                     audit.signedOffAt,
                   )}${audit.status === 'SIGNED_OFF' ? '' : ' · reopened since'}`}

@@ -112,7 +112,9 @@ export const PLATFORM_PERMISSIONS: Record<PlatformRoleValue, RolePermissions> =
         sites: VE,
         checkins: VX,
         documents: VCEX,
-        audits: VX,
+        // SC-013: Site Managers can now create + edit audits on site (sign-off and
+        // delete remain restricted to their existing allow-lists).
+        audits: VCEX,
         reports: VX,
         actions: VCE,
         bulletins: VCE, // Site managers publish Daily Bulletins for their site.
@@ -237,6 +239,23 @@ export const AUDIT_SIGNOFF_ROLES: PlatformRoleValue[] = [
  */
 export function canSignOffAudit(role: PlatformRoleValue): boolean {
   return AUDIT_SIGNOFF_ROLES.includes(role);
+}
+
+/**
+ * Manage the SHARED, organisation-level audit template library (SC-013): edit an
+ * existing template or delete one. Any audit-creating role may save a NEW template
+ * and use templates, but editing/deleting a shared template — which affects every
+ * site — is restricted so a single Site Manager can't break an org-wide format.
+ */
+export const AUDIT_TEMPLATE_MANAGE_ROLES: PlatformRoleValue[] = [
+  'DIRECTOR',
+  'PROJECT_MANAGER',
+  'AUDITOR',
+  'HS_CONSULTANT',
+];
+
+export function canManageAuditTemplates(role: PlatformRoleValue): boolean {
+  return AUDIT_TEMPLATE_MANAGE_ROLES.includes(role);
 }
 
 /**

@@ -1,4 +1,4 @@
-import { AuditStatus, Prisma } from '@prisma/client';
+import { AuditStatus, FindingCategory, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import {
@@ -29,6 +29,8 @@ export interface AuditMetaInput {
   overallScore?: string | number | null;
   jobSiteId?: string;
   documentIds?: string[];
+  /** SC-013: when creating from a template, its id (items are copied in). */
+  templateId?: string;
 }
 
 export interface ValidatedAuditMeta {
@@ -38,6 +40,7 @@ export interface ValidatedAuditMeta {
   overallScore: number | null;
   jobSiteId: string;
   documentIds: string[];
+  templateId: string | null;
 }
 
 export type AuditFieldErrors = Partial<Record<keyof AuditMetaInput, string>>;
@@ -104,6 +107,10 @@ export function validateAuditMeta(
       overallScore,
       jobSiteId,
       documentIds,
+      templateId:
+        typeof input.templateId === 'string' && input.templateId
+          ? input.templateId
+          : null,
     },
   };
 }
@@ -258,6 +265,8 @@ export async function getAuditForViewer(viewer: PlatformViewer, id: string) {
         select: { id: true, title: true, category: true, fileName: true },
         orderBy: { createdAt: 'desc' },
       },
+      // SC-013: the audit's checklist items (copied from a template at creation).
+      items: { orderBy: { order: 'asc' } },
     },
   });
 }
@@ -273,6 +282,40 @@ export async function createAudit(
   );
   if (!docs.ok) return { ok: false, errors: { documentIds: docs.error } };
 
+  // SC-013: when creating from a template, copy its items onto the audit as its
+  // checklist and snapshot the template's identity/version for provenance. The
+  // copy means later template edits never alter this audit (snapshot-on-use).
+  let items: {
+    label: string;
+    helpText: string | null;
+    category: FindingCategory;
+    order: number;
+  }[] = [];
+  let snapshot: {
+    sourceTemplateId: string;
+    sourceTemplateName: string;
+    sourceTemplateVersion: number;
+  } | null = null;
+  if (value.templateId) {
+    const template = await prisma.auditTemplate.findFirst({
+      where: { id: value.templateId, active: true },
+      include: { items: { orderBy: { order: 'asc' } } },
+    });
+    if (template) {
+      items = template.items.map((it, idx) => ({
+        label: it.label,
+        helpText: it.helpText,
+        category: it.category,
+        order: idx,
+      }));
+      snapshot = {
+        sourceTemplateId: template.id,
+        sourceTemplateName: template.name,
+        sourceTemplateVersion: template.version,
+      };
+    }
+  }
+
   const created = await prisma.audit.create({
     data: {
       title: value.title,
@@ -283,6 +326,8 @@ export async function createAudit(
       createdByUserId: viewer.id,
       createdByName: viewer.name,
       documents: { connect: docs.ids.map((id) => ({ id })) },
+      ...(snapshot ?? {}),
+      ...(items.length ? { items: { create: items } } : {}),
     },
     select: { id: true },
   });

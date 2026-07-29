@@ -809,11 +809,78 @@ model Audit {
   // Findings raised during this audit (Phase 2).
   findings AuditFinding[]
 
+  // SC-013: the audit's checklist of things to inspect, copied from a template at
+  // creation (or added ad-hoc). Ordered.
+  items AuditItem[]
+
+  // SC-013: provenance snapshot of the template used to create this audit. Copied
+  // once at creation; template edits never change this record (snapshot-on-use).
+  sourceTemplateId      String?
+  sourceTemplateName    String?
+  sourceTemplateVersion Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([jobSiteId, status, createdAt])
   @@index([status])
+}
+
+/// A single checklist item on an audit (SC-013) — a thing the auditor inspects.
+/// Copied from an AuditTemplateItem at audit creation, or added ad-hoc. Kept lean
+/// on purpose: scoring is layered on by SC-014, not stored here yet.
+model AuditItem {
+  id       String          @id @default(cuid())
+  audit    Audit           @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  auditId  String
+  label    String
+  helpText String?
+  category FindingCategory @default(OTHER)
+  /// Auditor's free-text note against this item (optional in v1).
+  note     String?
+  order    Int
+
+  @@index([auditId, order])
+}
+
+/// A reusable Audit Template (SC-013) — an ORGANISATION-LEVEL library entry that
+/// standardises an audit format across sites. Not site-scoped; usage (a created
+/// audit) is site-scoped. `version` bumps on edit for provenance/traceability;
+/// because audits COPY the items at creation, template edits never alter historic
+/// audits. `isSystem` marks the seeded starter templates.
+model AuditTemplate {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  version     Int     @default(1)
+  active      Boolean @default(true)
+  isSystem    Boolean @default(false)
+  order       Int     @default(0)
+
+  createdByUserId String?
+  createdByName   String?
+
+  items AuditTemplateItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, order])
+}
+
+/// One reusable check item on an audit template (SC-013). Copied onto an
+/// AuditItem when an audit is created from the template.
+model AuditTemplateItem {
+  id              String           @id @default(cuid())
+  template        AuditTemplate    @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateId      String
+  label           String
+  helpText        String?
+  category        FindingCategory  @default(OTHER)
+  defaultSeverity FindingSeverity?
+  order           Int
+
+  @@index([templateId, order])
 }
 
 /// A finding raised during an audit (Audits Phase 2): an issue with a title,
