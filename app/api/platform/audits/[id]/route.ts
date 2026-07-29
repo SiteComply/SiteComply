@@ -24,7 +24,10 @@ export async function PATCH(
 ) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
-    return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: 'Not signed in.' },
+      { status: 401 },
+    );
   }
   if (!permits(viewer.role, 'audits', 'edit')) {
     return NextResponse.json(
@@ -37,20 +40,32 @@ export async function PATCH(
   try {
     body = (await req.json()) as AuditMetaInput;
   } catch {
-    return NextResponse.json({ ok: false, error: 'Invalid request.' }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: 'Invalid request.' },
+      { status: 400 },
+    );
   }
 
   const result = validateAuditMeta(body, viewer);
   if (!result.ok) {
-    return NextResponse.json({ ok: false, errors: result.errors }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, errors: result.errors },
+      { status: 400 },
+    );
   }
 
   const updated = await updateAudit(viewer, params.id, result.value);
   if ('notFound' in updated) {
-    return NextResponse.json({ ok: false, error: 'Audit not found.' }, { status: 404 });
+    return NextResponse.json(
+      { ok: false, error: 'Audit not found.' },
+      { status: 404 },
+    );
   }
   if (!updated.ok) {
-    return NextResponse.json({ ok: false, errors: updated.errors }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, errors: updated.errors },
+      { status: 400 },
+    );
   }
 
   return NextResponse.json({ ok: true, id: updated.id });
@@ -69,7 +84,10 @@ export async function DELETE(
 ) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
-    return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: 'Not signed in.' },
+      { status: 401 },
+    );
   }
   if (!canDeleteAudit(viewer.role)) {
     return NextResponse.json(
@@ -80,7 +98,10 @@ export async function DELETE(
 
   const deleted = await deleteAudit(viewer, params.id);
   if (!deleted) {
-    return NextResponse.json({ ok: false, error: 'Audit not found.' }, { status: 404 });
+    return NextResponse.json(
+      { ok: false, error: 'Audit not found.' },
+      { status: 404 },
+    );
   }
 
   return NextResponse.json({ ok: true });

@@ -50,7 +50,9 @@ export type FindingFieldErrors = Partial<Record<keyof FindingInput, string>>;
 
 export function validateFinding(
   input: FindingInput,
-): { ok: true; value: ValidatedFinding } | { ok: false; errors: FindingFieldErrors } {
+):
+  | { ok: true; value: ValidatedFinding }
+  | { ok: false; errors: FindingFieldErrors } {
   const errors: FindingFieldErrors = {};
   const text = (v?: string) => (v ?? '').trim();
 
@@ -68,10 +70,12 @@ export function validateFinding(
     errors.correctiveAction = `Please keep the corrective action under ${FINDING_ACTION_MAX} characters.`;
 
   const category = text(input.category) || 'OTHER';
-  if (!isFindingCategory(category)) errors.category = 'Please choose a category.';
+  if (!isFindingCategory(category))
+    errors.category = 'Please choose a category.';
 
   const severity = text(input.severity) || 'MEDIUM';
-  if (!isFindingSeverity(severity)) errors.severity = 'Please choose a severity.';
+  if (!isFindingSeverity(severity))
+    errors.severity = 'Please choose a severity.';
 
   const status = text(input.status) || 'OPEN';
   if (!isFindingStatus(status)) errors.status = 'Please choose a status.';

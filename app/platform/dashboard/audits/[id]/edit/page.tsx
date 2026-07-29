@@ -39,7 +39,11 @@ export default async function EditAuditPage({
   >();
   for (const s of viewer.sites) {
     if (s.status === 'ACTIVE' || s.id === audit.jobSiteId) {
-      siteMap.set(s.id, { id: s.id, name: s.name, jobReference: s.jobReference });
+      siteMap.set(s.id, {
+        id: s.id,
+        name: s.name,
+        jobReference: s.jobReference,
+      });
     }
   }
   const documents = await listReferenceableDocuments(viewer);
@@ -69,7 +73,8 @@ export default async function EditAuditPage({
           jobSiteId: audit.jobSiteId,
           description: audit.description ?? '',
           observations: audit.observations ?? '',
-          overallScore: audit.overallScore === null ? '' : String(audit.overallScore),
+          overallScore:
+            audit.overallScore === null ? '' : String(audit.overallScore),
           documentIds: audit.documents.map((d) => d.id),
         }}
       />

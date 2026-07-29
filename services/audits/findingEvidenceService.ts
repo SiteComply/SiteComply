@@ -23,7 +23,9 @@ import type { EvidenceView } from '@/services/actions/actionEvidenceService';
 export { validateEvidenceFile } from '@/services/actions/actionEvidenceService';
 
 function buildEvidenceBlobPath(findingId: string, fileName: string): string {
-  const safe = (fileName || 'evidence').replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-80);
+  const safe = (fileName || 'evidence')
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .slice(-80);
   return `findings/${findingId}/${randomUUID()}-${safe}`;
 }
 
@@ -47,7 +49,9 @@ function toView(e: {
 }
 
 /** Evidence for a finding, newest first. Callers must have resolved scope first. */
-export async function listFindingEvidence(findingId: string): Promise<EvidenceView[]> {
+export async function listFindingEvidence(
+  findingId: string,
+): Promise<EvidenceView[]> {
   const rows = await prisma.findingEvidence.findMany({
     where: { findingId },
     orderBy: { createdAt: 'desc' },

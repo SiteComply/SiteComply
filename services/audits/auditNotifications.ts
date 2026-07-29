@@ -22,7 +22,8 @@ import type { RawNotification } from '@/services/notifications/notificationTypes
 const CREATED_WINDOW_DAYS = 7;
 const SIGNED_OFF_WINDOW_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
-const utcDay = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+const utcDay = (d: Date) =>
+  Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 
 const CREATED_BADGE = 'bg-brand-50 text-brand-700';
 const SIGNED_OFF_BADGE = 'bg-safe-50 text-safe-700';
@@ -64,7 +65,9 @@ export async function deriveAuditNotifications(
         key: `audit_created:${a.id}`,
         group: 'AUDIT_CREATED',
         title: a.title,
-        message: a.createdByName ? `Created by ${a.createdByName}` : 'New audit created',
+        message: a.createdByName
+          ? `Created by ${a.createdByName}`
+          : 'New audit created',
         context: a.jobSite.name,
         meta: `Created ${formatDateUK(a.createdAt)}`,
         href: `/platform/dashboard/audits/${a.id}`,
@@ -104,7 +107,9 @@ export async function deriveAuditNotifications(
         key: `audit_signed_off:${a.id}:${a.signedOffAt.getTime()}`,
         group: 'AUDIT_SIGNED_OFF',
         title: a.title,
-        message: a.signedOffByName ? `Signed off by ${a.signedOffByName}` : 'Audit signed off',
+        message: a.signedOffByName
+          ? `Signed off by ${a.signedOffByName}`
+          : 'Audit signed off',
         context: a.jobSite.name,
         meta: `Signed off ${formatDateUK(a.signedOffAt)}`,
         href: `/platform/dashboard/audits/${a.id}`,

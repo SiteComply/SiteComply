@@ -37,11 +37,12 @@ export const FINDING_SEVERITIES: {
   { value: 'CRITICAL', label: 'Critical' },
 ];
 
-export const FINDING_STATUSES: { value: FindingStatusValue; label: string }[] = [
-  { value: 'OPEN', label: 'Open' },
-  { value: 'IN_PROGRESS', label: 'In progress' },
-  { value: 'CLOSED', label: 'Closed' },
-];
+export const FINDING_STATUSES: { value: FindingStatusValue; label: string }[] =
+  [
+    { value: 'OPEN', label: 'Open' },
+    { value: 'IN_PROGRESS', label: 'In progress' },
+    { value: 'CLOSED', label: 'Closed' },
+  ];
 
 const CAT = new Map(FINDING_CATEGORIES.map((c) => [c.value, c.label]));
 const SEV = new Map(FINDING_SEVERITIES.map((s) => [s.value, s.label]));

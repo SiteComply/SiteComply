@@ -21,24 +21,34 @@ import {
 
 const CONFIG_ID = 'notifications';
 
-type TypeSetting = { enabled: boolean; channels: Record<NotificationChannelKey, boolean> };
+type TypeSetting = {
+  enabled: boolean;
+  channels: Record<NotificationChannelKey, boolean>;
+};
 type Settings = Record<string, TypeSetting>;
 
 const asObject = (json: unknown): Record<string, unknown> =>
-  json && typeof json === 'object' && !Array.isArray(json) ? (json as Record<string, unknown>) : {};
+  json && typeof json === 'object' && !Array.isArray(json)
+    ? (json as Record<string, unknown>)
+    : {};
 
 /** Effective setting for a type: stored value falls back to the catalogue default. */
-function effectiveType(key: string, stored: Record<string, unknown>): TypeSetting {
+function effectiveType(
+  key: string,
+  stored: Record<string, unknown>,
+): TypeSetting {
   const desc = getNotificationTypeDescriptor(key)!;
   const raw = asObject(stored[key]);
   const rawChannels = asObject(raw.channels);
   const channels = {} as Record<NotificationChannelKey, boolean>;
   for (const ch of NOTIFICATION_CHANNELS) {
     const v = rawChannels[ch.key];
-    channels[ch.key] = typeof v === 'boolean' ? v : desc.defaultChannels[ch.key];
+    channels[ch.key] =
+      typeof v === 'boolean' ? v : desc.defaultChannels[ch.key];
   }
   return {
-    enabled: typeof raw.enabled === 'boolean' ? raw.enabled : desc.defaultEnabled,
+    enabled:
+      typeof raw.enabled === 'boolean' ? raw.enabled : desc.defaultEnabled,
     channels,
   };
 }
@@ -58,7 +68,10 @@ export interface NotificationConfigView {
 export interface SaveNotificationConfigInput {
   types?: Record<
     string,
-    { enabled?: boolean; channels?: Partial<Record<NotificationChannelKey, boolean>> }
+    {
+      enabled?: boolean;
+      channels?: Partial<Record<NotificationChannelKey, boolean>>;
+    }
   >;
 }
 
@@ -98,7 +111,10 @@ export async function saveNotificationConfig(
     }
     settings[t.key] = {
       // Explicit boolean wins; an omitted type keeps the catalogue default.
-      enabled: typeof provided.enabled === 'boolean' ? provided.enabled : t.defaultEnabled,
+      enabled:
+        typeof provided.enabled === 'boolean'
+          ? provided.enabled
+          : t.defaultEnabled,
       channels,
     };
   }
@@ -111,7 +127,11 @@ export async function saveNotificationConfig(
 
   await prisma.notificationConfig.upsert({
     where: { id: CONFIG_ID },
-    update: { settings, updatedByAdminId: admin.adminId, updatedByName: admin.name },
+    update: {
+      settings,
+      updatedByAdminId: admin.adminId,
+      updatedByName: admin.name,
+    },
     create: {
       id: CONFIG_ID,
       settings,
@@ -151,5 +171,7 @@ export async function getNotificationChannels(
   const rc = await getNotificationRuntimeConfig();
   const t = rc.types[typeKey];
   if (!t || !t.enabled) return [];
-  return (Object.keys(t.channels) as NotificationChannelKey[]).filter((c) => t.channels[c]);
+  return (Object.keys(t.channels) as NotificationChannelKey[]).filter(
+    (c) => t.channels[c],
+  );
 }

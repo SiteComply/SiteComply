@@ -21,11 +21,17 @@ export async function POST(
 ) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
-    return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: 'Not signed in.' },
+      { status: 401 },
+    );
   }
   if (!permits(viewer.role, 'audits', 'edit')) {
     return NextResponse.json(
-      { ok: false, error: 'You do not have permission to manage audit findings.' },
+      {
+        ok: false,
+        error: 'You do not have permission to manage audit findings.',
+      },
       { status: 403 },
     );
   }
@@ -34,17 +40,26 @@ export async function POST(
   try {
     body = (await req.json()) as FindingInput;
   } catch {
-    return NextResponse.json({ ok: false, error: 'Invalid request.' }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: 'Invalid request.' },
+      { status: 400 },
+    );
   }
 
   const result = validateFinding(body);
   if (!result.ok) {
-    return NextResponse.json({ ok: false, errors: result.errors }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, errors: result.errors },
+      { status: 400 },
+    );
   }
 
   const created = await createFinding(viewer, params.id, result.value);
   if (!created) {
-    return NextResponse.json({ ok: false, error: 'Audit not found.' }, { status: 404 });
+    return NextResponse.json(
+      { ok: false, error: 'Audit not found.' },
+      { status: 404 },
+    );
   }
 
   return NextResponse.json({ ok: true, id: created.id });
