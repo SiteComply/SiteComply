@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
@@ -10,6 +10,7 @@ import {
   ACTION_PRIORITIES,
   ACTION_STATUSES,
 } from '@/services/actions/actionConstants';
+import type { AssignablePerson } from '@/services/actions/actionAssigneeService';
 
 export interface ActionFormSite {
   id: string;
@@ -24,6 +25,9 @@ interface Values {
   status: string;
   dueDate: string;
   assignedTo: string;
+  // SC-015: the chosen person's identity. `assignedTo` remains the display name.
+  assigneeKind: string;
+  assigneeId: string;
   description: string;
 }
 
@@ -53,10 +57,55 @@ export function ActionForm({
     status: initial?.status ?? 'OPEN',
     dueDate: initial?.dueDate ?? '',
     assignedTo: initial?.assignedTo ?? '',
+    assigneeKind: initial?.assigneeKind ?? '',
+    assigneeId: initial?.assigneeId ?? '',
     description: initial?.description ?? '',
   });
+
+  // SC-015: people assignable on the CURRENTLY selected site. Refetched whenever
+  // the site changes, and the previous choice is cleared — an assignee from
+  // another site must never survive a site change.
+  const [people, setPeople] = useState<AssignablePerson[]>([]);
+  const [peopleFallback, setPeopleFallback] = useState(false);
+  const [peopleLoading, setPeopleLoading] = useState(false);
+  const siteId = values.jobSiteId;
+  const firstLoad = useRef(true);
+
+  useEffect(() => {
+    if (!siteId) {
+      setPeople([]);
+      return;
+    }
+    let cancelled = false;
+    setPeopleLoading(true);
+    fetch(`/api/platform/sites/${siteId}/assignable-people`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        setPeople(d?.ok ? (d.people ?? []) : []);
+        setPeopleFallback(Boolean(d?.isFallback));
+      })
+      .catch(() => {
+        if (!cancelled) setPeople([]);
+      })
+      .finally(() => {
+        if (!cancelled) setPeopleLoading(false);
+      });
+    // Keep an existing assignee on the first render of an EDIT form; clear it on
+    // any later site change.
+    if (firstLoad.current) {
+      firstLoad.current = false;
+    } else {
+      setValues((v) => ({ ...v, assigneeKind: '', assigneeId: '' }));
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [siteId]);
   const [completionNote, setCompletionNote] = useState('');
-  const [errors, setErrors] = useState<FieldErrors & { completionNote?: string }>({});
+  const [errors, setErrors] = useState<
+    FieldErrors & { completionNote?: string }
+  >({});
   const [formError, setFormError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
 
@@ -76,13 +125,17 @@ export function ActionForm({
     setErrors({});
     setFormError(undefined);
     if (needsCompletionNote && completionNote.trim() === '') {
-      setErrors({ completionNote: 'A completion note is required to mark this Completed.' });
+      setErrors({
+        completionNote: 'A completion note is required to mark this Completed.',
+      });
       setBusy(false);
       return;
     }
     try {
       const res = await fetch(
-        mode === 'create' ? '/api/platform/actions' : `/api/platform/actions/${actionId}`,
+        mode === 'create'
+          ? '/api/platform/actions'
+          : `/api/platform/actions/${actionId}`,
         {
           method: mode === 'create' ? 'POST' : 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -92,7 +145,8 @@ export function ActionForm({
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
         if (data.errors) setErrors(data.errors);
-        else setFormError(data.error ?? 'Something went wrong. Please try again.');
+        else
+          setFormError(data.error ?? 'Something went wrong. Please try again.');
         return;
       }
       const id = data.id ?? actionId;
@@ -148,24 +202,84 @@ export function ActionForm({
           ))}
         </Select>
 
-        <TextField
-          label="Assigned to (optional)"
-          value={values.assignedTo}
-          onChange={(e) => set('assignedTo', e.target.value)}
-          error={errors.assignedTo}
-          placeholder="Person or company responsible"
-        />
+        <div>
+          <Select
+            label="Assigned to"
+            value={
+              values.assigneeId
+                ? `${values.assigneeKind}:${values.assigneeId}`
+                : ''
+            }
+            onChange={(e) => {
+              const [kind, id] = e.target.value.split(':');
+              setValues((v) => ({
+                ...v,
+                assigneeKind: id ? kind : '',
+                assigneeId: id ?? '',
+              }));
+            }}
+            error={errors.assignedTo}
+            disabled={!siteId || peopleLoading}
+          >
+            <option value="">
+              {!siteId
+                ? 'Select a site first'
+                : peopleLoading
+                  ? 'Loading…'
+                  : people.length === 0
+                    ? 'No one available for this site'
+                    : 'Select a person'}
+            </option>
+            {people.map((p) => (
+              <option key={`${p.kind}:${p.id}`} value={`${p.kind}:${p.id}`}>
+                {p.name} · {p.company}
+              </option>
+            ))}
+          </Select>
+          {siteId && !peopleLoading && (
+            <p className="mt-1 text-xs text-ink-subtle">
+              {people.length === 0
+                ? 'No inducted workers or assigned users for this site yet.'
+                : peopleFallback
+                  ? 'No inducted workers yet — showing users assigned to this site.'
+                  : 'Workers inducted on the selected site.'}
+            </p>
+          )}
+          {mode === 'edit' && values.assignedTo && !values.assigneeId && (
+            <p className="mt-1 text-xs text-ink-subtle">
+              Currently assigned to{' '}
+              <span className="font-medium text-ink-muted">
+                {values.assignedTo}
+              </span>
+              . Choose a person above to change it.
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-5 sm:grid-cols-3">
-        <Select label="Priority" value={values.priority} onChange={(e) => set('priority', e.target.value)} error={errors.priority}>
+        <Select
+          label="Priority"
+          value={values.priority}
+          onChange={(e) => set('priority', e.target.value)}
+          error={errors.priority}
+        >
           {ACTION_PRIORITIES.map((p) => (
-            <option key={p.value} value={p.value}>{p.label}</option>
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
           ))}
         </Select>
-        <Select label="Status" value={values.status} onChange={(e) => set('status', e.target.value)} error={errors.status}>
+        <Select
+          label="Status"
+          value={values.status}
+          onChange={(e) => set('status', e.target.value)}
+          error={errors.status}
+        >
           {ACTION_STATUSES.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
           ))}
         </Select>
         <TextField
@@ -207,7 +321,12 @@ export function ActionForm({
               ? 'Create action'
               : 'Save changes'}
         </Button>
-        <Button type="button" variant="ghost" onClick={() => router.back()} disabled={busy}>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => router.back()}
+          disabled={busy}
+        >
           Cancel
         </Button>
       </div>

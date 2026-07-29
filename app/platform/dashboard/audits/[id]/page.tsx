@@ -217,6 +217,7 @@ export default async function AuditDetailPage({
 
           <AuditFindingsPanel
             auditId={audit.id}
+            jobSiteId={audit.jobSite.id}
             findings={findingRows}
             canEdit={canEdit}
             canCreateAction={canCreateAction}

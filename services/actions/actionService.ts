@@ -5,6 +5,10 @@ import {
   Prisma,
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import {
+  resolveAssignee,
+  type AssigneeKind,
+} from '@/services/actions/actionAssigneeService';
 import { zonedMidnightToUtc } from '@/lib/datetime';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import {
@@ -21,7 +25,10 @@ import {
 /** Result of a mutation that can fail on scope or a required completion note. */
 export type ActionMutation =
   | { ok: true; id: string }
-  | { ok: false; reason: 'not_found' | 'note_required' };
+  | {
+      ok: false;
+      reason: 'not_found' | 'note_required' | 'invalid_assignee';
+    };
 
 /** Build an activity row for the given author (used inside transactions). */
 function activityRow(
@@ -62,6 +69,9 @@ export interface ActionInput {
   status?: string;
   dueDate?: string;
   assignedTo?: string;
+  // SC-015: the chosen assignee. `assigneeKind` is WORKER | PLATFORM_USER.
+  assigneeKind?: string;
+  assigneeId?: string;
 }
 
 export interface ValidatedAction {
@@ -72,13 +82,21 @@ export interface ValidatedAction {
   status: ActionStatus;
   dueDate: Date | null;
   assignedTo: string | null;
+  assigneeKind: 'WORKER' | 'PLATFORM_USER' | null;
+  assigneeId: string | null;
 }
 
 export type ActionFieldErrors = Partial<Record<keyof ActionInput, string>>;
 
+/**
+ * SC-015: `mode` decides whether an assignee is REQUIRED. It is mandatory when
+ * CREATING an action, but never forced on an edit — legacy actions predate the
+ * rule and must stay editable without inventing an assignee for them.
+ */
 export function validateAction(
   input: ActionInput,
   viewer: PlatformViewer,
+  mode: 'create' | 'edit' = 'edit',
 ):
   | { ok: true; value: ValidatedAction }
   | { ok: false; errors: ActionFieldErrors } {
@@ -97,6 +115,26 @@ export function validateAction(
   const assignedTo = text(input.assignedTo);
   if (assignedTo.length > ACTION_ASSIGNEE_MAX)
     errors.assignedTo = `Please keep the assignee under ${ACTION_ASSIGNEE_MAX} characters.`;
+
+  // SC-015: a new action must name a responsible person. The identity is
+  // re-checked against the site's assignable people in createAction — this only
+  // establishes that something was chosen.
+  const assigneeKind = text(input.assigneeKind);
+  const assigneeId = text(input.assigneeId);
+  if (mode === 'create') {
+    if (
+      !assigneeId ||
+      (assigneeKind !== 'WORKER' && assigneeKind !== 'PLATFORM_USER')
+    ) {
+      errors.assignedTo = 'Please choose who is responsible for this action.';
+    }
+  } else if (
+    assigneeId &&
+    assigneeKind !== 'WORKER' &&
+    assigneeKind !== 'PLATFORM_USER'
+  ) {
+    errors.assignedTo = 'Please choose who is responsible for this action.';
+  }
 
   const jobSiteId = text(input.jobSiteId);
   if (!jobSiteId) errors.jobSiteId = 'Please choose a site.';
@@ -129,6 +167,11 @@ export function validateAction(
       status: status as ActionStatus,
       dueDate,
       assignedTo: assignedTo || null,
+      assigneeKind:
+        assigneeKind === 'WORKER' || assigneeKind === 'PLATFORM_USER'
+          ? assigneeKind
+          : null,
+      assigneeId: assigneeId || null,
     },
   };
 }
@@ -203,6 +246,9 @@ function actionWhere(
       { title: { contains: q, mode: 'insensitive' } },
       { description: { contains: q, mode: 'insensitive' } },
       { assignedTo: { contains: q, mode: 'insensitive' } },
+      // SC-015: the assignee is now a real person, so search their employer too
+      // (the name itself is already covered by the assignedTo snapshot).
+      { assignedToCompany: { contains: q, mode: 'insensitive' } },
     ];
   }
   return where;
@@ -226,6 +272,7 @@ const ACTION_LIST_SELECT = {
   status: true,
   dueDate: true,
   assignedTo: true,
+  assignedToCompany: true,
   auditFindingId: true,
   createdAt: true,
   jobSite: { select: { id: true, name: true, jobReference: true } },
@@ -323,19 +370,43 @@ export async function getActionForViewer(viewer: PlatformViewer, id: string) {
 export async function createAction(
   viewer: PlatformViewer,
   value: ValidatedAction,
-): Promise<{ id: string }> {
-  // Seed the timeline: a CREATED entry, and an ASSIGNMENT entry if assigned now.
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  // SC-015: resolve the chosen person against the site's ASSIGNABLE list. The
+  // dropdown is a convenience; this is the authoritative check, so a crafted
+  // request cannot assign an action to someone not inducted on that site.
+  const assignee = await resolveAssignee(
+    viewer,
+    value.jobSiteId,
+    value.assigneeKind as AssigneeKind,
+    value.assigneeId ?? '',
+  );
+  if (!assignee) {
+    return {
+      ok: false,
+      error: 'That person cannot be assigned actions on the selected site.',
+    };
+  }
+
+  // Seed the timeline: a CREATED entry, and an ASSIGNMENT entry naming the person.
   const activities = [activityRow(viewer, ActionActivityType.CREATED)];
-  if (value.assignedTo)
-    activities.push(
-      activityRow(viewer, ActionActivityType.ASSIGNMENT, {
-        toValue: value.assignedTo,
-      }),
-    );
+  activities.push(
+    activityRow(viewer, ActionActivityType.ASSIGNMENT, {
+      toValue: assignee.assignedTo,
+    }),
+  );
 
   const created = await prisma.action.create({
     data: {
-      ...value,
+      title: value.title,
+      description: value.description,
+      jobSiteId: value.jobSiteId,
+      priority: value.priority,
+      status: value.status,
+      dueDate: value.dueDate,
+      assignedTo: assignee.assignedTo,
+      assignedToCompany: assignee.assignedToCompany,
+      assignedWorkerId: assignee.assignedWorkerId,
+      assignedPlatformUserId: assignee.assignedPlatformUserId,
       createdByUserId: viewer.id,
       createdByName: viewer.name,
       completedAt: value.status === ActionStatus.COMPLETED ? new Date() : null,
@@ -343,7 +414,7 @@ export async function createAction(
     },
     select: { id: true },
   });
-  return created;
+  return { ok: true, id: created.id };
 }
 
 export async function updateAction(
@@ -363,8 +434,24 @@ export async function updateAction(
   // A completion note is required when transitioning TO completed.
   if (completing && note === '') return { ok: false, reason: 'note_required' };
 
+  // SC-015: an edit only changes the assignee when a person was actually chosen.
+  // Legacy actions (free-text or unassigned) are left untouched — the mandatory
+  // rule applies to newly created actions only.
+  let assignee: Awaited<ReturnType<typeof resolveAssignee>> = null;
+  if (value.assigneeId && value.assigneeKind) {
+    assignee = await resolveAssignee(
+      viewer,
+      value.jobSiteId,
+      value.assigneeKind,
+      value.assigneeId,
+    );
+    if (!assignee) {
+      return { ok: false, reason: 'invalid_assignee' };
+    }
+  }
+  const nextAssignedTo = assignee ? assignee.assignedTo : existing.assignedTo;
   const assigneeChanged =
-    (value.assignedTo ?? null) !== (existing.assignedTo ?? null);
+    (nextAssignedTo ?? null) !== (existing.assignedTo ?? null);
 
   const activities = [];
   if (statusChanged)
@@ -379,7 +466,7 @@ export async function updateAction(
     activities.push(
       activityRow(viewer, ActionActivityType.ASSIGNMENT, {
         fromValue: existing.assignedTo,
-        toValue: value.assignedTo,
+        toValue: nextAssignedTo,
       }),
     );
 
@@ -392,7 +479,14 @@ export async function updateAction(
       priority: value.priority,
       status: value.status,
       dueDate: value.dueDate,
-      assignedTo: value.assignedTo,
+      ...(assignee
+        ? {
+            assignedTo: assignee.assignedTo,
+            assignedToCompany: assignee.assignedToCompany,
+            assignedWorkerId: assignee.assignedWorkerId,
+            assignedPlatformUserId: assignee.assignedPlatformUserId,
+          }
+        : {}),
       completedAt:
         value.status === ActionStatus.COMPLETED
           ? (existing.completedAt ?? new Date())
@@ -508,13 +602,28 @@ export function listActionActivities(actionId: string) {
 export async function createActionFromFinding(
   viewer: PlatformViewer,
   findingId: string,
-): Promise<{ id: string } | null> {
-  if (viewer.siteIds.length === 0) return null;
+  assignee: { kind: AssigneeKind; id: string },
+): Promise<
+  | { ok: true; id: string }
+  | { ok: false; reason: 'not_found' | 'invalid_assignee' }
+> {
+  if (viewer.siteIds.length === 0) return { ok: false, reason: 'not_found' };
   const finding = await prisma.auditFinding.findFirst({
     where: { id: findingId, audit: { jobSiteId: { in: viewer.siteIds } } },
     include: { audit: { select: { jobSiteId: true } } },
   });
-  if (!finding) return null;
+  if (!finding) return { ok: false, reason: 'not_found' };
+
+  // SC-015: findings→actions is the main generator of actions now that SC-013/
+  // SC-014 are live, so this path must satisfy the mandatory-assignee rule too —
+  // otherwise it would quietly create the unassigned actions the rule forbids.
+  const resolved = await resolveAssignee(
+    viewer,
+    finding.audit.jobSiteId,
+    assignee.kind,
+    assignee.id,
+  );
+  if (!resolved) return { ok: false, reason: 'invalid_assignee' };
 
   const created = await prisma.action.create({
     data: {
@@ -525,11 +634,22 @@ export async function createActionFromFinding(
       status: ActionStatus.OPEN,
       dueDate: finding.dueDate,
       auditFindingId: finding.id,
+      assignedTo: resolved.assignedTo,
+      assignedToCompany: resolved.assignedToCompany,
+      assignedWorkerId: resolved.assignedWorkerId,
+      assignedPlatformUserId: resolved.assignedPlatformUserId,
       createdByUserId: viewer.id,
       createdByName: viewer.name,
-      activities: { create: [activityRow(viewer, ActionActivityType.CREATED)] },
+      activities: {
+        create: [
+          activityRow(viewer, ActionActivityType.CREATED),
+          activityRow(viewer, ActionActivityType.ASSIGNMENT, {
+            toValue: resolved.assignedTo,
+          }),
+        ],
+      },
     },
     select: { id: true },
   });
-  return created;
+  return { ok: true, id: created.id };
 }

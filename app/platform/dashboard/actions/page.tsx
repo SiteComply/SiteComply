@@ -9,7 +9,11 @@ import {
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { canUseAiSummaries } from '@/services/ai/aiConfig';
 import { AiSummaryPanel } from '@/components/platform/AiSummaryPanel';
-import { listActions, actionCounts, countActions } from '@/services/actions/actionService';
+import {
+  listActions,
+  actionCounts,
+  countActions,
+} from '@/services/actions/actionService';
 import {
   ACTION_BUCKETS,
   ACTION_PRIORITIES,
@@ -36,7 +40,13 @@ export const dynamic = 'force-dynamic';
 export default async function PlatformActionsPage({
   searchParams,
 }: {
-  searchParams: { bucket?: string; site?: string; priority?: string; q?: string; page?: string };
+  searchParams: {
+    bucket?: string;
+    site?: string;
+    priority?: string;
+    q?: string;
+    page?: string;
+  };
 }) {
   const viewer = await requirePlatformViewer();
   assertModuleView(viewer, 'actions');
@@ -61,7 +71,11 @@ export default async function PlatformActionsPage({
     actionCounts(viewer, now),
   ]);
   const pg = resolvePage(searchParams.page, total);
-  const actions = await listActions(viewer, { ...filters, skip: pg.skip, take: pg.take }, now);
+  const actions = await listActions(
+    viewer,
+    { ...filters, skip: pg.skip, take: pg.take },
+    now,
+  );
   const canCreate = permits(viewer.role, 'actions', 'create');
   const showAiSummary = await canUseAiSummaries(viewer.role);
 
@@ -99,9 +113,7 @@ export default async function PlatformActionsPage({
         </div>
       </header>
 
-      {showAiSummary && (
-        <AiSummaryPanel targetType="ACTIONS_REGISTER" />
-      )}
+      {showAiSummary && <AiSummaryPanel targetType="ACTIONS_REGISTER" />}
 
       {/* Register buckets — clickable summary cards that filter the list. */}
       <div className="mb-4 grid gap-3 sm:grid-cols-4">
@@ -141,27 +153,45 @@ export default async function PlatformActionsPage({
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-semibold text-ink">Site</span>
-          <select name="site" defaultValue={site} className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink">
+          <select
+            name="site"
+            defaultValue={site}
+            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+          >
             <option value="">All my sites</option>
             {viewer.sites.map((s) => (
-              <option key={s.id} value={s.id}>{s.name} · {s.jobReference}</option>
+              <option key={s.id} value={s.id}>
+                {s.name} · {s.jobReference}
+              </option>
             ))}
           </select>
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-semibold text-ink">Priority</span>
-          <select name="priority" defaultValue={priority} className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink">
+          <select
+            name="priority"
+            defaultValue={priority}
+            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+          >
             <option value="">All priorities</option>
             {ACTION_PRIORITIES.map((p) => (
-              <option key={p.value} value={p.value}>{p.label}</option>
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
             ))}
           </select>
         </label>
-        <button type="submit" className="rounded-lg border border-brand-500 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50">
+        <button
+          type="submit"
+          className="rounded-lg border border-brand-500 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+        >
           Apply
         </button>
         {(bucket || site || priority || q) && (
-          <Link href="/platform/dashboard/actions" className="rounded-lg px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken">
+          <Link
+            href="/platform/dashboard/actions"
+            className="rounded-lg px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken"
+          >
             Clear
           </Link>
         )}
@@ -174,7 +204,10 @@ export default async function PlatformActionsPage({
           </p>
         ) : actions.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-ink-subtle">
-            No actions{bucket ? ` in “${ACTION_BUCKETS.find((b) => b.value === bucket)?.label}”` : ''}{' '}
+            No actions
+            {bucket
+              ? ` in “${ACTION_BUCKETS.find((b) => b.value === bucket)?.label}”`
+              : ''}{' '}
             for your sites.
             {canCreate && ' Use “New action” to add one.'}
           </p>
@@ -205,27 +238,58 @@ export default async function PlatformActionsPage({
                           {a.title}
                         </Link>
                         {a.auditFindingId && (
-                          <span className="ml-2 text-xs text-ink-subtle">· from audit</span>
+                          <span className="ml-2 text-xs text-ink-subtle">
+                            · from audit
+                          </span>
                         )}
                       </td>
                       <td className="px-5 py-3 text-ink">{a.jobSite.name}</td>
                       <td className="px-5 py-3">
-                        <Badge className={ACTION_PRIORITY_BADGE[a.priority as ActionPriorityValue]}>
+                        <Badge
+                          className={
+                            ACTION_PRIORITY_BADGE[
+                              a.priority as ActionPriorityValue
+                            ]
+                          }
+                        >
                           {actionPriorityLabel(a.priority)}
                         </Badge>
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <Badge className={ACTION_STATUS_BADGE[a.status as ActionStatusValue]}>
+                          <Badge
+                            className={
+                              ACTION_STATUS_BADGE[a.status as ActionStatusValue]
+                            }
+                          >
                             {actionStatusLabel(a.status)}
                           </Badge>
-                          {overdue && <Badge className={ACTION_OVERDUE_BADGE}>Overdue</Badge>}
+                          {overdue && (
+                            <Badge className={ACTION_OVERDUE_BADGE}>
+                              Overdue
+                            </Badge>
+                          )}
                         </div>
                       </td>
-                      <td className={`px-5 py-3 ${overdue ? 'font-semibold text-danger-700' : 'text-ink-muted'}`}>
+                      <td
+                        className={`px-5 py-3 ${overdue ? 'font-semibold text-danger-700' : 'text-ink-muted'}`}
+                      >
                         {a.dueDate ? formatDateUK(a.dueDate) : '—'}
                       </td>
-                      <td className="px-5 py-3 text-ink-muted">{a.assignedTo ?? '—'}</td>
+                      <td className="px-5 py-3 text-ink-muted">
+                        {a.assignedTo ? (
+                          <>
+                            <span className="text-ink">{a.assignedTo}</span>
+                            {a.assignedToCompany && (
+                              <span className="block text-xs text-ink-subtle">
+                                {a.assignedToCompany}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -263,9 +327,17 @@ function cardClass(active: boolean, overdue: boolean): string {
   );
 }
 
-function Badge({ className, children }: { className: string; children: React.ReactNode }) {
+function Badge({
+  className,
+  children,
+}: {
+  className: string;
+  children: React.ReactNode;
+}) {
   return (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${className}`}>
+    <span
+      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${className}`}
+    >
       {children}
     </span>
   );

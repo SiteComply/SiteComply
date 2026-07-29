@@ -321,6 +321,8 @@ model Worker {
 
   @@index([company])
   @@index([cscsExpiry])
+  // SC-015: corrective actions assigned to this worker.
+  assignedActions Action[]
 }
 
 /// A construction site / job that workers induct onto and check in to.
@@ -663,6 +665,8 @@ model PlatformUser {
 
   @@index([status])
   @@index([company])
+  // SC-015: actions assigned to this platform user (fallback assignee).
+  assignedActions Action[] @relation("ActionAssignee")
 }
 
 /// Per-user read state for in-app notifications. Notifications are derived (e.g.
@@ -1111,8 +1115,21 @@ model Action {
   status      ActionStatus   @default(OPEN)
   dueDate     DateTime? // stored as UTC midnight of the chosen date
 
-  // Free-text assignee (a person/company responsible — not necessarily a user).
-  assignedTo String?
+  // SC-015: the responsible person. `assignedTo` remains the denormalised NAME
+  // snapshot (so history survives a worker/user being removed, and legacy
+  // free-text assignees stay readable); the FKs below identify who it actually
+  // is. Exactly one FK is set for actions created from SC-015 onward — legacy
+  // actions have neither and keep their free text.
+  assignedTo        String?
+  assignedToCompany String?
+
+  assignedWorker   Worker? @relation(fields: [assignedWorkerId], references: [id], onDelete: SetNull)
+  assignedWorkerId String?
+
+  // Fallback assignee when a site has no inducted workers (SC-015 decision):
+  // a platform user assigned to that site.
+  assignedPlatformUser   PlatformUser? @relation("ActionAssignee", fields: [assignedPlatformUserId], references: [id], onDelete: SetNull)
+  assignedPlatformUserId String?
 
   // Owning site — the access boundary for site-scoping.
   jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
@@ -1143,6 +1160,8 @@ model Action {
 
   @@index([jobSiteId, status, dueDate])
   @@index([status, dueDate])
+  @@index([assignedWorkerId])
+  @@index([assignedPlatformUserId])
 }
 
 /// A photo or document uploaded as evidence against an Action. The bytes live in

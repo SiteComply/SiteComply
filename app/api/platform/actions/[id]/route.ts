@@ -22,7 +22,10 @@ export async function PATCH(
 ) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
-    return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: 'Not signed in.' },
+      { status: 401 },
+    );
   }
   if (!permits(viewer.role, 'actions', 'edit')) {
     return NextResponse.json(
@@ -35,12 +38,18 @@ export async function PATCH(
   try {
     body = (await req.json()) as ActionInput;
   } catch {
-    return NextResponse.json({ ok: false, error: 'Invalid request.' }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: 'Invalid request.' },
+      { status: 400 },
+    );
   }
 
   const result = validateAction(body, viewer);
   if (!result.ok) {
-    return NextResponse.json({ ok: false, errors: result.errors }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, errors: result.errors },
+      { status: 400 },
+    );
   }
 
   const updated = await updateAction(
@@ -52,11 +61,34 @@ export async function PATCH(
   if (!updated.ok) {
     if (updated.reason === 'note_required') {
       return NextResponse.json(
-        { ok: false, errors: { completionNote: 'A completion note is required to mark this action Completed.' } },
+        {
+          ok: false,
+          errors: {
+            completionNote:
+              'A completion note is required to mark this action Completed.',
+          },
+        },
         { status: 400 },
       );
     }
-    return NextResponse.json({ ok: false, error: 'Action not found.' }, { status: 404 });
+    // SC-015: a chosen assignee who isn't assignable on this site is a field
+    // error, not a missing record.
+    if (updated.reason === 'invalid_assignee') {
+      return NextResponse.json(
+        {
+          ok: false,
+          errors: {
+            assignedTo:
+              'That person cannot be assigned actions on the selected site.',
+          },
+        },
+        { status: 400 },
+      );
+    }
+    return NextResponse.json(
+      { ok: false, error: 'Action not found.' },
+      { status: 404 },
+    );
   }
 
   return NextResponse.json({ ok: true, id: updated.id });
@@ -74,7 +106,10 @@ export async function DELETE(
 ) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
-    return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: 'Not signed in.' },
+      { status: 401 },
+    );
   }
   if (!permits(viewer.role, 'actions', 'edit')) {
     return NextResponse.json(
@@ -85,7 +120,10 @@ export async function DELETE(
 
   const deleted = await deleteAction(viewer, params.id);
   if (!deleted) {
-    return NextResponse.json({ ok: false, error: 'Action not found.' }, { status: 404 });
+    return NextResponse.json(
+      { ok: false, error: 'Action not found.' },
+      { status: 404 },
+    );
   }
 
   return NextResponse.json({ ok: true });

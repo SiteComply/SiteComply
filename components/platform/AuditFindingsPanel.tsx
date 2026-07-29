@@ -20,7 +20,11 @@ import {
   type FindingStatusValue,
 } from '@/services/audits/findingConstants';
 import { DEFAULT_PAGE_SIZE } from '@/lib/pagination';
-import { EvidenceGallery, type EvidenceItem } from '@/components/platform/EvidenceGallery';
+import {
+  EvidenceGallery,
+  type EvidenceItem,
+} from '@/components/platform/EvidenceGallery';
+import type { AssignablePerson } from '@/services/actions/actionAssigneeService';
 
 export interface FindingRow {
   id: string;
@@ -65,11 +69,13 @@ const EMPTY: FormValues = {
  */
 export function AuditFindingsPanel({
   auditId,
+  jobSiteId,
   findings,
   canEdit,
   canCreateAction = false,
 }: {
   auditId: string;
+  jobSiteId: string;
   findings: FindingRow[];
   canEdit: boolean;
   canCreateAction?: boolean;
@@ -78,6 +84,12 @@ export function AuditFindingsPanel({
   // null = no form open; 'add' = add form; otherwise the finding id being edited.
   const [mode, setMode] = useState<null | 'add' | string>(null);
   const [busyId, setBusyId] = useState<string | undefined>();
+  const [assignFor, setAssignFor] = useState<string | undefined>();
+  const [assignee, setAssignee] = useState('');
+  const [assignError, setAssignError] = useState<string | undefined>();
+  const [people, setPeople] = useState<AssignablePerson[]>([]);
+  const [peopleFallback, setPeopleFallback] = useState(false);
+  const [peopleLoading, setPeopleLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
@@ -98,17 +110,47 @@ export function AuditFindingsPanel({
   // Generate a corrective action from this finding, then open it.
   async function createAction(findingId: string) {
     setBusyId(findingId);
+    setAssignError(undefined);
     try {
       const res = await fetch(
         `/api/platform/audit-findings/${findingId}/create-action`,
-        { method: 'POST' },
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            assigneeKind: assignee.split(':')[0],
+            assigneeId: assignee.split(':')[1],
+          }),
+        },
       );
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.ok && data.id) {
+        setAssignFor(undefined);
         router.push(`/platform/dashboard/actions/${data.id}`);
+      } else {
+        setAssignError(data.error ?? 'Could not create the action.');
       }
     } finally {
       setBusyId(undefined);
+    }
+  }
+
+  // SC-015: an action generated from a finding must name a responsible person,
+  // so the button opens an assignee picker instead of creating immediately.
+  function openAssign(findingId: string) {
+    setAssignFor(findingId);
+    setAssignee('');
+    setAssignError(undefined);
+    if (people.length === 0 && !peopleLoading) {
+      setPeopleLoading(true);
+      fetch(`/api/platform/sites/${jobSiteId}/assignable-people`)
+        .then((r) => r.json())
+        .then((d) => {
+          setPeople(d?.ok ? (d.people ?? []) : []);
+          setPeopleFallback(Boolean(d?.isFallback));
+        })
+        .catch(() => setPeople([]))
+        .finally(() => setPeopleLoading(false));
     }
   }
 
@@ -182,9 +224,13 @@ export function AuditFindingsPanel({
       )}
 
       {findings.length === 0 ? (
-        <p className="text-sm text-ink-subtle">No findings recorded for this audit.</p>
+        <p className="text-sm text-ink-subtle">
+          No findings recorded for this audit.
+        </p>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-ink-subtle">No findings match your search.</p>
+        <p className="text-sm text-ink-subtle">
+          No findings match your search.
+        </p>
       ) : (
         <ul className="space-y-3">
           {pageItems.map((f) => {
@@ -218,12 +264,18 @@ export function AuditFindingsPanel({
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold text-ink">{f.title}</span>
                       <Badge
-                        className={FINDING_SEVERITY_BADGE[f.severity as FindingSeverityValue]}
+                        className={
+                          FINDING_SEVERITY_BADGE[
+                            f.severity as FindingSeverityValue
+                          ]
+                        }
                       >
                         {findingSeverityLabel(f.severity)}
                       </Badge>
                       <Badge
-                        className={FINDING_STATUS_BADGE[f.status as FindingStatusValue]}
+                        className={
+                          FINDING_STATUS_BADGE[f.status as FindingStatusValue]
+                        }
                       >
                         {findingStatusLabel(f.status)}
                       </Badge>
@@ -288,11 +340,66 @@ export function AuditFindingsPanel({
                           <button
                             type="button"
                             disabled={busy}
-                            onClick={() => createAction(f.id)}
+                            onClick={() => openAssign(f.id)}
                             className="rounded-lg border border-brand-500 px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-50"
                           >
                             Create action
                           </button>
+                        )}
+                      </div>
+                    )}
+                    {assignFor === f.id && (
+                      <div className="mt-3 rounded-lg border border-line bg-surface-sunken p-3">
+                        <p className="text-sm font-semibold text-ink">
+                          Assign this action
+                        </p>
+                        <p className="mb-2 text-xs text-ink-subtle">
+                          {peopleLoading
+                            ? 'Loading people…'
+                            : people.length === 0
+                              ? 'No inducted workers or assigned users for this site yet.'
+                              : peopleFallback
+                                ? 'No inducted workers yet — showing users assigned to this site.'
+                                : 'Workers inducted on this site.'}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <select
+                            value={assignee}
+                            onChange={(e) => setAssignee(e.target.value)}
+                            disabled={peopleLoading || people.length === 0}
+                            aria-label="Assign this action to"
+                            className="min-w-[14rem] rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+                          >
+                            <option value="">Select a person</option>
+                            {people.map((p) => (
+                              <option
+                                key={`${p.kind}:${p.id}`}
+                                value={`${p.kind}:${p.id}`}
+                              >
+                                {p.name} · {p.company}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            disabled={!assignee || busy}
+                            onClick={() => createAction(f.id)}
+                            className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+                          >
+                            Create action
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAssignFor(undefined)}
+                            className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-ink-muted hover:bg-surface"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                        {assignError && (
+                          <p className="mt-2 text-xs font-medium text-danger-600">
+                            {assignError}
+                          </p>
                         )}
                       </div>
                     )}
@@ -316,8 +423,11 @@ export function AuditFindingsPanel({
       {filtered.length > 0 && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3 text-sm">
           <span className="text-ink-subtle">
-            Showing <span className="font-semibold text-ink">{rangeStart}–{rangeEnd}</span> of{' '}
-            <span className="font-semibold text-ink">{filtered.length}</span>
+            Showing{' '}
+            <span className="font-semibold text-ink">
+              {rangeStart}–{rangeEnd}
+            </span>{' '}
+            of <span className="font-semibold text-ink">{filtered.length}</span>
           </span>
           <div className="flex items-center gap-2">
             <PagerButton
@@ -421,7 +531,8 @@ function FindingForm({
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
         if (data.errors) setErrors(data.errors);
-        else setFormError(data.error ?? 'Something went wrong. Please try again.');
+        else
+          setFormError(data.error ?? 'Something went wrong. Please try again.');
         return;
       }
       onDone();
@@ -460,19 +571,40 @@ function FindingForm({
         error={errors.description}
       />
       <div className="grid gap-4 sm:grid-cols-3">
-        <Select label="Category" value={values.category} onChange={(e) => set('category', e.target.value)} error={errors.category}>
+        <Select
+          label="Category"
+          value={values.category}
+          onChange={(e) => set('category', e.target.value)}
+          error={errors.category}
+        >
           {FINDING_CATEGORIES.map((c) => (
-            <option key={c.value} value={c.value}>{c.label}</option>
+            <option key={c.value} value={c.value}>
+              {c.label}
+            </option>
           ))}
         </Select>
-        <Select label="Severity" value={values.severity} onChange={(e) => set('severity', e.target.value)} error={errors.severity}>
+        <Select
+          label="Severity"
+          value={values.severity}
+          onChange={(e) => set('severity', e.target.value)}
+          error={errors.severity}
+        >
           {FINDING_SEVERITIES.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
           ))}
         </Select>
-        <Select label="Status" value={values.status} onChange={(e) => set('status', e.target.value)} error={errors.status}>
+        <Select
+          label="Status"
+          value={values.status}
+          onChange={(e) => set('status', e.target.value)}
+          error={errors.status}
+        >
           {FINDING_STATUSES.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
           ))}
         </Select>
       </div>
@@ -495,7 +627,13 @@ function FindingForm({
         <Button type="submit" variant="brand" size="md" disabled={busy}>
           {busy ? 'Saving…' : submitLabel}
         </Button>
-        <Button type="button" variant="ghost" size="md" onClick={onCancel} disabled={busy}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="md"
+          onClick={onCancel}
+          disabled={busy}
+        >
           Cancel
         </Button>
       </div>

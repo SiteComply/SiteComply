@@ -18,7 +18,10 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
-    return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: 'Not signed in.' },
+      { status: 401 },
+    );
   }
   if (!permits(viewer.role, 'actions', 'create')) {
     return NextResponse.json(
@@ -31,14 +34,28 @@ export async function POST(req: NextRequest) {
   try {
     body = (await req.json()) as ActionInput;
   } catch {
-    return NextResponse.json({ ok: false, error: 'Invalid request.' }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: 'Invalid request.' },
+      { status: 400 },
+    );
   }
 
-  const result = validateAction(body, viewer);
+  // SC-015: 'create' mode makes the assignee mandatory (edits are exempt so
+  // legacy actions stay editable).
+  const result = validateAction(body, viewer, 'create');
   if (!result.ok) {
-    return NextResponse.json({ ok: false, errors: result.errors }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, errors: result.errors },
+      { status: 400 },
+    );
   }
 
   const created = await createAction(viewer, result.value);
+  if (!created.ok) {
+    return NextResponse.json(
+      { ok: false, errors: { assignedTo: created.error } },
+      { status: 400 },
+    );
+  }
   return NextResponse.json({ ok: true, id: created.id });
 }

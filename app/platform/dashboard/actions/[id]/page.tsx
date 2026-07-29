@@ -85,17 +85,26 @@ export default async function ActionDetailPage({
             { label: action.title },
           ]}
         />
-        <Link href="/platform/dashboard/actions" className="text-sm font-semibold text-brand-700 hover:underline">
+        <Link
+          href="/platform/dashboard/actions"
+          className="text-sm font-semibold text-brand-700 hover:underline"
+        >
           ← Actions
         </Link>
         <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-bold text-ink">{action.title}</h1>
-              <Badge className={ACTION_STATUS_BADGE[action.status as ActionStatusValue]}>
+              <Badge
+                className={
+                  ACTION_STATUS_BADGE[action.status as ActionStatusValue]
+                }
+              >
                 {actionStatusLabel(action.status)}
               </Badge>
-              {overdue && <Badge className={ACTION_OVERDUE_BADGE}>Overdue</Badge>}
+              {overdue && (
+                <Badge className={ACTION_OVERDUE_BADGE}>Overdue</Badge>
+              )}
             </div>
             <p className="text-ink-muted">{action.jobSite.name}</p>
           </div>
@@ -117,7 +126,9 @@ export default async function ActionDetailPage({
         <div className="space-y-6 lg:col-span-2">
           {action.description && (
             <Section title="Description">
-              <p className="whitespace-pre-line text-sm text-ink">{action.description}</p>
+              <p className="whitespace-pre-line text-sm text-ink">
+                {action.description}
+              </p>
             </Section>
           )}
           {action.completionNote && (
@@ -169,22 +180,55 @@ export default async function ActionDetailPage({
         <div className="space-y-6">
           <Section title="Summary">
             <dl className="space-y-3">
-              <Detail label="Priority" value={actionPriorityLabel(action.priority)} badge={ACTION_PRIORITY_BADGE[action.priority as ActionPriorityValue]} />
+              <Detail
+                label="Priority"
+                value={actionPriorityLabel(action.priority)}
+                badge={
+                  ACTION_PRIORITY_BADGE[action.priority as ActionPriorityValue]
+                }
+              />
               <Detail label="Status" value={actionStatusLabel(action.status)} />
-              <Detail label="Due date" value={action.dueDate ? formatDateUK(action.dueDate) : '—'} />
-              <Detail label="Assigned to" value={action.assignedTo ?? '—'} />
-              <Detail label="Site" value={`${action.jobSite.name} · ${action.jobSite.jobReference}`} />
-              <Detail label="Created by" value={action.createdByName ?? 'Unknown'} />
-              <Detail label="Created" value={formatDateTimeUK(action.createdAt)} />
+              <Detail
+                label="Due date"
+                value={action.dueDate ? formatDateUK(action.dueDate) : '—'}
+              />
+              <Detail
+                label="Assigned to"
+                value={
+                  action.assignedTo
+                    ? action.assignedToCompany
+                      ? `${action.assignedTo} · ${action.assignedToCompany}`
+                      : action.assignedTo
+                    : '—'
+                }
+              />
+              <Detail
+                label="Site"
+                value={`${action.jobSite.name} · ${action.jobSite.jobReference}`}
+              />
+              <Detail
+                label="Created by"
+                value={action.createdByName ?? 'Unknown'}
+              />
+              <Detail
+                label="Created"
+                value={formatDateTimeUK(action.createdAt)}
+              />
               {action.completedAt && (
-                <Detail label="Completed" value={formatDateTimeUK(action.completedAt)} />
+                <Detail
+                  label="Completed"
+                  value={formatDateTimeUK(action.completedAt)}
+                />
               )}
             </dl>
           </Section>
 
           {canEdit && (
             <Section title="Status workflow">
-              <ActionStatusControl actionId={action.id} status={action.status} />
+              <ActionStatusControl
+                actionId={action.id}
+                status={action.status}
+              />
             </Section>
           )}
         </div>
@@ -193,22 +237,42 @@ export default async function ActionDetailPage({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-subtle">{title}</h2>
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-subtle">
+        {title}
+      </h2>
       {children}
     </section>
   );
 }
 
-function Detail({ label, value, badge }: { label: string; value: string; badge?: string }) {
+function Detail({
+  label,
+  value,
+  badge,
+}: {
+  label: string;
+  value: string;
+  badge?: string;
+}) {
   return (
     <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-ink-subtle">{label}</dt>
+      <dt className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
+        {label}
+      </dt>
       <dd className="mt-0.5 break-words text-sm text-ink">
         {badge ? (
-          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${badge}`}>
+          <span
+            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${badge}`}
+          >
             {value}
           </span>
         ) : (
@@ -219,9 +283,17 @@ function Detail({ label, value, badge }: { label: string; value: string; badge?:
   );
 }
 
-function Badge({ className, children }: { className: string; children: React.ReactNode }) {
+function Badge({
+  className,
+  children,
+}: {
+  className: string;
+  children: React.ReactNode;
+}) {
   return (
-    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${className}`}>
+    <span
+      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${className}`}
+    >
       {children}
     </span>
   );
