@@ -2102,7 +2102,7 @@ model SchedulerRun {
 }
 
 enum SchedulerTrigger {
-  /// The hourly Logic App recurrence — the primary trigger.
+  /// The hourly Azure Functions timer — the primary trigger.
   TIMER
   /// A manual invocation of the same endpoint, for testing.
   MANUAL

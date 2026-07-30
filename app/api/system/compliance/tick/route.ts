@@ -8,9 +8,11 @@ export const dynamic = 'force-dynamic';
 /**
  * SC-020 Phase 4 — POST /api/system/compliance/tick
  *
- * The scheduled trigger's entry point, called hourly by an Azure Logic App
- * recurrence. Guarded by a SHARED SECRET rather than a platform session, because
- * there is no user involved.
+ * The scheduled trigger's entry point, called hourly by the Azure Functions
+ * timer in azure/scheduler-function (a Logic App recurrence was preferred but
+ * Microsoft.Logic is unregistered on this subscription and cannot be registered
+ * with the access available — see that directory's README). Guarded by a SHARED
+ * SECRET rather than a platform session, because there is no user involved.
  *
  * Security properties, deliberately:
  *  - The secret is compared in CONSTANT TIME, so the endpoint cannot be used as
@@ -57,7 +59,7 @@ export async function POST(req: NextRequest) {
     manual ? SchedulerTrigger.MANUAL : SchedulerTrigger.TIMER,
   );
 
-  // 200 even on a recorded failure: the Logic App should not retry-storm, and the
+  // 200 even on a recorded failure: the timer should not retry-storm, and the
   // failure is already visible on the calendar's status line and in SchedulerRun.
   return NextResponse.json({
     ok: result.ok,

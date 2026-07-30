@@ -363,6 +363,12 @@ export async function getComplianceActivityRows(
  * The caveat shown in the report footer and the CSV. Stated rather than implied:
  * a completion rate over occurrences that were never generated would overstate
  * performance.
+ *
+ * Updated in SC-020 Phase 4: scheduled generation now runs hourly, so the old
+ * "until scheduled generation is enabled" wording was not just stale but
+ * actively misleading — it told readers the figures were less trustworthy than
+ * they now are. The remaining caveat is real and narrower: the horizon is
+ * bounded, so activities beyond it genuinely do not exist yet.
  */
 export const GENERATION_CAVEAT =
-  'Figures cover compliance activities that have been generated. Until scheduled generation is enabled, activities are created when a calendar period is viewed.';
+  'Figures cover compliance activities that have been generated. Scheduled generation runs hourly on a rolling 60-day horizon, so activities due beyond that horizon are not yet included.';
