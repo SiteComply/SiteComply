@@ -23,12 +23,17 @@ export function SchedulerStatus({ health }: { health: SchedulerHealth }) {
     ? formatDateTimeUK(health.lastRunAt)
     : 'unknown';
 
+  // A failure states THAT it failed, never WHY. `health.lastError` is a raw
+  // internal error (Prisma messages carry table, column and host detail) and
+  // this line is visible to everyone with audits:view, which includes external
+  // Auditor and H&S Consultant users. The reason is recorded on SchedulerRun for
+  // whoever investigates — see scripts/sc020p4_status.ts.
   if (!health.lastOk) {
     return (
       <p className="rounded-lg border border-danger-500/40 bg-danger-50 px-3 py-1.5 text-xs font-medium text-danger-700">
-        Scheduled generation failed at {when}
-        {health.lastError ? ` — ${health.lastError}` : ''}. Activities are still
-        generated when a calendar period is viewed.
+        Scheduled generation failed at {when}. Activities are still generated
+        when a calendar period is viewed, so this calendar is up to date.
+        Contact support if this persists.
       </p>
     );
   }
