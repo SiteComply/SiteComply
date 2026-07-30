@@ -19,6 +19,8 @@ import {
   londonDateStr,
 } from '@/services/compliance/occurrenceGenerator';
 import { ComplianceCalendarShell } from '@/components/platform/ComplianceCalendarShell';
+import { ComplianceKpiStrip } from '@/components/platform/ComplianceKpiStrip';
+import { getComplianceKpis } from '@/services/reports/complianceActivityReport';
 import { ActivityTypeLegend } from '@/components/platform/ActivityTypeLegend';
 import { UpcomingCompliance } from '@/components/platform/UpcomingCompliance';
 
@@ -68,7 +70,7 @@ export default async function ComplianceCalendarPage({
   const from = gridDays[0]!;
   const to = gridDays[gridDays.length - 1]!;
 
-  const [{ occurrences }, upcoming, templates] = await Promise.all([
+  const [{ occurrences }, upcoming, templates, kpis] = await Promise.all([
     getCalendarWindow(viewer, from, to, siteId),
     getUpcoming(viewer, siteId),
     prisma.auditTemplate.findMany({
@@ -76,6 +78,10 @@ export default async function ComplianceCalendarPage({
       orderBy: { order: 'asc' },
       select: { id: true, name: true },
     }),
+    // SC-020 Phase 3 — headline figures across ALL time for the scoped sites,
+    // not just the displayed month: "3 overdue" should not change because you
+    // paged to a different month.
+    getComplianceKpis(siteId ? [siteId] : viewer.siteIds),
   ]);
 
   const canManage = permits(viewer.role, 'audits', 'create');
@@ -86,9 +92,7 @@ export default async function ComplianceCalendarPage({
   // site manager is the primary case, so platform users must always be offered.
   const peopleSiteId = siteId ?? viewer.siteIds[0];
   const [inducted, siteUsers] = await Promise.all([
-    peopleSiteId
-      ? listInductedWorkers(peopleSiteId)
-      : Promise.resolve([]),
+    peopleSiteId ? listInductedWorkers(peopleSiteId) : Promise.resolve([]),
     peopleSiteId
       ? prisma.platformUser.findMany({
           where: {
@@ -145,6 +149,13 @@ export default async function ComplianceCalendarPage({
         selectedSiteId={siteId ?? ''}
         canManage={canManage}
       />
+
+      <div className="mt-4">
+        <ComplianceKpiStrip
+          kpis={kpis}
+          reportHref={`/platform/dashboard/reports/compliance-activities${siteId ? `?sites=${siteId}` : ''}`}
+        />
+      </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <ActivityTypeLegend types={activityTypesIn(occurrences)} />

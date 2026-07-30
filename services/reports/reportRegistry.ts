@@ -50,6 +50,20 @@ export const REPORT_TYPES: ReportType[] = [
     built: true,
   },
   {
+    id: 'compliance-activities',
+    title: 'Compliance Activities',
+    description:
+      'Scheduled compliance activities (SC-020): upcoming, outstanding, overdue and escalated, with completion rates, per-site scores and a 12-week trend.',
+    icon: 'clipboard',
+    directorOnly: false,
+    // Occurrence-level rows name the assignee (a platform user or worker), so
+    // this is treated as personal data and Clients see aggregates only, matching
+    // every other report that identifies people.
+    personalData: true,
+    clientAggregateOnly: true,
+    built: true,
+  },
+  {
     id: 'permits',
     title: 'Permits to Work',
     description:
