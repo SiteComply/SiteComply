@@ -25,3 +25,6 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# SC-020 Phase 4 timer deps — installed at package time by scripts/sc020p4_timer.sh
+azure/scheduler-function/node_modules/

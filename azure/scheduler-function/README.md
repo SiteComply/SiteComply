@@ -26,8 +26,14 @@ external clock calling a secret-guarded HTTP endpoint — with no new provider.
 - **The app owns run history.** Every triggered run — success or failure — is
   written to `SchedulerRun` and surfaced on the Compliance Calendar, which is
   why this function needs no state of its own.
-- No npm dependencies, and no `main` in `package.json` (which keeps the
-  Functions Node worker on the `function.json` programming model).
+- Node 24 on the Functions **v4 programming model** (`app.timer(...)` in
+  `src/functions/`). Node 20 is past end-of-life and is refused by
+  `az functionapp create`, and Node 22+ dropped the older `function.json`
+  model — so the single dependency `@azure/functions` is unavoidable. It is
+  committed with the app and zipped with `node_modules`, so no build runs on
+  deploy.
+- `host.json` declares the **extension bundle**, without which the timer
+  binding is not available to a JavaScript function at all.
 
 ## Deploying
 

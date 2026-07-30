@@ -2,5 +2,9 @@
   "name": "sitecomply-scheduler-function",
   "version": "1.0.0",
   "description": "SC-020 Phase 4 hourly timer that triggers SiteComply compliance generation.",
-  "private": true
+  "private": true,
+  "main": "src/functions/*.js",
+  "dependencies": {
+    "@azure/functions": "^4.5.0"
+  }
 }

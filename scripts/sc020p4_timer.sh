@@ -40,11 +40,19 @@ echo "[3/6] Ensuring function app '$FNAPP'..."
 if az functionapp show -g "$RG" -n "$FNAPP" -o none 2>/dev/null; then
   echo "      already exists."
 else
+  # FLEX CONSUMPTION, not the classic consumption plan. Azure refuses to place
+  # Linux "dynamic workers" in a resource group that already contains a Linux
+  # Basic plan, and rgSiteComply holds the production B1 plan:
+  #   "Linux dynamic workers are not available in resource group"
+  # Flex is the supported isolated option. Sharing the production B1 plan was the
+  # alternative and was rejected — an always-warm functions host competing for
+  # memory and the single core with the live web app is not a trade worth making
+  # for one HTTP call an hour.
   az functionapp create -g "$RG" -n "$FNAPP" \
     --storage-account "$STORAGE" \
-    --consumption-plan-location "$LOC" \
-    --runtime node --runtime-version 20 --functions-version 4 \
-    --os-type Linux --disable-app-insights true -o none
+    --flexconsumption-location "$LOC" \
+    --runtime node --runtime-version 24 \
+    --disable-app-insights true -o none
   echo "      created."
 fi
 
@@ -57,7 +65,12 @@ echo "      SCHEDULER_SECRET + TICK_URL set."
 
 echo "[5/6] Packaging and deploying the function..."
 rm -f "$ZIP"
+# Install here and ship node_modules in the zip rather than building on the
+# consumption plan: one tiny dependency, and a deploy that needs no build step
+# cannot fail halfway through one.
+( cd "$SRC" && npm install --omit=dev --no-audit --no-fund >/dev/null )
 ( cd "$SRC" && zip -rq "$ZIP" . )
+echo "      packaged $(du -h "$ZIP" | cut -f1)."
 az functionapp deployment source config-zip -g "$RG" -n "$FNAPP" --src "$ZIP" -o none
 echo "      deployed."
 
