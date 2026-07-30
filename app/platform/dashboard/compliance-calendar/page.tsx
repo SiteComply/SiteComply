@@ -20,6 +20,8 @@ import {
 } from '@/services/compliance/occurrenceGenerator';
 import { ComplianceCalendarShell } from '@/components/platform/ComplianceCalendarShell';
 import { ComplianceKpiStrip } from '@/components/platform/ComplianceKpiStrip';
+import { SchedulerStatus } from '@/components/platform/SchedulerStatus';
+import { getSchedulerHealth } from '@/services/compliance/schedulerRunner';
 import { getComplianceKpis } from '@/services/reports/complianceActivityReport';
 import { ActivityTypeLegend } from '@/components/platform/ActivityTypeLegend';
 import { UpcomingCompliance } from '@/components/platform/UpcomingCompliance';
@@ -70,19 +72,22 @@ export default async function ComplianceCalendarPage({
   const from = gridDays[0]!;
   const to = gridDays[gridDays.length - 1]!;
 
-  const [{ occurrences }, upcoming, templates, kpis] = await Promise.all([
-    getCalendarWindow(viewer, from, to, siteId),
-    getUpcoming(viewer, siteId),
-    prisma.auditTemplate.findMany({
-      where: { active: true },
-      orderBy: { order: 'asc' },
-      select: { id: true, name: true },
-    }),
-    // SC-020 Phase 3 — headline figures across ALL time for the scoped sites,
-    // not just the displayed month: "3 overdue" should not change because you
-    // paged to a different month.
-    getComplianceKpis(siteId ? [siteId] : viewer.siteIds),
-  ]);
+  const [{ occurrences }, upcoming, templates, kpis, schedulerHealth] =
+    await Promise.all([
+      getCalendarWindow(viewer, from, to, siteId),
+      getUpcoming(viewer, siteId),
+      prisma.auditTemplate.findMany({
+        where: { active: true },
+        orderBy: { order: 'asc' },
+        select: { id: true, name: true },
+      }),
+      // SC-020 Phase 3 — headline figures across ALL time for the scoped sites,
+      // not just the displayed month: "3 overdue" should not change because you
+      // paged to a different month.
+      getComplianceKpis(siteId ? [siteId] : viewer.siteIds),
+      // SC-020 Phase 4 — surfaced so a stalled timer is visible rather than silent.
+      getSchedulerHealth(),
+    ]);
 
   const canManage = permits(viewer.role, 'audits', 'create');
 
@@ -155,6 +160,10 @@ export default async function ComplianceCalendarPage({
           kpis={kpis}
           reportHref={`/platform/dashboard/reports/compliance-activities${siteId ? `?sites=${siteId}` : ''}`}
         />
+      </div>
+
+      <div className="mt-3">
+        <SchedulerStatus health={schedulerHealth} />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">

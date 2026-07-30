@@ -2072,3 +2072,38 @@ enum OccurrenceStatus {
   COMPLETED
   MISSED
 }
+
+/// SC-020 Phase 4 — a record of each scheduled generation run.
+///
+/// Exists so a STALLED scheduler is visible rather than silent. A compliance
+/// scheduler that quietly stops generating is the worst failure mode available:
+/// nobody notices until an inspection has been missed. The calendar shows the
+/// last successful run, so "nothing is due" and "nothing has been generated" can
+/// never be mistaken for one another.
+///
+/// Lazy generation on calendar read is KEPT as a fallback and deliberately does
+/// not write rows here — this table tracks the TRIGGER, so its newest row is a
+/// truthful answer to "is the timer alive?".
+model SchedulerRun {
+  id      String           @id @default(cuid())
+  trigger SchedulerTrigger
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  sitesConsidered      Int @default(0)
+  occurrencesCreated   Int @default(0)
+  escalationsRecorded  Int @default(0)
+
+  ok    Boolean @default(false)
+  error String?
+
+  @@index([trigger, startedAt])
+}
+
+enum SchedulerTrigger {
+  /// The hourly Logic App recurrence — the primary trigger.
+  TIMER
+  /// A manual invocation of the same endpoint, for testing.
+  MANUAL
+}
