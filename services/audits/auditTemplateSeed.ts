@@ -147,6 +147,192 @@ export const AUDIT_TEMPLATE_LIBRARY: SeedTemplate[] = [
       },
     ],
   },
+  // --- SC-020: the recurring compliance activities shown in the REV-1
+  // Compliance Calendar example. In Phase 1 the schedulable unit IS an audit
+  // template, so these double as the calendar's activity types. Deliberately
+  // short checklists — a Daily Safe Start that takes ten minutes gets done; a
+  // thirty-item one gets skipped.
+  {
+    name: 'Daily Safe Start',
+    description:
+      'Short start-of-shift check before work begins — the daily activity in the compliance calendar.',
+    items: [
+      {
+        label: 'Work area is safe to start and free of new hazards',
+        category: 'SAFETY',
+      },
+      { label: 'Everyone on the task has the correct PPE', category: 'SAFETY' },
+      {
+        label: 'Permits and RAMS for today\u2019s work are in place',
+        category: 'DOCUMENTATION',
+      },
+      {
+        label: 'Plant and equipment for today has been checked',
+        category: 'SAFETY',
+      },
+      {
+        label: 'Emergency arrangements briefed to the team',
+        category: 'SAFETY',
+      },
+    ],
+  },
+  {
+    name: 'Fire Point Check',
+    description:
+      'Weekly check of fire points, extinguishers, alarms and escape routes.',
+    items: [
+      {
+        label: 'Fire points are present, signed and unobstructed',
+        category: 'SAFETY',
+        defaultSeverity: 'HIGH',
+      },
+      {
+        label: 'Extinguishers are in date and seals intact',
+        category: 'SAFETY',
+        defaultSeverity: 'HIGH',
+      },
+      {
+        label: 'Alarm / call points are operational',
+        category: 'SAFETY',
+        defaultSeverity: 'HIGH',
+      },
+      {
+        label: 'Escape routes are clear and signed',
+        category: 'SAFETY',
+        defaultSeverity: 'CRITICAL',
+      },
+      {
+        label: 'Assembly point signage is visible and correct',
+        category: 'SAFETY',
+      },
+    ],
+  },
+  {
+    name: 'Scaffold Inspection',
+    description:
+      'Statutory scaffold inspection — record and tag. Required at least every 7 days and after alteration or bad weather.',
+    items: [
+      {
+        label: 'Scafftag present, current and signed',
+        category: 'DOCUMENTATION',
+        defaultSeverity: 'HIGH',
+      },
+      {
+        label: 'Base plates, sole boards and footings sound',
+        category: 'SAFETY',
+        defaultSeverity: 'HIGH',
+      },
+      {
+        label: 'Guardrails, toe boards and brick guards complete',
+        category: 'SAFETY',
+        defaultSeverity: 'CRITICAL',
+      },
+      {
+        label: 'Ties, bracing and couplers secure',
+        category: 'SAFETY',
+        defaultSeverity: 'CRITICAL',
+      },
+      {
+        label: 'Platforms fully boarded, clean and free of debris',
+        category: 'SAFETY',
+      },
+      {
+        label: 'Safe access (ladders / stair towers) in place',
+        category: 'SAFETY',
+        defaultSeverity: 'HIGH',
+      },
+      {
+        label: 'No unauthorised alterations since the last inspection',
+        category: 'SAFETY',
+        defaultSeverity: 'HIGH',
+      },
+    ],
+  },
+  {
+    name: 'MEWP Inspection',
+    description:
+      'Mobile elevating work platform pre-use and periodic checks, including LOLER paperwork.',
+    items: [
+      {
+        label: 'LOLER thorough examination certificate in date',
+        category: 'DOCUMENTATION',
+        defaultSeverity: 'CRITICAL',
+      },
+      {
+        label: 'Pre-use inspection recorded by the operator',
+        category: 'DOCUMENTATION',
+      },
+      {
+        label: 'Operator holds a valid IPAF (or equivalent) card',
+        category: 'DOCUMENTATION',
+        defaultSeverity: 'HIGH',
+      },
+      {
+        label: 'Harness and lanyard in date and worn where required',
+        category: 'SAFETY',
+        defaultSeverity: 'HIGH',
+      },
+      {
+        label: 'Controls, emergency lowering and alarms function',
+        category: 'SAFETY',
+        defaultSeverity: 'HIGH',
+      },
+      {
+        label: 'Ground conditions and exclusion zone suitable',
+        category: 'SAFETY',
+      },
+      {
+        label: 'Rescue plan in place and understood',
+        category: 'SAFETY',
+        defaultSeverity: 'HIGH',
+      },
+    ],
+  },
+  {
+    name: 'Welfare Inspection',
+    description:
+      'Weekly welfare check — Schedule 2 CDM 2015 facilities in a clean and usable state.',
+    items: [
+      {
+        label: 'Toilets clean, stocked and in working order',
+        category: 'SAFETY',
+      },
+      {
+        label: 'Washing facilities with hot and cold water available',
+        category: 'SAFETY',
+      },
+      { label: 'Drinking water available and signed', category: 'SAFETY' },
+      {
+        label: 'Rest area clean, heated and adequate for numbers',
+        category: 'SAFETY',
+      },
+      { label: 'Drying room / changing facilities usable', category: 'SAFETY' },
+      {
+        label: 'First aid provision stocked and signed',
+        category: 'SAFETY',
+        defaultSeverity: 'HIGH',
+      },
+      { label: 'Waste removed and area tidy', category: 'ENVIRONMENTAL' },
+    ],
+  },
+  {
+    name: 'Toolbox Talk',
+    description:
+      'Supervisor-delivered briefing, recorded as a scheduled activity. SC-018 removed the toolbox-talk question from the worker induction precisely because these are delivered separately — this is where they belong.',
+    items: [
+      {
+        label: 'Topic covered and relevant to current works',
+        category: 'DOCUMENTATION',
+      },
+      {
+        label: 'Attendance recorded',
+        category: 'DOCUMENTATION',
+        defaultSeverity: 'MEDIUM',
+      },
+      { label: 'Questions raised were answered', category: 'DOCUMENTATION' },
+      { label: 'Actions arising have been raised', category: 'DOCUMENTATION' },
+    ],
+  },
 ];
 
 /** Idempotently seed/refresh the starter audit templates. */

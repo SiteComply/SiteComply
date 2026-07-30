@@ -390,6 +390,9 @@ model JobSite {
   setupProgress          SiteSetupProgress?
 
   @@index([status])
+  // SC-020 compliance scheduler.
+  complianceSchedules   ComplianceSchedule[]
+  complianceOccurrences ComplianceOccurrence[]
 }
 
 /// A Daily Bulletin (SC-002): an important site notice, announcement or safety
@@ -871,6 +874,8 @@ model Audit {
 
   @@index([jobSiteId, status, createdAt])
   @@index([status])
+  // SC-020 compliance scheduler.
+  complianceOccurrences ComplianceOccurrence[]
 }
 
 /// SC-014 — how an audit's overall score is produced.
@@ -1016,6 +1021,8 @@ model AuditTemplate {
   updatedAt DateTime @updatedAt
 
   @@index([active, order])
+  // SC-020 compliance scheduler.
+  complianceSchedules ComplianceSchedule[]
 }
 
 /// A weighted section on an audit template (SC-014). Copied onto an AuditSection
@@ -1922,4 +1929,133 @@ model SiteSetupProgress {
   updatedByName   String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+/// SC-020 Phase 1 — a recurring compliance activity.
+///
+/// v1 schedules AUDIT TEMPLATES, which means the template IS the activity type
+/// ("Daily Safe Start", "Fire Point Check"...). No separate activity-type
+/// catalogue is needed, and starting an occurrence creates a real audit so
+/// SC-013 provenance and SC-014 scoring come along for free.
+///
+/// Reminder/escalation fields are captured in Phase 1 but ACTED ON in Phase 2 —
+/// stored now so adding reminders later needs no migration.
+model ComplianceSchedule {
+  id        String  @id @default(cuid())
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+
+  auditTemplate   AuditTemplate @relation(fields: [auditTemplateId], references: [id], onDelete: Cascade)
+  auditTemplateId String
+  /// Display title; defaults from the template but may be overridden per site.
+  title           String
+
+  frequency    ScheduleFrequency
+  /// CUSTOM only: repeat every N days.
+  intervalDays Int?
+  /// WEEKLY (and weekday-limited DAILY): ISO weekdays, 1 = Monday .. 7 = Sunday.
+  weekdays     Int[]
+  /// MONTHLY: day of month 1-31, clamped to the month's length when generating.
+  dayOfMonth   Int?
+  /// Local time of day, "HH:MM" (Europe/London). The REV-1 chips all carry a
+  /// time, so this is not a date-only schedule.
+  timeOfDay    String            @default("08:00")
+
+  startDate       DateTime
+  endDate         DateTime?
+  /// Days after the due date the activity may still be completed in.
+  dueWindowDays   Int      @default(1)
+
+  assigneeKind           ScheduleAssigneeKind @default(ROLE)
+  assignedPlatformUserId String?
+  assignedWorkerId       String?
+  assignedRole           PlatformRole?
+
+  active      Boolean  @default(true)
+  /// Generation is ACTIVATION-FORWARD: nothing is created before this instant,
+  /// so switching on a schedule with a historic start date never backfills.
+  activatedAt DateTime @default(now())
+
+  /// Phase 2: days before due to remind, and the overdue escalation rule.
+  reminderOffsetsDays Int[]
+  escalateAfterDays   Int?
+  escalateToRole      PlatformRole?
+
+  createdByUserId String?
+  createdByName   String?
+  updatedByUserId String?
+  updatedByName   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  occurrences ComplianceOccurrence[]
+
+  @@index([jobSiteId, active])
+  @@index([auditTemplateId])
+}
+
+/// SC-020 Phase 1 — one generated instance of a schedule.
+///
+/// `@@unique([scheduleId, dueAt])` is the IDEMPOTENCY guarantee: generation uses
+/// createMany + skipDuplicates, so running it twice — or concurrently from two
+/// requests — cannot double-generate. That matters more here than anywhere else
+/// in the product: a duplicated or missing statutory inspection is a compliance
+/// failure, not a cosmetic bug.
+model ComplianceOccurrence {
+  id         String             @id @default(cuid())
+  schedule   ComplianceSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  scheduleId String
+  /// Denormalised so every calendar query is a single scoped read.
+  jobSite    JobSite            @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId  String
+
+  /// The due instant (UTC), and the Europe/London calendar date it belongs to.
+  /// Storing the local date makes grouping into calendar cells an indexed
+  /// equality rather than timezone arithmetic on every row.
+  dueAt        DateTime
+  dueDateLocal String
+  timeOfDay    String
+
+  status OccurrenceStatus @default(SCHEDULED)
+
+  /// The audit created when someone starts this activity (SC-013/SC-014).
+  audit   Audit?  @relation(fields: [auditId], references: [id], onDelete: SetNull)
+  auditId String?
+
+  /// Assignee SNAPSHOT at generation, so history survives later schedule edits.
+  assigneeKind           ScheduleAssigneeKind
+  assignedPlatformUserId String?
+  assignedWorkerId       String?
+  assignedRole           PlatformRole?
+  assigneeLabel          String?
+
+  completedAt     DateTime?
+  completedByName String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([scheduleId, dueAt])
+  @@index([jobSiteId, dueDateLocal])
+  @@index([status, dueAt])
+}
+
+enum ScheduleFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+enum ScheduleAssigneeKind {
+  USER
+  WORKER
+  ROLE
+}
+
+enum OccurrenceStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  MISSED
 }

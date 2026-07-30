@@ -58,6 +58,14 @@ export const PLATFORM_NAV: {
     module: 'documents',
   },
   {
+    href: '/platform/dashboard/compliance-calendar',
+    label: 'Compliance',
+    icon: 'clipboard',
+    // SC-020: scheduling recurring audits, so it sits under the audits module —
+    // no RBAC matrix change was needed.
+    module: 'audits',
+  },
+  {
     href: '/platform/dashboard/audits',
     label: 'Audits',
     icon: 'shield',
