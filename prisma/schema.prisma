@@ -384,6 +384,10 @@ model JobSite {
   siteInformation        SiteInformation?
   checkInOverrides       CheckInOverride[]
   permits                Permit[]
+  cdmDutyHolders         CdmDutyHolders?
+  projectDetails         SiteProjectDetails?
+  keyPeople              SiteKeyPerson[]
+  setupProgress          SiteSetupProgress?
 
   @@index([status])
 }
@@ -1597,6 +1601,20 @@ model SiteInformation {
   siteHazards         String? @db.Text
   emergencyProcedures String? @db.Text
 
+  /// SC-019 Phase 1 — further CPP narrative sections. Same kind of data as the
+  /// SC-008 fields above, so they live HERE rather than in a parallel CPP model:
+  /// one home means the worker-facing Site Information page and the Construction
+  /// Phase Plan can never diverge.
+  existingSiteRisks     String? @db.Text
+  temporaryWorks        String? @db.Text
+  trafficManagement     String? @db.Text
+  deliveryProcedures    String? @db.Text
+  accessEgress          String? @db.Text
+  environmentalControls String? @db.Text
+  utilitiesIsolation    String? @db.Text
+  highRiskActivities    String? @db.Text
+  fireArrangements      String? @db.Text
+
   /// Site map image, stored in the same private Azure Blob container as the
   /// Documents module (via services/documents/blobStorage). Metadata only; the
   /// bytes are streamed to a checked-in worker through an authenticated route,
@@ -1804,4 +1822,104 @@ enum NotificationEventType {
   ACTION_STATUS_CHANGED
   ACTION_PRIORITY_CHANGED
   ACTION_DUE_DATE_CHANGED
+}
+
+/// SC-019 — CDM 2015 duty holders for a project. These are legally structured
+/// appointments (client, principal designer, principal contractor), not free
+/// text, and they are distinct from the PRINCIPAL_CONTRACTOR platform ROLE: the
+/// role is who logs in, this is the appointed organisation.
+model CdmDutyHolders {
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String  @id
+
+  clientName            String?
+  clientContactName     String?
+  clientContactEmail    String?
+  clientContactPhone    String?
+
+  principalDesigner        String?
+  principalDesignerContact String?
+  principalDesignerEmail   String?
+  principalDesignerPhone   String?
+  principalDesignerAppointedAt DateTime?
+
+  principalContractor        String?
+  principalContractorContact String?
+  principalContractorEmail   String?
+  principalContractorPhone   String?
+  principalContractorAppointedAt DateTime?
+
+  updatedByUserId String?
+  updatedByName   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+/// SC-019 — project-level detail for the Construction Phase Plan. Separate from
+/// JobSite because JobSite is the operational record the worker flow depends on;
+/// this is documentation metadata that must never risk that path.
+model SiteProjectDetails {
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String  @id
+
+  description       String?   @db.Text
+  scopeOfWorks      String?   @db.Text
+  startDate         DateTime?
+  plannedEndDate    DateTime?
+  /// CDM 2015 F10 notifiable project (>30 working days with 20+ workers
+  /// simultaneously, or >500 person days). Captured, NOT submitted — notifying
+  /// the HSE remains the client's duty.
+  cdmNotifiable     Boolean   @default(false)
+  f10Reference      String?
+
+  updatedByUserId String?
+  updatedByName   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+/// SC-019 — named site personnel. Generalises JobSite's single first-aider
+/// fields to MULTIPLE first aiders, fire marshals and site managers. The single
+/// JobSite fields are kept and treated as the primary entry, so every existing
+/// worker-facing panel keeps working untouched.
+model SiteKeyPerson {
+  id        String            @id @default(cuid())
+  jobSite   JobSite           @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+  kind      SiteKeyPersonKind
+  name      String
+  phone     String?
+  /// Where to find them, e.g. "Site Office".
+  location  String?
+  order     Int               @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobSiteId, kind, order])
+}
+
+enum SiteKeyPersonKind {
+  FIRST_AIDER
+  FIRE_MARSHAL
+  SITE_MANAGER
+  OTHER
+}
+
+/// SC-019 — save-and-resume state for the setup wizard. The site is created from
+/// a short mandatory core and every later step writes straight to the real
+/// models, so this records only WHICH steps have been completed — it is progress
+/// tracking, never a second copy of the data.
+model SiteSetupProgress {
+  jobSite   JobSite  @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String   @id
+  /// Step keys the user has explicitly completed (see siteSetupConstants).
+  completedSteps String[]
+  /// Where to drop the user back in.
+  lastStepKey    String?
+
+  updatedByUserId String?
+  updatedByName   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
