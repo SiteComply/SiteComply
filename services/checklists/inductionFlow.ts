@@ -33,6 +33,56 @@ export function isCscsCompetencyItem(item: {
   );
 }
 
+/**
+ * SC-018: the seeded toolbox-talk induction question. Toolbox talks are delivered
+ * separately by supervisors in daily briefings, so requiring every worker to
+ * answer this at check-in added a step without adding assurance. It is filtered
+ * out of the live induction rather than deleted, for the same reasons as the CSCS
+ * question above: checklist items are VERSIONED and historic submissions record
+ * the version they answered, so removing rows would corrupt past records.
+ *
+ * Matched on the exact seeded label + YES_NO type. Deliberately NOT a fuzzy
+ * "contains toolbox" match — a site that has deliberately added its own
+ * toolbox-talk question must keep it.
+ *
+ * Where a toolbox talk genuinely needs recording, the existing Daily Bulletin
+ * (SC-002) issues and records an acknowledged briefing, and Documents has a
+ * GENERAL category for the paperwork.
+ */
+export const TOOLBOX_TALK_INDUCTION_LABEL =
+  'Have you attended the toolbox talk for today’s work?';
+
+export function isToolboxTalkItem(item: {
+  label: string;
+  type: string;
+}): boolean {
+  return (
+    item.type === 'YES_NO' &&
+    normaliseLabel(item.label) === normaliseLabel(TOOLBOX_TALK_INDUCTION_LABEL)
+  );
+}
+
+/**
+ * Normalise a label for comparison. The seeded label contains a TYPOGRAPHIC
+ * apostrophe (’); a site checklist edited by hand may carry a straight one ('),
+ * and the two must be treated as the same question.
+ */
+function normaliseLabel(label: string): string {
+  return label.trim().toLowerCase().replace(/[’‘']/g, "'");
+}
+
+/**
+ * Items removed from the live induction by a REV-1 decision but left in stored
+ * checklists so historic submissions stay intact. One predicate so every caller
+ * (wizard render and server-side validation) filters identically.
+ */
+export function isRetiredInductionItem(item: {
+  label: string;
+  type: string;
+}): boolean {
+  return isCscsCompetencyItem(item) || isToolboxTalkItem(item);
+}
+
 export interface FlowItem {
   id: string;
   label: string;

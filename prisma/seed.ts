@@ -2,7 +2,7 @@
  * SiteComply database seed — realistic UK sample data.
  *
  * Populates: one admin, three active UK construction sites, each with a standard
- * UK induction checklist (PPE + RAMS + toolbox talk + CDM 2015 safe-working),
+ * UK induction checklist (PPE + RAMS + CDM 2015 safe-working),
  * a handful of workers across two companies, and a couple of sample check-ins
  * (one worker currently on site, one historic check-out) to exercise relations.
  *

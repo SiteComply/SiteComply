@@ -4,7 +4,7 @@ import { ChecklistItemType } from '@prisma/client';
  * Standard UK construction site induction template.
  *
  * A sensible, HSE-aligned starting point for a site's compliance checklist:
- * site rules, RAMS, toolbox talk, near-miss awareness, permit to work, CSCS and
+ * site rules, RAMS, near-miss awareness, permit to work and
  * the core PPE items. Admins can add to, reorder or remove these per site in the
  * Stage 9 builder. Kept as plain data so it can be reused by both the seed and
  * the admin "start from template" action.
@@ -36,11 +36,6 @@ export const UK_INDUCTION_TEMPLATE: ChecklistItemTemplate[] = [
       'I have read the Risk Assessments & Method Statements (RAMS) for my work.',
     helpText: 'Ask the site manager if you have not been issued the RAMS.',
     type: ChecklistItemType.ACKNOWLEDGEMENT,
-    required: true,
-  },
-  {
-    label: 'Have you attended the toolbox talk for today’s work?',
-    type: ChecklistItemType.YES_NO,
     required: true,
   },
   {

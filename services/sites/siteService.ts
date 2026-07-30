@@ -1,6 +1,6 @@
 import { SiteStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { isCscsCompetencyItem } from '@/services/checklists/inductionFlow';
+import { isRetiredInductionItem } from '@/services/checklists/inductionFlow';
 
 /**
  * Job-site queries used by the worker flow.
@@ -38,12 +38,17 @@ export async function getActiveSiteWithChecklist(id: string) {
   });
   if (!site) return null;
   const checklist = site.checklists[0] ?? null;
-  // SC-012: drop the duplicate CSCS competency question from the live induction
-  // (its status comes from the verified SC-001 record, shown pre-induction).
+  // Drop questions retired by REV-1 decisions from the LIVE induction only —
+  // SC-012's duplicate CSCS question (its status comes from the verified SC-001
+  // record, shown pre-induction) and SC-018's toolbox-talk question (delivered
+  // separately by supervisors). Stored checklist rows are untouched, so historic
+  // submissions and their receipts are unaffected. This is the single filter
+  // point, so the wizard render and server-side check-in validation can never
+  // disagree about which questions apply.
   const filtered = checklist
     ? {
         ...checklist,
-        items: checklist.items.filter((i) => !isCscsCompetencyItem(i)),
+        items: checklist.items.filter((i) => !isRetiredInductionItem(i)),
       }
     : null;
   return { ...site, checklist: filtered };

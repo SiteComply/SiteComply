@@ -49,7 +49,7 @@ enum BulletinCategory {
 /// The kind of question presented on a digital induction checklist.
 enum ChecklistItemType {
   ACKNOWLEDGEMENT //  Read-and-acknowledge statement (e.g. site rules, RAMS)
-  YES_NO //           Yes/No question (e.g. "Have you attended the toolbox talk?")
+  YES_NO //           Yes/No question (e.g. "Have you been issued your PPE?")
   PPE_CONFIRM //      Confirm possession/wearing of a PPE item
 }
 
