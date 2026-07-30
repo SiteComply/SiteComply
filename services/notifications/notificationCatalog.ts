@@ -109,6 +109,33 @@ export const NOTIFICATION_TYPES: NotificationTypeDescriptor[] = [
     defaultEnabled: true,
     defaultChannels: { email: false, sms: false },
   },
+  // SC-020 Phase 2 — three independent categories so an admin can silence any
+  // one of them. Compliance schedules can be high-volume (a daily activity
+  // across several sites), and a bell nobody reads is worse than no bell.
+  {
+    key: 'compliance_reminders',
+    label: 'Compliance activity reminders',
+    description:
+      'A scheduled compliance activity is approaching its due date, using the reminder intervals set on the schedule.',
+    defaultEnabled: true,
+    defaultChannels: { email: false, sms: false },
+  },
+  {
+    key: 'compliance_overdue',
+    label: 'Overdue compliance activities',
+    description:
+      'A scheduled compliance activity has passed its due date without being completed.',
+    defaultEnabled: true,
+    defaultChannels: { email: false, sms: false },
+  },
+  {
+    key: 'compliance_escalation',
+    label: 'Compliance escalations',
+    description:
+      'An overdue compliance activity has been escalated to the role set on its schedule. Sent to the escalation role and to the assignee.',
+    defaultEnabled: true,
+    defaultChannels: { email: false, sms: false },
+  },
   {
     key: 'document_expiry',
     label: 'Document expiry reminders',

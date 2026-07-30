@@ -15,6 +15,10 @@ export type NotificationGroup =
   // manager types above.
   | 'ACTION_ASSIGNED_TO_ME'
   | 'ACTION_UPDATED'
+  // SC-020 Phase 2 — scheduled compliance activities.
+  | 'COMPLIANCE_ESCALATED'
+  | 'COMPLIANCE_OVERDUE'
+  | 'COMPLIANCE_DUE'
   | 'AUDIT_CREATED'
   | 'AUDIT_SIGNED_OFF';
 
@@ -58,6 +62,23 @@ export const NOTIFICATION_GROUP_META: Record<
   DOC_EXPIRING: { title: 'Expiring soon', accent: 'text-hivis-600', order: 4 },
   // SC-016 — your own items come FIRST: being personally responsible outranks
   // site-wide awareness.
+  // SC-020 Phase 2 — an escalation outranks everything: it means something has
+  // already been missed and management has been told.
+  COMPLIANCE_ESCALATED: {
+    title: 'Escalated compliance activities',
+    accent: 'text-danger-700',
+    order: -4,
+  },
+  COMPLIANCE_OVERDUE: {
+    title: 'Overdue compliance activities',
+    accent: 'text-danger-700',
+    order: -3,
+  },
+  COMPLIANCE_DUE: {
+    title: 'Compliance activities due soon',
+    accent: 'text-hivis-600',
+    order: 0,
+  },
   ACTION_ASSIGNED_TO_ME: {
     title: 'Assigned to you',
     accent: 'text-brand-700',

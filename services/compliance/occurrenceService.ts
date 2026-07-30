@@ -9,6 +9,7 @@ import {
   ensureOccurrences,
   londonDateStr,
 } from '@/services/compliance/occurrenceGenerator';
+import { recordEscalations } from '@/services/compliance/complianceNotifications';
 
 /**
  * SC-020 Phase 1 — reading and progressing generated occurrences.
@@ -31,6 +32,11 @@ export interface CalendarOccurrence {
   assigneeLabel: string;
   auditId: string | null;
   overdue: boolean;
+  /** SC-020 Phase 2 — set once escalated, drives the calendar's marker. */
+  escalatedAt: string | null;
+  escalatedToRole: string | null;
+  /** True when the assignee is a worker, who cannot yet be notified. */
+  workerNotNotified: boolean;
 }
 
 const OCCURRENCE_INCLUDE = {
@@ -103,6 +109,12 @@ async function toView(
       // Derived, never stored — the same rule the Actions register uses.
       overdue:
         r.status !== OccurrenceStatus.COMPLETED && r.dueDateLocal < todayLocal,
+      escalatedAt: r.escalatedAt ? r.escalatedAt.toISOString() : null,
+      escalatedToRole: r.escalatedToRole ?? null,
+      // A worker assignee gets no notification (SC-016 recipients are platform
+      // users), so the calendar says so plainly rather than implying someone was
+      // told.
+      workerNotNotified: r.assigneeKind === ScheduleAssigneeKind.WORKER,
     };
   });
 }
@@ -122,6 +134,10 @@ export async function getCalendarWindow(
   if (siteIds.length === 0) return { occurrences: [], generated: 0 };
 
   const { created } = await ensureOccurrences(siteIds, fromLocal, toLocal);
+  // SC-020 Phase 2: escalate anything now overdue past its threshold. Idempotent
+  // (guarded by escalatedAt), so running it on every calendar read is safe — and
+  // until Phase 4's timer this read IS the trigger.
+  await recordEscalations(siteIds);
 
   const rows = await prisma.complianceOccurrence.findMany({
     where: {

@@ -1829,6 +1829,10 @@ enum NotificationEventType {
   ACTION_STATUS_CHANGED
   ACTION_PRIORITY_CHANGED
   ACTION_DUE_DATE_CHANGED
+  /// SC-020 Phase 2 — an overdue compliance activity escalated. STORED rather
+  /// than derived because "was management actually told, and when" is the whole
+  /// point of an escalation, and a derived view can never answer it later.
+  COMPLIANCE_ESCALATED
 }
 
 /// SC-019 — CDM 2015 duty holders for a project. These are legally structured
@@ -2029,6 +2033,14 @@ model ComplianceOccurrence {
   assignedRole           PlatformRole?
   assigneeLabel          String?
 
+  /// SC-020 Phase 2 — set the FIRST time the escalation condition is observed,
+  /// which both prevents re-escalating and drives the calendar's escalated
+  /// marker. It records when we NOTICED, not when the activity became overdue;
+  /// notifications always state "overdue since <due date>" so the real elapsed
+  /// time is never obscured. Phase 4's scheduled trigger removes the lag.
+  escalatedAt     DateTime?
+  escalatedToRole PlatformRole?
+
   completedAt     DateTime?
   completedByName String?
 
@@ -2038,6 +2050,7 @@ model ComplianceOccurrence {
   @@unique([scheduleId, dueAt])
   @@index([jobSiteId, dueDateLocal])
   @@index([status, dueAt])
+  @@index([escalatedAt, status])
 }
 
 enum ScheduleFrequency {

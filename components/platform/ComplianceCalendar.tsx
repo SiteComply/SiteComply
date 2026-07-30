@@ -34,6 +34,9 @@ export interface CalendarItem {
   assigneeLabel: string;
   auditId: string | null;
   overdue: boolean;
+  escalatedAt: string | null;
+  escalatedToRole: string | null;
+  workerNotNotified: boolean;
 }
 
 export function ComplianceCalendar({
@@ -101,8 +104,36 @@ export function ComplianceCalendar({
 
   const selectedItems = selected ? (byDay.get(selected) ?? []) : [];
 
+  // Summary strip — what actually needs attention, above the grid.
+  const overdueCount = items.filter(
+    (i) => i.overdue && i.status !== 'COMPLETED',
+  ).length;
+  const escalatedCount = items.filter((i) => i.escalatedAt).length;
+  const dueSoonCount = items.filter(
+    (i) => !i.overdue && i.status !== 'COMPLETED' && isDueSoon(i, todayLocal),
+  ).length;
+
   return (
     <div className="space-y-3">
+      {(overdueCount > 0 || escalatedCount > 0 || dueSoonCount > 0) && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          {escalatedCount > 0 && (
+            <span className="rounded-full bg-danger-600 px-3 py-1 font-semibold text-white">
+              {escalatedCount} escalated
+            </span>
+          )}
+          {overdueCount > 0 && (
+            <span className="rounded-full bg-danger-50 px-3 py-1 font-semibold text-danger-700">
+              {overdueCount} overdue
+            </span>
+          )}
+          {dueSoonCount > 0 && (
+            <span className="rounded-full bg-hivis-400/25 px-3 py-1 font-semibold text-ink">
+              {dueSoonCount} due soon
+            </span>
+          )}
+        </div>
+      )}
       {error && (
         <p
           role="alert"
@@ -162,9 +193,13 @@ export function ComplianceCalendar({
                         className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${
                           it.status === 'COMPLETED'
                             ? 'bg-surface-sunken text-ink-subtle line-through'
-                            : it.overdue
-                              ? 'bg-danger-50 text-danger-700'
-                              : 'bg-surface-sunken text-ink'
+                            : it.escalatedAt
+                              ? 'bg-danger-600 text-white'
+                              : it.overdue
+                                ? 'bg-danger-50 text-danger-700'
+                                : isDueSoon(it, todayLocal)
+                                  ? 'bg-hivis-400/25 text-ink'
+                                  : 'bg-surface-sunken text-ink'
                         }`}
                         title={`${it.title} · ${it.timeOfDay} · ${it.assigneeLabel}`}
                       >
@@ -176,6 +211,11 @@ export function ComplianceCalendar({
                           }}
                         />
                         <span className="min-w-0 flex-1 truncate">
+                          {it.escalatedAt && (
+                            <span aria-hidden className="mr-0.5">
+                              ▲
+                            </span>
+                          )}
                           {it.title}
                         </span>
                         <span className="shrink-0 tabular-nums text-ink-subtle">
@@ -247,7 +287,14 @@ export function ComplianceCalendar({
                   )}
                   <span className="text-xs text-ink-subtle">
                     Assigned to {it.assigneeLabel}
+                    {it.workerNotNotified && ' — not notified'}
                   </span>
+                  {it.escalatedAt && (
+                    <span className="rounded-full bg-danger-600 px-2 py-0.5 text-[11px] font-semibold text-white">
+                      Escalated to {it.escalatedToRole ?? 'management'} on{' '}
+                      {new Date(it.escalatedAt).toLocaleDateString('en-GB')}
+                    </span>
+                  )}
                   <span
                     className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                       it.overdue && it.status !== 'COMPLETED'
@@ -298,4 +345,15 @@ export function ComplianceCalendar({
       )}
     </div>
   );
+}
+
+/** Due within the next 3 days (and not yet due) — the calendar's amber state. */
+function isDueSoon(item: CalendarItem, todayLocal: string): boolean {
+  if (item.status === 'COMPLETED') return false;
+  const days = Math.round(
+    (new Date(`${item.dueDateLocal}T12:00:00Z`).getTime() -
+      new Date(`${todayLocal}T12:00:00Z`).getTime()) /
+      86400000,
+  );
+  return days >= 0 && days <= 3;
 }

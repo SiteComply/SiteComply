@@ -27,6 +27,29 @@ import {
 
 const ASSIGNED_BADGE = 'bg-brand-50 text-brand-700';
 const UPDATED_BADGE = 'bg-surface-sunken text-ink-muted';
+const ESCALATED_BADGE = 'bg-danger-600 text-white';
+
+/**
+ * Badge presentation per group. Table-driven rather than nested ternaries so
+ * adding a group (as SC-020 Phase 2 does) is one entry and cannot silently fall
+ * through to the wrong label.
+ */
+/** Feed groups that stored notification events can land in. */
+type EventGroup =
+  | 'ACTION_ASSIGNED_TO_ME'
+  | 'ACTION_UPDATED'
+  | 'COMPLIANCE_ESCALATED';
+
+const BADGE_LABEL: Record<EventGroup, string> = {
+  ACTION_ASSIGNED_TO_ME: 'Assigned to you',
+  ACTION_UPDATED: 'Updated',
+  COMPLIANCE_ESCALATED: 'Escalated',
+};
+const BADGE_CLASS: Record<EventGroup, string> = {
+  ACTION_ASSIGNED_TO_ME: ASSIGNED_BADGE,
+  ACTION_UPDATED: UPDATED_BADGE,
+  COMPLIANCE_ESCALATED: ESCALATED_BADGE,
+};
 
 /** Window of stored events surfaced in the feed. */
 const EVENT_WINDOW_DAYS = 30;
@@ -154,15 +177,15 @@ export async function notifyMeaningfulChange(
   }
 }
 
-const GROUP_FOR: Record<
-  NotificationEventType,
-  'ACTION_ASSIGNED_TO_ME' | 'ACTION_UPDATED'
-> = {
+const GROUP_FOR: Record<NotificationEventType, EventGroup> = {
   ACTION_ASSIGNED: 'ACTION_ASSIGNED_TO_ME',
   ACTION_REASSIGNED: 'ACTION_ASSIGNED_TO_ME',
   ACTION_STATUS_CHANGED: 'ACTION_UPDATED',
   ACTION_PRIORITY_CHANGED: 'ACTION_UPDATED',
   ACTION_DUE_DATE_CHANGED: 'ACTION_UPDATED',
+  // SC-020 Phase 2 — escalations are stored events like the action ones above,
+  // so they flow through this same deriver and read-state machinery.
+  COMPLIANCE_ESCALATED: 'COMPLIANCE_ESCALATED',
 };
 
 /**
@@ -201,10 +224,8 @@ export async function deriveAssigneeNotifications(
         ? truncate(e.description, 140)
         : formatDateUK(e.createdAt),
       href: e.href,
-      badgeLabel:
-        group === 'ACTION_ASSIGNED_TO_ME' ? 'Assigned to you' : 'Updated',
-      badgeClass:
-        group === 'ACTION_ASSIGNED_TO_ME' ? ASSIGNED_BADGE : UPDATED_BADGE,
+      badgeLabel: BADGE_LABEL[group],
+      badgeClass: BADGE_CLASS[group],
       chip: e.priority ? actionPriorityLabel(e.priority) : null,
       urgency: -e.createdAt.getTime(), // newest first within the group
     };

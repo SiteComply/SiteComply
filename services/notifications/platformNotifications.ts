@@ -9,6 +9,7 @@ import { deriveDocumentNotifications } from '@/services/documents/documentExpiry
 import { deriveActionNotifications } from '@/services/actions/actionNotifications';
 import { deriveAuditNotifications } from '@/services/audits/auditNotifications';
 import { derivePermitNotifications } from '@/services/permits/permitNotifications';
+import { deriveComplianceNotifications } from '@/services/compliance/complianceNotifications';
 import {
   deriveAssigneeNotifications,
   deriveAssigneeDueSoon,
@@ -50,6 +51,10 @@ export async function getPlatformNotifications(
     ...(await deriveActionNotifications(viewer, now)),
     ...(await deriveDocumentNotifications(viewer, now)),
     ...(await deriveAuditNotifications(viewer, now)),
+    // SC-020 Phase 2 — reminders/overdue are DERIVED, so they need no scheduler
+    // and self-correct when a due date moves. Escalations arrive as stored
+    // events through deriveAssigneeNotifications above.
+    ...(await deriveComplianceNotifications(viewer, now)),
   ];
 
   return applyReadState(viewer.id, raw);
