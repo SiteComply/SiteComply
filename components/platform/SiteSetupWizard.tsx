@@ -277,12 +277,20 @@ export function SiteSetupWizard({
           <h1 className="text-xl font-bold text-ink">Project setup</h1>
           <p className="text-sm text-ink-muted">{siteName}</p>
         </div>
-        <Link
-          href={`/platform/dashboard/sites/${siteId}`}
-          className="touch-target rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-surface-sunken"
-        >
-          Back to site
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/platform/dashboard/sites/${siteId}/cpp`}
+            className="touch-target rounded-lg border border-brand-500 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+          >
+            View CPP draft
+          </Link>
+          <Link
+            href={`/platform/dashboard/sites/${siteId}`}
+            className="touch-target rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-surface-sunken"
+          >
+            Back to site
+          </Link>
+        </div>
       </div>
 
       {/* Progress — the save-and-resume anchor. */}

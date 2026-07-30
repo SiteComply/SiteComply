@@ -85,6 +85,12 @@ export async function SiteDetailHeader({
             {/* SC-019: the project setup wizard is where the CPP data lives.
                 "Edit site" stays for the core operational fields. */}
             <Link
+              href={`/platform/dashboard/sites/${site.id}/cpp`}
+              className="touch-target inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink-muted transition-colors hover:bg-surface-sunken"
+            >
+              CPP draft
+            </Link>
+            <Link
               href={`/platform/dashboard/sites/${site.id}/setup`}
               className="touch-target inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-brand-500 px-3 py-2 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50"
             >
