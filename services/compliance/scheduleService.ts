@@ -160,18 +160,43 @@ export async function createSchedule(
   } else {
     const id = (input.assigneeId ?? '').trim();
     if (!id) return invalid('Choose who is responsible.');
-    // Reuse SC-015's rule: the person must actually be assignable on this site.
-    const resolved = await resolveAssignee(
-      viewer,
-      input.jobSiteId,
-      input.assigneeKind === 'WORKER' ? 'WORKER' : 'PLATFORM_USER',
-      id,
-    );
-    if (!resolved) {
-      return invalid('That person cannot be assigned activities on this site.');
+    if (input.assigneeKind === 'WORKER') {
+      // A worker must genuinely be inducted on the site — SC-015's rule, which
+      // is the right one for someone who has to be on site to do the work.
+      const resolved = await resolveAssignee(
+        viewer,
+        input.jobSiteId,
+        'WORKER',
+        id,
+      );
+      if (!resolved) {
+        return invalid(
+          'That worker is not inducted on this site, so cannot be assigned activities there.',
+        );
+      }
+      assignedWorkerId = resolved.assignedWorkerId;
+    } else {
+      // A PLATFORM USER is validated directly against site assignment, NOT via
+      // SC-015's assignable-people list. That list only offers platform users as
+      // a FALLBACK when a site has no inducted workers — correct for actions,
+      // but wrong here: assigning a recurring inspection to a site manager is
+      // the primary case, and on any real site with inducted workers the
+      // fallback would never include them.
+      const user = await prisma.platformUser.findFirst({
+        where: {
+          id,
+          status: 'ACTIVE',
+          assignedSites: { some: { id: input.jobSiteId } },
+        },
+        select: { id: true },
+      });
+      if (!user) {
+        return invalid(
+          'That user is not an active platform user assigned to this site.',
+        );
+      }
+      assignedPlatformUserId = user.id;
     }
-    assignedPlatformUserId = resolved.assignedPlatformUserId;
-    assignedWorkerId = resolved.assignedWorkerId;
   }
 
   const escalateToRole =

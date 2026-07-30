@@ -12,7 +12,7 @@ import {
   getUpcoming,
   activityTypesIn,
 } from '@/services/compliance/occurrenceService';
-import { getAssignablePeople } from '@/services/actions/actionAssigneeService';
+import { listInductedWorkers } from '@/services/actions/actionAssigneeService';
 import {
   addDays,
   isoWeekday,
@@ -80,18 +80,40 @@ export default async function ComplianceCalendarPage({
 
   const canManage = permits(viewer.role, 'audits', 'create');
 
-  // People assignable on the selected site (or the first accessible one) reuse
-  // SC-015's rule, so an individual must genuinely be assignable there.
+  // Two SEPARATE lists, deliberately. SC-015's getAssignablePeople offers
+  // platform users only as a FALLBACK when a site has no inducted workers, which
+  // is right for actions but wrong here — assigning a recurring inspection to a
+  // site manager is the primary case, so platform users must always be offered.
   const peopleSiteId = siteId ?? viewer.siteIds[0];
-  const assignable = peopleSiteId
-    ? await getAssignablePeople(viewer, peopleSiteId)
-    : null;
-  const people = (assignable?.people ?? []).map((p) => ({
-    kind: p.kind === 'WORKER' ? ('WORKER' as const) : ('USER' as const),
-    id: p.id,
-    name: p.name,
-    company: p.company,
-  }));
+  const [inducted, siteUsers] = await Promise.all([
+    peopleSiteId
+      ? listInductedWorkers(peopleSiteId)
+      : Promise.resolve([]),
+    peopleSiteId
+      ? prisma.platformUser.findMany({
+          where: {
+            status: 'ACTIVE',
+            assignedSites: { some: { id: peopleSiteId } },
+          },
+          orderBy: { name: 'asc' },
+          select: { id: true, name: true, role: true, company: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const people = [
+    ...siteUsers.map((u) => ({
+      kind: 'USER' as const,
+      id: u.id,
+      name: u.name,
+      company: u.company || (ROLE_LABELS[u.role] ?? u.role),
+    })),
+    ...inducted.map((p) => ({
+      kind: 'WORKER' as const,
+      id: p.id,
+      name: p.name,
+      company: p.company,
+    })),
+  ];
 
   const roles = Object.keys(PlatformRole).map((r) => ({
     value: r,
