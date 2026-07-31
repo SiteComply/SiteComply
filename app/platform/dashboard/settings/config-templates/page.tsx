@@ -20,11 +20,14 @@ export const dynamic = 'force-dynamic';
 /**
  * SC-021 Phase 2 — shared configuration templates and company requirements.
  *
- * Lives under Compliance because a configuration template answers "which
- * compliance processes apply to this project?" — a compliance question, not a
- * site-records one. Reached as a secondary action from the Compliance Calendar,
- * mirroring how SC-013's audit template library hangs off the Audits page
- * rather than taking a top-level nav slot.
+ * Lives under Settings because this is GOVERNANCE — defining an organisation
+ * standard — not scheduling and not site records. Applying a template is a
+ * different job with a different owner and cadence, and stays embedded in the
+ * site experience; only authoring and company requirements live here.
+ *
+ * An organisation-wide artefact must not be administered from inside one
+ * arbitrary site: deleting a shared template from within a single site would
+ * read as a site action while affecting every future project.
  *
  * Viewing still needs `sites:view`, deliberately UNCHANGED by the move: every
  * role holds both `sites:view` and `audits:view`, so switching the gate would
@@ -49,10 +52,7 @@ export default async function ConfigTemplatesPage() {
     <PlatformShell>
       <Breadcrumbs
         items={[
-          {
-            label: 'Compliance',
-            href: '/platform/dashboard/compliance-calendar',
-          },
+          { label: 'Settings', href: '/platform/dashboard/settings' },
           { label: 'Configuration templates' },
         ]}
       />

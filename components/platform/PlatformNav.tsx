@@ -20,6 +20,13 @@ export const PLATFORM_NAV: {
   label: string;
   icon: PlatformIconName;
   module: PlatformModule;
+  /**
+   * Optional extra restriction ON TOP of the module gate — NOT a permission.
+   * The pages behind these entries keep their own gates unchanged; this only
+   * decides whose navigation shows the entry, so an organisation-wide
+   * configuration area isn't advertised to roles who cannot act on it.
+   */
+  roles?: PlatformRoleValue[];
 }[] = [
   {
     href: '/platform/dashboard',
@@ -83,6 +90,20 @@ export const PLATFORM_NAV: {
     icon: 'permit',
     module: 'permits',
   },
+  {
+    // SC-021 — organisation-wide configuration. Deliberately LAST: it is
+    // administration, not daily work, and should not sit among the operational
+    // screens people open every morning.
+    //
+    // Uses the existing `sites` module so PLATFORM_PERMISSIONS is untouched;
+    // the Director/Project Manager restriction is navigation visibility only
+    // and matches who can actually manage a shared template.
+    href: '/platform/dashboard/settings',
+    label: 'Settings',
+    icon: 'sliders',
+    module: 'sites',
+    roles: ['DIRECTOR', 'PROJECT_MANAGER'],
+  },
 ];
 
 const NOTIFICATIONS_HREF = '/platform/dashboard/notifications';
@@ -96,7 +117,11 @@ export function PlatformNav({
 }) {
   const pathname = usePathname();
   const items = role
-    ? PLATFORM_NAV.filter((item) => permits(role, item.module, 'view'))
+    ? PLATFORM_NAV.filter(
+        (item) =>
+          permits(role, item.module, 'view') &&
+          (!item.roles || item.roles.includes(role)),
+      )
     : PLATFORM_NAV;
 
   return (

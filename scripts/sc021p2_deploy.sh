@@ -40,7 +40,7 @@ echo "[2/8] Confirming SC-021 code IS present in this artifact..."
   && grep -q 'isActivityTypeAvailable' services/compliance/scheduleService.ts \
   && [ -f services/siteServices/siteConfigTemplateService.ts ] \
   && [ -f components/platform/ConfigTemplateLibrary.tsx ] \
-  && [ -f app/platform/dashboard/compliance-calendar/config-templates/page.tsx ] \
+  && [ -f app/platform/dashboard/settings/config-templates/page.tsx ] \
   && [ -f app/api/platform/org-service-policy/route.ts ] \
   && grep -q 'SiteConfigTemplate' prisma/schema.prisma \
   && grep -q 'OrgServicePolicy' prisma/schema.prisma \

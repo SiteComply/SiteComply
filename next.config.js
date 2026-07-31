@@ -11,13 +11,20 @@ const nextConfig = {
   },
   async redirects() {
     return [
+      // SC-021: configuration templates now live under Settings. BOTH historical
+      // paths point straight at the final destination rather than chaining
+      // through each other — a redirect chain costs an extra round trip and
+      // breaks the moment an intermediate hop is removed.
+      // Temporary (not permanent) so they can be withdrawn without fighting a
+      // cached 308.
       {
-        // SC-021 Phase 2 UX move: configuration templates moved from Sites to
-        // Compliance. Kept as a redirect rather than a hard break because the
-        // old path was shared for testing and may be bookmarked. Temporary
-        // (not permanent) so it can be withdrawn without fighting a cached 308.
         source: '/platform/dashboard/sites/config-templates',
-        destination: '/platform/dashboard/compliance-calendar/config-templates',
+        destination: '/platform/dashboard/settings/config-templates',
+        permanent: false,
+      },
+      {
+        source: '/platform/dashboard/compliance-calendar/config-templates',
+        destination: '/platform/dashboard/settings/config-templates',
         permanent: false,
       },
     ];
