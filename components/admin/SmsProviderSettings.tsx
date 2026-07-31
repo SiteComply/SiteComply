@@ -27,15 +27,19 @@ export function SmsProviderSettings({
 }) {
   const router = useRouter();
   const [active, setActive] = useState(config.activeProvider);
+  const [sendingEnabled, setSendingEnabled] = useState(config.sendingEnabled);
   // Full controlled value map: non-secrets prefilled, secrets start blank.
-  const [values, setValues] = useState<Record<string, Record<string, string>>>(() => {
-    const v: Record<string, Record<string, string>> = {};
-    for (const p of providers) {
-      v[p.id] = {};
-      for (const f of p.fields) v[p.id][f.key] = f.secret ? '' : config.values[p.id]?.[f.key] ?? '';
-    }
-    return v;
-  });
+  const [values, setValues] = useState<Record<string, Record<string, string>>>(
+    () => {
+      const v: Record<string, Record<string, string>> = {};
+      for (const p of providers) {
+        v[p.id] = {};
+        for (const f of p.fields)
+          v[p.id][f.key] = f.secret ? '' : (config.values[p.id]?.[f.key] ?? '');
+      }
+      return v;
+    },
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [savedMsg, setSavedMsg] = useState<string | undefined>();
   const [saveErr, setSaveErr] = useState<string | undefined>();
@@ -43,7 +47,9 @@ export function SmsProviderSettings({
 
   const [testTo, setTestTo] = useState('');
   const [testBusy, setTestBusy] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | undefined>();
+  const [testResult, setTestResult] = useState<
+    { ok: boolean; text: string } | undefined
+  >();
 
   const desc = providers.find((p) => p.id === active)!;
 
@@ -61,7 +67,11 @@ export function SmsProviderSettings({
       const res = await fetch('/api/admin/settings/sms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ activeProvider: active, settings: values }),
+        body: JSON.stringify({
+          activeProvider: active,
+          sendingEnabled,
+          settings: values,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
@@ -92,12 +102,18 @@ export function SmsProviderSettings({
       const res = await fetch('/api/admin/settings/sms/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ providerId: active, to: testTo, settings: values[active] }),
+        body: JSON.stringify({
+          providerId: active,
+          to: testTo,
+          settings: values[active],
+        }),
       });
       const data = await res.json().catch(() => ({}));
       setTestResult({
         ok: !!data.ok,
-        text: data.ok ? data.message ?? 'Test succeeded.' : data.error ?? 'Test failed.',
+        text: data.ok
+          ? (data.message ?? 'Test succeeded.')
+          : (data.error ?? 'Test failed.'),
       });
     } catch {
       setTestResult({ ok: false, text: 'Network problem. Please try again.' });
@@ -112,8 +128,8 @@ export function SmsProviderSettings({
       <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
         <h2 className="text-sm font-semibold text-ink">Active SMS provider</h2>
         <p className="mt-0.5 text-sm text-ink-subtle">
-          The gateway used to send worker verification codes. Changes take effect
-          immediately once saved.
+          The gateway used to send worker verification codes. Changes take
+          effect immediately once saved.
         </p>
         <div className="mt-3 grid gap-2 sm:grid-cols-3">
           {providers.map((p) => {
@@ -125,11 +141,17 @@ export function SmsProviderSettings({
                 onClick={() => setActive(p.id)}
                 className={cn(
                   'rounded-xl border p-3 text-left transition-colors',
-                  on ? 'border-brand-500 bg-brand-50' : 'border-line hover:bg-surface-sunken',
+                  on
+                    ? 'border-brand-500 bg-brand-50'
+                    : 'border-line hover:bg-surface-sunken',
                 )}
               >
-                <span className="block text-sm font-semibold text-ink">{p.name}</span>
-                <span className="mt-0.5 block text-xs text-ink-subtle">{p.description}</span>
+                <span className="block text-sm font-semibold text-ink">
+                  {p.name}
+                </span>
+                <span className="mt-0.5 block text-xs text-ink-subtle">
+                  {p.description}
+                </span>
               </button>
             );
           })}
@@ -138,7 +160,9 @@ export function SmsProviderSettings({
 
       {/* Provider configuration (dynamic from the descriptor) */}
       <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
-        <h2 className="text-sm font-semibold text-ink">Configuration — {desc.name}</h2>
+        <h2 className="text-sm font-semibold text-ink">
+          Configuration — {desc.name}
+        </h2>
         {desc.fields.length === 0 ? (
           <p className="mt-2 text-sm text-ink-subtle">
             This provider has no settings to configure.
@@ -168,6 +192,33 @@ export function SmsProviderSettings({
             {savedMsg}
           </p>
         )}
+
+        {/* Master switch. Deliberately sits next to Save with its consequence
+            spelled out: turning this off stops SIGN-IN CODES too, so workers
+            cannot log in. It exists for a billing emergency or a suspected
+            compromise, not for routine use — and an admin should not have to
+            discover that by causing it. */}
+        <div className="mt-4 rounded-lg border border-line bg-surface-sunken px-3 py-2.5">
+          <label className="flex items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={sendingEnabled}
+              disabled={!canManage}
+              onChange={(e) => setSendingEnabled(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-line text-safe-600"
+            />
+            <span>
+              <span className="block text-sm font-medium text-ink">
+                Send SMS messages
+              </span>
+              <span className="block text-xs text-ink-muted">
+                {sendingEnabled
+                  ? 'Outbound SMS is on. Turning it off suppresses every message — including worker sign-in codes, which would stop workers signing in.'
+                  : 'Outbound SMS is OFF. Sign-in codes and invitations are not being delivered. Attempts are still recorded in the SMS log.'}
+              </span>
+            </span>
+          </label>
+        </div>
 
         <div className="mt-4 flex items-center gap-3">
           <button
@@ -251,7 +302,10 @@ function Field({
     'w-full rounded-xl border bg-surface px-3 py-2 text-sm text-ink',
     error ? 'border-danger-500' : 'border-line',
   );
-  const placeholder = field.secret && stored ? '•••••••• (stored — leave blank to keep)' : field.placeholder;
+  const placeholder =
+    field.secret && stored
+      ? '•••••••• (stored — leave blank to keep)'
+      : field.placeholder;
   return (
     <div className="space-y-1">
       <label className="block text-sm font-semibold text-ink">
@@ -259,10 +313,22 @@ function Field({
         {field.required && <span className="text-danger-600"> *</span>}
       </label>
       {field.type === 'textarea' ? (
-        <textarea rows={2} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={common} />
+        <textarea
+          rows={2}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className={common}
+        />
       ) : (
         <input
-          type={field.type === 'password' ? 'password' : field.type === 'tel' ? 'tel' : 'text'}
+          type={
+            field.type === 'password'
+              ? 'password'
+              : field.type === 'tel'
+                ? 'tel'
+                : 'text'
+          }
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}

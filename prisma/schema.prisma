@@ -314,6 +314,8 @@ model Worker {
   updatedAt DateTime @updatedAt
 
   submissions            Submission[]
+  /// SMS audit rows addressed to this worker (cleared on erasure).
+  smsMessages            SmsMessageLog[]
   bulletinReads          SiteBulletinRead[]
   knowledgeCheckAttempts KnowledgeCheckAttempt[]
   checkInOverrides       CheckInOverride[]
@@ -1469,6 +1471,14 @@ model AiSummary {
 model SmsConfig {
   id               String   @id // fixed singleton key ("sms")
   activeProvider   String   @default("mock")
+  /// Master switch for outbound SMS.
+  ///
+  /// Defaults TRUE so adding it changes nothing — the active provider is what
+  /// decides whether a real message leaves. Turning it OFF suppresses every
+  /// send, INCLUDING sign-in codes, so a worker cannot receive an OTP and
+  /// cannot log in. The admin screen says so plainly; it exists for a billing
+  /// emergency or a suspected compromise, not for routine use.
+  sendingEnabled   Boolean  @default(true)
   settings         Json     @default("{}")
   updatedByAdminId String?
   updatedByName    String?
@@ -2418,4 +2428,48 @@ model CompanyPermissionDefault {
 
   @@unique([company, module])
   @@index([company])
+}
+
+/// Audit trail for outbound SMS.
+///
+/// PRIVACY: the message BODY is never stored. Bodies carry one-time sign-in
+/// codes and invitation codes, so persisting them would turn this table into a
+/// credential store and undo the point of one-time codes. What is kept is
+/// enough to answer "was this sent, to whom, when, and did it work": purpose,
+/// a masked destination, the provider's message id, and the outcome.
+///
+/// The destination is stored MASKED (+4477****4321) so the log is useful for
+/// support without duplicating a full personal phone number outside the Worker
+/// record. `workerId` is kept where known, so a full number can still be
+/// reached through the proper record — and disappears with it on erasure.
+model SmsMessageLog {
+  id String @id @default(cuid())
+
+  /// OTP | WORKER_INVITE | TEST | OTHER — what the message was for.
+  purpose String
+
+  /// Masked destination, e.g. "+4477****4321".
+  toMasked String
+  /// Set when the recipient is a known worker, so GDPR erasure reaches this row.
+  worker   Worker? @relation(fields: [workerId], references: [id], onDelete: SetNull)
+  workerId String?
+
+  provider  String
+  /// Provider message id (Twilio SID) where the send succeeded.
+  messageId String?
+
+  ok    Boolean
+  /// Failure reason, already sanitised by the provider — never a credential.
+  error String?
+
+  /// Who triggered it, where a person did (an admin test, a manager invite).
+  actorName String?
+
+  jobSiteId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([purpose, createdAt])
+  @@index([workerId, createdAt])
+  @@index([createdAt])
 }

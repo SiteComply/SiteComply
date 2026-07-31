@@ -24,7 +24,10 @@ export class AcsSmsProvider implements SmsProvider {
   private sender?: string;
 
   constructor(
-    private readonly config?: { connectionString?: string; senderNumber?: string },
+    private readonly config?: {
+      connectionString?: string;
+      senderNumber?: string;
+    },
   ) {}
 
   private getClient(): { client: SmsClient; sender: string } {

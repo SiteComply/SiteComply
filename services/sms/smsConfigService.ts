@@ -21,6 +21,8 @@ type Settings = Record<string, Record<string, string>>;
 
 export interface SmsConfigView {
   activeProvider: string;
+  /** Master switch for outbound sending. */
+  sendingEnabled: boolean;
   /** Non-secret current values, per provider id. */
   values: Settings;
   /** Whether each secret field currently has a stored value, per provider id. */
@@ -31,6 +33,7 @@ export interface SmsConfigView {
 
 export interface SaveSmsConfigInput {
   activeProvider?: string;
+  sendingEnabled?: boolean;
   /** Per-provider field values. A blank secret field means "keep existing". */
   settings?: Settings;
 }
@@ -62,6 +65,9 @@ export async function getSmsConfigForAdmin(): Promise<SmsConfigView> {
 
   return {
     activeProvider: row?.activeProvider ?? process.env.SMS_PROVIDER ?? 'mock',
+    // Defaults ON when no row exists: the ACTIVE PROVIDER decides whether a
+    // real message leaves, so an absent config must not read as "suppressed".
+    sendingEnabled: row?.sendingEnabled ?? true,
     values,
     secretSet,
     updatedByName: row?.updatedByName ?? null,
@@ -91,7 +97,10 @@ function mergeSettings(existing: Settings, incoming: Settings): Settings {
 }
 
 /** Are all required fields of `providerId` satisfied in `settings`? */
-function missingRequired(providerId: string, settings: Settings): Record<string, string> {
+function missingRequired(
+  providerId: string,
+  settings: Settings,
+): Record<string, string> {
   const desc = getSmsProviderDescriptor(providerId);
   const errors: Record<string, string> = {};
   if (!desc) return errors;
@@ -106,7 +115,9 @@ function missingRequired(providerId: string, settings: Settings): Record<string,
 export async function saveSmsConfig(
   input: SaveSmsConfigInput,
   admin: { adminId: string; name: string },
-): Promise<{ ok: true } | { ok: false; error?: string; errors?: Record<string, string> }> {
+): Promise<
+  { ok: true } | { ok: false; error?: string; errors?: Record<string, string> }
+> {
   const activeProvider = (input.activeProvider ?? '').trim();
   if (!isKnownSmsProvider(activeProvider))
     return { ok: false, error: 'Choose a valid SMS provider.' };
@@ -118,10 +129,13 @@ export async function saveSmsConfig(
   const errors = missingRequired(activeProvider, merged);
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
+  const sendingEnabled = input.sendingEnabled ?? row?.sendingEnabled ?? true;
+
   await prisma.smsConfig.upsert({
     where: { id: CONFIG_ID },
     update: {
       activeProvider,
+      sendingEnabled,
       settings: merged,
       updatedByAdminId: admin.adminId,
       updatedByName: admin.name,
@@ -129,6 +143,7 @@ export async function saveSmsConfig(
     create: {
       id: CONFIG_ID,
       activeProvider,
+      sendingEnabled,
       settings: merged,
       updatedByAdminId: admin.adminId,
       updatedByName: admin.name,
@@ -158,14 +173,18 @@ export function decryptProviderSettings(
  * The active provider + its decrypted settings for the send path. Returns null
  * when no config row exists (caller falls back to env, backward compatible).
  */
-export async function getActiveSmsProviderConfig(): Promise<
-  { providerId: string; settings: Record<string, string> } | null
-> {
+export async function getActiveSmsProviderConfig(): Promise<{
+  providerId: string;
+  settings: Record<string, string>;
+} | null> {
   const row = await readRow();
   if (!row) return null;
   return {
     providerId: row.activeProvider,
-    settings: decryptProviderSettings(row.activeProvider, asSettings(row.settings)),
+    settings: decryptProviderSettings(
+      row.activeProvider,
+      asSettings(row.settings),
+    ),
   };
 }
 

@@ -1,7 +1,7 @@
 import { createHmac, randomInt, timingSafeEqual } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { normaliseUkMobile, maskUkMobile } from '@/lib/phone';
-import { resolveSmsProvider, SmsSendError } from '@/services/sms';
+import { sendAuditedSms } from '@/services/sms/smsSendService';
 import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
 
 /**
@@ -77,7 +77,8 @@ export async function requestCode(
   if (!authConfig.smsOtpEnabled) {
     return {
       ok: false,
-      error: 'SMS verification is currently unavailable. Please contact your site administrator.',
+      error:
+        'SMS verification is currently unavailable. Please contact your site administrator.',
     };
   }
   const ttlSeconds = authConfig.otpTtlSeconds;
@@ -117,25 +118,25 @@ export async function requestCode(
     data: { mobile, codeHash: hashCode(mobile, code), expiresAt },
   });
 
-  const provider = await resolveSmsProvider();
   const minutes = Math.round(ttlSeconds / 60);
-  try {
-    await provider.send({
-      to: mobile,
-      message:
-        `${code} is your SiteComply verification code. ` +
-        `It expires in ${minutes} minute${minutes === 1 ? '' : 's'}. ` +
-        `Never share this code.`,
-    });
-  } catch (error) {
-    if (error instanceof SmsSendError) {
-      return {
-        ok: false,
-        error:
-          'We couldn’t send your code right now. Please check the number and try again.',
-      };
-    }
-    throw error;
+  // Routed through the audited sender so the attempt is recorded and the master
+  // switch is honoured. The CODE ITSELF is never logged — only that a sign-in
+  // code was sent, to a masked number, and whether it worked.
+  const sent = await sendAuditedSms({
+    to: mobile,
+    purpose: 'OTP',
+    message:
+      `${code} is your SiteComply verification code. ` +
+      `It expires in ${minutes} minute${minutes === 1 ? '' : 's'}. ` +
+      `Never share this code.`,
+  });
+  if (!sent.ok) {
+    return {
+      ok: false,
+      error: sent.disabled
+        ? 'Sign-in codes are temporarily unavailable. Please contact your site manager.'
+        : 'We couldn’t send your code right now. Please check the number and try again.',
+    };
   }
 
   return {
@@ -144,7 +145,9 @@ export async function requestCode(
     expiresInSeconds: ttlSeconds,
     resendInSeconds: RESEND_COOLDOWN_SECONDS,
     // Only leak the code when explicitly using the console mock (dev/testing).
-    devCode: provider.name === 'mock' ? code : undefined,
+    // Taken from the audited send result, so it stays tied to the provider that
+    // actually handled THIS message rather than a second, separate lookup.
+    devCode: sent.provider === 'mock' ? code : undefined,
   };
 }
 

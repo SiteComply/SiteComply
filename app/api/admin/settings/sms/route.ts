@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminRole, ADMIN_WRITE_ROLES } from '@/lib/adminAuth';
-import { saveSmsConfig, type SaveSmsConfigInput } from '@/services/sms/smsConfigService';
+import {
+  saveSmsConfig,
+  type SaveSmsConfigInput,
+} from '@/services/sms/smsConfigService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,7 +23,10 @@ export async function POST(req: NextRequest) {
   try {
     body = (await req.json()) as SaveSmsConfigInput;
   } catch {
-    return NextResponse.json({ ok: false, error: 'Invalid request.' }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: 'Invalid request.' },
+      { status: 400 },
+    );
   }
 
   const result = await saveSmsConfig(body, {

@@ -52,7 +52,8 @@ export const SMS_PROVIDERS: SmsProviderDescriptor[] = [
         type: 'password',
         secret: true,
         required: true,
-        placeholder: 'endpoint=https://<resource>.communication.azure.com/;accesskey=…',
+        placeholder:
+          'endpoint=https://<resource>.communication.azure.com/;accesskey=…',
         help: 'The ACS resource connection string. Stored encrypted.',
       },
       {
@@ -71,7 +72,7 @@ export const SMS_PROVIDERS: SmsProviderDescriptor[] = [
     id: 'twilio',
     name: 'Twilio',
     description:
-      'Sends SMS via Twilio. Provided as an example of adding a third-party provider (send() implementation is a stub until enabled).',
+      'Sends SMS via the Twilio REST API. Used for worker invitations, access workflows and sign-in codes.',
     fields: [
       {
         key: 'accountSid',
@@ -80,6 +81,7 @@ export const SMS_PROVIDERS: SmsProviderDescriptor[] = [
         secret: false,
         required: true,
         placeholder: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+        help: 'From the Twilio console. Not a secret on its own, but pairs with the auth token.',
       },
       {
         key: 'authToken',
@@ -87,22 +89,43 @@ export const SMS_PROVIDERS: SmsProviderDescriptor[] = [
         type: 'password',
         secret: true,
         required: true,
-        help: 'Stored encrypted.',
+        help: 'Stored encrypted and never shown again. Leave blank to keep the current token.',
+      },
+      {
+        key: 'messagingServiceSid',
+        label: 'Messaging Service SID',
+        type: 'text',
+        secret: false,
+        required: false,
+        placeholder: 'MGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+        help: 'Preferred. Twilio then handles sender selection and STOP/opt-out handling for the UK number.',
       },
       {
         key: 'from',
         label: 'Sender number',
         type: 'tel',
         secret: false,
-        required: true,
+        required: false,
         placeholder: '+441234567890',
+        help: 'Used when no Messaging Service SID is set. The SiteComply UK number.',
+      },
+      {
+        key: 'senderName',
+        label: 'Sender name (optional)',
+        type: 'text',
+        secret: false,
+        required: false,
+        placeholder: 'SiteComply',
+        help: 'Alphanumeric sender ID. Last resort only — recipients CANNOT reply to it, so use the UK number for invitations.',
       },
     ],
     supportsTest: true,
   },
 ];
 
-export function getSmsProviderDescriptor(id: string): SmsProviderDescriptor | undefined {
+export function getSmsProviderDescriptor(
+  id: string,
+): SmsProviderDescriptor | undefined {
   return SMS_PROVIDERS.find((p) => p.id === id);
 }
 

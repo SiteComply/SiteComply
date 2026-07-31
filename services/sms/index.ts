@@ -28,6 +28,8 @@ export function buildSmsProvider(
         accountSid: settings.accountSid,
         authToken: settings.authToken,
         from: settings.from,
+        messagingServiceSid: settings.messagingServiceSid,
+        senderName: settings.senderName,
       });
     case 'mock':
       return new MockSmsProvider();

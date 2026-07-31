@@ -4,6 +4,8 @@ import { normaliseUkMobile } from '@/lib/phone';
 import { buildSmsProvider, SmsSendError } from '@/services/sms';
 import { resolveTestSettings } from '@/services/sms/smsConfigService';
 import { getSmsProviderDescriptor } from '@/services/sms/providerCatalog';
+import { prisma } from '@/lib/prisma';
+import { maskNumber } from '@/services/sms/smsSendService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,21 +21,34 @@ export async function POST(req: NextRequest) {
   const auth = requireAdminRole(ADMIN_WRITE_ROLES);
   if (!auth.ok) return auth.response;
 
-  let body: { providerId?: string; to?: string; settings?: Record<string, string> };
+  let body: {
+    providerId?: string;
+    to?: string;
+    settings?: Record<string, string>;
+  };
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ ok: false, error: 'Invalid request.' }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: 'Invalid request.' },
+      { status: 400 },
+    );
   }
 
   const providerId = (body.providerId ?? '').trim();
   const desc = getSmsProviderDescriptor(providerId);
   if (!desc) {
-    return NextResponse.json({ ok: false, error: 'Unknown provider.' }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: 'Unknown provider.' },
+      { status: 400 },
+    );
   }
   if (!desc.supportsTest) {
     return NextResponse.json(
-      { ok: false, error: `Connectivity testing is not applicable for ${desc.name}.` },
+      {
+        ok: false,
+        error: `Connectivity testing is not applicable for ${desc.name}.`,
+      },
       { status: 400 },
     );
   }
@@ -41,14 +56,19 @@ export async function POST(req: NextRequest) {
   const mobile = normaliseUkMobile(body.to ?? '');
   if (!mobile.ok || !mobile.e164) {
     return NextResponse.json(
-      { ok: false, error: 'Enter a valid UK mobile number to send the test to.' },
+      {
+        ok: false,
+        error: 'Enter a valid UK mobile number to send the test to.',
+      },
       { status: 400 },
     );
   }
 
   const settings = await resolveTestSettings(providerId, body.settings ?? {});
   const missing = desc.fields
-    .filter((f) => f.required && !(settings[f.key] && settings[f.key].trim() !== ''))
+    .filter(
+      (f) => f.required && !(settings[f.key] && settings[f.key].trim() !== ''),
+    )
     .map((f) => f.label);
   if (missing.length > 0) {
     return NextResponse.json({
@@ -57,24 +77,62 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // A test is a real, billable message, so it is logged like any other — a
+  // send that costs money and reaches a phone should never be invisible in the
+  // audit trail just because an admin called it a test. It deliberately does
+  // NOT go through the master switch: testing is how you verify the integration
+  // before turning sending on.
   try {
     const provider = buildSmsProvider(providerId, settings);
     const result = await provider.send({
       to: mobile.e164,
-      message: 'SiteComply SMS connectivity test — your integration is working.',
+      message:
+        'SiteComply SMS connectivity test — your integration is working.',
     });
+    await logTestSms(
+      mobile.e164,
+      providerId,
+      true,
+      null,
+      auth.admin.name,
+      result.messageId,
+    );
     return NextResponse.json({
       ok: true,
       message: `Test message accepted by ${desc.name}.`,
       messageId: result.messageId,
     });
   } catch (error) {
-    return NextResponse.json({
-      ok: false,
-      error:
-        error instanceof SmsSendError
-          ? error.message
-          : 'The test failed. Check the provider settings and try again.',
+    const message =
+      error instanceof SmsSendError
+        ? error.message
+        : 'The test failed. Check the provider settings and try again.';
+    await logTestSms(mobile.e164, providerId, false, message, auth.admin.name);
+    return NextResponse.json({ ok: false, error: message });
+  }
+}
+
+async function logTestSms(
+  to: string,
+  provider: string,
+  ok: boolean,
+  error: string | null,
+  actorName: string | undefined,
+  messageId?: string,
+): Promise<void> {
+  try {
+    await prisma.smsMessageLog.create({
+      data: {
+        purpose: 'TEST',
+        toMasked: maskNumber(to),
+        provider,
+        messageId: messageId ?? null,
+        ok,
+        error: error?.slice(0, 500) ?? null,
+        actorName: actorName ?? null,
+      },
     });
+  } catch (e) {
+    console.error('Failed to log test SMS', e);
   }
 }
