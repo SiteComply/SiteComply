@@ -268,14 +268,124 @@ export function ConfigTemplateLibrary({
       ) : null}
 
       <section>
-        <h2 className="text-base font-bold text-ink">
-          Configuration templates
-        </h2>
-        <p className="mb-3 text-sm text-ink-muted">
-          Reusable sets of permits and inspections for a project type, a client
-          or an industry. Create one by configuring a site and choosing “Save
-          this site as a template”.
-        </p>
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold text-ink">
+              Configuration templates
+            </h2>
+            <p className="text-sm text-ink-muted">
+              Reusable sets of permits and inspections for a project type, a
+              client or an industry. Build one here, or capture one from a site
+              you have already set up.
+            </p>
+          </div>
+          {canManage ? (
+            <button
+              type="button"
+              onClick={() =>
+                editing === null ? openCreate() : setEditing(null)
+              }
+              className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink"
+            >
+              {editing === null ? 'New template' : 'Cancel'}
+            </button>
+          ) : null}
+        </div>
+
+        {editing !== null ? (
+          <div className="mb-3 rounded-xl border border-line bg-surface-sunken p-4">
+            <h3 className="mb-2 text-sm font-bold text-ink">
+              {editing === '' ? 'New template' : 'Edit template'}
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              <input
+                value={form.name}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, name: e.target.value }))
+                }
+                placeholder="Name, e.g. Refurbishment"
+                className="min-w-52 flex-1 rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink"
+              />
+              <input
+                value={form.description}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, description: e.target.value }))
+                }
+                placeholder="What it is for (optional)"
+                className="min-w-52 flex-1 rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink"
+              />
+              <select
+                value={form.category}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, category: e.target.value }))
+                }
+                aria-label="Template category"
+                className="rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink"
+              >
+                {Object.entries(CATEGORY_LABEL).map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <p className="mt-3 text-xs text-ink-muted">
+              Tick what a project of this type USES. Everything starts ticked —
+              untick what does not apply.
+            </p>
+
+            {(
+              [
+                ['Permits', 'PERMIT_TYPE', catalogue.permitTypes],
+                [
+                  'Inspections and checks',
+                  'ACTIVITY_TYPE',
+                  catalogue.activityTypes,
+                ],
+              ] as const
+            ).map(([title, kind, items]) => (
+              <div key={kind} className="mt-3">
+                <p className="mb-1 text-xs font-semibold text-ink">{title}</p>
+                <ul className="grid gap-1 sm:grid-cols-2">
+                  {items.map((it) => (
+                    <li key={it.id}>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-line text-brand-600"
+                          checked={!form.off.has(key(kind, it.id))}
+                          onChange={(e) =>
+                            toggleItem(kind, it.id, e.target.checked)
+                          }
+                        />
+                        <span className="text-sm text-ink">{it.name}</span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                disabled={!form.name.trim() || busy === 'save'}
+                onClick={saveTemplate}
+                className="rounded-xl bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                {editing === '' ? 'Create template' : 'Save changes'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditing(null)}
+                className="rounded-xl border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {templates.length === 0 ? (
           <p className="rounded-xl border border-line bg-surface px-5 py-10 text-center text-sm text-ink-subtle">
