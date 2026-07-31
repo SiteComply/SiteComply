@@ -13,7 +13,9 @@ import {
 import {
   listAllConfigTemplates,
   listMandatoryPolicy,
+  getConfigTemplate,
 } from '@/services/siteServices/siteConfigTemplateService';
+import { listServiceCatalog } from '@/services/siteServices/siteServiceAvailability';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,10 +45,32 @@ export default async function ConfigTemplatesPage() {
   const viewer = await requirePlatformViewer();
   assertModuleView(viewer, 'sites');
 
-  const [templates, policy] = await Promise.all([
+  const [templates, policy, catalogue] = await Promise.all([
     listAllConfigTemplates(),
     viewer.role === 'DIRECTOR' ? listMandatoryPolicy() : Promise.resolve([]),
+    // The catalogue lets a template be authored here directly, rather than only
+    // by copying a site that already happens to be configured correctly.
+    listServiceCatalog(),
   ]);
+
+  // Full item sets, so an existing template can be EDITED in place rather than
+  // only activated, deactivated or deleted.
+  const details = await Promise.all(
+    templates.map((t) => getConfigTemplate(t.id)),
+  );
+  const itemsByTemplate: Record<
+    string,
+    { kind: string; refId: string; enabled: boolean }[]
+  > = {};
+  for (const d of details) {
+    if (d) {
+      itemsByTemplate[d.id] = d.items.map((i) => ({
+        kind: i.kind,
+        refId: i.refId,
+        enabled: i.enabled,
+      }));
+    }
+  }
 
   return (
     <PlatformShell>
@@ -71,6 +95,8 @@ export default async function ConfigTemplatesPage() {
         canManage={canManageSiteConfigTemplates(viewer.role)}
         policy={policy}
         canSetPolicy={viewer.role === 'DIRECTOR'}
+        catalogue={catalogue}
+        itemsByTemplate={itemsByTemplate}
       />
 
       {permits(viewer.role, 'sites', 'edit') ? (

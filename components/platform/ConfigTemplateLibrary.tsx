@@ -31,11 +31,23 @@ export function ConfigTemplateLibrary({
   canManage,
   policy,
   canSetPolicy,
+  catalogue,
+  itemsByTemplate,
 }: {
   templates: ConfigTemplateSummary[];
   canManage: boolean;
   policy: MandatoryPolicyRow[];
   canSetPolicy: boolean;
+  /** Every permit and inspection type, so a template can be built here. */
+  catalogue: {
+    permitTypes: { id: string; name: string; description: string | null }[];
+    activityTypes: { id: string; name: string; description: string | null }[];
+  };
+  /** Existing item sets, so a template can be edited rather than only replaced. */
+  itemsByTemplate: Record<
+    string,
+    { kind: string; refId: string; enabled: boolean }[]
+  >;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +55,112 @@ export function ConfigTemplateLibrary({
   const [busy, setBusy] = useState<string | null>(null);
   const [reasonFor, setReasonFor] = useState<string | null>(null);
   const [reason, setReason] = useState('');
+
+  // The template editor. `editing` is null when closed, '' when creating, or a
+  // template id when editing an existing one — one form serving both, so the
+  // two can never drift apart in behaviour or wording.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [form, setForm] = useState<{
+    name: string;
+    description: string;
+    category: string;
+    off: Set<string>;
+  }>({ name: '', description: '', category: 'PROJECT_TYPE', off: new Set() });
+
+  const key = (kind: string, refId: string) => `${kind}:${refId}`;
+
+  function openCreate() {
+    setEditing('');
+    setError(null);
+    setNotice(null);
+    setForm({
+      name: '',
+      description: '',
+      category: 'PROJECT_TYPE',
+      // A new template starts with everything available — the same default a
+      // site has, so building one is a matter of removing what does not apply.
+      off: new Set(),
+    });
+  }
+
+  function openEdit(t: ConfigTemplateSummary) {
+    setEditing(t.id);
+    setError(null);
+    setNotice(null);
+    const off = new Set<string>();
+    for (const i of itemsByTemplate[t.id] ?? []) {
+      if (!i.enabled) off.add(key(i.kind, i.refId));
+    }
+    setForm({
+      name: t.name,
+      description: t.description ?? '',
+      category: t.category,
+      off,
+    });
+  }
+
+  function toggleItem(kind: string, refId: string, keep: boolean) {
+    setForm((f) => {
+      const off = new Set(f.off);
+      if (keep) off.delete(key(kind, refId));
+      else off.add(key(kind, refId));
+      return { ...f, off };
+    });
+  }
+
+  async function saveTemplate() {
+    if (!form.name.trim()) return;
+    // Every catalogue entry is written explicitly, matching what
+    // "save this site as a template" records, so an applied template produces
+    // the same result however it was authored.
+    const items = [
+      ...catalogue.permitTypes.map((t) => ({
+        kind: 'PERMIT_TYPE',
+        refId: t.id,
+        enabled: !form.off.has(key('PERMIT_TYPE', t.id)),
+      })),
+      ...catalogue.activityTypes.map((t) => ({
+        kind: 'ACTIVITY_TYPE',
+        refId: t.id,
+        enabled: !form.off.has(key('ACTIVITY_TYPE', t.id)),
+      })),
+    ];
+    const isNew = editing === '';
+    setBusy('save');
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(
+        isNew
+          ? '/api/platform/site-config-templates'
+          : `/api/platform/site-config-templates/${editing}`,
+        {
+          method: isNew ? 'POST' : 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            name: form.name,
+            description: form.description,
+            category: form.category,
+            items,
+          }),
+        },
+      );
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) {
+        setError(data?.error ?? 'Could not save the template.');
+        return;
+      }
+      setNotice(
+        isNew
+          ? `Created “${form.name.trim()}”.`
+          : `Saved changes to “${form.name.trim()}”.`,
+      );
+      setEditing(null);
+      router.refresh();
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function setActive(id: string, active: boolean) {
     setBusy(id);
@@ -161,9 +279,8 @@ export function ConfigTemplateLibrary({
 
         {templates.length === 0 ? (
           <p className="rounded-xl border border-line bg-surface px-5 py-10 text-center text-sm text-ink-subtle">
-            No configuration templates yet. Configure a site’s permits and
-            inspections, then save it as a template to reuse on similar
-            projects.
+            No configuration templates yet. Use “New template” above to build
+            one, or open a site’s Compliance tab and save its current setup.
           </p>
         ) : (
           <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
@@ -196,6 +313,14 @@ export function ConfigTemplateLibrary({
                 </div>
                 {canManage ? (
                   <div className="flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(t)}
+                      disabled={busy === t.id}
+                      className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
+                    >
+                      Edit
+                    </button>
                     <button
                       type="button"
                       onClick={() => setActive(t.id, !t.active)}

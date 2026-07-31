@@ -36,18 +36,23 @@ export function PermissionTemplateLibrary({
   companyDefaults,
   canManageTemplates,
   canSetCompanyDefaults,
+  itemsByTemplate = {},
 }: {
   templates: PermissionTemplateSummary[];
   companies: { company: string; users: number }[];
   companyDefaults: Record<string, CompanyDefaultRow[]>;
   canManageTemplates: boolean;
   canSetCompanyDefaults: boolean;
+  /** Existing item sets, so a template can be edited rather than only replaced. */
+  itemsByTemplate?: Record<string, { module: string; verbs: string[] }[]>;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
+  // null = closed, '' = creating, id = editing. One form for both, so the two
+  // cannot drift apart.
+  const [editing, setEditing] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [draft, setDraft] = useState<Record<string, string[]>>({});
@@ -79,6 +84,54 @@ export function PermissionTemplateLibrary({
     } finally {
       setBusy(null);
     }
+  }
+
+  function openCreate() {
+    setEditing('');
+    setError(null);
+    setNotice(null);
+    setName('');
+    setDescription('');
+    setDraft({});
+  }
+
+  function openEdit(t: PermissionTemplateSummary) {
+    setEditing(t.id);
+    setError(null);
+    setNotice(null);
+    setName(t.name);
+    setDescription(t.description ?? '');
+    const d: Record<string, string[]> = {};
+    for (const i of itemsByTemplate[t.id] ?? []) d[i.module] = i.verbs;
+    setDraft(d);
+  }
+
+  async function saveTemplate() {
+    if (!name.trim()) return;
+    const isNew = editing === '';
+    await call(
+      isNew
+        ? '/api/platform/permission-templates'
+        : `/api/platform/permission-templates/${editing}`,
+      isNew ? 'POST' : 'PATCH',
+      {
+        name,
+        description,
+        items: NARROWABLE_MODULES.map((m) => ({
+          module: m,
+          verbs: draft[m] ?? [],
+        })),
+      },
+      'save',
+      () => {
+        setEditing(null);
+        const saved = name.trim();
+        setName('');
+        setDescription('');
+        setDraft({});
+        return isNew ? `Created “${saved}”.` : `Saved changes to “${saved}”.`;
+      },
+    );
   }
 
   const currentDefaults = companyDefaults[company] ?? [];
@@ -116,16 +169,21 @@ export function PermissionTemplateLibrary({
           {canManageTemplates ? (
             <button
               type="button"
-              onClick={() => setCreating((v) => !v)}
+              onClick={() =>
+                editing === null ? openCreate() : setEditing(null)
+              }
               className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink"
             >
-              {creating ? 'Cancel' : 'New template'}
+              {editing === null ? 'New template' : 'Cancel'}
             </button>
           ) : null}
         </div>
 
-        {creating ? (
+        {editing !== null ? (
           <div className="mb-3 rounded-xl border border-line bg-surface-sunken p-4">
+            <h3 className="mb-2 text-sm font-bold text-ink">
+              {editing === '' ? 'New template' : 'Edit template'}
+            </h3>
             <div className="flex flex-wrap gap-2">
               <input
                 value={name}
@@ -173,35 +231,23 @@ export function PermissionTemplateLibrary({
                 </li>
               ))}
             </ul>
-            <button
-              type="button"
-              disabled={!name.trim() || busy === 'create'}
-              onClick={() =>
-                call(
-                  '/api/platform/permission-templates',
-                  'POST',
-                  {
-                    name,
-                    description,
-                    items: NARROWABLE_MODULES.map((m) => ({
-                      module: m,
-                      verbs: draft[m] ?? [],
-                    })),
-                  },
-                  'create',
-                  () => {
-                    setCreating(false);
-                    setName('');
-                    setDescription('');
-                    setDraft({});
-                    return `Created “${name.trim()}”.`;
-                  },
-                )
-              }
-              className="mt-3 rounded-xl bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-40"
-            >
-              Create template
-            </button>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                disabled={!name.trim() || busy === 'save'}
+                onClick={saveTemplate}
+                className="rounded-xl bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                {editing === '' ? 'Create template' : 'Save changes'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditing(null)}
+                className="rounded-xl border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         ) : null}
 
@@ -238,6 +284,14 @@ export function PermissionTemplateLibrary({
               </div>
               {canManageTemplates ? (
                 <div className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    disabled={busy === t.id}
+                    onClick={() => openEdit(t)}
+                    className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
+                  >
+                    Edit
+                  </button>
                   <button
                     type="button"
                     disabled={busy === t.id}

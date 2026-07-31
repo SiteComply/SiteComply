@@ -11,6 +11,7 @@ import {
   listPermissionTemplates,
   listCompanies,
   getCompanyDefaults,
+  getPermissionTemplate,
 } from '@/services/platformUsers/permissionTemplateService';
 
 export const dynamic = 'force-dynamic';
@@ -36,6 +37,22 @@ export default async function PermissionTemplatesPage() {
     listPermissionTemplates(true),
     isDirector ? listCompanies() : Promise.resolve([]),
   ]);
+
+  // Item sets, so an existing template can be EDITED in place rather than only
+  // activated, deactivated or deleted.
+  const details = await Promise.all(
+    templates.map((t) => getPermissionTemplate(t.id)),
+  );
+  const itemsByTemplate: Record<string, { module: string; verbs: string[] }[]> =
+    {};
+  for (const d of details) {
+    if (d) {
+      itemsByTemplate[d.id] = d.items.map((i) => ({
+        module: i.module,
+        verbs: i.verbs,
+      }));
+    }
+  }
 
   // Only a Director sees or sets company defaults, so only a Director's page
   // loads them.
@@ -73,6 +90,7 @@ export default async function PermissionTemplatesPage() {
         companyDefaults={companyDefaults}
         canManageTemplates={canManageSiteConfigTemplates(viewer.role)}
         canSetCompanyDefaults={isDirector}
+        itemsByTemplate={itemsByTemplate}
       />
 
       <p className="mt-6 text-sm text-ink-subtle">

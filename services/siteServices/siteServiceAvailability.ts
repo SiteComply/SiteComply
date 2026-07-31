@@ -458,3 +458,30 @@ export async function setSiteServiceEnabled(
   if (!groups) return { ok: false, reason: 'not_found' };
   return { ok: true, groups };
 }
+
+/**
+ * The organisation-wide service catalogue, for building a configuration
+ * template in Settings.
+ *
+ * Site-independent on purpose: a template describes a KIND of project, so it
+ * must be authorable without first picking a real site to copy. Read-only, and
+ * the pages that call it are already gated.
+ */
+export async function listServiceCatalog(): Promise<{
+  permitTypes: { id: string; name: string; description: string | null }[];
+  activityTypes: { id: string; name: string; description: string | null }[];
+}> {
+  const [permitTypes, activityTypes] = await Promise.all([
+    prisma.permitType.findMany({
+      where: { active: true },
+      orderBy: { order: 'asc' },
+      select: { id: true, name: true, description: true },
+    }),
+    prisma.auditTemplate.findMany({
+      where: { active: true },
+      orderBy: [{ order: 'asc' }, { name: 'asc' }],
+      select: { id: true, name: true, description: true },
+    }),
+  ]);
+  return { permitTypes, activityTypes };
+}
