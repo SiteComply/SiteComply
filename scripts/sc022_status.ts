@@ -23,6 +23,28 @@ async function main() {
     }),
   ]);
 
+  // SC-022 Phase 2 additions.
+  const [templates, companyDefaults] = await Promise.all([
+    prisma.permissionTemplate.findMany({
+      include: { items: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.companyPermissionDefault.findMany({ orderBy: { company: 'asc' } }),
+  ]);
+  console.log(`permission templates: ${templates.length}`);
+  for (const t of templates) {
+    console.log(
+      `  ${t.name}${t.isSystem ? ' [built-in]' : ''} active=${t.active} · restricts ${t.items.length} section(s)`,
+    );
+  }
+  console.log(`company defaults: ${companyDefaults.length}`);
+  for (const c of companyDefaults) {
+    console.log(
+      `  "${c.company}" · ${c.module} → ${c.verbs.join('/') || 'no access'} · by ${c.updatedByName ?? '—'}`,
+    );
+  }
+  console.log();
+
   console.log('active platform users by role:');
   for (const u of users) console.log(`  ${u.role}: ${u._count._all}`);
 
