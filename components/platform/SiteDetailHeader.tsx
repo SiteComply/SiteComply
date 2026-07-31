@@ -14,6 +14,7 @@ import {
   canEditSite,
 } from '@/services/platformUsers/platformPermissions';
 import { getSiteForEditByViewer } from '@/services/sites/platformSiteService';
+import { canManageContractorAccess } from '@/services/platformUsers/contractorAccessService';
 
 /**
  * Shared chrome for every Site Details tab: breadcrumb, title, status, the
@@ -52,6 +53,10 @@ export async function SiteDetailHeader({
   if (canViewCheckins || canViewAudits || canViewActions)
     tabs.push({ key: 'compliance', label: 'Compliance' });
   if (canViewDocuments) tabs.push({ key: 'documents', label: 'Documents' });
+  // SC-022 — per-project contractor access. Shown only to the roles that may
+  // configure it, so it isn't advertised to the contractors it governs.
+  if (canManageContractorAccess(viewer.role))
+    tabs.push({ key: 'access', label: 'Access' });
 
   return (
     <div className="mb-6">

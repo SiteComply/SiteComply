@@ -7,6 +7,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { isActivityTypeAvailable } from '@/services/siteServices/siteServiceAvailability';
+import { viewerSiteIdsFor } from '@/services/platformUsers/effectivePermissions';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import {
   isAuditStatus,
@@ -168,10 +169,15 @@ function auditWhere(
   viewer: PlatformViewer,
   filters: AuditListFilters,
 ): Prisma.AuditWhereInput | null {
+  // SC-022: the module's OWN access boundary, not the viewer's whole site list.
+  // A contractor narrowed out of audits on one site keeps their other sites,
+  // and the exclusion happens in the query rather than being filtered out after
+  // the rows have already been read.
+  const scoped = viewerSiteIdsFor(viewer, 'audits');
   const siteIds =
-    filters.siteId && viewer.siteIds.includes(filters.siteId)
+    filters.siteId && scoped.includes(filters.siteId)
       ? [filters.siteId]
-      : viewer.siteIds;
+      : scoped;
   if (siteIds.length === 0) return null;
 
   const explicitStatus =

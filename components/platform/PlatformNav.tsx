@@ -111,15 +111,24 @@ const NOTIFICATIONS_HREF = '/platform/dashboard/notifications';
 export function PlatformNav({
   role,
   notificationCount = 0,
+  allowedModules,
 }: {
   role?: PlatformRoleValue;
   notificationCount?: number;
+  /**
+   * SC-022 — modules the viewer may view somewhere, resolved server-side from
+   * effective (role ∩ per-site override) permissions. When absent the role
+   * baseline is used, so nothing changes for a viewer with no overrides.
+   */
+  allowedModules?: PlatformModule[];
 }) {
   const pathname = usePathname();
   const items = role
     ? PLATFORM_NAV.filter(
         (item) =>
-          permits(role, item.module, 'view') &&
+          (allowedModules
+            ? allowedModules.includes(item.module)
+            : permits(role, item.module, 'view')) &&
           (!item.roles || item.roles.includes(role)),
       )
     : PLATFORM_NAV;

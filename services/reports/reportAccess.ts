@@ -1,6 +1,10 @@
 import { permits } from '@/services/platformUsers/platformPermissions';
+import { viewerSiteIdsFor } from '@/services/platformUsers/effectivePermissions';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
-import { REPORT_TYPES, type ReportType } from '@/services/reports/reportRegistry';
+import {
+  REPORT_TYPES,
+  type ReportType,
+} from '@/services/reports/reportRegistry';
 
 /**
  * Report-specific access & scope helpers, layered on the platform RBAC + site
@@ -9,7 +13,10 @@ import { REPORT_TYPES, type ReportType } from '@/services/reports/reportRegistry
  */
 
 /** Can the viewer run (view) this report? */
-export function canRunReport(viewer: PlatformViewer, report: ReportType): boolean {
+export function canRunReport(
+  viewer: PlatformViewer,
+  report: ReportType,
+): boolean {
   if (report.directorOnly && !viewer.allSites) return false;
   return permits(viewer.role, 'reports', 'view');
 }
@@ -57,7 +64,12 @@ export function resolveReportScope(
   viewer: PlatformViewer,
   requestedSiteIds?: string[],
 ): string[] {
-  if (!requestedSiteIds || requestedSiteIds.length === 0) return viewer.siteIds;
-  const allowed = new Set(viewer.siteIds);
+  // SC-022: reports are on the requirement's "contractors must not see" list
+  // (site-wide compliance statistics, KPIs, management reports), so the scope
+  // is the sites where this viewer still holds reports access — not every site
+  // they can otherwise see.
+  const scoped = viewerSiteIdsFor(viewer, 'reports');
+  if (!requestedSiteIds || requestedSiteIds.length === 0) return scoped;
+  const allowed = new Set(scoped);
   return requestedSiteIds.filter((id) => allowed.has(id));
 }

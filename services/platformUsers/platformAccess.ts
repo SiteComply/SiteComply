@@ -5,9 +5,14 @@ import { getPlatformSession } from '@/lib/session';
 import {
   roleHasAllSites,
   permits,
+  isPlatformModule,
+  PERMISSION_VERBS,
   type PlatformModule,
+  type PermissionVerb,
 } from '@/services/platformUsers/platformPermissions';
 import type { PlatformRoleValue } from '@/services/platformUsers/platformUserConstants';
+import type { SiteOverrides } from '@/services/platformUsers/contractorAccessConstants';
+import { viewerCan as viewerCanImpl } from '@/services/platformUsers/effectivePermissions';
 
 /**
  * Assigned-Sites enforcement for Platform Login users.
@@ -42,6 +47,12 @@ export interface PlatformViewer {
   siteIds: string[];
   /** The sites the viewer may see, for listing. */
   sites: ViewerSite[];
+  /**
+   * SC-022 — per-site permission overrides NARROWING the role baseline.
+   * Keyed siteId → module → retained verbs. Only overridden entries appear;
+   * absence means the role baseline applies unchanged.
+   */
+  overrides: SiteOverrides;
 }
 
 const SITE_FIELDS = {
@@ -80,6 +91,25 @@ export const getPlatformViewer = cache(
         })
       : [...user.assignedSites].sort((a, b) => a.name.localeCompare(b.name));
 
+    // SC-022 — one extra query per request, inside the same cached resolver, so
+    // every gate in the app sees the same effective permissions without any
+    // call site having to remember to look them up.
+    //
+    // A DIRECTOR is never narrowed: they are the only all-sites role, and an
+    // organisation that can lock its own Directors out of the platform has no
+    // way back in. Skipping the query for them is also the common case.
+    const overrides: SiteOverrides = {};
+    if (role !== 'DIRECTOR') {
+      const rows = await prisma.siteUserPermission.findMany({
+        where: { platformUserId: user.id },
+        select: { jobSiteId: true, module: true, verbs: true },
+      });
+      for (const r of rows) {
+        if (!isPlatformModule(r.module)) continue;
+        (overrides[r.jobSiteId] ??= {})[r.module] = r.verbs as PermissionVerb[];
+      }
+    }
+
     return {
       id: user.id,
       name: user.name,
@@ -88,6 +118,7 @@ export const getPlatformViewer = cache(
       allSites,
       siteIds: sites.map((s) => s.id),
       sites,
+      overrides,
     };
   },
 );
@@ -99,17 +130,28 @@ export async function requirePlatformViewer(): Promise<PlatformViewer> {
   return viewer;
 }
 
+// SC-022 — effective permission resolution lives in effectivePermissions.ts so
+// it stays pure and independently testable; re-exported here because this is
+// where callers already look for viewer helpers.
+export {
+  effectiveVerbs,
+  viewerCan,
+  viewerSiteIdsFor,
+} from '@/services/platformUsers/effectivePermissions';
+
 /**
  * Require that the viewer may VIEW `module`; redirect to the dashboard otherwise.
- * Enforced for Director/Project Manager/Client; other roles are unchanged (all
- * three enforced roles can currently view every module, so this blocks nothing
- * for them yet, but the gate is in place for future modules/roles).
+ *
+ * SC-022: now answers against EFFECTIVE permissions rather than the role alone,
+ * so narrowing a contractor's audits access closes all 80-odd module pages at
+ * once instead of each page needing to remember. "On any assigned site" is the
+ * gate; the site-scoped queries inside each page do the rest.
  */
 export function assertModuleView(
   viewer: PlatformViewer,
   module: PlatformModule,
 ): void {
-  if (!permits(viewer.role, module, 'view')) redirect('/platform/dashboard');
+  if (!viewerCanImpl(viewer, module, 'view')) redirect('/platform/dashboard');
 }
 
 /** A short human description of a viewer's site access, for headers/badges. */

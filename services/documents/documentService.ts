@@ -1,6 +1,7 @@
 import { DocumentCategory, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { DocumentAnnotationMeta } from '@/services/annotations/annotationUpload';
+import { viewerSiteIdsFor } from '@/services/platformUsers/effectivePermissions';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import {
   isDocumentCategory,
@@ -157,10 +158,15 @@ function documentWhere(
   viewer: PlatformViewer,
   filters: DocumentListFilters,
 ): Prisma.DocumentWhereInput | null {
+  // SC-022: the module's OWN access boundary, not the viewer's whole site list.
+  // A contractor narrowed out of documents on one site keeps their other sites,
+  // and the exclusion happens in the query rather than being filtered out after
+  // the rows have already been read.
+  const scoped = viewerSiteIdsFor(viewer, 'documents');
   const siteIds =
-    filters.siteId && viewer.siteIds.includes(filters.siteId)
+    filters.siteId && scoped.includes(filters.siteId)
       ? [filters.siteId]
-      : viewer.siteIds;
+      : scoped;
   if (siteIds.length === 0) return null;
 
   const category =

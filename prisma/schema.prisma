@@ -396,6 +396,9 @@ model JobSite {
   permitTypeSettings   SitePermitTypeSetting[]
   activityTypeSettings SiteActivityTypeSetting[]
 
+  /// SC-022 — per-user, per-site permission overrides for this site.
+  userPermissions SiteUserPermission[]
+
   /// SC-021 Phase 2 — provenance of the last configuration template applied.
   /// SNAPSHOT STRINGS, deliberately not a foreign key: deleting or renaming a
   /// template must never rewrite what a site records about its own past
@@ -663,6 +666,9 @@ model PlatformUser {
 
   // Sites this user is assigned to (scope for their future RBAC permissions).
   assignedSites JobSite[] @relation("PlatformUserSites")
+
+  /// SC-022 — permission overrides narrowing this user's role baseline per site.
+  sitePermissions SiteUserPermission[]
 
   reportExports ReportExportLog[]
 
@@ -2272,4 +2278,75 @@ model OrgServicePolicy {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// SC-022 Phase 1 — a per-(user, site, module) permission override.
+///
+/// NARROW-ONLY. `verbs` is the set of verbs the user keeps on that module for
+/// that site, and the resolver intersects it with the role baseline, so an
+/// override can never grant a capability the role does not already have. That
+/// invariant is what stops permission configuration becoming a
+/// privilege-escalation route, and it is enforced in the resolver rather than
+/// trusted to each call site.
+///
+/// OVERRIDES ONLY: no row means the role baseline applies unchanged, so every
+/// existing user keeps exactly the access they have today with no backfill.
+///
+/// `module` and `verbs` are stored as strings validated against PLATFORM_MODULES
+/// and PERMISSION_VERBS rather than as database enums, so adding a module stays
+/// a code change and never requires a migration to keep the two in step.
+model SiteUserPermission {
+  id             String       @id @default(cuid())
+  platformUser   PlatformUser @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+  platformUserId String
+  jobSite        JobSite      @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId      String
+  module         String
+  /// The verbs retained. An EMPTY array means the module is hidden on this site.
+  verbs          String[]
+
+  updatedByUserId String?
+  updatedByName   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([platformUserId, jobSiteId, module])
+  @@index([platformUserId])
+  @@index([jobSiteId])
+}
+
+/// SC-022 Phase 1 — append-only record of every permission change.
+///
+/// "Audit user permissions" in the requirement. Names and the site name are
+/// DENORMALISED so the history survives deletion of the user, the actor or the
+/// site — an access-control audit trail that disappears when someone is removed
+/// is worthless precisely when it is most needed.
+///
+/// This covers permission CHANGES. Access history (who viewed what) is a
+/// separate, larger concern and is deliberately not attempted here.
+model PermissionChangeLog {
+  id String @id @default(cuid())
+
+  actorUserId String?
+  actorName   String
+
+  targetUserId String?
+  targetName   String
+  targetRole   String
+
+  jobSiteId   String?
+  jobSiteName String
+
+  /// NARROW | RESET | APPLY_PRESET | REVOKE_SITE
+  action String
+  module String?
+
+  beforeVerbs String[]
+  afterVerbs  String[]
+
+  createdAt DateTime @default(now())
+
+  @@index([targetUserId, createdAt])
+  @@index([jobSiteId, createdAt])
 }

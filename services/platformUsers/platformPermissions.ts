@@ -50,6 +50,17 @@ export const PLATFORM_MODULES: PlatformModule[] = [
   'platformUsers',
 ];
 
+/**
+ * SC-022 — runtime guard for a module name read back from storage.
+ *
+ * Override rows store the module as a string so adding a module stays a code
+ * change; an unrecognised value is DISCARDED rather than trusted, so a stale
+ * row can never resolve to a permission decision.
+ */
+export function isPlatformModule(v: unknown): v is PlatformModule {
+  return typeof v === 'string' && (PLATFORM_MODULES as string[]).includes(v);
+}
+
 export interface RolePermissions {
   /**
    * Organisation-wide access: when true the role sees every site and ignores

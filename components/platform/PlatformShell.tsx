@@ -10,6 +10,8 @@ import {
 import { countUnreadPlatformNotifications } from '@/services/notifications/platformNotifications';
 import { NotificationPoller } from '@/components/platform/NotificationPoller';
 import { PlatformNav } from './PlatformNav';
+import { viewerCan } from '@/services/platformUsers/platformAccess';
+import { PLATFORM_MODULES } from '@/services/platformUsers/platformPermissions';
 
 /**
  * Platform dashboard shell.
@@ -81,6 +83,16 @@ export async function PlatformShell({ children }: { children: ReactNode }) {
           <div className="rounded-xl border border-line bg-surface p-2 shadow-card md:sticky md:top-6">
             <PlatformNav
               role={viewer?.role}
+              // SC-022 — modules the viewer can view on AT LEAST ONE assigned
+              // site. The nav is global while permissions are per-site, so a
+              // single answer has to cover several sites; the page gate and the
+              // queries beneath it still enforce per-site truth, so a visible
+              // section can never leak data from a site they have lost.
+              allowedModules={
+                viewer
+                  ? PLATFORM_MODULES.filter((m) => viewerCan(viewer, m, 'view'))
+                  : undefined
+              }
               notificationCount={notificationCount}
             />
           </div>

@@ -15,7 +15,8 @@ export type SiteTabKey =
   | 'workers'
   | 'experience'
   | 'compliance'
-  | 'documents';
+  | 'documents'
+  | 'access';
 
 export interface SiteTab {
   key: SiteTabKey;
@@ -28,6 +29,8 @@ const SEGMENT: Record<SiteTabKey, string> = {
   experience: '/experience',
   compliance: '/compliance',
   documents: '/documents',
+  // SC-022 — per-project contractor access.
+  access: '/access',
 };
 
 export function SiteDetailTabs({
