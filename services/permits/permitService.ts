@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { isPermitTypeAvailable } from '@/services/siteServices/siteServiceAvailability';
 import type { Prisma, Permit, PermitActivity } from '@prisma/client';
 import {
   WORK_ACTIVITY_MAX,
@@ -72,6 +73,14 @@ export async function createPermit(
     include: { questions: { orderBy: { order: 'asc' } } },
   });
   if (!type) return { ok: false, error: 'That permit type is not available.' };
+
+  // SC-021 — SERVER-SIDE ENFORCEMENT, not just UI filtering. The picker already
+  // hides types this site has switched off, but the id is postable regardless,
+  // so availability is re-checked here where it actually counts. Same wording as
+  // the global check above: a worker gets one honest answer either way.
+  if (!(await isPermitTypeAvailable(input.siteId, type.id))) {
+    return { ok: false, error: 'That permit type is not available.' };
+  }
 
   const questions: PermitQuestion[] = type.questions.map((q) => ({
     id: q.id,

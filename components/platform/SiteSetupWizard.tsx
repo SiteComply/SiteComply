@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { SiteServicesConfig } from '@/components/platform/SiteServicesConfig';
+import type { SiteServiceGroup } from '@/services/siteServices/siteServiceCatalog';
 import Link from 'next/link';
 import {
   SETUP_STEPS,
@@ -184,6 +186,7 @@ export function SiteSetupWizard({
   initialPeople,
   completedSteps,
   canEditProject,
+  serviceGroups,
 }: {
   siteId: string;
   siteName: string;
@@ -191,6 +194,8 @@ export function SiteSetupWizard({
   initialPeople: KeyPersonRow[];
   completedSteps: string[];
   canEditProject: boolean;
+  /** SC-021 — permits and inspections available on this site. */
+  serviceGroups: SiteServiceGroup[];
 }) {
   const router = useRouter();
   const [values, setValues] = useState<SetupValues>(initialValues);
@@ -403,6 +408,15 @@ export function SiteSetupWizard({
               rows={people}
               disabled={!editable || saving}
               onChange={setPeople}
+            />
+          ) : active.key === 'services' ? (
+            // SC-021. Each toggle saves immediately through its own endpoint,
+            // so this step needs no fields of its own — "Save & continue" only
+            // records that the manager has been through it.
+            <SiteServicesConfig
+              siteId={siteId}
+              groups={serviceGroups}
+              canEdit={editable}
             />
           ) : active.key === 'drawings' ? (
             <div className="space-y-2 text-sm text-ink-muted">

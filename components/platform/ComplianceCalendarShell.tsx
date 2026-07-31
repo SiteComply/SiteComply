@@ -39,7 +39,7 @@ export function ComplianceCalendarShell({
   items: CalendarItem[];
   todayLocal: string;
   sites: { id: string; name: string }[];
-  templates: { id: string; name: string }[];
+  templates: { id: string; name: string; disabledSiteIds?: string[] }[];
   roles: { value: string; label: string }[];
   people: {
     kind: 'USER' | 'WORKER';

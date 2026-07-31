@@ -7,6 +7,7 @@ import { permits } from '@/services/platformUsers/platformPermissions';
 import { ROLE_LABELS } from '@/services/platformUsers/platformUserConstants';
 import { PlatformRole } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { listActiveTemplatesForSites } from '@/services/audits/auditTemplateService';
 import {
   getCalendarWindow,
   getUpcoming,
@@ -76,11 +77,15 @@ export default async function ComplianceCalendarPage({
     await Promise.all([
       getCalendarWindow(viewer, from, to, siteId),
       getUpcoming(viewer, siteId),
-      prisma.auditTemplate.findMany({
-        where: { active: true },
-        orderBy: { order: 'asc' },
-        select: { id: true, name: true },
-      }),
+      // SC-021 — activity types with the sites each is switched off for, so the
+      // schedule form can narrow the list as the site selection changes.
+      listActiveTemplatesForSites(viewer.siteIds).then((rows) =>
+        rows.map((t) => ({
+          id: t.id,
+          name: t.name,
+          disabledSiteIds: t.disabledSiteIds,
+        })),
+      ),
       // SC-020 Phase 3 — headline figures across ALL time for the scoped sites,
       // not just the displayed month: "3 overdue" should not change because you
       // paged to a different month.

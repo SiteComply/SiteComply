@@ -27,6 +27,8 @@ import {
   type ActionStatusValue,
   type ActionPriorityValue,
 } from '@/services/actions/actionConstants';
+import { SiteServicesConfig } from '@/components/platform/SiteServicesConfig';
+import { getSiteServiceConfig } from '@/services/siteServices/siteServiceAvailability';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,6 +63,12 @@ export default async function SiteCompliancePage({
   const actions = canViewActions
     ? await listOutstandingActionsForSite(viewer, params.id, 5, now)
     : [];
+
+  // SC-021 — which permits and inspections this site uses. Read is open to
+  // anyone who can see the tab; editing is gated on sites:edit, enforced in the
+  // service and the API as well as here.
+  const canEditServices = permits(viewer.role, 'sites', 'edit');
+  const serviceGroups = (await getSiteServiceConfig(viewer, params.id)) ?? [];
 
   return (
     <PlatformShell>
@@ -200,6 +208,21 @@ export default async function SiteCompliancePage({
             </Link>
           </Section>
         )}
+      </div>
+
+      <div className="mt-6">
+        <Section title="Permits and inspections used on this site">
+          <p className="mb-4 text-sm text-ink-muted">
+            Everything is available until you turn it off. Turning something off
+            removes it from new work only — records already raised stay visible
+            and keep appearing in reports.
+          </p>
+          <SiteServicesConfig
+            siteId={params.id}
+            groups={serviceGroups}
+            canEdit={canEditServices}
+          />
+        </Section>
       </div>
     </PlatformShell>
   );

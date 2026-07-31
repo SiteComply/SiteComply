@@ -309,6 +309,13 @@ export async function saveSetupStep(
       // Drawings and plans are Document records (reusing the register, its
       // permissions and SC-017 annotation), so this step only records progress.
       break;
+    case 'services':
+      // SC-021. Each toggle writes immediately through
+      // /api/platform/sites/[id]/services, where the availability rules and the
+      // active-schedule conflict check live. Routing them through here as well
+      // would mean two write paths for one setting and two places for the
+      // conflict rule to be enforced — so this step records progress only.
+      break;
     default:
       return { ok: false, reason: 'invalid', error: 'Unknown setup step.' };
   }

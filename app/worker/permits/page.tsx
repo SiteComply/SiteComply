@@ -30,7 +30,8 @@ export default async function WorkerPermitsPage() {
   const [unread, permitsList, types] = await Promise.all([
     countUnreadBulletinsForWorker(site.id, worker.id),
     listWorkerPermits(worker.id),
-    listActivePermitTypes(),
+    // SC-021: only the permit types this site makes available.
+    listActivePermitTypes(site.id),
   ]);
 
   const active = permitsList.filter((p) =>

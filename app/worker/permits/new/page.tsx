@@ -20,7 +20,8 @@ export default async function NewPermitPage({
 
   const [unread, types] = await Promise.all([
     countUnreadBulletinsForWorker(site.id, worker.id),
-    listActivePermitTypesWithQuestions(),
+    // SC-021: only the permit types this site makes available.
+    listActivePermitTypesWithQuestions(site.id),
   ]);
 
   return (

@@ -6,6 +6,7 @@ import {
   ScoringMethod,
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { isActivityTypeAvailable } from '@/services/siteServices/siteServiceAvailability';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import {
   isAuditStatus,
@@ -368,6 +369,20 @@ export async function createAudit(
     sourceTemplateVersion: number;
   } | null = null;
   if (value.templateId) {
+    // SC-021 — SERVER-SIDE ENFORCEMENT. The form hides templates this site has
+    // switched off, but the id is postable, so availability is re-checked here.
+    // Refused outright rather than silently creating a blank audit: a manager
+    // who picked a template must not end up with an empty checklist and no
+    // explanation of why.
+    if (!(await isActivityTypeAvailable(value.jobSiteId, value.templateId))) {
+      return {
+        ok: false,
+        errors: {
+          templateId:
+            'That inspection type is not available for the selected site.',
+        },
+      };
+    }
     const template = await prisma.auditTemplate.findFirst({
       where: { id: value.templateId, active: true },
       include: {

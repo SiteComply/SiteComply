@@ -166,6 +166,22 @@ export const SETUP_STEPS: SetupStep[] = [
     owner: 'SITE_MANAGER',
     cppRequired: false,
   },
+  {
+    // SC-021. Appended rather than inserted so every existing step keeps its
+    // position and no site's stored progress shifts meaning.
+    //
+    // owner SITE_MANAGER, which the wizard treats as "Director or Site Manager
+    // may edit" (a DIRECTOR-owned step is the restricted one) — exactly the two
+    // roles SC-021 names. NOT cppRequired: a Construction Phase Plan does not
+    // depend on which optional modules a site uses, and marking it required
+    // would make every existing site's CPP look incomplete overnight.
+    key: 'services',
+    title: 'Permits and inspections used',
+    description:
+      'Which permits, inspections and checks apply to this project. Everything is available until you turn it off.',
+    owner: 'SITE_MANAGER',
+    cppRequired: false,
+  },
 ];
 
 /** Fields that must exist before a site record is created at all. */

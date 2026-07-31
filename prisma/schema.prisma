@@ -318,11 +318,11 @@ model Worker {
   knowledgeCheckAttempts KnowledgeCheckAttempt[]
   checkInOverrides       CheckInOverride[]
   permits                Permit[]
+  // SC-015: corrective actions assigned to this worker.
+  assignedActions        Action[]
 
   @@index([company])
   @@index([cscsExpiry])
-  // SC-015: corrective actions assigned to this worker.
-  assignedActions Action[]
 }
 
 /// A construction site / job that workers induct onto and check in to.
@@ -388,11 +388,15 @@ model JobSite {
   projectDetails         SiteProjectDetails?
   keyPeople              SiteKeyPerson[]
   setupProgress          SiteSetupProgress?
+  // SC-020 compliance scheduler.
+  complianceSchedules    ComplianceSchedule[]
+  complianceOccurrences  ComplianceOccurrence[]
+
+  // SC-021: per-site availability overrides for permit types and activity types.
+  permitTypeSettings   SitePermitTypeSetting[]
+  activityTypeSettings SiteActivityTypeSetting[]
 
   @@index([status])
-  // SC-020 compliance scheduler.
-  complianceSchedules   ComplianceSchedule[]
-  complianceOccurrences ComplianceOccurrence[]
 }
 
 /// A Daily Bulletin (SC-002): an important site notice, announcement or safety
@@ -668,14 +672,14 @@ model PlatformUser {
   aiSummaries AiSummary[]
 
   // Per-user read state for in-app notifications.
-  notificationReads NotificationRead[]
+  notificationReads  NotificationRead[]
+  // SC-015: actions assigned to this platform user (fallback assignee).
+  assignedActions    Action[]            @relation("ActionAssignee")
+  // SC-016: notification events addressed to this user.
+  notificationEvents NotificationEvent[] @relation("NotificationRecipient")
 
   @@index([status])
   @@index([company])
-  // SC-015: actions assigned to this platform user (fallback assignee).
-  assignedActions Action[] @relation("ActionAssignee")
-  // SC-016: notification events addressed to this user.
-  notificationEvents NotificationEvent[] @relation("NotificationRecipient")
 }
 
 /// Per-user read state for in-app notifications. Notifications are derived (e.g.
@@ -869,13 +873,13 @@ model Audit {
   calculatedPassed  Boolean?
   scoredAt          DateTime?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  // SC-020 compliance scheduler.
+  complianceOccurrences ComplianceOccurrence[]
 
   @@index([jobSiteId, status, createdAt])
   @@index([status])
-  // SC-020 compliance scheduler.
-  complianceOccurrences ComplianceOccurrence[]
 }
 
 /// SC-014 — how an audit's overall score is produced.
@@ -914,13 +918,13 @@ enum ItemResult {
 /// Security". Copied from an AuditTemplateSection at audit creation, so later
 /// template edits never alter a historic audit's structure or score.
 model AuditSection {
-  id      String @id @default(cuid())
-  audit   Audit  @relation(fields: [auditId], references: [id], onDelete: Cascade)
-  auditId String
-  name    String
+  id            String @id @default(cuid())
+  audit         Audit  @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  auditId       String
+  name          String
   /// Share of totalPossibleScore this section contributes. Across one audit these
   /// must sum to 100 — enforced in auditScoringService, not by the database.
-  weightPercent Int @default(0)
+  weightPercent Int    @default(0)
   order         Int
 
   items AuditItem[]
@@ -1017,12 +1021,15 @@ model AuditTemplate {
   showAsPercentage   Boolean       @default(true)
   roundScores        Boolean       @default(true)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([active, order])
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
   // SC-020 compliance scheduler.
   complianceSchedules ComplianceSchedule[]
+
+  /// SC-021: sites that have overridden this activity type's availability.
+  siteSettings SiteActivityTypeSetting[]
+
+  @@index([active, order])
 }
 
 /// A weighted section on an audit template (SC-014). Copied onto an AuditSection
@@ -1190,15 +1197,15 @@ model Action {
   // Uploaded evidence (photos / documents) supporting the action.
   evidence ActionEvidence[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  // SC-016: notifications raised about this action.
+  notificationEvents NotificationEvent[]
 
   @@index([jobSiteId, status, dueDate])
   @@index([status, dueDate])
   @@index([assignedWorkerId])
   @@index([assignedPlatformUserId])
-  // SC-016: notifications raised about this action.
-  notificationEvents NotificationEvent[]
 }
 
 /// A photo or document uploaded as evidence against an Action. The bytes live in
@@ -1278,6 +1285,9 @@ model PermitType {
 
   questions PermitTypeQuestion[]
   permits   Permit[]
+
+  /// SC-021: sites that have overridden this type's availability.
+  siteSettings SitePermitTypeSetting[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1843,21 +1853,21 @@ model CdmDutyHolders {
   jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
   jobSiteId String  @id
 
-  clientName            String?
-  clientContactName     String?
-  clientContactEmail    String?
-  clientContactPhone    String?
+  clientName         String?
+  clientContactName  String?
+  clientContactEmail String?
+  clientContactPhone String?
 
-  principalDesigner        String?
-  principalDesignerContact String?
-  principalDesignerEmail   String?
-  principalDesignerPhone   String?
+  principalDesigner            String?
+  principalDesignerContact     String?
+  principalDesignerEmail       String?
+  principalDesignerPhone       String?
   principalDesignerAppointedAt DateTime?
 
-  principalContractor        String?
-  principalContractorContact String?
-  principalContractorEmail   String?
-  principalContractorPhone   String?
+  principalContractor            String?
+  principalContractorContact     String?
+  principalContractorEmail       String?
+  principalContractorPhone       String?
   principalContractorAppointedAt DateTime?
 
   updatedByUserId String?
@@ -1873,15 +1883,15 @@ model SiteProjectDetails {
   jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
   jobSiteId String  @id
 
-  description       String?   @db.Text
-  scopeOfWorks      String?   @db.Text
-  startDate         DateTime?
-  plannedEndDate    DateTime?
+  description    String?   @db.Text
+  scopeOfWorks   String?   @db.Text
+  startDate      DateTime?
+  plannedEndDate DateTime?
   /// CDM 2015 F10 notifiable project (>30 working days with 20+ workers
   /// simultaneously, or >500 person days). Captured, NOT submitted — notifying
   /// the HSE remains the client's duty.
-  cdmNotifiable     Boolean   @default(false)
-  f10Reference      String?
+  cdmNotifiable  Boolean   @default(false)
+  f10Reference   String?
 
   updatedByUserId String?
   updatedByName   String?
@@ -1922,8 +1932,8 @@ enum SiteKeyPersonKind {
 /// models, so this records only WHICH steps have been completed — it is progress
 /// tracking, never a second copy of the data.
 model SiteSetupProgress {
-  jobSite   JobSite  @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
-  jobSiteId String   @id
+  jobSite        JobSite  @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId      String   @id
   /// Step keys the user has explicitly completed (see siteSetupConstants).
   completedSteps String[]
   /// Where to drop the user back in.
@@ -1965,10 +1975,10 @@ model ComplianceSchedule {
   /// time, so this is not a date-only schedule.
   timeOfDay    String            @default("08:00")
 
-  startDate       DateTime
-  endDate         DateTime?
+  startDate     DateTime
+  endDate       DateTime?
   /// Days after the due date the activity may still be completed in.
-  dueWindowDays   Int      @default(1)
+  dueWindowDays Int       @default(1)
 
   assigneeKind           ScheduleAssigneeKind @default(ROLE)
   assignedPlatformUserId String?
@@ -2091,9 +2101,9 @@ model SchedulerRun {
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
 
-  sitesConsidered      Int @default(0)
-  occurrencesCreated   Int @default(0)
-  escalationsRecorded  Int @default(0)
+  sitesConsidered     Int @default(0)
+  occurrencesCreated  Int @default(0)
+  escalationsRecorded Int @default(0)
 
   ok    Boolean @default(false)
   error String?
@@ -2106,4 +2116,58 @@ enum SchedulerTrigger {
   TIMER
   /// A manual invocation of the same endpoint, for testing.
   MANUAL
+}
+
+/// SC-021 — per-site availability of a permit type.
+///
+/// OVERRIDES ONLY, mirroring SiteDashboardSetting (SC-003): a site with no row
+/// for a type gets the default, which is AVAILABLE. That is what makes this
+/// additive with no backfill — every existing site keeps exactly the behaviour
+/// it has today until somebody deliberately turns something off.
+///
+/// Disabling governs NEW work only. Permits already raised stay visible,
+/// completable and reportable, so a configuration change can never rewrite
+/// history or strand an in-flight permit.
+model SitePermitTypeSetting {
+  id           String     @id @default(cuid())
+  jobSite      JobSite    @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId    String
+  permitType   PermitType @relation(fields: [permitTypeId], references: [id], onDelete: Cascade)
+  permitTypeId String
+  enabled      Boolean
+
+  /// Who last changed it (denormalised name so history survives user deletion).
+  updatedByUserId String?
+  updatedByName   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([jobSiteId, permitTypeId])
+  @@index([jobSiteId])
+}
+
+/// SC-021 — per-site availability of an activity type (an audit template, which
+/// is what SC-020 schedules and SC-013 audits are both built from).
+///
+/// Same overrides-only rule as SitePermitTypeSetting. Disabling is blocked while
+/// active compliance schedules still use the type on that site: silently
+/// stopping scheduled inspections is the failure SC-020 Phase 4 exists to
+/// prevent, so the conflict is surfaced and the manager decides.
+model SiteActivityTypeSetting {
+  id              String        @id @default(cuid())
+  jobSite         JobSite       @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId       String
+  auditTemplate   AuditTemplate @relation(fields: [auditTemplateId], references: [id], onDelete: Cascade)
+  auditTemplateId String
+  enabled         Boolean
+
+  updatedByUserId String?
+  updatedByName   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([jobSiteId, auditTemplateId])
+  @@index([jobSiteId])
 }

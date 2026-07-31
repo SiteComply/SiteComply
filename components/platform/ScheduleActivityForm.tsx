@@ -28,7 +28,7 @@ export function ScheduleActivityForm({
   onClose,
 }: {
   sites: { id: string; name: string }[];
-  templates: { id: string; name: string }[];
+  templates: { id: string; name: string; disabledSiteIds?: string[] }[];
   roles: { value: string; label: string }[];
   people: {
     kind: 'USER' | 'WORKER';
@@ -42,7 +42,16 @@ export function ScheduleActivityForm({
   const today = new Date().toISOString().slice(0, 10);
 
   const [jobSiteId, setJobSiteId] = useState(sites[0]?.id ?? '');
-  const [auditTemplateId, setTemplateId] = useState(templates[0]?.id ?? '');
+
+  // SC-021 — only the activity types the chosen site actually uses. Computed
+  // from the chosen site rather than fetched, so switching site is instant.
+  const availableTemplates = templates.filter(
+    (t) => !(t.disabledSiteIds ?? []).includes(jobSiteId),
+  );
+
+  const [auditTemplateId, setTemplateId] = useState(
+    availableTemplates[0]?.id ?? '',
+  );
   const [title, setTitle] = useState('');
   const [frequency, setFrequency] = useState<FrequencyValue>('WEEKLY');
   const [weekdays, setWeekdays] = useState<number[]>([1]);
@@ -157,7 +166,24 @@ export function ScheduleActivityForm({
             <select
               className={field}
               value={jobSiteId}
-              onChange={(e) => setJobSiteId(e.target.value)}
+              onChange={(e) => {
+                const nextSiteId = e.target.value;
+                setJobSiteId(nextSiteId);
+                // SC-021: if the new site doesn't use the chosen activity type,
+                // move to one it does rather than leaving a selection the
+                // server will reject after the round trip.
+                const stillAvailable = templates.some(
+                  (t) =>
+                    t.id === auditTemplateId &&
+                    !(t.disabledSiteIds ?? []).includes(nextSiteId),
+                );
+                if (!stillAvailable) {
+                  const next = templates.find(
+                    (t) => !(t.disabledSiteIds ?? []).includes(nextSiteId),
+                  );
+                  setTemplateId(next?.id ?? '');
+                }
+              }}
             >
               {sites.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -174,7 +200,7 @@ export function ScheduleActivityForm({
               value={auditTemplateId}
               onChange={(e) => setTemplateId(e.target.value)}
             >
-              {templates.map((t) => (
+              {availableTemplates.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>

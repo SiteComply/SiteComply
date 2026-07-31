@@ -333,6 +333,109 @@ export const AUDIT_TEMPLATE_LIBRARY: SeedTemplate[] = [
       { label: 'Actions arising have been raised', category: 'DOCUMENTATION' },
     ],
   },
+  {
+    // SC-021 named "Temporary Works Inspections" as a configurable type but no
+    // template existed, so the requirement could not actually be represented.
+    // Appended (not inserted) so the existing templates keep their order values.
+    name: 'Temporary Works Inspection',
+    description:
+      'Inspection of temporary works against the design and the temporary works register — BS 5975 permit-to-load discipline.',
+    items: [
+      {
+        label: 'Temporary works design available and current revision on site',
+        category: 'DOCUMENTATION',
+        defaultSeverity: 'HIGH',
+      },
+      {
+        label: 'Erected works match the design (dimensions, members, bracing)',
+        category: 'SAFETY',
+        defaultSeverity: 'CRITICAL',
+      },
+      {
+        label: 'Temporary Works Co-ordinator has inspected and signed off',
+        category: 'DOCUMENTATION',
+        defaultSeverity: 'HIGH',
+      },
+      {
+        label: 'Permit to load / permit to strike status correct for the stage',
+        category: 'SAFETY',
+        defaultSeverity: 'CRITICAL',
+      },
+      {
+        label: 'Foundations and bearing surfaces sound and undisturbed',
+        category: 'SAFETY',
+        defaultSeverity: 'HIGH',
+      },
+      {
+        label: 'Props, needles and supports undamaged and correctly pinned',
+        category: 'SAFETY',
+        defaultSeverity: 'HIGH',
+      },
+      {
+        label:
+          'No unauthorised alteration, removal or loading since last check',
+        category: 'SAFETY',
+        defaultSeverity: 'CRITICAL',
+      },
+      {
+        label: 'Exclusion zones and signage in place where required',
+        category: 'SAFETY',
+      },
+      {
+        label: 'Temporary works register updated with this inspection',
+        category: 'DOCUMENTATION',
+      },
+    ],
+  },
+  {
+    // SC-021 named "Environmental Inspections"; likewise had no template.
+    name: 'Environmental Inspection',
+    description:
+      'Site environmental controls — pollution prevention, waste duty of care, dust, noise and spill readiness.',
+    items: [
+      {
+        label:
+          'Fuel and oil stored in bunded containers, bunds intact and empty',
+        category: 'ENVIRONMENTAL',
+        defaultSeverity: 'HIGH',
+      },
+      {
+        label: 'Spill kits available, stocked and staff know their location',
+        category: 'ENVIRONMENTAL',
+        defaultSeverity: 'HIGH',
+      },
+      {
+        label: 'No visible pollution of drains, watercourses or ground',
+        category: 'ENVIRONMENTAL',
+        defaultSeverity: 'CRITICAL',
+      },
+      {
+        label: 'Waste segregated, skips covered and waste transfer notes held',
+        category: 'ENVIRONMENTAL',
+      },
+      {
+        label: 'Waste carrier licence checked for the collecting contractor',
+        category: 'DOCUMENTATION',
+      },
+      {
+        label: 'Dust suppression in use and effective at the boundary',
+        category: 'ENVIRONMENTAL',
+      },
+      {
+        label: 'Noise and vibration controls in place; working hours observed',
+        category: 'ENVIRONMENTAL',
+      },
+      {
+        label: 'Wheel washing / road cleanliness maintained',
+        category: 'ENVIRONMENTAL',
+      },
+      {
+        label: 'Protected species, trees and habitats safeguarded as specified',
+        category: 'ENVIRONMENTAL',
+        defaultSeverity: 'HIGH',
+      },
+    ],
+  },
 ];
 
 /** Idempotently seed/refresh the starter audit templates. */

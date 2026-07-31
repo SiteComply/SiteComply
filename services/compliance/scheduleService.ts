@@ -4,6 +4,7 @@ import {
   ScheduleFrequency,
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { isActivityTypeAvailable } from '@/services/siteServices/siteServiceAvailability';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { ROLE_LABELS } from '@/services/platformUsers/platformUserConstants';
@@ -146,6 +147,16 @@ export async function createSchedule(
   });
   if (!template) return invalid('Choose an activity type.');
 
+  // SC-021 — SERVER-SIDE ENFORCEMENT. The activity-type picker already hides
+  // types this site has switched off; re-checked here because the id is
+  // postable. Named in the message: "not available" without saying what would
+  // leave the manager guessing which of their choices was wrong.
+  if (!(await isActivityTypeAvailable(input.jobSiteId, template.id))) {
+    return invalid(
+      `“${template.name}” is not available for this site. Turn it on in the site’s services configuration first.`,
+    );
+  }
+
   if (!isAssigneeKind(input.assigneeKind))
     return invalid('Choose who is responsible.');
 
@@ -256,9 +267,32 @@ export async function setScheduleActive(
   if (viewer.siteIds.length === 0) return { ok: false, reason: 'not_found' };
   const existing = await prisma.complianceSchedule.findFirst({
     where: { id: scheduleId, jobSiteId: { in: viewer.siteIds } },
-    select: { id: true },
+    select: {
+      id: true,
+      jobSiteId: true,
+      auditTemplateId: true,
+      auditTemplate: { select: { name: true } },
+    },
   });
   if (!existing) return { ok: false, reason: 'not_found' };
+
+  // SC-021: RE-ACTIVATION is a creation-shaped act and gets the same check.
+  // Without this, a schedule paused before its type was switched off could be
+  // resumed afterwards and quietly start generating an inspection the site has
+  // declared irrelevant. Deactivating is never blocked.
+  if (
+    active &&
+    !(await isActivityTypeAvailable(
+      existing.jobSiteId,
+      existing.auditTemplateId,
+    ))
+  ) {
+    return {
+      ok: false,
+      reason: 'invalid',
+      error: `“${existing.auditTemplate.name}” is no longer available for this site, so this schedule cannot be reactivated. Turn the inspection type back on in the site’s services configuration first.`,
+    };
+  }
 
   await prisma.complianceSchedule.update({
     where: { id: scheduleId },

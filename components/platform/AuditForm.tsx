@@ -24,6 +24,12 @@ export interface AuditFormTemplate {
   name: string;
   description: string | null;
   itemCount: number;
+  /**
+   * SC-021 — sites where this inspection type has been switched off. The
+   * NEGATIVE is carried because overrides are rare, so this stays a few ids
+   * rather than a full site × template matrix.
+   */
+  disabledSiteIds?: string[];
 }
 
 interface Values {
@@ -72,6 +78,20 @@ export function AuditForm({
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
+  // SC-021 — only the inspection types the chosen site actually uses. Mirrors
+  // the document filter below; a site must be chosen before templates mean
+  // anything, so with no site selected the full list is offered and the server
+  // re-checks on submit.
+  const availableTemplates = useMemo(
+    () =>
+      values.jobSiteId
+        ? templates.filter(
+            (t) => !(t.disabledSiteIds ?? []).includes(values.jobSiteId),
+          )
+        : templates,
+    [templates, values.jobSiteId],
+  );
+
   const chosenTemplate = templates.find((t) => t.id === templateId) ?? null;
 
   function chooseTemplate(id: string) {
@@ -161,7 +181,7 @@ export function AuditForm({
       )}
 
       {/* SC-013: start blank or from a template. */}
-      {mode === 'create' && templates.length > 0 && (
+      {mode === 'create' && availableTemplates.length > 0 && (
         <div className="rounded-xl border border-line bg-surface-sunken p-4">
           <label className="block text-sm font-semibold text-ink">
             Start from
@@ -176,7 +196,7 @@ export function AuditForm({
             className="w-full rounded-xl border border-line bg-surface px-4 py-3 text-base text-ink"
           >
             <option value="">Blank audit (start from scratch)</option>
-            {templates.map((t) => (
+            {availableTemplates.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name} · {t.itemCount} item{t.itemCount === 1 ? '' : 's'}
               </option>
@@ -208,12 +228,23 @@ export function AuditForm({
           label="Site"
           value={values.jobSiteId}
           onChange={(e) => {
+            const nextSiteId = e.target.value;
             // Changing site clears document refs (they're site-specific).
             setValues((v) => ({
               ...v,
-              jobSiteId: e.target.value,
+              jobSiteId: nextSiteId,
               documentIds: [],
             }));
+            // SC-021: and clears the template if the new site doesn't use it.
+            // Leaving a now-unavailable template selected would submit a choice
+            // the picker no longer offers, and the server would reject it after
+            // the round trip.
+            if (templateId) {
+              const t = templates.find((x) => x.id === templateId);
+              if (t && (t.disabledSiteIds ?? []).includes(nextSiteId)) {
+                setTemplateId('');
+              }
+            }
           }}
           error={errors.jobSiteId}
           hint="Only sites you have access to are listed."

@@ -7,6 +7,7 @@ import {
   canEditSite,
 } from '@/services/platformUsers/platformPermissions';
 import { getSetupForSite } from '@/services/sites/siteSetupService';
+import { getSiteServiceConfig } from '@/services/siteServices/siteServiceAvailability';
 import {
   SiteSetupWizard,
   type KeyPersonRow,
@@ -106,7 +107,12 @@ export default async function SiteSetupPage({
     environment: { environmentalControls: info?.environmentalControls ?? '' },
     drawings: {},
     people: {},
+    services: {},
   };
+
+  // SC-021 — the site's permit and inspection availability, with the conflicts
+  // that block a disable, so the step can explain a refusal before it happens.
+  const serviceGroups = (await getSiteServiceConfig(viewer, site.id)) ?? [];
 
   const initialPeople: KeyPersonRow[] = site.keyPeople.map((p) => ({
     kind: p.kind,
@@ -131,6 +137,7 @@ export default async function SiteSetupPage({
         initialPeople={initialPeople}
         completedSteps={site.setupProgress?.completedSteps ?? []}
         canEditProject={canEditSite(viewer.role)}
+        serviceGroups={serviceGroups}
       />
     </PlatformShell>
   );

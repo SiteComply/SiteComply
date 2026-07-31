@@ -1,5 +1,6 @@
 import { FindingCategory, FindingSeverity } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { disabledSitesByActivityType } from '@/services/siteServices/siteServiceAvailability';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import {
   permits,
@@ -52,6 +53,33 @@ export async function listActiveTemplates(): Promise<TemplateSummary[]> {
     include: { _count: { select: { items: true } } },
   });
   return rows.map(toSummary);
+}
+
+/**
+ * SC-021 — active templates annotated with the sites each is switched OFF for.
+ *
+ * For pickers where the site is chosen in the same form (audit creation,
+ * schedule creation), so the client can narrow the list as the site changes
+ * without a round trip — the pattern AuditForm already uses for documents.
+ *
+ * Carries the NEGATIVE (disabled sites) because overrides are rare: this stays
+ * a few ids rather than a full site × template matrix.
+ */
+export async function listActiveTemplatesForSites(
+  siteIds: string[],
+): Promise<(TemplateSummary & { disabledSiteIds: string[] })[]> {
+  const [rows, disabled] = await Promise.all([
+    prisma.auditTemplate.findMany({
+      where: { active: true },
+      orderBy: [{ order: 'asc' }, { name: 'asc' }],
+      include: { _count: { select: { items: true } } },
+    }),
+    disabledSitesByActivityType(siteIds),
+  ]);
+  return rows.map((r) => ({
+    ...toSummary(r),
+    disabledSiteIds: disabled[r.id] ?? [],
+  }));
 }
 
 /** All templates for the library admin (includes inactive). */
