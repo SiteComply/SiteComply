@@ -280,6 +280,27 @@ export function canApprovePermit(role: PlatformRoleValue): boolean {
 }
 
 /**
+ * Manage the SHARED, organisation-level site configuration template library
+ * (SC-021 Phase 2): edit or delete an existing template.
+ *
+ * NARROWER than the audit template library on purpose. An audit template shapes
+ * one audit; a configuration template decides which permits and inspections a
+ * whole project may use, so reshaping a shared one is a management decision
+ * rather than a safety-professional one. Anyone with `sites:edit` may still SAVE
+ * a new template from a site they configure, and apply templates — mirroring
+ * SC-013, where any audit-creating role can save a template but not edit a
+ * shared one.
+ */
+export const SITE_CONFIG_TEMPLATE_MANAGE_ROLES: PlatformRoleValue[] = [
+  'DIRECTOR',
+  'PROJECT_MANAGER',
+];
+
+export function canManageSiteConfigTemplates(role: PlatformRoleValue): boolean {
+  return SITE_CONFIG_TEMPLATE_MANAGE_ROLES.includes(role);
+}
+
+/**
  * Create a brand-new job site from the Platform portal. This is deliberately
  * NARROWER than the `sites` "create" verb in the matrix (which several
  * management roles hold for future within-site management affordances):

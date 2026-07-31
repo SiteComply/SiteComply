@@ -396,6 +396,14 @@ model JobSite {
   permitTypeSettings   SitePermitTypeSetting[]
   activityTypeSettings SiteActivityTypeSetting[]
 
+  /// SC-021 Phase 2 — provenance of the last configuration template applied.
+  /// SNAPSHOT STRINGS, deliberately not a foreign key: deleting or renaming a
+  /// template must never rewrite what a site records about its own past
+  /// (the same rule as SC-013's snapshot-on-use).
+  appliedConfigTemplateName String?
+  appliedConfigTemplateAt   DateTime?
+  appliedConfigTemplateBy   String?
+
   @@index([status])
 }
 
@@ -1029,6 +1037,10 @@ model AuditTemplate {
   /// SC-021: sites that have overridden this activity type's availability.
   siteSettings SiteActivityTypeSetting[]
 
+  /// SC-021 Phase 2.
+  configTemplateItems SiteConfigTemplateItem[]
+  orgPolicy           OrgServicePolicy?
+
   @@index([active, order])
 }
 
@@ -1288,6 +1300,10 @@ model PermitType {
 
   /// SC-021: sites that have overridden this type's availability.
   siteSettings SitePermitTypeSetting[]
+
+  /// SC-021 Phase 2.
+  templateItems SiteConfigTemplateItem[]
+  orgPolicy     OrgServicePolicy?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2170,4 +2186,90 @@ model SiteActivityTypeSetting {
 
   @@unique([jobSiteId, auditTemplateId])
   @@index([jobSiteId])
+}
+
+/// SC-021 Phase 2 — how a template is labelled. The requirement lists project
+/// templates, client-specific requirements and industry-specific templates as
+/// three bullets; they are ONE mechanism — a reusable bundle of availability
+/// settings — differing only in what the bundle represents. Modelling them as
+/// three separate concepts would triple the code for no behavioural difference.
+enum SiteConfigTemplateCategory {
+  PROJECT_TYPE
+  CLIENT
+  INDUSTRY
+  OTHER
+}
+
+/// SC-021 Phase 2 — a named, reusable bundle of per-site availability settings.
+///
+/// Applied with REPLACE semantics: applying a template produces the same
+/// configuration regardless of what the site had before. Merge semantics would
+/// make the outcome depend on prior state, which defeats the point of a
+/// template.
+model SiteConfigTemplate {
+  id          String                     @id @default(cuid())
+  name        String
+  description String?
+  category    SiteConfigTemplateCategory @default(PROJECT_TYPE)
+  active      Boolean                    @default(true)
+
+  createdByUserId String?
+  createdByName   String?
+  updatedByUserId String?
+  updatedByName   String?
+
+  items SiteConfigTemplateItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name])
+  @@index([active, category])
+}
+
+/// One decision inside a template. Exactly one of permitTypeId / auditTemplateId
+/// is set — enforced by a CHECK constraint in the migration, because a row
+/// pointing at both or neither is meaningless and would silently misapply.
+model SiteConfigTemplateItem {
+  id         String             @id @default(cuid())
+  template   SiteConfigTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateId String
+
+  permitType   PermitType? @relation(fields: [permitTypeId], references: [id], onDelete: Cascade)
+  permitTypeId String?
+
+  auditTemplate   AuditTemplate? @relation(fields: [auditTemplateId], references: [id], onDelete: Cascade)
+  auditTemplateId String?
+
+  enabled Boolean
+
+  @@unique([templateId, permitTypeId])
+  @@unique([templateId, auditTemplateId])
+  @@index([templateId])
+}
+
+/// SC-021 Phase 2 — a company-wide MANDATORY service.
+///
+/// Row presence means mandatory. A mandatory service is forced ON when
+/// availability is read and refused when a disable is attempted, mirroring
+/// SC-003's locked Check-out panel: no configuration, however it was written,
+/// can remove it. Template application cannot override it either.
+model OrgServicePolicy {
+  id String @id @default(cuid())
+
+  permitType   PermitType? @relation(fields: [permitTypeId], references: [id], onDelete: Cascade)
+  permitTypeId String?     @unique
+
+  auditTemplate   AuditTemplate? @relation(fields: [auditTemplateId], references: [id], onDelete: Cascade)
+  auditTemplateId String?        @unique
+
+  /// Why it is mandatory, shown to managers beside the lock. A rule without a
+  /// stated reason reads as an obstruction.
+  reason String?
+
+  updatedByUserId String?
+  updatedByName   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

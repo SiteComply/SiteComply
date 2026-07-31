@@ -4,6 +4,7 @@ import { permits } from '@/services/platformUsers/platformPermissions';
 import { ACTIVE_PERMIT_STATUSES } from '@/services/permits/permitConstants';
 import {
   disableBlockedReason,
+  mandatoryLockReason,
   isSiteServiceKind,
   type SiteServiceGroup,
   type SiteServiceItem,
@@ -31,25 +32,66 @@ import {
 /* Reads                                                                       */
 /* -------------------------------------------------------------------------- */
 
-/** Ids explicitly turned OFF for a site. Everything else is available. */
+/**
+ * SC-021 Phase 2 — company-mandatory services.
+ *
+ * Row presence means mandatory. Applied at the point availability is RESOLVED
+ * rather than at each call site, so no read path and no future caller can
+ * bypass it — the same construction as SC-003, where a locked panel is forced
+ * on when visibility is read rather than trusted to every renderer.
+ */
+export async function mandatoryPermitTypeIds(): Promise<Set<string>> {
+  const rows = await prisma.orgServicePolicy.findMany({
+    where: { permitTypeId: { not: null } },
+    select: { permitTypeId: true },
+  });
+  return new Set(rows.map((r) => r.permitTypeId!));
+}
+
+export async function mandatoryActivityTypeIds(): Promise<Set<string>> {
+  const rows = await prisma.orgServicePolicy.findMany({
+    where: { auditTemplateId: { not: null } },
+    select: { auditTemplateId: true },
+  });
+  return new Set(rows.map((r) => r.auditTemplateId!));
+}
+
+/**
+ * Ids explicitly turned OFF for a site. Everything else is available.
+ *
+ * A MANDATORY service is never in this set, however the site's rows read. A
+ * stale override written before a policy existed therefore stops taking effect
+ * the moment the policy is set — the policy wins on read, so there is no window
+ * in which a site quietly ignores a company requirement.
+ */
 export async function disabledPermitTypeIds(
   siteId: string,
 ): Promise<Set<string>> {
-  const rows = await prisma.sitePermitTypeSetting.findMany({
-    where: { jobSiteId: siteId, enabled: false },
-    select: { permitTypeId: true },
-  });
-  return new Set(rows.map((r) => r.permitTypeId));
+  const [rows, mandatory] = await Promise.all([
+    prisma.sitePermitTypeSetting.findMany({
+      where: { jobSiteId: siteId, enabled: false },
+      select: { permitTypeId: true },
+    }),
+    mandatoryPermitTypeIds(),
+  ]);
+  return new Set(
+    rows.map((r) => r.permitTypeId).filter((id) => !mandatory.has(id)),
+  );
 }
 
 export async function disabledActivityTypeIds(
   siteId: string,
 ): Promise<Set<string>> {
-  const rows = await prisma.siteActivityTypeSetting.findMany({
-    where: { jobSiteId: siteId, enabled: false },
-    select: { auditTemplateId: true },
-  });
-  return new Set(rows.map((r) => r.auditTemplateId));
+  const [rows, mandatory] = await Promise.all([
+    prisma.siteActivityTypeSetting.findMany({
+      where: { jobSiteId: siteId, enabled: false },
+      select: { auditTemplateId: true },
+    }),
+    mandatoryActivityTypeIds(),
+  ]);
+  return new Set(
+    rows.map((r) => r.auditTemplateId).filter((id) => !mandatory.has(id)),
+  );
 }
 
 /**
@@ -62,10 +104,17 @@ export async function isPermitTypeAvailable(
   siteId: string,
   permitTypeId: string,
 ): Promise<boolean> {
-  const row = await prisma.sitePermitTypeSetting.findUnique({
-    where: { jobSiteId_permitTypeId: { jobSiteId: siteId, permitTypeId } },
-    select: { enabled: true },
-  });
+  const [row, policy] = await Promise.all([
+    prisma.sitePermitTypeSetting.findUnique({
+      where: { jobSiteId_permitTypeId: { jobSiteId: siteId, permitTypeId } },
+      select: { enabled: true },
+    }),
+    prisma.orgServicePolicy.findUnique({
+      where: { permitTypeId },
+      select: { id: true },
+    }),
+  ]);
+  if (policy) return true; // mandatory beats any site override
   return row ? row.enabled : true;
 }
 
@@ -73,12 +122,19 @@ export async function isActivityTypeAvailable(
   siteId: string,
   auditTemplateId: string,
 ): Promise<boolean> {
-  const row = await prisma.siteActivityTypeSetting.findUnique({
-    where: {
-      jobSiteId_auditTemplateId: { jobSiteId: siteId, auditTemplateId },
-    },
-    select: { enabled: true },
-  });
+  const [row, policy] = await Promise.all([
+    prisma.siteActivityTypeSetting.findUnique({
+      where: {
+        jobSiteId_auditTemplateId: { jobSiteId: siteId, auditTemplateId },
+      },
+      select: { enabled: true },
+    }),
+    prisma.orgServicePolicy.findUnique({
+      where: { auditTemplateId },
+      select: { id: true },
+    }),
+  ]);
+  if (policy) return true; // mandatory beats any site override
   return row ? row.enabled : true;
 }
 
@@ -95,12 +151,18 @@ export async function disabledSitesByPermitType(
   siteIds: string[],
 ): Promise<Record<string, string[]>> {
   if (siteIds.length === 0) return {};
-  const rows = await prisma.sitePermitTypeSetting.findMany({
-    where: { jobSiteId: { in: siteIds }, enabled: false },
-    select: { permitTypeId: true, jobSiteId: true },
-  });
+  const [rows, mandatory] = await Promise.all([
+    prisma.sitePermitTypeSetting.findMany({
+      where: { jobSiteId: { in: siteIds }, enabled: false },
+      select: { permitTypeId: true, jobSiteId: true },
+    }),
+    mandatoryPermitTypeIds(),
+  ]);
   const out: Record<string, string[]> = {};
-  for (const r of rows) (out[r.permitTypeId] ??= []).push(r.jobSiteId);
+  for (const r of rows) {
+    if (mandatory.has(r.permitTypeId)) continue;
+    (out[r.permitTypeId] ??= []).push(r.jobSiteId);
+  }
   return out;
 }
 
@@ -108,12 +170,18 @@ export async function disabledSitesByActivityType(
   siteIds: string[],
 ): Promise<Record<string, string[]>> {
   if (siteIds.length === 0) return {};
-  const rows = await prisma.siteActivityTypeSetting.findMany({
-    where: { jobSiteId: { in: siteIds }, enabled: false },
-    select: { auditTemplateId: true, jobSiteId: true },
-  });
+  const [rows, mandatory] = await Promise.all([
+    prisma.siteActivityTypeSetting.findMany({
+      where: { jobSiteId: { in: siteIds }, enabled: false },
+      select: { auditTemplateId: true, jobSiteId: true },
+    }),
+    mandatoryActivityTypeIds(),
+  ]);
   const out: Record<string, string[]> = {};
-  for (const r of rows) (out[r.auditTemplateId] ??= []).push(r.jobSiteId);
+  for (const r of rows) {
+    if (mandatory.has(r.auditTemplateId)) continue;
+    (out[r.auditTemplateId] ??= []).push(r.jobSiteId);
+  }
   return out;
 }
 
@@ -180,6 +248,21 @@ export async function getSiteServiceConfig(
       }),
     ]);
 
+  // SC-021 Phase 2 — company-mandatory services, with their stated reasons.
+  const policies = await prisma.orgServicePolicy.findMany({
+    select: { permitTypeId: true, auditTemplateId: true, reason: true },
+  });
+  const mandatoryPermit = new Map(
+    policies
+      .filter((p) => p.permitTypeId)
+      .map((p) => [p.permitTypeId!, p.reason]),
+  );
+  const mandatoryActivity = new Map(
+    policies
+      .filter((p) => p.auditTemplateId)
+      .map((p) => [p.auditTemplateId!, p.reason]),
+  );
+
   const permitOverride = new Map(
     permitOverrides.map((r) => [r.permitTypeId, r.enabled]),
   );
@@ -216,26 +299,39 @@ export async function getSiteServiceConfig(
     inFlightPermits.map((p) => [p.permitTypeId, p._count._all]),
   );
 
-  const permitItems: SiteServiceItem[] = permitTypes.map((t) => ({
-    id: t.id,
-    name: t.name,
-    description: t.description,
-    enabled: permitOverride.get(t.id) ?? true,
-    configured: permitOverride.has(t.id),
-    // A permit type has no schedules, so nothing ever blocks disabling one.
-    blockingSchedules: [],
-    inFlightCount: inFlightByPermitType.get(t.id) ?? 0,
-  }));
+  const permitItems: SiteServiceItem[] = permitTypes.map((t) => {
+    const mandatory = mandatoryPermit.has(t.id);
+    return {
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      // Mandatory forces ON regardless of what the site stored, matching what
+      // the availability reads resolve — the screen must never show a service
+      // as off while workers can still use it.
+      enabled: mandatory ? true : (permitOverride.get(t.id) ?? true),
+      configured: permitOverride.has(t.id),
+      mandatory,
+      mandatoryReason: mandatoryPermit.get(t.id) ?? null,
+      // A permit type has no schedules, so nothing ever blocks disabling one.
+      blockingSchedules: [],
+      inFlightCount: inFlightByPermitType.get(t.id) ?? 0,
+    };
+  });
 
-  const activityItems: SiteServiceItem[] = templates.map((t) => ({
-    id: t.id,
-    name: t.name,
-    description: t.description,
-    enabled: activityOverride.get(t.id) ?? true,
-    configured: activityOverride.has(t.id),
-    blockingSchedules: schedulesByTemplate.get(t.id) ?? [],
-    inFlightCount: 0,
-  }));
+  const activityItems: SiteServiceItem[] = templates.map((t) => {
+    const mandatory = mandatoryActivity.has(t.id);
+    return {
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      enabled: mandatory ? true : (activityOverride.get(t.id) ?? true),
+      configured: activityOverride.has(t.id),
+      mandatory,
+      mandatoryReason: mandatoryActivity.get(t.id) ?? null,
+      blockingSchedules: schedulesByTemplate.get(t.id) ?? [],
+      inFlightCount: 0,
+    };
+  });
 
   return [
     { kind: 'PERMIT_TYPE', items: permitItems },
@@ -252,7 +348,8 @@ export type SetAvailabilityResult =
   | { ok: false; reason: 'forbidden' }
   | { ok: false; reason: 'not_found' }
   | { ok: false; reason: 'invalid'; error: string }
-  | { ok: false; reason: 'blocked'; error: string };
+  | { ok: false; reason: 'blocked'; error: string }
+  | { ok: false; reason: 'mandatory'; error: string };
 
 /**
  * Turn one service on or off for one site.
@@ -298,6 +395,19 @@ export async function setSiteServiceEnabled(
     });
     if (!type) {
       return { ok: false, reason: 'invalid', error: 'Unknown permit type.' };
+    }
+    if (!enabled) {
+      const policy = await prisma.orgServicePolicy.findUnique({
+        where: { permitTypeId: refId },
+        select: { reason: true },
+      });
+      if (policy) {
+        return {
+          ok: false,
+          reason: 'mandatory',
+          error: mandatoryLockReason(policy.reason),
+        };
+      }
     }
     await prisma.sitePermitTypeSetting.upsert({
       where: {

@@ -29,6 +29,9 @@ import {
 } from '@/services/actions/actionConstants';
 import { SiteServicesConfig } from '@/components/platform/SiteServicesConfig';
 import { getSiteServiceConfig } from '@/services/siteServices/siteServiceAvailability';
+import { listActiveConfigTemplates } from '@/services/siteServices/siteConfigTemplateService';
+import { prisma } from '@/lib/prisma';
+import { formatDateUK } from '@/lib/datetime';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,6 +72,30 @@ export default async function SiteCompliancePage({
   // service and the API as well as here.
   const canEditServices = permits(viewer.role, 'sites', 'edit');
   const serviceGroups = (await getSiteServiceConfig(viewer, params.id)) ?? [];
+  // SC-021 Phase 2 — templates available to apply, and what this site was last
+  // configured from.
+  const configTemplates = canEditServices
+    ? (await listActiveConfigTemplates()).map((t) => ({
+        id: t.id,
+        name: t.name,
+        category: t.category as string,
+      }))
+    : [];
+  const siteProvenance = await prisma.jobSite.findUnique({
+    where: { id: params.id },
+    select: {
+      appliedConfigTemplateName: true,
+      appliedConfigTemplateAt: true,
+      appliedConfigTemplateBy: true,
+    },
+  });
+  const provenance = siteProvenance?.appliedConfigTemplateName
+    ? {
+        name: siteProvenance.appliedConfigTemplateName,
+        at: formatDateUK(siteProvenance.appliedConfigTemplateAt!),
+        by: siteProvenance.appliedConfigTemplateBy,
+      }
+    : null;
 
   return (
     <PlatformShell>
@@ -221,6 +248,8 @@ export default async function SiteCompliancePage({
             siteId={params.id}
             groups={serviceGroups}
             canEdit={canEditServices}
+            templates={configTemplates}
+            provenance={provenance}
           />
         </Section>
       </div>

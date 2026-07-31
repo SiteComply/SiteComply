@@ -56,6 +56,12 @@ export interface SiteServiceItem {
    */
   blockingSchedules: string[];
   /**
+   * SC-021 Phase 2 — required company-wide. Forced on, cannot be turned off.
+   */
+  mandatory: boolean;
+  /** Why it is mandatory, shown beside the lock. */
+  mandatoryReason: string | null;
+  /**
    * Work already in progress that a disable would NOT stop. Not a blocker: the
    * SC-021 rule is that disabling governs new work only, so anything already
    * raised runs to completion. Surfaced so the manager isn't surprised.
@@ -95,4 +101,17 @@ export function inFlightNotice(kind: SiteServiceKind, count: number): string {
   return kind === 'PERMIT_TYPE'
     ? `${count} ${noun} of this type ${count === 1 ? 'is' : 'are'} still going through approval. ${count === 1 ? 'It' : 'They'} will continue as normal — turning the type off only stops NEW requests.`
     : `${count} activit${count === 1 ? 'y is' : 'ies are'} already scheduled and will still be completed. Turning the type off only stops new ones.`;
+}
+
+/**
+ * Why a mandatory service cannot be switched off.
+ *
+ * States the reason when one was given. A company rule presented without a
+ * reason reads as an obstruction, and the manager has no way to tell whether it
+ * is deliberate policy or a misconfiguration.
+ */
+export function mandatoryLockReason(reason: string | null): string {
+  return reason
+    ? `Required on every site by company policy — ${reason}`
+    : 'Required on every site by company policy.';
 }

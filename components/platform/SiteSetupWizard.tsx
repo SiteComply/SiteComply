@@ -187,6 +187,7 @@ export function SiteSetupWizard({
   completedSteps,
   canEditProject,
   serviceGroups,
+  configTemplates = [],
 }: {
   siteId: string;
   siteName: string;
@@ -196,6 +197,8 @@ export function SiteSetupWizard({
   canEditProject: boolean;
   /** SC-021 — permits and inspections available on this site. */
   serviceGroups: SiteServiceGroup[];
+  /** SC-021 Phase 2 — configuration templates that can be applied here. */
+  configTemplates?: { id: string; name: string; category: string }[];
 }) {
   const router = useRouter();
   const [values, setValues] = useState<SetupValues>(initialValues);
@@ -417,6 +420,7 @@ export function SiteSetupWizard({
               siteId={siteId}
               groups={serviceGroups}
               canEdit={editable}
+              templates={configTemplates}
             />
           ) : active.key === 'drawings' ? (
             <div className="space-y-2 text-sm text-ink-muted">

@@ -1,5 +1,6 @@
 import { SiteStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { applyConfigTemplate } from '@/services/siteServices/siteConfigTemplateService';
 import {
   canCreateSite,
   canEditSite,
@@ -30,6 +31,11 @@ import {
 export interface PlatformSiteInput extends SiteInput {
   /** 'ACTIVE' | 'ARCHIVED' — anything else defaults to ACTIVE. */
   status?: string;
+  /**
+   * SC-021 Phase 2 — optional configuration template applied on creation, so a
+   * repeated project type arrives already configured.
+   */
+  configTemplateId?: string;
 }
 
 export type CreateSiteResult =
@@ -82,6 +88,27 @@ export async function createSiteForDirector(
     },
     select: { id: true },
   });
+
+  // SC-021 Phase 2 — apply a configuration template at creation, which is the
+  // moment "commonly repeated project types" actually pays off: the site is
+  // configured before anyone ever sees it misconfigured.
+  //
+  // Deliberately NOT fatal. The site exists and is usable; if the template can't
+  // be applied, the Director can apply it from the site afterwards. Failing the
+  // whole creation over a configuration convenience would be the wrong trade.
+  if (input.configTemplateId) {
+    try {
+      // A Director has all sites in scope, but the viewer object was built
+      // before this site existed, so the new id is added for the apply call.
+      await applyConfigTemplate(
+        { ...viewer, siteIds: [...viewer.siteIds, site.id] },
+        site.id,
+        input.configTemplateId,
+      );
+    } catch {
+      // Swallowed on purpose — see above. The site is already created.
+    }
+  }
 
   return { ok: true, id: site.id };
 }

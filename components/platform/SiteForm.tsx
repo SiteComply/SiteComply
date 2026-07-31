@@ -54,12 +54,16 @@ export function SiteForm({
   mode,
   siteId,
   initial,
+  configTemplates = [],
 }: {
   mode: 'create' | 'edit';
   siteId?: string;
   initial?: Partial<SiteFormValues>;
+  /** SC-021 Phase 2 — optional configuration template applied on creation. */
+  configTemplates?: { id: string; name: string; category: string }[];
 }) {
   const router = useRouter();
+  const [configTemplateId, setConfigTemplateId] = useState('');
   const [values, setValues] = useState<SiteFormValues>({
     ...EMPTY,
     ...initial,
@@ -84,7 +88,13 @@ export function SiteForm({
         {
           method: mode === 'create' ? 'POST' : 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(values),
+          // Only sent on create — applying a template is a creation-time
+          // convenience, and an edit must never silently reconfigure a live site.
+          body: JSON.stringify(
+            mode === 'create' && configTemplateId
+              ? { ...values, configTemplateId }
+              : values,
+          ),
         },
       );
       const data = await res.json().catch(() => ({}));
@@ -148,6 +158,26 @@ export function SiteForm({
             <option value="ARCHIVED">Archived</option>
           </Select>
         </div>
+
+        {/* SC-021 Phase 2 — configure a repeated project type at the moment of
+            creation, so the site is right before anyone sees it wrong. Optional:
+            leaving it blank keeps every permit and inspection available, which is
+            the default behaviour. */}
+        {mode === 'create' && configTemplates.length > 0 ? (
+          <Select
+            label="Configuration template (optional)"
+            value={configTemplateId}
+            onChange={(e) => setConfigTemplateId(e.target.value)}
+            hint="Sets which permits and inspections apply to this project. Leave blank to make everything available, and change it later from the site."
+          >
+            <option value="">No template — everything available</option>
+            {configTemplates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </Select>
+        ) : null}
       </Section>
 
       <Section title="Address">

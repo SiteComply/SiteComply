@@ -8,6 +8,7 @@ import {
 } from '@/services/platformUsers/platformPermissions';
 import { getSetupForSite } from '@/services/sites/siteSetupService';
 import { getSiteServiceConfig } from '@/services/siteServices/siteServiceAvailability';
+import { listActiveConfigTemplates } from '@/services/siteServices/siteConfigTemplateService';
 import {
   SiteSetupWizard,
   type KeyPersonRow,
@@ -113,6 +114,12 @@ export default async function SiteSetupPage({
   // SC-021 — the site's permit and inspection availability, with the conflicts
   // that block a disable, so the step can explain a refusal before it happens.
   const serviceGroups = (await getSiteServiceConfig(viewer, site.id)) ?? [];
+  // SC-021 Phase 2 — templates the manager can apply from inside the wizard.
+  const configTemplates = (await listActiveConfigTemplates()).map((t) => ({
+    id: t.id,
+    name: t.name,
+    category: t.category as string,
+  }));
 
   const initialPeople: KeyPersonRow[] = site.keyPeople.map((p) => ({
     kind: p.kind,
@@ -138,6 +145,7 @@ export default async function SiteSetupPage({
         completedSteps={site.setupProgress?.completedSteps ?? []}
         canEditProject={canEditSite(viewer.role)}
         serviceGroups={serviceGroups}
+        configTemplates={configTemplates}
       />
     </PlatformShell>
   );

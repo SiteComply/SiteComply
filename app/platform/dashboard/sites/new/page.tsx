@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
+import { listActiveConfigTemplates } from '@/services/siteServices/siteConfigTemplateService';
 import { SiteForm } from '@/components/platform/SiteForm';
 import {
   requirePlatformViewer,
@@ -23,6 +24,13 @@ export default async function NewSitePage() {
   if (!canCreateSite(viewer.role)) {
     redirect('/platform/dashboard/sites');
   }
+
+  // SC-021 Phase 2 — offer a configuration template at creation.
+  const configTemplates = (await listActiveConfigTemplates()).map((t) => ({
+    id: t.id,
+    name: t.name,
+    category: t.category as string,
+  }));
 
   return (
     <PlatformShell>
@@ -46,7 +54,7 @@ export default async function NewSitePage() {
         </p>
       </div>
 
-      <SiteForm mode="create" />
+      <SiteForm mode="create" configTemplates={configTemplates} />
     </PlatformShell>
   );
 }
