@@ -20,10 +20,21 @@ export const dynamic = 'force-dynamic';
 /**
  * SC-021 Phase 2 — shared configuration templates and company requirements.
  *
- * Viewing needs `sites:view`; managing a shared template is Director/Project
- * Manager; setting a company requirement is Director only. Each gate is
- * enforced in the service and the API too — this page only decides what to
- * show.
+ * Lives under Compliance because a configuration template answers "which
+ * compliance processes apply to this project?" — a compliance question, not a
+ * site-records one. Reached as a secondary action from the Compliance Calendar,
+ * mirroring how SC-013's audit template library hangs off the Audits page
+ * rather than taking a top-level nav slot.
+ *
+ * Viewing still needs `sites:view`, deliberately UNCHANGED by the move: every
+ * role holds both `sites:view` and `audits:view`, so switching the gate would
+ * alter nothing in practice while still being an edit to permission code. The
+ * mismatch between the URL's section and the gate's module is intentional, not
+ * an oversight.
+ *
+ * Managing a shared template is Director/Project Manager; setting a company
+ * requirement is Director only. Each gate is enforced in the service and the
+ * API too — this page only decides what to show.
  */
 export default async function ConfigTemplatesPage() {
   const viewer = await requirePlatformViewer();
@@ -38,7 +49,10 @@ export default async function ConfigTemplatesPage() {
     <PlatformShell>
       <Breadcrumbs
         items={[
-          { label: 'Sites', href: '/platform/dashboard/sites' },
+          {
+            label: 'Compliance',
+            href: '/platform/dashboard/compliance-calendar',
+          },
           { label: 'Configuration templates' },
         ]}
       />

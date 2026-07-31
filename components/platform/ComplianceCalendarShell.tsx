@@ -112,6 +112,16 @@ export function ComplianceCalendarShell({
           >
             ›
           </Link>
+          {/* SC-021 Phase 2 — a SECONDARY action, styled to match the Audits
+              page's Templates link. The calendar stays the primary experience;
+              this is another quiet destination alongside the schedules
+              register, not a competing surface. */}
+          <Link
+            href="/platform/dashboard/compliance-calendar/config-templates"
+            className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-ink-muted hover:bg-surface-sunken"
+          >
+            Configuration templates
+          </Link>
           {canManage && (
             <button
               type="button"

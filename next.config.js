@@ -9,6 +9,19 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_APP_NAME: 'SiteComply',
   },
+  async redirects() {
+    return [
+      {
+        // SC-021 Phase 2 UX move: configuration templates moved from Sites to
+        // Compliance. Kept as a redirect rather than a hard break because the
+        // old path was shared for testing and may be bookmarked. Temporary
+        // (not permanent) so it can be withdrawn without fighting a cached 308.
+        source: '/platform/dashboard/sites/config-templates',
+        destination: '/platform/dashboard/compliance-calendar/config-templates',
+        permanent: false,
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

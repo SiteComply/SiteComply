@@ -66,13 +66,6 @@ export default async function PlatformSitesPage({
               Export CSV
             </a>
           )}
-          {/* SC-021 Phase 2 — the shared configuration template library. */}
-          <Link
-            href="/platform/dashboard/sites/config-templates"
-            className="touch-target inline-flex items-center rounded-lg border border-brand-200 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
-          >
-            Configuration templates
-          </Link>
           {canCreate && (
             <Link
               href="/platform/dashboard/sites/new"
