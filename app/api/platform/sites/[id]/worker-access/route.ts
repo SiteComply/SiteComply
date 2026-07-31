@@ -11,6 +11,7 @@ import {
   setAssignmentDetails,
   transferWorker,
   setWorkerPanel,
+  setSiteRequirement,
 } from '@/services/workerAccess/workerAssignmentService';
 
 export const runtime = 'nodejs';
@@ -23,6 +24,8 @@ export const dynamic = 'force-dynamic';
  *   { action: 'setDetails', assignmentId, role?, startDate?, endDate? }
  *   { action: 'transfer', assignmentId, toSiteId }
  *   { action: 'setPanel', workerId, panel, enabled }
+ *   { action: 'setRequirement', requirement, enabled, confirm? }
+ *       → 409 with the preview until `confirm: true` is sent
  *   { action: 'setEnforcement', enabled }        → DIRECTOR ONLY
  *
  * SC-023 Phase 1. Gated on the worker-access capability plus site scope, both
@@ -123,6 +126,52 @@ export async function PATCH(
         body.toSiteId,
       );
       break;
+    case 'setRequirement': {
+      // The mandatory preview is enforced in the SERVICE, so calling this API
+      // directly cannot skip it: without `confirm` it returns who would be
+      // blocked and writes nothing.
+      if (
+        typeof body.requirement !== 'string' ||
+        typeof body.enabled !== 'boolean'
+      ) {
+        return NextResponse.json(
+          { ok: false, error: 'Invalid request.' },
+          { status: 400 },
+        );
+      }
+      const r = await setSiteRequirement(
+        viewer,
+        params.id,
+        body.requirement as never,
+        body.enabled,
+        body.confirm === true,
+      );
+      if (r.ok) {
+        return NextResponse.json({
+          ok: true,
+          blockedAtEnable: r.blockedAtEnable,
+        });
+      }
+      if (r.reason === 'preview_required') {
+        // 409, not 400: the request is well formed, it just has not been
+        // confirmed against its consequences yet.
+        return NextResponse.json(
+          { ok: false, previewRequired: true, preview: r.preview },
+          { status: 409 },
+        );
+      }
+      return NextResponse.json(
+        { ok: false, error: r.error ?? 'Could not update the requirement.' },
+        {
+          status:
+            r.reason === 'forbidden'
+              ? 403
+              : r.reason === 'not_found'
+                ? 404
+                : 400,
+        },
+      );
+    }
     case 'setPanel':
       if (
         typeof body.workerId !== 'string' ||

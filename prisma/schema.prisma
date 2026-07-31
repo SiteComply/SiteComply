@@ -409,6 +409,8 @@ model JobSite {
   workerAssignments   WorkerSiteAssignment[]
   /// SC-023 Phase 2 — per-worker panel overrides on this site.
   workerPanelSettings WorkerPanelSetting[]
+  /// SC-023 Phase 3 — competency and induction requirements for access.
+  accessRequirements  SiteAccessRequirement[]
 
   /// SC-023 — when TRUE, only invited-and-approved workers may check in here.
   ///
@@ -2640,4 +2642,50 @@ model WorkerPanelSetting {
 
   @@unique([workerId, jobSiteId, panel])
   @@index([workerId, jobSiteId])
+}
+
+/// SC-023 Phase 3 — a condition a worker must satisfy to check in to a site.
+///
+/// CSCS_VERIFIED          — a verified CSCS record (SC-001).
+/// CSCS_IN_DATE           — that card has an expiry date, in the future.
+/// KNOWLEDGE_CHECK_PASSED — has passed this site's knowledge check (SC-005).
+/// INDUCTION_VALID        — induction still valid under the site's rules (SC-006).
+/// SIGNATURE_ON_FILE      — has signed the induction declaration (SC-011).
+enum AccessRequirement {
+  CSCS_VERIFIED
+  CSCS_IN_DATE
+  KNOWLEDGE_CHECK_PASSED
+  INDUCTION_VALID
+  SIGNATURE_ON_FILE
+}
+
+/// SC-023 Phase 3 — which requirements a site enforces.
+///
+/// OVERRIDES ONLY and DEFAULT OFF: no row means the requirement is not
+/// enforced, so adding this changes nothing for any worker until a manager
+/// deliberately switches one on — and even then only where the site-level
+/// enforcement switch is already enabled.
+///
+/// Records WHO enabled it and the count of workers who would have been blocked
+/// at that moment, because enabling a requirement is a decision someone should
+/// be able to account for later.
+model SiteAccessRequirement {
+  id          String            @id @default(cuid())
+  jobSite     JobSite           @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId   String
+  requirement AccessRequirement
+  enabled     Boolean           @default(false)
+
+  /// How many assigned workers did not meet it when it was switched on. Kept as
+  /// evidence that the mandatory preview was seen and accepted.
+  blockedAtEnable Int?
+
+  updatedByUserId String?
+  updatedByName   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([jobSiteId, requirement])
+  @@index([jobSiteId, enabled])
 }

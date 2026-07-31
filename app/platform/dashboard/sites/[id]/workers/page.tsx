@@ -15,6 +15,7 @@ import {
   listSiteAssignments,
   canManageWorkerAccess,
   canSetEnforcement,
+  listSiteRequirements,
 } from '@/services/workerAccess/workerAssignmentService';
 
 export const dynamic = 'force-dynamic';
@@ -41,6 +42,10 @@ export default async function SiteWorkersPage({
   const access = canManageWorkerAccess(viewer.role)
     ? await listSiteAssignments(viewer, params.id)
     : null;
+  // SC-023 Phase 3 — requirements with live "who would be blocked" counts.
+  const requirements = canManageWorkerAccess(viewer.role)
+    ? ((await listSiteRequirements(viewer, params.id)) ?? [])
+    : [];
 
   return (
     <PlatformShell>
@@ -131,6 +136,7 @@ export default async function SiteWorkersPage({
               otherSites={viewer.sites
                 .filter((x) => x.id !== params.id && x.status === 'ACTIVE')
                 .map((x) => ({ id: x.id, name: x.name }))}
+              requirements={requirements}
             />
           </Section>
         </div>

@@ -1,4 +1,8 @@
-import { WorkerAssignmentStatus, WorkerSiteRole } from '@prisma/client';
+import {
+  WorkerAssignmentStatus,
+  WorkerSiteRole,
+  AccessRequirement,
+} from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
@@ -8,6 +12,12 @@ import { sendAuditedSms } from '@/services/sms/smsSendService';
 import { formatDateUK } from '@/lib/datetime';
 import { getPanelVisibility } from '@/services/workerDashboard/dashboardConfigService';
 import { WORKER_DASHBOARD_PANELS } from '@/services/workerDashboard/dashboardPanels';
+import {
+  ACCESS_REQUIREMENTS,
+  evaluateRequirements,
+  formatUnmetMessage,
+  requirementMeta,
+} from '@/services/workerAccess/accessRequirements';
 import {
   windowState,
   daysUntilExpiry,
@@ -98,6 +108,20 @@ export async function canWorkerCheckIn(
         return {
           allowed: false,
           reason: `Your access to this project ended on ${formatDateUK(assignment.endDate!)}. Ask your site manager to extend it.`,
+        };
+      }
+      // SC-023 Phase 3 — competency and induction requirements, evaluated LAST.
+      // A worker whose assignment is fine but whose card has lapsed should be
+      // told about the card, not sent looking for an approval problem.
+      const unmet = await evaluateRequirements(workerId, siteId);
+      if (unmet.length > 0) {
+        const site = await prisma.jobSite.findUnique({
+          where: { id: siteId },
+          select: { name: true },
+        });
+        return {
+          allowed: false,
+          reason: formatUnmetMessage(site?.name ?? 'this project', unmet),
         };
       }
       return { allowed: true, enforced: true };
@@ -917,4 +941,214 @@ export async function setWorkerPanel(
     meta.label,
   );
   return { ok: true, assignmentId: '' };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Phase 3 — site access requirements                                           */
+/* -------------------------------------------------------------------------- */
+
+export interface RequirementRow {
+  requirement: AccessRequirement;
+  label: string;
+  description: string;
+  blocksFirstTime: boolean;
+  enabled: boolean;
+  /** How many currently-assigned workers do not meet it right now. */
+  blockedCount: number;
+  blockedNames: string[];
+}
+
+/**
+ * The site's requirements, each with a LIVE count of who would be blocked.
+ *
+ * The count is computed on every read rather than cached, so the number a
+ * manager sees is the number that would actually bite — a stale figure here
+ * would be worse than none.
+ */
+export async function listSiteRequirements(
+  viewer: PlatformViewer,
+  siteId: string,
+): Promise<RequirementRow[] | null> {
+  if (!viewer.siteIds.includes(siteId)) return null;
+
+  const [stored, assignments] = await Promise.all([
+    prisma.siteAccessRequirement.findMany({ where: { jobSiteId: siteId } }),
+    prisma.workerSiteAssignment.findMany({
+      where: { jobSiteId: siteId, status: WorkerAssignmentStatus.ACTIVE },
+      include: { worker: { select: { id: true, fullName: true } } },
+    }),
+  ]);
+  const enabledMap = new Map(stored.map((r) => [r.requirement, r.enabled]));
+
+  const rows: RequirementRow[] = [];
+  for (const meta of ACCESS_REQUIREMENTS) {
+    // Evaluate this requirement ALONE against each worker, so the count answers
+    // "who does this one requirement block?" rather than being confounded by
+    // the others already switched on.
+    const blocked = await blockedByRequirement(
+      siteId,
+      meta.requirement,
+      assignments.map((a) => ({ id: a.worker.id, name: a.worker.fullName })),
+    );
+    rows.push({
+      requirement: meta.requirement,
+      label: meta.label,
+      description: meta.description,
+      blocksFirstTime: meta.blocksFirstTime,
+      enabled: enabledMap.get(meta.requirement) ?? false,
+      blockedCount: blocked.length,
+      blockedNames: blocked.map((b) => b.name),
+    });
+  }
+  return rows;
+}
+
+/** Who a single requirement would refuse, ignoring whatever else is enabled. */
+async function blockedByRequirement(
+  siteId: string,
+  requirement: AccessRequirement,
+  workers: { id: string; name: string }[],
+): Promise<{ id: string; name: string }[]> {
+  const out: { id: string; name: string }[] = [];
+  for (const w of workers) {
+    const unmet = await evaluateOne(w.id, siteId, requirement);
+    if (unmet) out.push(w);
+  }
+  return out;
+}
+
+/**
+ * Evaluate ONE requirement against one worker, as if only it were enabled.
+ *
+ * Implemented by enabling it in memory rather than duplicating the rules, so
+ * the preview and the real gate can never disagree — a preview that lies is
+ * worse than no preview.
+ */
+async function evaluateOne(
+  workerId: string,
+  siteId: string,
+  requirement: AccessRequirement,
+): Promise<boolean> {
+  const existing = await prisma.siteAccessRequirement.findUnique({
+    where: { jobSiteId_requirement: { jobSiteId: siteId, requirement } },
+    select: { enabled: true },
+  });
+  if (existing?.enabled) {
+    const unmet = await evaluateRequirements(workerId, siteId);
+    return unmet.some((u) => u.requirement === requirement);
+  }
+  // Not currently enabled: turn it on, measure, put it back. Wrapped so a
+  // failure cannot leave a requirement switched on that nobody chose.
+  try {
+    await prisma.siteAccessRequirement.upsert({
+      where: { jobSiteId_requirement: { jobSiteId: siteId, requirement } },
+      create: { jobSiteId: siteId, requirement, enabled: true },
+      update: { enabled: true },
+    });
+    const unmet = await evaluateRequirements(workerId, siteId);
+    return unmet.some((u) => u.requirement === requirement);
+  } finally {
+    await prisma.siteAccessRequirement
+      .update({
+        where: { jobSiteId_requirement: { jobSiteId: siteId, requirement } },
+        data: { enabled: existing?.enabled ?? false },
+      })
+      .catch(() => {});
+  }
+}
+
+export type RequirementResult =
+  | { ok: true; blockedAtEnable?: number }
+  | {
+      ok: false;
+      reason: 'forbidden' | 'not_found' | 'invalid' | 'preview_required';
+      error?: string;
+      preview?: { count: number; names: string[] };
+    };
+
+/**
+ * Enable or disable a requirement.
+ *
+ * ENABLING REQUIRES AN EXPLICIT CONFIRMATION carrying the preview. Without
+ * `confirm`, this returns who would be blocked and changes nothing. The
+ * mandatory preview is enforced HERE rather than in the UI, so it cannot be
+ * skipped by calling the API directly — turning workers away is not something
+ * to do by accident.
+ *
+ * Disabling never needs confirmation: removing a restriction cannot lock
+ * anyone out.
+ */
+export async function setSiteRequirement(
+  viewer: PlatformViewer,
+  siteId: string,
+  requirement: AccessRequirement,
+  enabled: boolean,
+  confirm = false,
+): Promise<RequirementResult> {
+  const g = await guard(viewer, siteId);
+  if (!g.ok) return g;
+  if (!ACCESS_REQUIREMENTS.some((r) => r.requirement === requirement)) {
+    return { ok: false, reason: 'invalid', error: 'Unknown requirement.' };
+  }
+
+  if (enabled && !confirm) {
+    const assignments = await prisma.workerSiteAssignment.findMany({
+      where: { jobSiteId: siteId, status: WorkerAssignmentStatus.ACTIVE },
+      include: { worker: { select: { id: true, fullName: true } } },
+    });
+    const blocked = await blockedByRequirement(
+      siteId,
+      requirement,
+      assignments.map((a) => ({ id: a.worker.id, name: a.worker.fullName })),
+    );
+    return {
+      ok: false,
+      reason: 'preview_required',
+      preview: { count: blocked.length, names: blocked.map((b) => b.name) },
+    };
+  }
+
+  let blockedAtEnable: number | undefined;
+  if (enabled) {
+    const assignments = await prisma.workerSiteAssignment.findMany({
+      where: { jobSiteId: siteId, status: WorkerAssignmentStatus.ACTIVE },
+      include: { worker: { select: { id: true, fullName: true } } },
+    });
+    blockedAtEnable = (
+      await blockedByRequirement(
+        siteId,
+        requirement,
+        assignments.map((a) => ({ id: a.worker.id, name: a.worker.fullName })),
+      )
+    ).length;
+  }
+
+  await prisma.siteAccessRequirement.upsert({
+    where: { jobSiteId_requirement: { jobSiteId: siteId, requirement } },
+    create: {
+      jobSiteId: siteId,
+      requirement,
+      enabled,
+      blockedAtEnable: blockedAtEnable ?? null,
+      updatedByUserId: viewer.id,
+      updatedByName: viewer.name,
+    },
+    update: {
+      enabled,
+      blockedAtEnable: enabled ? (blockedAtEnable ?? null) : null,
+      updatedByUserId: viewer.id,
+      updatedByName: viewer.name,
+    },
+  });
+
+  await recordEvent(
+    null,
+    '—',
+    siteId,
+    g.site.name,
+    enabled ? 'REQUIREMENT_ON' : 'REQUIREMENT_OFF',
+    viewer.name,
+    `${requirementMeta(requirement).label}${enabled ? ` — ${blockedAtEnable} worker(s) did not meet it at the time` : ''}`,
+  );
+  return { ok: true, blockedAtEnable };
 }
