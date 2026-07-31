@@ -1,6 +1,7 @@
 import { SubmissionStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getActiveSiteWithChecklist } from '@/services/sites/siteService';
+import { canWorkerCheckIn } from '@/services/workerAccess/workerAssignmentService';
 import { evaluateGate } from '@/services/knowledgeChecks/attemptService';
 import {
   evaluateCheckInGate,
@@ -83,6 +84,18 @@ export async function createCheckIn(
   const site = await getActiveSiteWithChecklist(input.siteId);
   if (!site || !site.checklist) {
     return { ok: false, error: 'That site is no longer available.' };
+  }
+
+  // SC-023 — the authoritative access check. The pages ahead of this one show
+  // the same decision, but THIS is the write, so it is the boundary that
+  // actually matters: a hidden button is not a control.
+  //
+  // Returns the refusal REASON verbatim. A worker turned away at a site gate by
+  // a generic failure has no way to resolve it; "your access is suspended —
+  // speak to your site manager" is actionable.
+  const access = await canWorkerCheckIn(input.workerId, input.siteId);
+  if (!access.allowed) {
+    return { ok: false, error: access.reason };
   }
 
   const items: FlowItem[] = site.checklist.items.map((i) => ({

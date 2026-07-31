@@ -10,6 +10,12 @@ import {
 } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { getSiteDetailForViewer } from '@/services/sites/siteDetailService';
+import { WorkerAccessManager } from '@/components/platform/WorkerAccessManager';
+import {
+  listSiteAssignments,
+  canManageWorkerAccess,
+  canSetEnforcement,
+} from '@/services/workerAccess/workerAssignmentService';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +35,12 @@ export default async function SiteWorkersPage({
   if (!detail) notFound();
 
   const { currentWorkers, recentSubmissions } = detail;
+
+  // SC-023 — project access. Null when the site is out of scope, which the
+  // existing detail loader has already handled.
+  const access = canManageWorkerAccess(viewer.role)
+    ? await listSiteAssignments(viewer, params.id)
+    : null;
 
   return (
     <PlatformShell>
@@ -101,6 +113,25 @@ export default async function SiteWorkersPage({
           )}
         </Section>
       </div>
+
+      {access ? (
+        <div className="mt-6">
+          <Section title="Project access">
+            <p className="mb-4 text-sm text-ink-muted">
+              Who is authorised to work on this project. Workers must be invited
+              and approved before they can check in — once controlled access is
+              switched on.
+            </p>
+            <WorkerAccessManager
+              siteId={params.id}
+              enforced={access.enforced}
+              rows={access.rows}
+              canManage={canManageWorkerAccess(viewer.role)}
+              canSetEnforcement={canSetEnforcement(viewer.role)}
+            />
+          </Section>
+        </div>
+      ) : null}
     </PlatformShell>
   );
 }

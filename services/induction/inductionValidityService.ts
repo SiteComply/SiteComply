@@ -1,6 +1,7 @@
 import { SubmissionStatus, SiteStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { checkInReference } from '@/services/submissions/submissionService';
+import { canWorkerCheckIn } from '@/services/workerAccess/workerAssignmentService';
 import {
   evaluateCheckInGate,
   type LocationFix,
@@ -163,6 +164,14 @@ export async function expressCheckIn(
     select: { id: true },
   });
   if (!site) return { ok: false, error: 'That site is no longer available.' };
+
+  // SC-023 — express check-in is a SECOND write path that does not go through
+  // createCheckIn, so it needs the access check in its own right. Enforcing
+  // only in createCheckIn would let a returning worker with a valid induction
+  // walk straight past the assignment requirement — precisely the kind of
+  // second door that makes access control fail in practice.
+  const access = await canWorkerCheckIn(workerId, siteId);
+  if (!access.allowed) return { ok: false, error: access.reason };
 
   const validity = await getInductionValidity(workerId, siteId);
   if (!(validity.enabled && validity.state === 'valid')) {

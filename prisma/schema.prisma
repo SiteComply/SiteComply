@@ -316,6 +316,8 @@ model Worker {
   submissions            Submission[]
   /// SMS audit rows addressed to this worker (cleared on erasure).
   smsMessages            SmsMessageLog[]
+  /// SC-023 — this worker's site assignments.
+  siteAssignments        WorkerSiteAssignment[]
   bulletinReads          SiteBulletinRead[]
   knowledgeCheckAttempts KnowledgeCheckAttempt[]
   checkInOverrides       CheckInOverride[]
@@ -400,6 +402,17 @@ model JobSite {
 
   /// SC-022 — per-user, per-site permission overrides for this site.
   userPermissions SiteUserPermission[]
+
+  /// SC-023 — worker assignments to this site.
+  workerAssignments WorkerSiteAssignment[]
+
+  /// SC-023 — when TRUE, only invited-and-approved workers may check in here.
+  ///
+  /// Defaults FALSE so enabling SC-023 changes nothing on deploy. This switch
+  /// can DENY SITE ACCESS, so it is Director-only and deliberately per site: an
+  /// organisation turns it on one project at a time, once that project's
+  /// workers have been invited.
+  workerAccessEnforced Boolean @default(false)
 
   /// SC-021 Phase 2 — provenance of the last configuration template applied.
   /// SNAPSHOT STRINGS, deliberately not a foreign key: deleting or renaming a
@@ -2472,4 +2485,96 @@ model SmsMessageLog {
   @@index([purpose, createdAt])
   @@index([workerId, createdAt])
   @@index([createdAt])
+}
+
+/// SC-023 — the lifecycle of a worker's access to one project.
+///
+/// INVITED    — invited, not yet approved. No access.
+/// ACTIVE     — approved by an authorised user. Access granted.
+/// SUSPENDED  — access withdrawn immediately, assignment retained.
+/// REMOVED    — taken off the project. Kept for history, never deleted.
+///
+/// Phase 1 deliberately makes manager assignment + approval sufficient to grant
+/// access. `acceptedAt` records that a worker accepted where they did, but is
+/// NOT a gate: an undelivered SMS must never block a worker standing at the
+/// gate whose manager has already approved them.
+enum WorkerAssignmentStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  REMOVED
+}
+
+/// SC-023 — a worker's authorised access to one project.
+///
+/// The missing spine: before this, a worker's relationship to a site was merely
+/// "they checked in once", so there was nothing for an invitation, approval or
+/// suspension to attach to.
+model WorkerSiteAssignment {
+  id        String  @id @default(cuid())
+  worker    Worker  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  workerId  String
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+
+  status WorkerAssignmentStatus @default(INVITED)
+
+  /// Short code a manager can read out when SMS cannot be delivered. Site huts
+  /// have poor signal; a flow that only works with a delivered message fails on
+  /// a real site, so this is a permanent feature and not test scaffolding.
+  invitationCode String?
+
+  invitedByUserId String?
+  invitedByName   String?
+  invitedAt       DateTime @default(now())
+
+  /// Recorded when the worker accepts. Informational in Phase 1 — see the enum.
+  acceptedAt DateTime?
+
+  approvedByUserId String?
+  approvedByName   String?
+  approvedAt       DateTime?
+
+  suspendedAt     DateTime?
+  suspendedByName String?
+  removedAt       DateTime?
+
+  /// True when created by the SC-023 backfill rather than a real invitation, so
+  /// "how did this person get access?" stays answerable afterwards.
+  backfilled Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workerId, jobSiteId])
+  @@index([jobSiteId, status])
+  @@index([workerId, status])
+}
+
+/// SC-023 — append-only record of every access decision.
+///
+/// "Audit who granted access and when." NO foreign keys and denormalised names,
+/// following SC-022's PermissionChangeLog: an access-control trail that
+/// disappears when the worker or the site is deleted is worthless precisely
+/// when it is most needed.
+model WorkerAssignmentEvent {
+  id String @id @default(cuid())
+
+  workerId   String?
+  workerName String
+  jobSiteId  String?
+  siteName   String
+
+  /// INVITED | APPROVED | SUSPENDED | REINSTATED | REMOVED | ACCEPTED |
+  /// ENFORCEMENT_ON | ENFORCEMENT_OFF | BACKFILLED
+  action String
+  /// Free-text detail, e.g. why access was refused or who reinstated it.
+  detail String?
+
+  actorName String
+
+  createdAt DateTime @default(now())
+
+  @@index([jobSiteId, createdAt])
+  @@index([workerId, createdAt])
 }
