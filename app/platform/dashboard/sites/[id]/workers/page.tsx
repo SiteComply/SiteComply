@@ -128,6 +128,9 @@ export default async function SiteWorkersPage({
               rows={access.rows}
               canManage={canManageWorkerAccess(viewer.role)}
               canSetEnforcement={canSetEnforcement(viewer.role)}
+              otherSites={viewer.sites
+                .filter((x) => x.id !== params.id && x.status === 'ACTIVE')
+                .map((x) => ({ id: x.id, name: x.name }))}
             />
           </Section>
         </div>

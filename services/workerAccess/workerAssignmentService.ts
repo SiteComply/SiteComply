@@ -1,10 +1,20 @@
-import { WorkerAssignmentStatus } from '@prisma/client';
+import { WorkerAssignmentStatus, WorkerSiteRole } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import type { PlatformRoleValue } from '@/services/platformUsers/platformUserConstants';
 import { normaliseUkMobile } from '@/lib/phone';
 import { sendAuditedSms } from '@/services/sms/smsSendService';
+import { formatDateUK } from '@/lib/datetime';
+import { getPanelVisibility } from '@/services/workerDashboard/dashboardConfigService';
+import { WORKER_DASHBOARD_PANELS } from '@/services/workerDashboard/dashboardPanels';
+import {
+  windowState,
+  daysUntilExpiry,
+  isExpiringSoon,
+  parseAccessDate,
+  type WindowState,
+} from '@/services/workerAccess/assignmentWindow';
 
 /**
  * SC-023 Phase 1 — worker invitation and site assignment.
@@ -62,7 +72,7 @@ export async function canWorkerCheckIn(
 
   const assignment = await prisma.workerSiteAssignment.findUnique({
     where: { workerId_jobSiteId: { workerId, jobSiteId: siteId } },
-    select: { status: true },
+    select: { status: true, startDate: true, endDate: true },
   });
 
   if (!assignment) {
@@ -73,8 +83,25 @@ export async function canWorkerCheckIn(
     };
   }
   switch (assignment.status) {
-    case WorkerAssignmentStatus.ACTIVE:
+    case WorkerAssignmentStatus.ACTIVE: {
+      // SC-023 Phase 2 — the access window, DERIVED. Checked only for an
+      // otherwise-active assignment: a suspended worker should be told they are
+      // suspended, not that their dates have lapsed.
+      const state = windowState(assignment.startDate, assignment.endDate);
+      if (state === 'pending') {
+        return {
+          allowed: false,
+          reason: `Your access to this project starts on ${formatDateUK(assignment.startDate!)}. Please speak to your site manager if you need access sooner.`,
+        };
+      }
+      if (state === 'expired') {
+        return {
+          allowed: false,
+          reason: `Your access to this project ended on ${formatDateUK(assignment.endDate!)}. Ask your site manager to extend it.`,
+        };
+      }
       return { allowed: true, enforced: true };
+    }
     case WorkerAssignmentStatus.INVITED:
       return {
         allowed: false,
@@ -116,6 +143,15 @@ export interface AssignmentRow {
   approvedByName: string | null;
   approvedAt: Date | null;
   backfilled: boolean;
+  /** SC-023 Phase 2 — recorded only; never affects access or visibility. */
+  role: WorkerSiteRole | null;
+  startDate: Date | null;
+  endDate: Date | null;
+  /** Derived from the dates on every read — never stored. */
+  windowState: WindowState;
+  daysUntilExpiry: number | null;
+  expiringSoon: boolean;
+  transferredFromSiteName: string | null;
 }
 
 export async function listSiteAssignments(
@@ -155,6 +191,16 @@ export async function listSiteAssignments(
       approvedByName: r.approvedByName,
       approvedAt: r.approvedAt,
       backfilled: r.backfilled,
+      role: r.role,
+      startDate: r.startDate,
+      endDate: r.endDate,
+      windowState: windowState(r.startDate, r.endDate),
+      daysUntilExpiry: daysUntilExpiry(r.endDate),
+      // Only meaningful for someone who currently HAS access — warning about a
+      // suspended worker's expiry date would be noise.
+      expiringSoon:
+        r.status === WorkerAssignmentStatus.ACTIVE && isExpiringSoon(r.endDate),
+      transferredFromSiteName: r.transferredFromSiteName,
     })),
   };
 }
@@ -560,4 +606,315 @@ export async function recordAcceptance(
       data: { acceptedAt: new Date() },
     })
     .catch(() => {});
+}
+
+/* -------------------------------------------------------------------------- */
+/* Phase 2 — details, transfers, per-worker panels                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Set the recorded role and access window for an assignment.
+ *
+ * The role is METADATA. Nothing reads it to decide access or visibility, so
+ * changing it can never silently alter what someone can do — that stays the job
+ * of approval, suspension and the explicit panel settings.
+ *
+ * Dates are optional; clearing both restores unrestricted access.
+ */
+export async function setAssignmentDetails(
+  viewer: PlatformViewer,
+  siteId: string,
+  assignmentId: string,
+  input: {
+    role?: string | null;
+    startDate?: string | null;
+    endDate?: string | null;
+  },
+): Promise<AssignmentResult> {
+  const g = await guard(viewer, siteId);
+  if (!g.ok) return g;
+
+  const existing = await prisma.workerSiteAssignment.findFirst({
+    where: { id: assignmentId, jobSiteId: siteId },
+    include: { worker: { select: { id: true, fullName: true } } },
+  });
+  if (!existing) return { ok: false, reason: 'not_found' };
+
+  const role =
+    input.role &&
+    (Object.values(WorkerSiteRole) as string[]).includes(input.role)
+      ? (input.role as WorkerSiteRole)
+      : null;
+  const startDate = parseAccessDate(input.startDate);
+  const endDate = parseAccessDate(input.endDate);
+
+  // An end before a start is never what anyone means, and would silently deny
+  // access on every future day.
+  if (startDate && endDate && endDate.getTime() < startDate.getTime()) {
+    return {
+      ok: false,
+      reason: 'invalid',
+      error: 'The end date cannot be before the start date.',
+    };
+  }
+
+  await prisma.workerSiteAssignment.update({
+    where: { id: assignmentId },
+    data: { role, startDate, endDate },
+  });
+
+  const detail = [
+    role ? `role ${role}` : 'role cleared',
+    startDate ? `from ${formatDateUK(startDate)}` : 'no start date',
+    endDate ? `to ${formatDateUK(endDate)} inclusive` : 'no end date',
+  ].join(', ');
+  await recordEvent(
+    existing.worker.id,
+    existing.worker.fullName,
+    siteId,
+    g.site.name,
+    'DETAILS_UPDATED',
+    viewer.name,
+    detail,
+  );
+  return { ok: true, assignmentId };
+}
+
+/**
+ * Transfer a worker from one project to another.
+ *
+ * The destination assignment arrives INVITED and needs approving there: the
+ * destination site's manager owns who is on their site, and a transfer must not
+ * be a way to place people onto a project without that manager's knowledge.
+ *
+ * The source assignment is REMOVED rather than deleted, and the worker's
+ * check-ins, inductions and permits on the source site are untouched — moving
+ * someone must never erase what they did.
+ *
+ * Both sides are audited, in one transaction with the change itself.
+ */
+export async function transferWorker(
+  viewer: PlatformViewer,
+  fromSiteId: string,
+  assignmentId: string,
+  toSiteId: string,
+): Promise<AssignmentResult> {
+  const from = await guard(viewer, fromSiteId);
+  if (!from.ok) return from;
+  // The actor must hold the DESTINATION site too — otherwise a manager could
+  // push workers onto sites they have no authority over.
+  const to = await guard(viewer, toSiteId);
+  if (!to.ok) {
+    return {
+      ok: false,
+      reason: 'forbidden',
+      error: 'You can only transfer workers to a site you manage.',
+    };
+  }
+  if (fromSiteId === toSiteId) {
+    return {
+      ok: false,
+      reason: 'invalid',
+      error: 'Choose a different project.',
+    };
+  }
+
+  const existing = await prisma.workerSiteAssignment.findFirst({
+    where: { id: assignmentId, jobSiteId: fromSiteId },
+    include: { worker: { select: { id: true, fullName: true } } },
+  });
+  if (!existing) return { ok: false, reason: 'not_found' };
+
+  const code = makeInvitationCode();
+  const [, created] = await prisma.$transaction([
+    prisma.workerSiteAssignment.update({
+      where: { id: assignmentId },
+      data: { status: WorkerAssignmentStatus.REMOVED, removedAt: new Date() },
+    }),
+    prisma.workerSiteAssignment.upsert({
+      where: {
+        workerId_jobSiteId: {
+          workerId: existing.workerId,
+          jobSiteId: toSiteId,
+        },
+      },
+      create: {
+        workerId: existing.workerId,
+        jobSiteId: toSiteId,
+        status: WorkerAssignmentStatus.INVITED,
+        invitationCode: code,
+        invitedByUserId: viewer.id,
+        invitedByName: viewer.name,
+        // The role travels with the worker; the DATES do not. An access window
+        // agreed for one project says nothing about another.
+        role: existing.role,
+        transferredFromSiteName: from.site.name,
+      },
+      update: {
+        status: WorkerAssignmentStatus.INVITED,
+        invitationCode: code,
+        invitedByUserId: viewer.id,
+        invitedByName: viewer.name,
+        invitedAt: new Date(),
+        role: existing.role,
+        startDate: null,
+        endDate: null,
+        suspendedAt: null,
+        suspendedByName: null,
+        removedAt: null,
+        approvedAt: null,
+        approvedByName: null,
+        transferredFromSiteName: from.site.name,
+      },
+      select: { id: true },
+    }),
+    prisma.workerAssignmentEvent.create({
+      data: {
+        workerId: existing.worker.id,
+        workerName: existing.worker.fullName,
+        jobSiteId: fromSiteId,
+        siteName: from.site.name,
+        action: 'TRANSFERRED_OUT',
+        actorName: viewer.name,
+        detail: `Transferred to ${to.site.name}.`,
+      },
+    }),
+    prisma.workerAssignmentEvent.create({
+      data: {
+        workerId: existing.worker.id,
+        workerName: existing.worker.fullName,
+        jobSiteId: toSiteId,
+        siteName: to.site.name,
+        action: 'TRANSFERRED_IN',
+        actorName: viewer.name,
+        detail: `Transferred from ${from.site.name}. Awaiting approval.`,
+      },
+    }),
+  ]);
+
+  return { ok: true, assignmentId: created.id, invitationCode: code };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Per-worker panel visibility                                                  */
+/* -------------------------------------------------------------------------- */
+
+export interface WorkerPanelRow {
+  panel: string;
+  /** What the SITE allows — the ceiling this worker cannot exceed. */
+  siteEnabled: boolean;
+  /** What this worker actually sees. */
+  effective: boolean;
+  overridden: boolean;
+  locked: boolean;
+}
+
+/**
+ * A worker's panel settings for a site, with the site's own setting alongside.
+ *
+ * Showing both makes the narrow-only rule visible: a panel the site hides
+ * renders as unavailable rather than as an unticked box that looks switchable.
+ */
+export async function getWorkerPanels(
+  viewer: PlatformViewer,
+  siteId: string,
+  workerId: string,
+): Promise<WorkerPanelRow[] | null> {
+  if (!viewer.siteIds.includes(siteId)) return null;
+  const [siteVisibility, overrides] = await Promise.all([
+    getPanelVisibility(siteId),
+    prisma.workerPanelSetting.findMany({
+      where: { workerId, jobSiteId: siteId },
+      select: { panel: true, enabled: true },
+    }),
+  ]);
+  const byPanel = new Map(overrides.map((o) => [o.panel as string, o.enabled]));
+
+  return WORKER_DASHBOARD_PANELS.map((p) => {
+    const siteEnabled = siteVisibility[p.value];
+    const override = byPanel.get(p.value);
+    return {
+      panel: p.value,
+      siteEnabled,
+      // NARROW-ONLY: intersected, so an override can only ever remove.
+      effective: siteEnabled && (override ?? true),
+      overridden: override !== undefined,
+      locked: p.locked === true,
+    };
+  });
+}
+
+/** Hide or restore one panel for one worker on one site. */
+export async function setWorkerPanel(
+  viewer: PlatformViewer,
+  siteId: string,
+  workerId: string,
+  panel: string,
+  enabled: boolean,
+): Promise<AssignmentResult> {
+  const g = await guard(viewer, siteId);
+  if (!g.ok) return g;
+
+  const meta = WORKER_DASHBOARD_PANELS.find((p) => p.value === panel);
+  if (!meta) {
+    return { ok: false, reason: 'invalid', error: 'Unknown panel.' };
+  }
+  if (meta.locked && !enabled) {
+    // Check out is locked for the same reason as in SC-003: hiding it would
+    // leave a worker unable to end their attendance record, and the site's fire
+    // register wrong about who is on the premises.
+    return {
+      ok: false,
+      reason: 'invalid',
+      error: `${meta.label} cannot be hidden — a worker must always be able to check out.`,
+    };
+  }
+
+  const worker = await prisma.worker.findUnique({
+    where: { id: workerId },
+    select: { id: true, fullName: true },
+  });
+  if (!worker) return { ok: false, reason: 'not_found' };
+
+  if (enabled) {
+    // Back to the site default: delete rather than store a no-op, so
+    // "overridden" keeps meaning "deliberately restricted".
+    await prisma.workerPanelSetting.deleteMany({
+      where: { workerId, jobSiteId: siteId, panel: panel as never },
+    });
+  } else {
+    await prisma.workerPanelSetting.upsert({
+      where: {
+        workerId_jobSiteId_panel: {
+          workerId,
+          jobSiteId: siteId,
+          panel: panel as never,
+        },
+      },
+      create: {
+        workerId,
+        jobSiteId: siteId,
+        panel: panel as never,
+        enabled: false,
+        updatedByUserId: viewer.id,
+        updatedByName: viewer.name,
+      },
+      update: {
+        enabled: false,
+        updatedByUserId: viewer.id,
+        updatedByName: viewer.name,
+      },
+    });
+  }
+
+  await recordEvent(
+    worker.id,
+    worker.fullName,
+    siteId,
+    g.site.name,
+    enabled ? 'PANEL_RESTORED' : 'PANEL_HIDDEN',
+    viewer.name,
+    meta.label,
+  );
+  return { ok: true, assignmentId: '' };
 }

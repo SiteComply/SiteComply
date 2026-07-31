@@ -32,6 +32,7 @@ export type { PanelVisibility };
  */
 export async function getPanelVisibility(
   siteId: string,
+  workerId?: string,
 ): Promise<PanelVisibility> {
   const visibility = defaultPanelVisibility();
 
@@ -43,7 +44,25 @@ export async function getPanelVisibility(
     if (isWorkerDashboardPanel(row.panel)) visibility[row.panel] = row.enabled;
   }
 
-  // A locked panel is never hidden, whatever is stored.
+  // SC-023 Phase 2 — per-worker overrides, applied NARROW-ONLY.
+  //
+  // Intersected with the site's setting, so a worker override can only ever
+  // HIDE a panel the site already shows and can never reveal one it hides.
+  // Applied here, where visibility is RESOLVED, so no caller can bypass it —
+  // the same construction SC-022 uses for platform permissions.
+  if (workerId) {
+    const workerRows = await prisma.workerPanelSetting.findMany({
+      where: { jobSiteId: siteId, workerId },
+      select: { panel: true, enabled: true },
+    });
+    for (const row of workerRows) {
+      if (!isWorkerDashboardPanel(row.panel)) continue;
+      visibility[row.panel] = visibility[row.panel] && row.enabled;
+    }
+  }
+
+  // A locked panel is never hidden, whatever is stored — by the site OR by a
+  // per-worker override.
   for (const panel of WORKER_DASHBOARD_PANELS) {
     if (panel.locked) visibility[panel.value] = true;
   }

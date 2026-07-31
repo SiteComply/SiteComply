@@ -318,6 +318,8 @@ model Worker {
   smsMessages            SmsMessageLog[]
   /// SC-023 — this worker's site assignments.
   siteAssignments        WorkerSiteAssignment[]
+  /// SC-023 Phase 2 — per-worker dashboard panel overrides.
+  panelSettings          WorkerPanelSetting[]
   bulletinReads          SiteBulletinRead[]
   knowledgeCheckAttempts KnowledgeCheckAttempt[]
   checkInOverrides       CheckInOverride[]
@@ -404,7 +406,9 @@ model JobSite {
   userPermissions SiteUserPermission[]
 
   /// SC-023 — worker assignments to this site.
-  workerAssignments WorkerSiteAssignment[]
+  workerAssignments   WorkerSiteAssignment[]
+  /// SC-023 Phase 2 — per-worker panel overrides on this site.
+  workerPanelSettings WorkerPanelSetting[]
 
   /// SC-023 — when TRUE, only invited-and-approved workers may check in here.
   ///
@@ -2505,6 +2509,17 @@ enum WorkerAssignmentStatus {
   REMOVED
 }
 
+/// SC-023 Phase 2 — what the worker is on this project.
+///
+/// RECORDED ONLY. Nothing in the platform reads this to decide access or
+/// visibility, by design: role and permission must stay separately auditable.
+enum WorkerSiteRole {
+  EMPLOYEE
+  CONTRACTOR
+  SUPERVISOR
+  CLIENT_REP
+}
+
 /// SC-023 — a worker's authorised access to one project.
 ///
 /// The missing spine: before this, a worker's relationship to a site was merely
@@ -2543,6 +2558,26 @@ model WorkerSiteAssignment {
   /// "how did this person get access?" stays answerable afterwards.
   backfilled Boolean @default(false)
 
+  /// SC-023 Phase 2 — RECORDED ONLY. Deliberately does not affect access or
+  /// visibility: making a role silently grant things would create a second,
+  /// invisible permission system alongside the explicit one.
+  ///
+  /// Nullable rather than defaulted to EMPLOYEE, because the backfilled
+  /// assignments have no known role and defaulting would assert something
+  /// untrue about real people.
+  role WorkerSiteRole?
+
+  /// SC-023 Phase 2 — the access window. NULL means unrestricted, so existing
+  /// assignments are unaffected.
+  ///
+  /// Stored as the UTC instant of London midnight for the chosen day.
+  /// `endDate` is INCLUSIVE: access runs to the end of that day.
+  startDate DateTime?
+  endDate   DateTime?
+
+  /// Where a transfer brought this worker from, for the audit trail.
+  transferredFromSiteName String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2577,4 +2612,32 @@ model WorkerAssignmentEvent {
 
   @@index([jobSiteId, createdAt])
   @@index([workerId, createdAt])
+}
+
+/// SC-023 Phase 2 — a per-worker override of a site's dashboard panel.
+///
+/// NARROW-ONLY, exactly as SC-022's permission overrides: this can HIDE a panel
+/// the site already shows, and can never reveal one the site hides. The
+/// intersection is applied where visibility is resolved, so a stale or
+/// over-generous row cannot widen anything.
+///
+/// OVERRIDES ONLY — no row means the site's own setting applies, so every
+/// existing worker is unaffected with no backfill.
+model WorkerPanelSetting {
+  id        String               @id @default(cuid())
+  worker    Worker               @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  workerId  String
+  jobSite   JobSite              @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+  panel     WorkerDashboardPanel
+  enabled   Boolean
+
+  updatedByUserId String?
+  updatedByName   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workerId, jobSiteId, panel])
+  @@index([workerId, jobSiteId])
 }

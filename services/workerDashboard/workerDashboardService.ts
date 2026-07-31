@@ -205,7 +205,9 @@ export async function getWorkerContext(): Promise<WorkerContext | null> {
       jobSiteId: active.jobSiteId,
     },
     site: active.jobSite,
-    panels: await getPanelVisibility(active.jobSiteId),
+    // SC-023 Phase 2 — resolved for THIS worker, so any per-worker restriction
+    // applies across the whole worker portal from one place.
+    panels: await getPanelVisibility(active.jobSiteId, worker.id),
     openCheckIns: open.map((s) => ({
       submissionId: s.id,
       siteId: s.jobSiteId,

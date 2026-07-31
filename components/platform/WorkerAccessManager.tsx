@@ -13,6 +13,23 @@ import type { AssignmentRow } from '@/services/workerAccess/workerAssignmentServ
  * enforcement off these are records, with it on they are the gate.
  */
 
+/** yyyy-mm-dd for a date input, from the stored London-midnight instant. */
+function toInput(d: Date | string): string {
+  return new Date(d).toISOString().slice(0, 10);
+}
+
+const ROLE_LABEL: Record<string, string> = {
+  EMPLOYEE: 'Employee',
+  CONTRACTOR: 'Contractor',
+  SUPERVISOR: 'Supervisor',
+  CLIENT_REP: 'Client representative',
+};
+
+const WINDOW_NOTE: Record<string, string> = {
+  pending: 'Access has not started yet',
+  expired: 'Access has ended',
+};
+
 const STATUS_LABEL: Record<string, string> = {
   INVITED: 'Awaiting approval',
   ACTIVE: 'Approved',
@@ -33,12 +50,15 @@ export function WorkerAccessManager({
   rows,
   canManage,
   canSetEnforcement,
+  otherSites = [],
 }: {
   siteId: string;
   enforced: boolean;
   rows: AssignmentRow[];
   canManage: boolean;
   canSetEnforcement: boolean;
+  /** SC-023 Phase 2 — projects this manager can transfer a worker to. */
+  otherSites?: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -50,6 +70,22 @@ export function WorkerAccessManager({
     name: string;
     code: string;
   } | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [detail, setDetail] = useState({
+    role: '',
+    startDate: '',
+    endDate: '',
+  });
+  const [transferTo, setTransferTo] = useState<Record<string, string>>({});
+
+  function openDetails(r: AssignmentRow) {
+    setEditing(editing === r.id ? null : r.id);
+    setDetail({
+      role: r.role ?? '',
+      startDate: r.startDate ? toInput(r.startDate) : '',
+      endDate: r.endDate ? toInput(r.endDate) : '',
+    });
+  }
 
   async function call(body: Record<string, unknown>, key: string, ok: string) {
     setBusy(key);
@@ -91,6 +127,7 @@ export function WorkerAccessManager({
 
   const active = rows.filter((r) => r.status === 'ACTIVE').length;
   const waiting = rows.filter((r) => r.status === 'INVITED').length;
+  const expiring = rows.filter((r) => r.expiringSoon);
 
   return (
     <div className="space-y-4">
@@ -169,6 +206,26 @@ export function WorkerAccessManager({
         </div>
       </div>
 
+      {/* SC-023 Phase 2 — surfaced BEFORE it bites at the gate. A manager
+          should learn about an expiry from this page, not from a worker being
+          turned away on Monday morning. */}
+      {expiring.length > 0 ? (
+        <div className="rounded-xl border border-hivis-500/40 bg-hivis-500/10 px-4 py-3">
+          <p className="text-sm font-semibold text-ink">
+            {expiring.length} worker{expiring.length === 1 ? '' : 's'} lose
+            access within {7} days
+          </p>
+          <p className="text-xs text-ink-muted">
+            {expiring
+              .map(
+                (r) =>
+                  `${r.workerName} (${r.daysUntilExpiry} day${r.daysUntilExpiry === 1 ? '' : 's'})`,
+              )
+              .join(', ')}
+          </p>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-ink-muted">
           {rows.length} assignment{rows.length === 1 ? '' : 's'} · {active}{' '}
@@ -176,13 +233,21 @@ export function WorkerAccessManager({
           {waiting > 0 ? ` · ${waiting} awaiting approval` : ''}
         </p>
         {canManage ? (
-          <button
-            type="button"
-            onClick={() => setShowInvite((v) => !v)}
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink"
-          >
-            {showInvite ? 'Cancel' : 'Invite a worker'}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={`/api/platform/sites/${siteId}/worker-access/export`}
+              className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink"
+            >
+              Export CSV
+            </a>
+            <button
+              type="button"
+              onClick={() => setShowInvite((v) => !v)}
+              className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink"
+            >
+              {showInvite ? 'Cancel' : 'Invite a worker'}
+            </button>
+          </div>
         ) : null}
       </div>
 
@@ -257,6 +322,23 @@ export function WorkerAccessManager({
                 <p className="text-xs text-ink-muted">
                   {r.company} · {r.mobile}
                 </p>
+                {r.role ||
+                r.startDate ||
+                r.endDate ||
+                r.transferredFromSiteName ? (
+                  <p className="mt-0.5 text-xs text-ink-muted">
+                    {r.role ? (ROLE_LABEL[r.role] ?? r.role) : 'Role not set'}
+                    {r.startDate || r.endDate
+                      ? ` · ${r.startDate ? formatDateTimeUK(r.startDate).slice(0, 10) : 'any date'} to ${r.endDate ? formatDateTimeUK(r.endDate).slice(0, 10) : 'no end'}`
+                      : ''}
+                    {WINDOW_NOTE[r.windowState]
+                      ? ` · ${WINDOW_NOTE[r.windowState]}`
+                      : ''}
+                    {r.transferredFromSiteName
+                      ? ` · transferred from ${r.transferredFromSiteName}`
+                      : ''}
+                  </p>
+                ) : null}
                 <p className="mt-0.5 text-xs text-ink-subtle">
                   Invited {formatDateTimeUK(r.invitedAt)}
                   {r.invitedByName ? ` by ${r.invitedByName}` : ''}
@@ -311,6 +393,13 @@ export function WorkerAccessManager({
                       Suspend
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => openDetails(r)}
+                    className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink"
+                  >
+                    {editing === r.id ? 'Close' : 'Role & dates'}
+                  </button>
                   {r.status !== 'REMOVED' ? (
                     <button
                       type="button"
@@ -333,6 +422,126 @@ export function WorkerAccessManager({
                     >
                       Remove
                     </button>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {editing === r.id && canManage ? (
+                <div className="mt-3 border-t border-line pt-3">
+                  <div className="flex flex-wrap items-end gap-2">
+                    <label className="text-xs text-ink-muted">
+                      Role
+                      <select
+                        value={detail.role}
+                        onChange={(e) =>
+                          setDetail((d) => ({ ...d, role: e.target.value }))
+                        }
+                        className="mt-0.5 block rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+                      >
+                        <option value="">Not set</option>
+                        {Object.entries(ROLE_LABEL).map(([v, l]) => (
+                          <option key={v} value={v}>
+                            {l}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-xs text-ink-muted">
+                      Access from
+                      <input
+                        type="date"
+                        value={detail.startDate}
+                        onChange={(e) =>
+                          setDetail((d) => ({
+                            ...d,
+                            startDate: e.target.value,
+                          }))
+                        }
+                        className="mt-0.5 block rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+                      />
+                    </label>
+                    <label className="text-xs text-ink-muted">
+                      Access to (inclusive)
+                      <input
+                        type="date"
+                        value={detail.endDate}
+                        onChange={(e) =>
+                          setDetail((d) => ({ ...d, endDate: e.target.value }))
+                        }
+                        className="mt-0.5 block rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={busy === r.id}
+                      onClick={() =>
+                        call(
+                          {
+                            action: 'setDetails',
+                            assignmentId: r.id,
+                            ...detail,
+                          },
+                          r.id,
+                          `Updated ${r.workerName}.`,
+                        )
+                      }
+                      className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+                    >
+                      Save
+                    </button>
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-subtle">
+                    The role is recorded for reporting only — it does not change
+                    what this worker can see or do. Access runs to the END of
+                    the “access to” day.
+                  </p>
+
+                  {otherSites.length > 0 && r.status !== 'REMOVED' ? (
+                    <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+                      <select
+                        aria-label={`Transfer ${r.workerName} to`}
+                        value={transferTo[r.id] ?? ''}
+                        onChange={(e) =>
+                          setTransferTo((t) => ({
+                            ...t,
+                            [r.id]: e.target.value,
+                          }))
+                        }
+                        className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+                      >
+                        <option value="">Transfer to…</option>
+                        {otherSites.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={busy === r.id || !transferTo[r.id]}
+                        onClick={() => {
+                          if (
+                            !window.confirm(
+                              `Transfer ${r.workerName} to the selected project?\n\nThey will need approving there before they can check in, and are removed from this project. Their history here is kept.`,
+                            )
+                          ) {
+                            return;
+                          }
+                          call(
+                            {
+                              action: 'transfer',
+                              assignmentId: r.id,
+                              toSiteId: transferTo[r.id],
+                            },
+                            r.id,
+                            `${r.workerName} transferred — they need approving on the destination project.`,
+                          );
+                        }}
+                        className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
+                      >
+                        Transfer
+                      </button>
+                    </div>
                   ) : null}
                 </div>
               ) : null}

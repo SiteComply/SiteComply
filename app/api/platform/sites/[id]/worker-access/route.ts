@@ -8,6 +8,9 @@ import {
   reinstateAssignment,
   removeAssignment,
   setSiteEnforcement,
+  setAssignmentDetails,
+  transferWorker,
+  setWorkerPanel,
 } from '@/services/workerAccess/workerAssignmentService';
 
 export const runtime = 'nodejs';
@@ -17,6 +20,9 @@ export const dynamic = 'force-dynamic';
  * PATCH /api/platform/sites/[id]/worker-access
  *   { action: 'invite', mobile, fullName, company }
  *   { action: 'approve' | 'suspend' | 'reinstate' | 'remove', assignmentId }
+ *   { action: 'setDetails', assignmentId, role?, startDate?, endDate? }
+ *   { action: 'transfer', assignmentId, toSiteId }
+ *   { action: 'setPanel', workerId, panel, enabled }
  *   { action: 'setEnforcement', enabled }        → DIRECTOR ONLY
  *
  * SC-023 Phase 1. Gated on the worker-access capability plus site scope, both
@@ -94,6 +100,47 @@ export async function PATCH(
       break;
     case 'remove':
       result = await removeAssignment(viewer, params.id, assignmentId);
+      break;
+    case 'setDetails':
+      // SC-023 Phase 2 — role and access window. The role is metadata only.
+      result = await setAssignmentDetails(viewer, params.id, assignmentId, {
+        role: typeof body.role === 'string' ? body.role : null,
+        startDate: typeof body.startDate === 'string' ? body.startDate : null,
+        endDate: typeof body.endDate === 'string' ? body.endDate : null,
+      });
+      break;
+    case 'transfer':
+      if (typeof body.toSiteId !== 'string' || !body.toSiteId) {
+        return NextResponse.json(
+          { ok: false, error: 'Choose a project to transfer to.' },
+          { status: 400 },
+        );
+      }
+      result = await transferWorker(
+        viewer,
+        params.id,
+        assignmentId,
+        body.toSiteId,
+      );
+      break;
+    case 'setPanel':
+      if (
+        typeof body.workerId !== 'string' ||
+        typeof body.panel !== 'string' ||
+        typeof body.enabled !== 'boolean'
+      ) {
+        return NextResponse.json(
+          { ok: false, error: 'Invalid request.' },
+          { status: 400 },
+        );
+      }
+      result = await setWorkerPanel(
+        viewer,
+        params.id,
+        body.workerId,
+        body.panel,
+        body.enabled,
+      );
       break;
     default:
       return NextResponse.json(
