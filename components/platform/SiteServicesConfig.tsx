@@ -200,39 +200,50 @@ export function SiteServicesConfig({
         </p>
       ) : null}
 
-      {canEdit && templates.length > 0 ? (
+      {/* Gated on canEdit ALONE, not on there being templates. Saving a site as
+          a template is how the FIRST one gets created, so hiding this whole
+          panel until a template exists would be a dead end: no template can be
+          made because no template exists. Only the apply controls need a
+          template to be present. */}
+      {canEdit ? (
         <div className="rounded-xl border border-line bg-surface-sunken p-4">
           <h3 className="text-sm font-bold text-ink">
-            Apply a configuration template
+            Configuration templates
           </h3>
           <p className="mb-3 text-xs text-ink-muted">
-            Sets this site to match the template. You will see exactly what
-            changes before anything is saved.
+            {templates.length > 0
+              ? 'Apply a template to set this site to match it — you will see exactly what changes before anything is saved. Or save this site’s current setup for reuse.'
+              : 'No templates exist yet. Set this site’s permits and inspections below, then save it as a template to reuse on similar projects.'}
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={templateId}
-              onChange={(e) => {
-                setTemplateId(e.target.value);
-                setPreview(null);
-              }}
-              className="min-w-52 flex-1 rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink"
-            >
-              <option value="">Choose a template…</option>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} · {CATEGORY_LABEL[t.category] ?? t.category}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={loadPreview}
-              disabled={!templateId || applying}
-              className="rounded-xl border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink disabled:opacity-40"
-            >
-              Preview changes
-            </button>
+            {templates.length > 0 ? (
+              <>
+                <select
+                  value={templateId}
+                  onChange={(e) => {
+                    setTemplateId(e.target.value);
+                    setPreview(null);
+                  }}
+                  aria-label="Configuration template to apply"
+                  className="min-w-52 flex-1 rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink"
+                >
+                  <option value="">Choose a template…</option>
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} · {CATEGORY_LABEL[t.category] ?? t.category}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={loadPreview}
+                  disabled={!templateId || applying}
+                  className="rounded-xl border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink disabled:opacity-40"
+                >
+                  Preview changes
+                </button>
+              </>
+            ) : null}
             <button
               type="button"
               onClick={() => setShowSave((v) => !v)}
