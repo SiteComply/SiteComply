@@ -4,6 +4,7 @@ import {
   canManageContractorAccess,
   setModuleAccess,
   applyContractorPreset,
+  applyPermissionTemplate,
   resetAccess,
   revokeSiteAccess,
 } from '@/services/platformUsers/contractorAccessService';
@@ -15,6 +16,7 @@ export const dynamic = 'force-dynamic';
  * PATCH /api/platform/sites/[id]/access
  *   { action: 'setModule', userId, module, verbs }  → narrow one module
  *   { action: 'applyPreset', userId }               → Contractor (standard)
+ *   { action: 'applyTemplate', userId, templateId } → a saved template
  *   { action: 'reset', userId }                     → back to the role baseline
  *   { action: 'revoke', userId }                    → remove from the site
  *
@@ -49,6 +51,7 @@ export async function PATCH(
     userId?: unknown;
     module?: unknown;
     verbs?: unknown;
+    templateId?: unknown;
   };
   try {
     body = await req.json();
@@ -85,6 +88,20 @@ export async function PATCH(
       break;
     case 'applyPreset':
       result = await applyContractorPreset(viewer, params.id, body.userId);
+      break;
+    case 'applyTemplate':
+      if (typeof body.templateId !== 'string' || !body.templateId) {
+        return NextResponse.json(
+          { ok: false, error: 'Choose a template.' },
+          { status: 400 },
+        );
+      }
+      result = await applyPermissionTemplate(
+        viewer,
+        params.id,
+        body.userId,
+        body.templateId,
+      );
       break;
     case 'reset':
       result = await resetAccess(viewer, params.id, body.userId);

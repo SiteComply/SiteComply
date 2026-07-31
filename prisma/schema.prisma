@@ -2350,3 +2350,72 @@ model PermissionChangeLog {
   @@index([targetUserId, createdAt])
   @@index([jobSiteId, createdAt])
 }
+
+/// SC-022 Phase 2 — a reusable named set of permission restrictions.
+///
+/// Applied through the SAME narrow-only resolver as a manual override, so a
+/// template is no more capable of granting access than a person is. It is a
+/// shortcut for a decision, never a new source of authority.
+model PermissionTemplate {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+  active      Boolean @default(true)
+  /// Seeded templates (Contractor (standard)). Kept so the library can stop a
+  /// built-in being deleted out from under the UI that references it.
+  isSystem    Boolean @default(false)
+
+  createdByUserId String?
+  createdByName   String?
+  updatedByUserId String?
+  updatedByName   String?
+
+  items PermissionTemplateItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, name])
+}
+
+/// One module's retained verbs inside a template. An EMPTY array means the
+/// module is removed entirely; NO ROW means the template says nothing about
+/// that module and leaves it at the role baseline.
+model PermissionTemplateItem {
+  id         String             @id @default(cuid())
+  template   PermissionTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateId String
+  module     String
+  verbs      String[]
+
+  @@unique([templateId, module])
+  @@index([templateId])
+}
+
+/// SC-022 Phase 2 — a company-wide permission floor.
+///
+/// A LIVE RULE, evaluated on every read, so it covers people hired after it was
+/// set — a policy that silently skipped later joiners would not be a policy.
+/// It is a FLOOR a site cannot loosen: the resolver intersects role ∩ company
+/// default ∩ site override, so most restrictive wins and a Site Manager cannot
+/// hand back what the company deliberately removed.
+///
+/// Matched on the PlatformUser.company STRING, which is free text — "ACME Ltd"
+/// and "Acme Limited" are two different companies here. The UI therefore offers
+/// a picker of values already in use and shows the matched user count before
+/// saving, so a typo shows up as "0 users" rather than as a silently inert rule.
+model CompanyPermissionDefault {
+  id      String   @id @default(cuid())
+  company String
+  module  String
+  verbs   String[]
+
+  updatedByUserId String?
+  updatedByName   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([company, module])
+  @@index([company])
+}

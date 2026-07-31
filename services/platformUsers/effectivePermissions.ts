@@ -8,6 +8,7 @@ import type { PlatformRoleValue } from '@/services/platformUsers/platformUserCon
 import {
   narrow,
   type SiteOverrides,
+  type PermissionOverride,
 } from '@/services/platformUsers/contractorAccessConstants';
 
 /**
@@ -25,6 +26,11 @@ export interface ViewerPermissionContext {
   role: PlatformRoleValue;
   siteIds: string[];
   overrides: SiteOverrides;
+  /**
+   * SC-022 Phase 2 — the company-wide floor for this user's company. Optional
+   * so every existing caller and test keeps working unchanged.
+   */
+  companyDefaults?: PermissionOverride;
 }
 
 /**
@@ -46,7 +52,15 @@ export function effectiveVerbs(
   // A DIRECTOR is never narrowed — the only all-sites role, and an organisation
   // that can lock its own Directors out has no way back in.
   if (viewer.role === 'DIRECTOR') return baseline;
-  return narrow(baseline, viewer.overrides[siteId]?.[module]);
+
+  // MOST RESTRICTIVE WINS: role ∩ company default ∩ site override.
+  //
+  // The company default is a FLOOR, applied before the site override and never
+  // relaxed by it, so a Site Manager cannot hand back access the company
+  // deliberately removed. Each step is an intersection, so the result can only
+  // shrink — the narrow-only invariant survives however many sources are added.
+  const withCompany = narrow(baseline, viewer.companyDefaults?.[module]);
+  return narrow(withCompany, viewer.overrides[siteId]?.[module]);
 }
 
 /**

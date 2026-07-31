@@ -14,6 +14,7 @@ import {
   NARROWABLE_MODULES,
   narrow,
 } from '@/services/platformUsers/contractorAccessConstants';
+import { getPermissionTemplate } from '@/services/platformUsers/permissionTemplateService';
 
 /**
  * SC-022 Phase 1 — managing contractor access to a site.
@@ -321,22 +322,95 @@ export async function setModuleAccess(
   return { ok: true };
 }
 
-/** Apply the Contractor (standard) preset to one user on one site. */
+/**
+ * Apply a permission template to one user on one site.
+ *
+ * SC-022 Phase 2: templates are now real records, so this takes a template id.
+ * The seeded Contractor (standard) row is the definition the Phase 1 button
+ * points at — one source of truth rather than a code constant and a record that
+ * can drift apart.
+ *
+ * A template is applied through the SAME narrowing as a manual change, so it
+ * cannot grant anything: `narrow` is still the only path to a stored value.
+ */
+export async function applyPermissionTemplate(
+  viewer: PlatformViewer,
+  siteId: string,
+  targetUserId: string,
+  templateId: string,
+): Promise<AccessResult> {
+  const g = await guard(viewer, siteId, targetUserId);
+  if (!g.ok) return g;
+
+  const template = await getPermissionTemplate(templateId);
+  if (!template || !template.active) {
+    return {
+      ok: false,
+      reason: 'invalid',
+      error: 'That template is not available.',
+    };
+  }
+  const override: Record<string, PermissionVerb[]> = {};
+  for (const i of template.items) override[i.module] = i.verbs;
+
+  return applyOverrideMap(
+    viewer,
+    g,
+    siteId,
+    targetUserId,
+    override,
+    template.name,
+  );
+}
+
+/** Apply the built-in Contractor (standard) template. */
 export async function applyContractorPreset(
   viewer: PlatformViewer,
   siteId: string,
   targetUserId: string,
 ): Promise<AccessResult> {
+  const seeded = await prisma.permissionTemplate.findUnique({
+    where: { name: CONTRACTOR_STANDARD_LABEL },
+    select: { id: true, active: true },
+  });
+  if (seeded?.active) {
+    return applyPermissionTemplate(viewer, siteId, targetUserId, seeded.id);
+  }
+  // Falls back to the code constant if the seed has not run or the built-in was
+  // deactivated, so the shipped button never simply stops working.
   const g = await guard(viewer, siteId, targetUserId);
   if (!g.ok) return g;
+  return applyOverrideMap(
+    viewer,
+    g,
+    siteId,
+    targetUserId,
+    CONTRACTOR_STANDARD_PRESET as Record<string, PermissionVerb[]>,
+    CONTRACTOR_STANDARD_LABEL,
+  );
+}
 
+/** Shared application path for a preset or a template. */
+async function applyOverrideMap(
+  viewer: PlatformViewer,
+  g: {
+    site: { id: string; name: string };
+    target: { id: string; name: string; role: PlatformRoleValue };
+  },
+  siteId: string,
+  targetUserId: string,
+  override: Record<string, PermissionVerb[]>,
+  label: string,
+): Promise<AccessResult> {
   const writes = [];
   const before: string[] = [];
   const after: string[] = [];
 
   for (const module of NARROWABLE_MODULES) {
     const baseline = baselineFor(g.target.role, module);
-    const next = narrow(baseline, CONTRACTOR_STANDARD_PRESET[module]);
+    // A module the template says nothing about is left at the role baseline,
+    // rather than being silently emptied.
+    const next = narrow(baseline, override[module]);
     before.push(`${module}:${baseline.join('/') || 'none'}`);
     after.push(`${module}:${next.join('/') || 'none'}`);
 
@@ -382,7 +456,7 @@ export async function applyContractorPreset(
         jobSiteId: siteId,
         jobSiteName: g.site.name,
         action: 'APPLY_PRESET',
-        module: CONTRACTOR_STANDARD_LABEL,
+        module: label,
         beforeVerbs: before,
         afterVerbs: after,
       },

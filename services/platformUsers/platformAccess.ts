@@ -11,7 +11,10 @@ import {
   type PermissionVerb,
 } from '@/services/platformUsers/platformPermissions';
 import type { PlatformRoleValue } from '@/services/platformUsers/platformUserConstants';
-import type { SiteOverrides } from '@/services/platformUsers/contractorAccessConstants';
+import type {
+  SiteOverrides,
+  PermissionOverride,
+} from '@/services/platformUsers/contractorAccessConstants';
 import { viewerCan as viewerCanImpl } from '@/services/platformUsers/effectivePermissions';
 
 /**
@@ -53,6 +56,8 @@ export interface PlatformViewer {
    * absence means the role baseline applies unchanged.
    */
   overrides: SiteOverrides;
+  /** SC-022 Phase 2 — the company-wide floor applying to this user. */
+  companyDefaults: PermissionOverride;
 }
 
 const SITE_FIELDS = {
@@ -99,14 +104,27 @@ export const getPlatformViewer = cache(
     // organisation that can lock its own Directors out of the platform has no
     // way back in. Skipping the query for them is also the common case.
     const overrides: SiteOverrides = {};
+    const companyDefaults: PermissionOverride = {};
     if (role !== 'DIRECTOR') {
-      const rows = await prisma.siteUserPermission.findMany({
-        where: { platformUserId: user.id },
-        select: { jobSiteId: true, module: true, verbs: true },
-      });
+      const [rows, companyRows] = await Promise.all([
+        prisma.siteUserPermission.findMany({
+          where: { platformUserId: user.id },
+          select: { jobSiteId: true, module: true, verbs: true },
+        }),
+        // SC-022 Phase 2 — a LIVE rule, read every request, so it covers people
+        // added to the company after it was set.
+        prisma.companyPermissionDefault.findMany({
+          where: { company: user.company },
+          select: { module: true, verbs: true },
+        }),
+      ]);
       for (const r of rows) {
         if (!isPlatformModule(r.module)) continue;
         (overrides[r.jobSiteId] ??= {})[r.module] = r.verbs as PermissionVerb[];
+      }
+      for (const r of companyRows) {
+        if (!isPlatformModule(r.module)) continue;
+        companyDefaults[r.module] = r.verbs as PermissionVerb[];
       }
     }
 
@@ -119,6 +137,7 @@ export const getPlatformViewer = cache(
       siteIds: sites.map((s) => s.id),
       sites,
       overrides,
+      companyDefaults,
     };
   },
 );

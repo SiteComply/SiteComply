@@ -56,6 +56,18 @@ export default async function SettingsPage() {
             or industry — and the services every site must have.
           </p>
         </Link>
+        <Link
+          href="/platform/dashboard/settings/permission-templates"
+          className="group rounded-xl border border-line bg-surface p-5 transition-colors hover:border-brand-200 hover:bg-brand-50"
+        >
+          <h2 className="text-base font-bold text-ink group-hover:text-brand-700">
+            Permission templates
+          </h2>
+          <p className="mt-1 text-sm text-ink-muted">
+            Reusable access restrictions for contractor types, and company-wide
+            defaults that a site cannot loosen.
+          </p>
+        </Link>
       </div>
 
       <p className="mt-6 text-sm text-ink-subtle">

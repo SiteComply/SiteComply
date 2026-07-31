@@ -12,6 +12,7 @@ import {
   getSiteAccessHistory,
   canManageContractorAccess,
 } from '@/services/platformUsers/contractorAccessService';
+import { listPermissionTemplates } from '@/services/platformUsers/permissionTemplateService';
 import { formatDateTimeUK } from '@/lib/datetime';
 
 export const dynamic = 'force-dynamic';
@@ -39,6 +40,11 @@ export default async function SiteAccessPage({
   const users = await getSiteAccess(viewer, params.id);
   if (!users) notFound();
   const history = (await getSiteAccessHistory(viewer, params.id, 20)) ?? [];
+  // SC-022 Phase 2 — saved templates offered per user.
+  const templates = (await listPermissionTemplates()).map((t) => ({
+    id: t.id,
+    name: t.name,
+  }));
 
   return (
     <PlatformShell>
@@ -53,6 +59,7 @@ export default async function SiteAccessPage({
           siteId={params.id}
           users={users}
           canManage={canManageContractorAccess(viewer.role)}
+          templates={templates}
         />
       </Section>
 

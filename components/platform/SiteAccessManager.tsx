@@ -32,16 +32,20 @@ export function SiteAccessManager({
   siteId,
   users,
   canManage,
+  templates = [],
 }: {
   siteId: string;
   users: SiteUserAccess[];
   canManage: boolean;
+  /** SC-022 Phase 2 — saved permission templates available to apply. */
+  templates?: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [openUser, setOpenUser] = useState<string | null>(null);
+  const [templateFor, setTemplateFor] = useState<Record<string, string>>({});
 
   async function send(body: Record<string, unknown>, ok: string) {
     setBusy(String(body.userId));
@@ -168,6 +172,50 @@ export function SiteAccessManager({
                       >
                         Apply {CONTRACTOR_STANDARD_LABEL}
                       </button>
+                      {/* SC-022 Phase 2 — apply a saved template. Uses the same
+                          narrowing as every other change here, so it can only
+                          remove access. */}
+                      {templates.length > 0 ? (
+                        <span className="flex items-center gap-1">
+                          <select
+                            aria-label={`Permission template for ${u.name}`}
+                            value={templateFor[u.userId] ?? ''}
+                            onChange={(e) =>
+                              setTemplateFor((t) => ({
+                                ...t,
+                                [u.userId]: e.target.value,
+                              }))
+                            }
+                            className="rounded-lg border border-line bg-surface px-2 py-1.5 text-xs text-ink"
+                          >
+                            <option value="">Template…</option>
+                            {templates.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            disabled={
+                              busy === u.userId || !templateFor[u.userId]
+                            }
+                            onClick={() =>
+                              send(
+                                {
+                                  action: 'applyTemplate',
+                                  userId: u.userId,
+                                  templateId: templateFor[u.userId],
+                                },
+                                `Applied the template to ${u.name}.`,
+                              )
+                            }
+                            className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
+                          >
+                            Apply
+                          </button>
+                        </span>
+                      ) : null}
                       <button
                         type="button"
                         disabled={busy === u.userId || restricted.length === 0}
