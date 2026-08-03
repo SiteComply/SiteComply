@@ -219,6 +219,39 @@ grep -q 'sortOutstandingWork(workRows, now)' "$CP" \
   || { echo "ERROR: Compliance is not using the agreed outstanding-work order — aborting"; exit 1; }
 echo "      confirmed: one work surface, gates unmerged, ids prefixed, agreed order in use."
 
+echo "[5g] Workers roster workspace (Phase 5c)..."
+WK='app/platform/dashboard/sites/[id]/workers/page.tsx'
+grep -q '<WorkSurface' "$WK" \
+  || { echo "ERROR: Workers is not a roster work surface — aborting"; exit 1; }
+# The two panels showed THE SAME PEOPLE. They must not come back.
+grep -qE '<Section title=\{?.?(Current workers|`Current workers)' "$WK" \
+  && { echo "ERROR: the 'Current workers on site' panel is back — aborting"; exit 1; }
+grep -q '<Section title="Recent check-ins">' "$WK" \
+  && { echo "ERROR: the 'Recent check-ins' panel is back — aborting"; exit 1; }
+# One row per PERSON is what removes the duplicate; a list keyed on submission
+# id would silently reintroduce it.
+grep -q 'const byWorker = new Map' "$WK" \
+  || { echo "ERROR: the roster is no longer keyed per worker — aborting"; exit 1; }
+# Assignment facts must stay behind canManageWorkerAccess. `access` is null
+# without it, so the roster must read assignments through `access?.rows`.
+grep -q 'access?.rows ?? \[\]' "$WK" \
+  || { echo "ERROR: assignments are not read through the gated access object — aborting"; exit 1; }
+node -e "
+const s=require('fs').readFileSync('$WK','utf8');
+const m=s.match(/const access = ([\s\S]{0,80})/);
+if(!m || !m[1].includes('canManageWorkerAccess')) {
+  console.error('ERROR: listSiteAssignments is not gated on canManageWorkerAccess');
+  process.exit(1);
+}
+" || exit 1
+# SC-023 management must remain reachable — invite/approve/suspend/transfer,
+# enforcement and requirements all live in this component.
+grep -q '<WorkerAccessManager' "$WK" \
+  || { echo "ERROR: worker access management is no longer reachable — aborting"; exit 1; }
+grep -q 'canSetEnforcement={canSetEnforcement(viewer.role)}' "$WK" \
+  || { echo "ERROR: enforcement is no longer gated on canSetEnforcement — aborting"; exit 1; }
+echo "      confirmed: one roster keyed per worker, assignments gated, SC-023 management intact."
+
 echo "[6/8] Building..."
 npx prisma generate >/dev/null 2>&1 || { echo "ERROR: prisma generate failed"; exit 1; }
 rm -rf .next
