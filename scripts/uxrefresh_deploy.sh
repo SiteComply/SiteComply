@@ -103,6 +103,27 @@ for r in actions audits documents permits; do
 done
 echo "      confirmed: Panel/TableSurface/RecordHeader shared, 4 registers joined, benchmark on the shared panel."
 
+echo "[5c] Worker Experience workspace (Phase 3)..."
+WE='app/platform/dashboard/sites/[id]/experience/page.tsx'
+[ -f components/platform/SectionWorkspace.tsx ] \
+  || { echo "ERROR: SectionWorkspace.tsx missing — aborting"; exit 1; }
+grep -q '<SectionWorkspace' "$WE" \
+  || { echo "ERROR: Worker Experience is not using the workspace — aborting"; exit 1; }
+# EVERY panel must still be rendered. Losing one would silently remove a manager's
+# ability to configure part of the worker experience, and the page would still
+# look perfectly fine.
+for c in SiteBulletins WorkerDashboardConfig SiteInformationConfig \
+         KnowledgeCheckConfig InductionValidityConfig GpsCheckInConfig SiteContacts; do
+  grep -q "<$c" "$WE" \
+    || { echo "ERROR: Worker Experience no longer renders $c — aborting"; exit 1; }
+done
+# Each panel keeps its OWN save + API call; the workspace is presentational. If a
+# panel stopped being gated on canConfigureDashboard, a read-only role could see
+# controls it must not have.
+[ "$(grep -c 'canEdit={canConfigureDashboard}' "$WE")" -ge 6 ] \
+  || { echo "ERROR: config panels are no longer gated on canConfigureDashboard — aborting"; exit 1; }
+echo "      confirmed: workspace in use, all 7 panels rendered, edit gates intact."
+
 echo "[6/8] Building..."
 npx prisma generate >/dev/null 2>&1 || { echo "ERROR: prisma generate failed"; exit 1; }
 rm -rf .next
