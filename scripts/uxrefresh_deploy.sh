@@ -189,9 +189,28 @@ grep -q 'const audits = canViewAudits' "$CP" \
   || { echo "ERROR: audits/actions are no longer separately gated — aborting"; exit 1; }
 grep -q '\.\.\.audits\.map' "$CP" && grep -q '\.\.\.actions\.map' "$CP" \
   || { echo "ERROR: the merged list is not built from the gated arrays — aborting"; exit 1; }
-if grep -E 'listOutstanding(Audits|Actions)ForSite' "$CP" | grep -v 'canView' | grep -q 'await'; then
-  echo "ERROR: an outstanding-work query bypasses its permission check — aborting"; exit 1
-fi
+# Checked on the WHOLE FILE, not line by line: Prettier wraps
+#   const audits = canViewAudits
+#     ? await listOutstandingAuditsForSite(...)
+# so the call sits on a line with no `canView` on it. A line-based check reports
+# a false positive here — it did, and blocked a correct deploy.
+node -e "
+const s=require('fs').readFileSync('$CP','utf8');
+for (const [fn, gate] of [['listOutstandingAuditsForSite','canViewAudits'],
+                          ['listOutstandingActionsForSite','canViewActions']]) {
+  const re=new RegExp(fn+'\\\\(','g'); let m, n=0;
+  while ((m=re.exec(s))) {
+    n++;
+    // The gate must appear in the 120 characters immediately before the call.
+    const before=s.slice(Math.max(0,m.index-120), m.index);
+    if (!before.includes(gate)) {
+      console.error('ERROR: a '+fn+' call is not gated on '+gate);
+      process.exit(1);
+    }
+  }
+  if (n===0) { console.error('ERROR: '+fn+' is no longer called'); process.exit(1); }
+}
+" || exit 1
 # Ids must stay kind-prefixed or ?item= could select the wrong record.
 grep -q "id: \`audit:" "$CP" && grep -q "id: \`action:" "$CP" \
   || { echo "ERROR: merged row ids are not kind-prefixed — aborting"; exit 1; }
