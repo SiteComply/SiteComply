@@ -1,5 +1,6 @@
 import { cn } from '@/lib/cn';
 import { RowLink } from '@/components/platform/RowLink';
+import { Panel } from '@/components/platform/Panel';
 import { pct } from '@/services/reports/complianceReport';
 
 /**
@@ -9,20 +10,30 @@ import { pct } from '@/services/reports/complianceReport';
  * a UX refactor only, with no behaviour change.
  */
 
+/**
+ * UX REFRESH PHASE 2 — `Section` is now the shared `Panel` primitive.
+ *
+ * It kept its own spelling of a panel (`p-5`, uppercase muted heading) while the
+ * benchmark screen the brief points at used `p-4` and a plain dark heading. Two
+ * treatments for the same idea, so panels in the site tabs and panels in Audit
+ * Scoring read as belonging to different products. They are now one definition.
+ *
+ * The signature is unchanged, so all five site tabs adopt it without edits;
+ * `actions` is newly available for the phases that will use it.
+ */
 export function Section({
   title,
+  actions,
   children,
 }: {
   title: string;
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-subtle">
-        {title}
-      </h2>
+    <Panel title={title} actions={actions}>
       {children}
-    </section>
+    </Panel>
   );
 }
 

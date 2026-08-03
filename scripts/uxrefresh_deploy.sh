@@ -78,6 +78,31 @@ if(new Set(runs).size!==runs.length){console.error('nav clusters are NOT contigu
 console.log('      confirmed: '+runs.length+' contiguous clusters — '+runs.join(' | '));
 " || exit 1
 
+echo "[5b] Shared layout primitives (Phase 2)..."
+# The point of the primitives is that there is ONE definition of each idea. If a
+# screen quietly grows its own again, the refresh has failed in the exact way it
+# was meant to prevent.
+for f in Panel TableSurface RecordHeader; do
+  [ -f "components/platform/$f.tsx" ] \
+    || { echo "ERROR: components/platform/$f.tsx missing — aborting"; exit 1; }
+done
+# Section must delegate to Panel, not re-declare a panel.
+grep -q '<Panel title={title}' components/platform/siteDetailUi.tsx \
+  || { echo "ERROR: Section no longer delegates to Panel — aborting"; exit 1; }
+# The benchmark must render through the shared primitive too, or "extracted from
+# the benchmark" stops being true the first time one of them is edited.
+grep -q '<Panel title={title} hint={hint}>' components/platform/AuditScoringConfig.tsx \
+  || { echo "ERROR: Audit Scoring no longer uses the shared Panel — aborting"; exit 1; }
+# Registers must use the joined surface, not a detached filter card.
+for r in actions audits documents permits; do
+  grep -q 'TABLE_TOOLBAR_CLASS' "app/platform/dashboard/$r/page.tsx" \
+    || { echo "ERROR: $r register is not using the shared toolbar — aborting"; exit 1; }
+  grep -q 'mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-line bg-surface p-4 shadow-card' \
+    "app/platform/dashboard/$r/page.tsx" \
+    && { echo "ERROR: $r register still has a detached filter card — aborting"; exit 1; }
+done
+echo "      confirmed: Panel/TableSurface/RecordHeader shared, 4 registers joined, benchmark on the shared panel."
+
 echo "[6/8] Building..."
 npx prisma generate >/dev/null 2>&1 || { echo "ERROR: prisma generate failed"; exit 1; }
 rm -rf .next

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
-import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
+import { RecordHeader } from '@/components/platform/RecordHeader';
 import { ActionStatusControl } from '@/components/platform/ActionStatusControl';
 import {
   requirePlatformViewer,
@@ -78,38 +78,30 @@ export default async function ActionDetailPage({
 
   return (
     <PlatformShell>
-      <div className="mb-6">
-        <Breadcrumbs
-          items={[
-            { label: 'Actions', href: '/platform/dashboard/actions' },
-            { label: action.title },
-          ]}
-        />
-        <Link
-          href="/platform/dashboard/actions"
-          className="text-sm font-semibold text-brand-700 hover:underline"
-        >
-          ← Actions
-        </Link>
-        <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold text-ink">{action.title}</h1>
-              <Badge
-                className={
-                  ACTION_STATUS_BADGE[action.status as ActionStatusValue]
-                }
-              >
-                {actionStatusLabel(action.status)}
-              </Badge>
-              {overdue && (
-                <Badge className={ACTION_OVERDUE_BADGE}>Overdue</Badge>
-              )}
-            </div>
-            <p className="text-ink-muted">{action.jobSite.name}</p>
-          </div>
-          {canEdit && (
-            <div className="flex items-center gap-2">
+      <RecordHeader
+        breadcrumbs={[
+          { label: 'Actions', href: '/platform/dashboard/actions' },
+          { label: action.title },
+        ]}
+        backHref="/platform/dashboard/actions"
+        backLabel="Actions"
+        title={action.title}
+        badges={
+          <>
+            <Badge
+              className={
+                ACTION_STATUS_BADGE[action.status as ActionStatusValue]
+              }
+            >
+              {actionStatusLabel(action.status)}
+            </Badge>
+            {overdue && <Badge className={ACTION_OVERDUE_BADGE}>Overdue</Badge>}
+          </>
+        }
+        subtitle={action.jobSite.name}
+        actions={
+          canEdit && (
+            <>
               <Link
                 href={`/platform/dashboard/actions/${action.id}/edit`}
                 className="rounded-xl border border-brand-500 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
@@ -117,10 +109,10 @@ export default async function ActionDetailPage({
                 Edit action
               </Link>
               <ActionDeleteButton actionId={action.id} title={action.title} />
-            </div>
-          )}
-        </div>
-      </div>
+            </>
+          )
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">

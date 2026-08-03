@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { Panel } from '@/components/platform/Panel';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { PlatformIcon } from '@/components/platform/icons';
@@ -929,6 +930,12 @@ export function AuditScoringConfig({
   );
 }
 
+/**
+ * UX REFRESH PHASE 2 — this local helper WAS the pattern the brief points at as
+ * the target, so it became the shared `Panel` primitive rather than being
+ * redesigned. The name is kept so its call sites below are untouched, and the
+ * rendered result is identical: this screen is a benchmark and must not move.
+ */
 function Card({
   title,
   hint,
@@ -939,12 +946,9 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
-      <h2 className="text-sm font-bold text-ink">{title}</h2>
-      {hint && <p className="mb-3 mt-0.5 text-xs text-ink-subtle">{hint}</p>}
-      {!hint && <div className="mb-3" />}
+    <Panel title={title} hint={hint}>
       {children}
-    </section>
+    </Panel>
   );
 }
 

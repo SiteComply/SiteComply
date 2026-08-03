@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
-import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
+import { RecordHeader } from '@/components/platform/RecordHeader';
 import { AuditStatusControl } from '@/components/platform/AuditStatusControl';
 import {
   requirePlatformViewer,
@@ -76,34 +76,26 @@ export default async function AuditDetailPage({
 
   return (
     <PlatformShell>
-      <div className="mb-6">
-        <Breadcrumbs
-          items={[
-            { label: 'Audits', href: '/platform/dashboard/audits' },
-            { label: audit.title },
-          ]}
-        />
-        <Link
-          href="/platform/dashboard/audits"
-          className="text-sm font-semibold text-brand-700 hover:underline"
-        >
-          ← Audits
-        </Link>
-        <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-bold text-ink">{audit.title}</h1>
-              <span
-                className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                  AUDIT_STATUS_BADGE[audit.status as AuditStatusValue]
-                }`}
-              >
-                {auditStatusLabel(audit.status)}
-              </span>
-            </div>
-            <p className="text-ink-muted">{audit.jobSite.name}</p>
-          </div>
-          <div className="flex flex-wrap items-start gap-2">
+      <RecordHeader
+        breadcrumbs={[
+          { label: 'Audits', href: '/platform/dashboard/audits' },
+          { label: audit.title },
+        ]}
+        backHref="/platform/dashboard/audits"
+        backLabel="Audits"
+        title={audit.title}
+        badges={
+          <span
+            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+              AUDIT_STATUS_BADGE[audit.status as AuditStatusValue]
+            }`}
+          >
+            {auditStatusLabel(audit.status)}
+          </span>
+        }
+        subtitle={audit.jobSite.name}
+        actions={
+          <>
             {canEdit && (
               <Link
                 href={`/platform/dashboard/audits/${audit.id}/edit`}
@@ -121,9 +113,9 @@ export default async function AuditDetailPage({
             {canDelete && (
               <AuditDeleteButton auditId={audit.id} title={audit.title} />
             )}
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {showAiSummary && (
         <AiSummaryPanel targetType="AUDIT" targetKey={audit.id} />
