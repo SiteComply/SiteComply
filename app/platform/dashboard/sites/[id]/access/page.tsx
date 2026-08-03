@@ -63,8 +63,24 @@ export default async function SiteAccessPage({
         />
       </Section>
 
-      <div className="mt-6">
-        <Section title="Access history">
+      {/* UX REFRESH PHASE 4 — the history is evidence you consult, not status
+          you check, so it no longer occupies a screen of its own by default. */}
+      <details className="group mt-4 rounded-xl border border-line bg-surface shadow-card">
+        <summary className="touch-target cursor-pointer list-none px-4 py-3 text-sm font-bold text-ink marker:content-none">
+          <span className="inline-flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="text-ink-subtle transition-transform group-open:rotate-90"
+            >
+              ›
+            </span>
+            Access history
+            <span className="font-normal text-ink-subtle">
+              ({history.length})
+            </span>
+          </span>
+        </summary>
+        <div className="border-t border-line p-4">
           {history.length === 0 ? (
             <p className="text-sm text-ink-subtle">
               No access changes recorded for this site yet.
@@ -95,8 +111,8 @@ export default async function SiteAccessPage({
               ))}
             </ul>
           )}
-        </Section>
-      </div>
+        </div>
+      </details>
     </PlatformShell>
   );
 }

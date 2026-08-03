@@ -8,7 +8,12 @@ import {
   canReopenProject,
   listClosureEvents,
 } from '@/services/projectClosure/closureService';
-import { Section, Detail, Stat } from '@/components/platform/siteDetailUi';
+import { Detail, Stat } from '@/components/platform/siteDetailUi';
+import { Panel } from '@/components/platform/Panel';
+import {
+  SITE_STATUS_LABEL,
+  type SiteStatusValue,
+} from '@/services/sites/siteStatusFilter';
 import { formatDateUK } from '@/lib/datetime';
 import {
   requirePlatformViewer,
@@ -70,11 +75,20 @@ export default async function SiteOverviewPage({
         </div>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          {canViewCheckins && (
-            <Section title="Site summary">
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      {/* UX REFRESH PHASE 4 — the Overview was a three-column grid whose
+          two-column main region held one card containing four small stats and
+          then stopped, leaving most of the landing page for every project empty.
+          The right column carried TWO cards both headed "Site information",
+          which read as a duplicate rather than as two different things.
+
+          Now: one full-width summary strip, then the project's details laid out
+          across the width. Same figures, same links, same gates — the numbers
+          just stop being crammed into a third of the page. */}
+      {(canViewCheckins || infoComplete) && (
+        <Panel title="Project summary" className="mb-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
+            {canViewCheckins && (
+              <>
                 <Stat label="Check-ins" value={String(compliance.total)} />
                 <Stat label="Compliant" value={`${compliantPct}%`} />
                 <Stat label="On site now" value={String(detail.onSiteCount)} />
@@ -82,53 +96,52 @@ export default async function SiteOverviewPage({
                   label="Incomplete"
                   value={String(compliance.incomplete)}
                 />
+              </>
+            )}
+            {infoComplete && (
+              <div className="rounded-lg border border-line bg-surface-sunken px-3 py-2">
+                <div className="text-lg font-bold tabular-nums text-ink">
+                  {infoComplete.complete}/{infoComplete.total}
+                </div>
+                <div className="text-xs text-ink-subtle">
+                  Worker-facing sections
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-line">
+                  <div
+                    className="h-full rounded-full bg-safe-500"
+                    style={{
+                      width: `${(infoComplete.complete / infoComplete.total) * 100}%`,
+                    }}
+                  />
+                </div>
               </div>
-            </Section>
+            )}
+          </div>
+          {infoComplete && infoComplete.missing.length > 0 && (
+            <p className="mt-3 text-xs text-ink-subtle">
+              Still to add on the Worker Experience tab:{' '}
+              {infoComplete.missing.join(', ')}.
+            </p>
           )}
-        </div>
+        </Panel>
+      )}
 
-        <div className="space-y-6">
-          <Section title="Site information">
-            <dl className="space-y-3">
-              <Detail label="Job reference" value={site.jobReference} />
-              <Detail
-                label="Address"
-                value={`${site.addressLine1}, ${site.town}, ${site.postcode}`}
-              />
-              <Detail
-                label="Status"
-                value={site.status === 'ACTIVE' ? 'Active' : 'Archived'}
-              />
-              <Detail label="Created" value={formatDateUK(site.createdAt)} />
-            </dl>
-          </Section>
-
-          {infoComplete && (
-            <Section title="Site information">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm text-ink-muted">Worker-facing content</p>
-                <span className="text-sm font-semibold tabular-nums text-ink">
-                  {infoComplete.complete}/{infoComplete.total} sections
-                </span>
-              </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line">
-                <div
-                  className="h-full rounded-full bg-safe-500"
-                  style={{
-                    width: `${(infoComplete.complete / infoComplete.total) * 100}%`,
-                  }}
-                />
-              </div>
-              {infoComplete.missing.length > 0 && (
-                <p className="mt-2 text-xs text-ink-subtle">
-                  Add on the Worker Experience tab:{' '}
-                  {infoComplete.missing.join(', ')}.
-                </p>
-              )}
-            </Section>
-          )}
-        </div>
-      </div>
+      <Panel title="Project details">
+        <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Detail label="Job reference" value={site.jobReference} />
+          <Detail
+            label="Address"
+            value={`${site.addressLine1}, ${site.town}, ${site.postcode}`}
+          />
+          {/* Was `status === 'ACTIVE' ? 'Active' : 'Archived'`, which labelled an
+              SC-025 COMPLETED project "Archived". Uses the module's own labels. */}
+          <Detail
+            label="Status"
+            value={SITE_STATUS_LABEL[site.status as SiteStatusValue]}
+          />
+          <Detail label="Created" value={formatDateUK(site.createdAt)} />
+        </dl>
+      </Panel>
 
       {/* The close control sits at the BOTTOM for an open project: completing a
           project is a deliberate, end-of-life act, not something to fall over

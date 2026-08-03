@@ -124,6 +124,31 @@ done
   || { echo "ERROR: config panels are no longer gated on canConfigureDashboard — aborting"; exit 1; }
 echo "      confirmed: workspace in use, all 7 panels rendered, edit gates intact."
 
+echo "[5d] Site Details workspace (Phase 4)..."
+# The status label defect: a COMPLETED project must never render as "Archived".
+# They are different states reached by different workflows with different ways
+# back, and the old ternary pre-dated COMPLETED existing.
+if grep -rn "=== 'ACTIVE' ? 'Active' : 'Archived'" app components --include='*.tsx' \
+     | grep -v '^\s*//' | grep -q 'value=\|label='; then
+  echo "ERROR: a site status is still hardcoded to Active/Archived — a COMPLETED project would be mislabelled — aborting"; exit 1
+fi
+grep -q 'SITE_STATUS_LABEL' components/platform/SiteDetailHeader.tsx \
+  && grep -q 'SITE_STATUS_LABEL' 'app/platform/dashboard/sites/[id]/page.tsx' \
+  || { echo "ERROR: site status is not using the shared labels — aborting"; exit 1; }
+# The duplicate heading defect.
+[ "$(grep -c 'title="Site information"' 'app/platform/dashboard/sites/[id]/page.tsx')" -eq 0 ] \
+  || { echo "ERROR: the duplicated 'Site information' heading is back — aborting"; exit 1; }
+# The site header must go through the shared record header.
+grep -q '<RecordHeader' components/platform/SiteDetailHeader.tsx \
+  || { echo "ERROR: SiteDetailHeader is not using RecordHeader — aborting"; exit 1; }
+# SC-025: a completed project must still announce itself before anything else,
+# and must still offer neither editing nor the archive control.
+grep -q "site.status === 'COMPLETED' ?" 'app/platform/dashboard/sites/[id]/page.tsx' \
+  || { echo "ERROR: the completed-project banner is gone — aborting"; exit 1; }
+grep -q "site.status !== 'COMPLETED' && (" components/platform/SiteDetailHeader.tsx \
+  || { echo "ERROR: a completed project would be offered edit/archive — aborting"; exit 1; }
+echo "      confirmed: shared status labels, no duplicate heading, RecordHeader in use, SC-025 completion behaviour intact."
+
 echo "[6/8] Building..."
 npx prisma generate >/dev/null 2>&1 || { echo "ERROR: prisma generate failed"; exit 1; }
 rm -rf .next

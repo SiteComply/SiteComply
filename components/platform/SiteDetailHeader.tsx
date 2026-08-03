@@ -1,6 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
+import { RecordHeader } from '@/components/platform/RecordHeader';
+import {
+  SITE_STATUS_LABEL,
+  isProjectClosed,
+  type SiteStatusValue,
+} from '@/services/sites/siteStatusFilter';
 import { SiteStatusButton } from '@/components/platform/SiteStatusButton';
 import { StatusPill } from '@/components/platform/siteDetailUi';
 import {
@@ -60,34 +65,33 @@ export async function SiteDetailHeader({
     tabs.push({ key: 'access', label: 'Access' });
 
   return (
-    <div className="mb-6">
-      <Breadcrumbs
-        items={[
-          { label: 'Sites', href: '/platform/dashboard/sites' },
-          { label: site.name },
-        ]}
-      />
-      <Link
-        href="/platform/dashboard/sites"
-        className="text-sm font-semibold text-brand-700 hover:underline"
-      >
-        ← Sites
-      </Link>
-      <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-bold text-ink">{site.name}</h1>
-            <StatusPill
-              label={site.status === 'ACTIVE' ? 'Active' : 'Archived'}
-              tone={site.status === 'ACTIVE' ? 'good' : 'muted'}
-            />
-          </div>
-          <p className="text-ink-muted">
-            Ref {site.jobReference} · {site.town}, {site.postcode}
-          </p>
-        </div>
-        {canEdit && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+    <RecordHeader
+      breadcrumbs={[
+        { label: 'Sites', href: '/platform/dashboard/sites' },
+        { label: site.name },
+      ]}
+      backHref="/platform/dashboard/sites"
+      backLabel="Sites"
+      title={site.name}
+      badges={
+        /* UX REFRESH PHASE 4 — this read `status === 'ACTIVE' ? 'Active' :
+           'Archived'`, which pre-dates SC-025's COMPLETED status and therefore
+           labelled a *completed* project "Archived" — a different thing, reached
+           by a different workflow, with a different way back. Now uses the
+           module's own SITE_STATUS_LABEL so a future status cannot be silently
+           mislabelled here, and isProjectClosed decides the tone so Completed
+           and Archived both read as closed without pretending to be the same. */
+        <StatusPill
+          label={SITE_STATUS_LABEL[site.status as SiteStatusValue]}
+          tone={
+            isProjectClosed(site.status as SiteStatusValue) ? 'muted' : 'good'
+          }
+        />
+      }
+      subtitle={`Ref ${site.jobReference} · ${site.town}, ${site.postcode}`}
+      actions={
+        canEdit && (
+          <>
             {/* SC-019: the project setup wizard is where the CPP data lives.
                 "Edit site" stays for the core operational fields. */}
             <Link
@@ -113,8 +117,8 @@ export async function SiteDetailHeader({
             >
               Project setup
             </Link>
-{/* SC-025 — a completed project is read-only, so neither editing nor the
-                archive/reactivate control is offered. Reactivating here would
+            {/* SC-025 — a completed project is read-only, so neither editing nor
+                the archive/reactivate control is offered. Reactivating here would
                 bypass the Director-only reopen flow, which requires a recorded
                 reason and restores suspended worker access. */}
             {site.status !== 'COMPLETED' && (
@@ -128,11 +132,11 @@ export async function SiteDetailHeader({
                 <SiteStatusButton siteId={site.id} status={site.status} />
               </>
             )}
-          </div>
-        )}
-      </div>
-
+          </>
+        )
+      }
+    >
       <SiteDetailTabs siteId={site.id} tabs={tabs} active={active} />
-    </div>
+    </RecordHeader>
   );
 }

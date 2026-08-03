@@ -105,8 +105,13 @@ export default async function SiteCompliancePage({
         active="compliance"
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {canViewCheckins && (
+      {/* UX REFRESH PHASE 4 — three different altitudes were interleaved in one
+          two-column grid: a compliance READING, two lists of OUTSTANDING WORK,
+          and a block of CONFIGURATION. Separated here — status across the top,
+          work side by side beneath it, configuration behind a disclosure because
+          it is something you set up once, not something you check. */}
+      {canViewCheckins && (
+        <div className="mb-4">
           <Section title="Induction compliance">
             {compliance.total === 0 ? (
               <Empty>No check-ins recorded for this site yet.</Empty>
@@ -131,8 +136,10 @@ export default async function SiteCompliancePage({
               </dl>
             )}
           </Section>
-        )}
+        </div>
+      )}
 
+      <div className="grid gap-4 lg:grid-cols-2">
         {canViewAudits && (
           <Section title="Outstanding audits">
             {audits.length === 0 ? (
@@ -237,13 +244,24 @@ export default async function SiteCompliancePage({
         )}
       </div>
 
-      <div className="mt-6">
-        <Section title="Permits and inspections used on this site">
-          <p className="mb-4 text-sm text-ink-muted">
+      <details className="group mt-4 rounded-xl border border-line bg-surface shadow-card">
+        <summary className="touch-target cursor-pointer list-none px-4 py-3 text-sm font-bold text-ink marker:content-none">
+          <span className="inline-flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="text-ink-subtle transition-transform group-open:rotate-90"
+            >
+              ›
+            </span>
+            Permits and inspections used on this site
+          </span>
+          <span className="mt-0.5 block pl-5 text-xs font-normal text-ink-subtle">
             Everything is available until you turn it off. Turning something off
             removes it from new work only — records already raised stay visible
             and keep appearing in reports.
-          </p>
+          </span>
+        </summary>
+        <div className="border-t border-line p-4">
           <SiteServicesConfig
             siteId={params.id}
             groups={serviceGroups}
@@ -251,8 +269,8 @@ export default async function SiteCompliancePage({
             templates={configTemplates}
             provenance={provenance}
           />
-        </Section>
-      </div>
+        </div>
+      </details>
     </PlatformShell>
   );
 }

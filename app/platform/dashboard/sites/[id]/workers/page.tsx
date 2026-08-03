@@ -51,7 +51,9 @@ export default async function SiteWorkersPage({
     <PlatformShell>
       <SiteDetailHeader viewer={viewer} siteId={params.id} active="workers" />
 
-      <div className="space-y-6">
+      {/* UX REFRESH PHASE 4 — two lists of the same kind stacked vertically for
+          no reason, pushing Project access below the fold. Side by side now. */}
+      <div className="grid gap-4 lg:grid-cols-2">
         <Section title={`Current workers on site (${currentWorkers.length})`}>
           {currentWorkers.length === 0 ? (
             <Empty>No workers are currently checked in.</Empty>
@@ -120,7 +122,7 @@ export default async function SiteWorkersPage({
       </div>
 
       {access ? (
-        <div className="mt-6">
+        <div className="mt-4">
           <Section title="Project access">
             <p className="mb-4 text-sm text-ink-muted">
               Who is authorised to work on this project. Workers must be invited
