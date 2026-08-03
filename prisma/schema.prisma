@@ -35,7 +35,14 @@ enum CscsCardType {
 
 enum SiteStatus {
   ACTIVE
-  ARCHIVED
+  ARCHIVED //   Hidden from selection, but still editable — the pre-SC-025 soft hide.
+  /// SC-025 — formally closed: read-only, worker access suspended, scheduled
+  /// work stopped, notifications off. Deliberately a THIRD value rather than a
+  /// reuse of ARCHIVED: sites archived before SC-025 never passed a completion
+  /// checklist and must not be retroactively declared complete. Adding a value
+  /// also makes the compiler enumerate every `'ACTIVE' | 'ARCHIVED'` union that
+  /// needs reviewing.
+  COMPLETED
 }
 
 /// Category of a site Daily Bulletin (SC-002) — drives the label/badge shown to
@@ -342,6 +349,14 @@ model JobSite {
   postcode     String // UK postcode (validated/normalised in the service layer)
   jobReference String // Site/job reference shown to workers, e.g. "BNE-2026-014"
   status       SiteStatus @default(ACTIVE)
+
+  /// SC-025 — when the project was formally completed, and by whom.
+  /// Denormalised name so the audit trail survives the user being deleted.
+  completedAt     DateTime?
+  completedById   String?
+  completedByName String?
+
+  closureEvents SiteClosureEvent[]
 
   // Free-text induction content shown before the checklist (site overview,
   // welfare facilities, working hours, etc.).
@@ -2822,4 +2837,37 @@ model CloseOutPackShareView {
   ipHash String?
 
   @@index([shareId, viewedAt])
+}
+
+/// SC-025 — append-only record of project closure and reopening.
+///
+/// The requirement asks who closed a project and when, and for a reason when a
+/// project is reopened. Both are OCCURRENCES, not state, so they are stored
+/// rather than derived (the SC-016/SC-020 rule). `warnings` snapshots the
+/// checklist as it stood at the moment of the decision: "closed with 4 open
+/// actions" is unanswerable later if the actions were closed afterwards.
+model SiteClosureEvent {
+  id        String  @id @default(cuid())
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+
+  /// 'CLOSED' | 'REOPENED'
+  action String
+
+  /// Mandatory on REOPENED, optional on CLOSED.
+  reason String?
+
+  /// Snapshot of the overridden warnings at the time, as
+  /// [{ key, label, count }]. Empty when the project closed cleanly.
+  warnings Json?
+
+  /// Assignments suspended by this closure, so reopening can offer exactly
+  /// those back rather than guessing. [] when none were suspended.
+  suspendedAssignmentIds Json?
+
+  actorUserId String?
+  actorName   String
+  createdAt   DateTime @default(now())
+
+  @@index([jobSiteId, createdAt])
 }

@@ -1,3 +1,4 @@
+import type { SiteStatusValue } from '@/services/sites/siteStatusFilter';
 import { SiteStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { applyConfigTemplate } from '@/services/siteServices/siteConfigTemplateService';
@@ -118,7 +119,7 @@ export interface EditableSite {
   id: string;
   name: string;
   jobReference: string;
-  status: 'ACTIVE' | 'ARCHIVED';
+  status: SiteStatusValue;
   addressLine1: string;
   addressLine2: string | null;
   town: string;
@@ -168,6 +169,7 @@ export type UpdateSiteResult =
   | { ok: true; id: string }
   | { ok: false; reason: 'forbidden' }
   | { ok: false; reason: 'not_found' }
+  | { ok: false; reason: 'project_completed' }
   | { ok: false; reason: 'validation'; errors: FieldErrors };
 
 /**
@@ -193,9 +195,18 @@ export async function updateSiteForDirector(
   // Guard against a race where the site was removed after the scope check.
   const existing = await prisma.jobSite.findUnique({
     where: { id: siteId },
-    select: { id: true },
+    select: { id: true, status: true },
   });
   if (!existing) return { ok: false, reason: 'not_found' };
+
+  // SC-025 — a COMPLETED project is read-only. This check has to live HERE
+  // rather than rely on the data-layer guard: that guard keys on `jobSiteId`,
+  // and JobSite itself has no such column, so the site record is the one row it
+  // cannot protect. Reopening also never happens through this path — it is
+  // Director-only, needs a recorded reason and restores suspended access.
+  if (existing.status === 'COMPLETED') {
+    return { ok: false, reason: 'project_completed' };
+  }
 
   const validated = validateSite(input);
   if (!validated.ok) {
@@ -217,6 +228,7 @@ export type SetSiteStatusResult =
   | { ok: true; status: SiteStatus }
   | { ok: false; reason: 'forbidden' }
   | { ok: false; reason: 'not_found' }
+  | { ok: false; reason: 'project_completed' }
   | { ok: false; reason: 'invalid_status' };
 
 /**
@@ -243,9 +255,18 @@ export async function setSiteStatusForDirector(
 
   const existing = await prisma.jobSite.findUnique({
     where: { id: siteId },
-    select: { id: true },
+    select: { id: true, status: true },
   });
   if (!existing) return { ok: false, reason: 'not_found' };
+
+  // SC-025 — a COMPLETED project is read-only. This check has to live HERE
+  // rather than rely on the data-layer guard: that guard keys on `jobSiteId`,
+  // and JobSite itself has no such column, so the site record is the one row it
+  // cannot protect. Reopening also never happens through this path — it is
+  // Director-only, needs a recorded reason and restores suspended access.
+  if (existing.status === 'COMPLETED') {
+    return { ok: false, reason: 'project_completed' };
+  }
 
   const next: SiteStatus =
     status === SiteStatus.ARCHIVED ? SiteStatus.ARCHIVED : SiteStatus.ACTIVE;

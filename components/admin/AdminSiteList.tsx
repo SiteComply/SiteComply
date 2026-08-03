@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  SITE_STATUS_LABEL,
+  type SiteStatusValue,
+} from '@/services/sites/siteStatusFilter';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -13,7 +17,7 @@ export interface AdminSiteRow {
   jobReference: string;
   town: string;
   postcode: string;
-  status: 'ACTIVE' | 'ARCHIVED';
+  status: SiteStatusValue;
   onSiteCount: number;
 }
 
@@ -135,17 +139,23 @@ export function AdminSiteList({ sites }: { sites: AdminSiteRow[] }) {
   );
 }
 
-function StatusBadge({ status }: { status: 'ACTIVE' | 'ARCHIVED' }) {
+// A completed project reads differently from an archived one: archived is a
+// soft hide, completed is a formally closed, read-only project.
+const STATUS_BADGE_CLASS: Record<SiteStatusValue, string> = {
+  ACTIVE: 'bg-safe-50 text-safe-700',
+  COMPLETED: 'bg-brand-700/10 text-brand-700',
+  ARCHIVED: 'border border-line bg-surface-sunken text-ink-muted',
+};
+
+function StatusBadge({ status }: { status: SiteStatusValue }) {
   return (
     <span
       className={cn(
         'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
-        status === 'ACTIVE'
-          ? 'bg-safe-50 text-safe-700'
-          : 'border border-line bg-surface-sunken text-ink-muted',
+        STATUS_BADGE_CLASS[status],
       )}
     >
-      {status === 'ACTIVE' ? 'Active' : 'Archived'}
+      {SITE_STATUS_LABEL[status]}
     </span>
   );
 }

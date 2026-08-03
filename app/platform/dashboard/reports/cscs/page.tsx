@@ -17,7 +17,10 @@ import {
   canExportReport,
   isAggregateOnly,
 } from '@/services/reports/reportAccess';
-import { parseReportFilters, reportFiltersQuery } from '@/services/reports/reportFilters';
+import {
+  parseReportFilters,
+  reportFiltersQuery,
+} from '@/services/reports/reportFilters';
 import { getCscsSummary, getCscsRows } from '@/services/reports/cscsReport';
 
 export const dynamic = 'force-dynamic';
@@ -39,18 +42,26 @@ export default async function CscsReportPage({
   assertModuleView(viewer, 'reports');
   if (!canRunReport(viewer, REPORT)) redirect('/platform/dashboard/reports');
 
-  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const one = (v: string | string[] | undefined) =>
+    Array.isArray(v) ? v[0] : v;
   const many = (v: string | string[] | undefined) =>
     v == null ? [] : Array.isArray(v) ? v : [v];
-  const filters = parseReportFilters(
-    { from: one(searchParams.from), to: one(searchParams.to), sites: many(searchParams.sites) },
+  const filters = await parseReportFilters(
+    {
+      from: one(searchParams.from),
+      to: one(searchParams.to),
+      sites: many(searchParams.sites),
+      includeCompleted: one(searchParams.includeCompleted),
+    },
     viewer,
   );
 
   const aggregate = isAggregateOnly(viewer, REPORT);
   const canExport = canExportReport(viewer, REPORT);
   const summary = await getCscsSummary(filters.siteIds, filters.range);
-  const rows = aggregate ? [] : await getCscsRows(filters.siteIds, filters.range, DISPLAY_LIMIT);
+  const rows = aggregate
+    ? []
+    : await getCscsRows(filters.siteIds, filters.range, DISPLAY_LIMIT);
 
   return (
     <PlatformShell>
@@ -65,7 +76,11 @@ export default async function CscsReportPage({
         }
       />
 
-      <ReportFilterBar viewer={viewer} filters={filters} action="/platform/dashboard/reports/cscs" />
+      <ReportFilterBar
+        viewer={viewer}
+        filters={filters}
+        action="/platform/dashboard/reports/cscs"
+      />
 
       <KpiCards
         items={[
@@ -86,22 +101,24 @@ export default async function CscsReportPage({
           </p>
         ) : (
           <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-line text-left text-ink-subtle">
-                <th className="px-5 py-2 font-medium">CSCS card</th>
-                <th className="px-5 py-2 text-right font-medium">Workers</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {summary.byType.map((t) => (
-                <tr key={t.label}>
-                  <td className="px-5 py-2 text-ink">{t.label}</td>
-                  <td className="px-5 py-2 text-right tabular-nums text-ink">{t.count}</td>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-ink-subtle">
+                  <th className="px-5 py-2 font-medium">CSCS card</th>
+                  <th className="px-5 py-2 text-right font-medium">Workers</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {summary.byType.map((t) => (
+                  <tr key={t.label}>
+                    <td className="px-5 py-2 text-ink">{t.label}</td>
+                    <td className="px-5 py-2 text-right tabular-nums text-ink">
+                      {t.count}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </section>
@@ -140,9 +157,15 @@ export default async function CscsReportPage({
                 <tbody className="divide-y divide-line">
                   {rows.map((r) => (
                     <tr key={r.id}>
-                      <td className="px-5 py-2 font-medium text-ink">{r.workerName}</td>
-                      <td className="px-5 py-2 text-ink-subtle">{r.workerCompany}</td>
-                      <td className="px-5 py-2 text-ink-subtle">{r.cardTypeLabel}</td>
+                      <td className="px-5 py-2 font-medium text-ink">
+                        {r.workerName}
+                      </td>
+                      <td className="px-5 py-2 text-ink-subtle">
+                        {r.workerCompany}
+                      </td>
+                      <td className="px-5 py-2 text-ink-subtle">
+                        {r.cardTypeLabel}
+                      </td>
                       <td className="whitespace-nowrap px-5 py-2 tabular-nums text-ink-subtle">
                         {r.expiry ? formatDateUK(r.expiry) : '—'}
                       </td>

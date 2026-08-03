@@ -45,11 +45,12 @@ export default async function PermitsReportPage({
     Array.isArray(v) ? v[0] : v;
   const many = (v: string | string[] | undefined) =>
     v == null ? [] : Array.isArray(v) ? v : [v];
-  const filters = parseReportFilters(
+  const filters = await parseReportFilters(
     {
       from: one(searchParams.from),
       to: one(searchParams.to),
       sites: many(searchParams.sites),
+      includeCompleted: one(searchParams.includeCompleted),
     },
     viewer,
   );

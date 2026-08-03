@@ -18,7 +18,10 @@ import {
 } from '@/services/platformUsers/platformAccess';
 import { getReportType } from '@/services/reports/reportRegistry';
 import { canRunReport, canExportReport } from '@/services/reports/reportAccess';
-import { parseReportFilters, reportFiltersQuery } from '@/services/reports/reportFilters';
+import {
+  parseReportFilters,
+  reportFiltersQuery,
+} from '@/services/reports/reportFilters';
 import { getOrgOverview } from '@/services/reports/orgOverviewReport';
 import { canUseAiSummaries } from '@/services/ai/aiConfig';
 import { AiSummaryPanel } from '@/components/platform/AiSummaryPanel';
@@ -42,11 +45,17 @@ export default async function OrgOverviewReportPage({
   assertModuleView(viewer, 'reports');
   if (!canRunReport(viewer, REPORT)) redirect('/platform/dashboard/reports');
 
-  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const one = (v: string | string[] | undefined) =>
+    Array.isArray(v) ? v[0] : v;
   const many = (v: string | string[] | undefined) =>
     v == null ? [] : Array.isArray(v) ? v : [v];
-  const filters = parseReportFilters(
-    { from: one(searchParams.from), to: one(searchParams.to), sites: many(searchParams.sites) },
+  const filters = await parseReportFilters(
+    {
+      from: one(searchParams.from),
+      to: one(searchParams.to),
+      sites: many(searchParams.sites),
+      includeCompleted: one(searchParams.includeCompleted),
+    },
     viewer,
   );
 
@@ -79,13 +88,21 @@ export default async function OrgOverviewReportPage({
         />
       )}
 
-      <ReportFilterBar viewer={viewer} filters={filters} action="/platform/dashboard/reports/org-overview" />
+      <ReportFilterBar
+        viewer={viewer}
+        filters={filters}
+        action="/platform/dashboard/reports/org-overview"
+      />
 
       <KpiCards
         items={[
           { label: 'Total sites', value: o.totalSites },
           { label: 'Active workers', value: o.activeWorkers },
-          { label: 'Check-ins', value: o.checkIns, sub: `avg ${o.avgPerDay}/day` },
+          {
+            label: 'Check-ins',
+            value: o.checkIns,
+            sub: `avg ${o.avgPerDay}/day`,
+          },
           { label: 'On site now', value: o.onSiteNow },
         ]}
       />
@@ -127,18 +144,30 @@ export default async function OrgOverviewReportPage({
                 <thead>
                   <tr className="border-b border-line text-left text-ink-subtle">
                     <th className="px-5 py-2 font-medium">Site</th>
-                    <th className="px-5 py-2 text-right font-medium">Check-ins</th>
-                    <th className="px-5 py-2 text-right font-medium">On site</th>
-                    <th className="px-5 py-2 text-right font-medium">Compliance</th>
+                    <th className="px-5 py-2 text-right font-medium">
+                      Check-ins
+                    </th>
+                    <th className="px-5 py-2 text-right font-medium">
+                      On site
+                    </th>
+                    <th className="px-5 py-2 text-right font-medium">
+                      Compliance
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
                   {o.sitePerformance.map((s) => (
                     <tr key={s.siteId}>
                       <td className="px-5 py-2 text-ink">{s.siteName}</td>
-                      <td className="px-5 py-2 text-right tabular-nums text-ink-subtle">{s.checkIns}</td>
-                      <td className="px-5 py-2 text-right tabular-nums text-ink-subtle">{s.onSiteNow}</td>
-                      <td className="px-5 py-2 text-right tabular-nums font-semibold text-ink">{s.compliancePct}%</td>
+                      <td className="px-5 py-2 text-right tabular-nums text-ink-subtle">
+                        {s.checkIns}
+                      </td>
+                      <td className="px-5 py-2 text-right tabular-nums text-ink-subtle">
+                        {s.onSiteNow}
+                      </td>
+                      <td className="px-5 py-2 text-right font-semibold tabular-nums text-ink">
+                        {s.compliancePct}%
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -148,7 +177,7 @@ export default async function OrgOverviewReportPage({
         </SectionCard>
       </div>
 
-      <h2 className="mt-8 mb-3 text-sm font-semibold uppercase tracking-wide text-ink-subtle">
+      <h2 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wide text-ink-subtle">
         Upcoming modules
       </h2>
       <div className="grid gap-4 sm:grid-cols-3">

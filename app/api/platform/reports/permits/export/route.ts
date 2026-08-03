@@ -35,11 +35,14 @@ export async function GET(req: NextRequest) {
   }
 
   const sp = req.nextUrl.searchParams;
-  const filters = parseReportFilters(
+  const filters = await parseReportFilters(
     {
       from: sp.get('from') ?? undefined,
       to: sp.get('to') ?? undefined,
       sites: sp.getAll('sites'),
+      // SC-025 — carried through so an export matches exactly what the screen
+      // showed.
+      includeCompleted: sp.get('includeCompleted') ?? undefined,
     },
     viewer,
   );

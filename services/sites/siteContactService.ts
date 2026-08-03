@@ -42,9 +42,7 @@ export type SiteContactFieldErrors = Partial<
 >;
 
 /** Validate & normalise a contact. A role is required; name and phone optional. */
-export function validateSiteContact(
-  input: SiteContactInput,
-):
+export function validateSiteContact(input: SiteContactInput):
   | {
       ok: true;
       value: { role: string; name: string | null; phone: string | null };

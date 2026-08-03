@@ -51,6 +51,16 @@ export async function PATCH(
         { status: 400 },
       );
     }
+    if (result.reason === 'project_completed') {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            'This project has been completed and its records are read-only. A Director can reopen it if changes are needed.',
+        },
+        { status: 409 },
+      );
+    }
     if (result.reason === 'forbidden') {
       return NextResponse.json(
         { ok: false, error: 'Only Directors can edit sites.' },

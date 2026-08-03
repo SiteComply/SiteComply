@@ -3,6 +3,7 @@ import {
   toDateInputValue,
   ukDateRangeToUtc,
 } from '@/lib/datetime';
+import { prisma } from '@/lib/prisma';
 import { resolveReportScope } from '@/services/reports/reportAccess';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 
@@ -25,12 +26,33 @@ export interface ReportFilters {
   siteIds: string[];
   /** Raw requested site ids (for checkbox state); null = "all accessible". */
   requestedSiteIds: string[] | null;
+  /** SC-025 — whether completed projects are included. Default false. */
+  includeCompleted: boolean;
+  /** How many accessible projects are completed, for the toggle's label. */
+  completedCount: number;
 }
 
-export function parseReportFilters(
-  raw: { from?: string; to?: string; sites?: string[] },
+/**
+ * SC-025 — completed projects are EXCLUDED by default.
+ *
+ * A finished job should not drag a live compliance figure down for the rest of
+ * the year: "82% of inspections completed" is about the work in progress. The
+ * historical record is still reachable — this is a default, not a deletion, and
+ * `includeCompleted` puts it back.
+ *
+ * Async because it now asks the database which projects are completed. Every
+ * caller is an async server component or route handler; the compiler finds any
+ * that forgets to await, because `.siteIds` does not exist on a Promise.
+ */
+export async function parseReportFilters(
+  raw: {
+    from?: string;
+    to?: string;
+    sites?: string[];
+    includeCompleted?: string | boolean;
+  },
   viewer: PlatformViewer,
-): ReportFilters {
+): Promise<ReportFilters> {
   const today = toDateInputValue(new Date());
   let toStr = raw.to && ISO.test(raw.to) ? raw.to : today;
   let fromStr =
@@ -38,7 +60,24 @@ export function parseReportFilters(
   if (fromStr > toStr) [fromStr, toStr] = [toStr, fromStr]; // tolerate reversed range
 
   const requested = raw.sites && raw.sites.length ? raw.sites : null;
-  const siteIds = resolveReportScope(viewer, requested ?? undefined);
+  const scoped = resolveReportScope(viewer, requested ?? undefined);
+
+  const includeCompleted =
+    raw.includeCompleted === true ||
+    raw.includeCompleted === '1' ||
+    raw.includeCompleted === 'true';
+
+  const completed = scoped.length
+    ? await prisma.jobSite.findMany({
+        where: { id: { in: scoped }, status: 'COMPLETED' },
+        select: { id: true },
+      })
+    : [];
+  const completedIds = new Set(completed.map((c) => c.id));
+
+  const siteIds = includeCompleted
+    ? scoped
+    : scoped.filter((id) => !completedIds.has(id));
 
   return {
     fromStr,
@@ -46,6 +85,8 @@ export function parseReportFilters(
     range: ukDateRangeToUtc(fromStr, toStr),
     siteIds,
     requestedSiteIds: requested,
+    includeCompleted,
+    completedCount: completedIds.size,
   };
 }
 
@@ -55,5 +96,7 @@ export function reportFiltersQuery(filters: ReportFilters): string {
   p.set('from', filters.fromStr);
   p.set('to', filters.toStr);
   (filters.requestedSiteIds ?? []).forEach((id) => p.append('sites', id));
+  // Carried through so an export matches exactly what was on screen.
+  if (filters.includeCompleted) p.set('includeCompleted', '1');
   return p.toString();
 }

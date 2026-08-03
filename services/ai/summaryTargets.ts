@@ -86,14 +86,14 @@ const COMPLIANCE: SummaryTargetDef = {
   label: 'compliance report',
   authorize: (v) => canRunReport(v, getReportType('compliance')!),
   async resolveKey(viewer, opts) {
-    const f = parseReportFilters(opts.filters ?? {}, viewer);
+    const f = await parseReportFilters(opts.filters ?? {}, viewer);
     return {
       targetKey: reportTargetKey('compliance', f.fromStr, f.toStr, f.siteIds),
       siteIds: f.siteIds,
     };
   },
   async build(viewer, opts) {
-    const filters = parseReportFilters(opts.filters ?? {}, viewer);
+    const filters = await parseReportFilters(opts.filters ?? {}, viewer);
     const s = await getComplianceSummary(filters.siteIds, filters.range);
     return {
       targetKey: reportTargetKey(
@@ -133,14 +133,14 @@ const SCORECARD: SummaryTargetDef = {
   label: 'site compliance scorecard',
   authorize: (v) => canRunReport(v, getReportType('scorecard')!),
   async resolveKey(viewer, opts) {
-    const f = parseReportFilters(opts.filters ?? {}, viewer);
+    const f = await parseReportFilters(opts.filters ?? {}, viewer);
     return {
       targetKey: reportTargetKey('scorecard', f.fromStr, f.toStr, f.siteIds),
       siteIds: f.siteIds,
     };
   },
   async build(viewer, opts) {
-    const filters = parseReportFilters(opts.filters ?? {}, viewer);
+    const filters = await parseReportFilters(opts.filters ?? {}, viewer);
     const scopeSites = viewer.sites.filter((s) =>
       filters.siteIds.includes(s.id),
     );
@@ -175,14 +175,14 @@ const ORG_OVERVIEW: SummaryTargetDef = {
   label: 'organisation overview report',
   authorize: (v) => canRunReport(v, getReportType('org-overview')!), // directorOnly enforced here
   async resolveKey(viewer, opts) {
-    const f = parseReportFilters(opts.filters ?? {}, viewer);
+    const f = await parseReportFilters(opts.filters ?? {}, viewer);
     return {
       targetKey: reportTargetKey('org-overview', f.fromStr, f.toStr, f.siteIds),
       siteIds: f.siteIds,
     };
   },
   async build(viewer, opts) {
-    const filters = parseReportFilters(opts.filters ?? {}, viewer);
+    const filters = await parseReportFilters(opts.filters ?? {}, viewer);
     const scopeSites = viewer.sites.filter((s) =>
       filters.siteIds.includes(s.id),
     );

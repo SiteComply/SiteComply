@@ -1,6 +1,13 @@
 import { notFound } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { SiteDetailHeader } from '@/components/platform/SiteDetailHeader';
+import { ProjectCompletionPanel } from '@/components/platform/ProjectCompletionPanel';
+import { ProjectClosureHistory } from '@/components/platform/ProjectClosureHistory';
+import {
+  canCloseProject,
+  canReopenProject,
+  listClosureEvents,
+} from '@/services/projectClosure/closureService';
 import { Section, Detail, Stat } from '@/components/platform/siteDetailUi';
 import { formatDateUK } from '@/lib/datetime';
 import {
@@ -39,9 +46,29 @@ export default async function SiteOverviewPage({
   const siteInfo = await getSiteInformationForViewer(viewer, params.id);
   const infoComplete = siteInfo?.completeness ?? null;
 
+  // SC-025 — completion state, controls and audit trail.
+  const closureEvents = (await listClosureEvents(viewer, params.id)) ?? [];
+
   return (
     <PlatformShell>
       <SiteDetailHeader viewer={viewer} siteId={params.id} active="overview" />
+
+      {/* SC-025 — a completed project says so before anything else on the page,
+          so nobody starts work on records they cannot change. */}
+      {site.status === 'COMPLETED' ? (
+        <div className="mb-6">
+          <ProjectCompletionPanel
+            siteId={params.id}
+            status={site.status}
+            completedAt={
+              site.completedAt ? site.completedAt.toISOString() : null
+            }
+            completedByName={site.completedByName}
+            canClose={canCloseProject(viewer.role)}
+            canReopen={canReopenProject(viewer.role)}
+          />
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -102,6 +129,33 @@ export default async function SiteOverviewPage({
           )}
         </div>
       </div>
+
+      {/* The close control sits at the BOTTOM for an open project: completing a
+          project is a deliberate, end-of-life act, not something to fall over
+          while reading the summary. */}
+      {site.status !== 'COMPLETED' && canCloseProject(viewer.role) ? (
+        <div className="mt-6">
+          <ProjectCompletionPanel
+            siteId={params.id}
+            status={site.status}
+            completedAt={null}
+            completedByName={null}
+            canClose
+            canReopen={canReopenProject(viewer.role)}
+          />
+        </div>
+      ) : null}
+
+      {closureEvents.length > 0 ? (
+        <div className="mt-6">
+          <ProjectClosureHistory
+            events={closureEvents.map((e) => ({
+              ...e,
+              createdAt: e.createdAt.toISOString(),
+            }))}
+          />
+        </div>
+      ) : null}
     </PlatformShell>
   );
 }

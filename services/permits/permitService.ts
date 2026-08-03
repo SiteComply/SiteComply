@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+import { prisma, type AppTransactionClient } from '@/lib/prisma';
 import { isPermitTypeAvailable } from '@/services/siteServices/siteServiceAvailability';
 import type { Prisma, Permit, PermitActivity } from '@prisma/client';
 import {
@@ -26,7 +26,7 @@ const twoDigit = (n: number) => String(n).padStart(2, '0');
 
 /** Build a human reference like "HW-260728-003" (prefix-YYMMDD-seq per prefix/day). */
 async function nextReference(
-  tx: Prisma.TransactionClient,
+  tx: AppTransactionClient,
   prefix: string,
   now: Date,
 ): Promise<string> {

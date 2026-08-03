@@ -17,7 +17,10 @@ import {
   canExportReport,
   isAggregateOnly,
 } from '@/services/reports/reportAccess';
-import { parseReportFilters, reportFiltersQuery } from '@/services/reports/reportFilters';
+import {
+  parseReportFilters,
+  reportFiltersQuery,
+} from '@/services/reports/reportFilters';
 import {
   getComplianceSummary,
   getComplianceRows,
@@ -45,11 +48,17 @@ export default async function ComplianceReportPage({
   assertModuleView(viewer, 'reports');
   if (!canRunReport(viewer, REPORT)) redirect('/platform/dashboard/reports');
 
-  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const one = (v: string | string[] | undefined) =>
+    Array.isArray(v) ? v[0] : v;
   const many = (v: string | string[] | undefined) =>
     v == null ? [] : Array.isArray(v) ? v : [v];
-  const filters = parseReportFilters(
-    { from: one(searchParams.from), to: one(searchParams.to), sites: many(searchParams.sites) },
+  const filters = await parseReportFilters(
+    {
+      from: one(searchParams.from),
+      to: one(searchParams.to),
+      sites: many(searchParams.sites),
+      includeCompleted: one(searchParams.includeCompleted),
+    },
     viewer,
   );
 
@@ -93,18 +102,34 @@ export default async function ComplianceReportPage({
 
       <KpiCards
         items={[
-          { label: 'Compliant', value: `${pct(summary.compliant, summary.total)}%`, sub: `${summary.compliant} of ${summary.total}` },
+          {
+            label: 'Compliant',
+            value: `${pct(summary.compliant, summary.total)}%`,
+            sub: `${summary.compliant} of ${summary.total}`,
+          },
           { label: 'Incomplete', value: summary.incomplete },
-          { label: 'PPE confirmed', value: `${pct(summary.ppe, summary.total)}%` },
-          { label: 'GDPR consent', value: `${pct(summary.gdpr, summary.total)}%` },
+          {
+            label: 'PPE confirmed',
+            value: `${pct(summary.ppe, summary.total)}%`,
+          },
+          {
+            label: 'GDPR consent',
+            value: `${pct(summary.gdpr, summary.total)}%`,
+          },
         ]}
       />
 
       <div className="mt-4">
         <KpiCards
           items={[
-            { label: 'Site rules acknowledged', value: `${pct(summary.rules, summary.total)}%` },
-            { label: 'Safe working agreed', value: `${pct(summary.safe, summary.total)}%` },
+            {
+              label: 'Site rules acknowledged',
+              value: `${pct(summary.rules, summary.total)}%`,
+            },
+            {
+              label: 'Safe working agreed',
+              value: `${pct(summary.safe, summary.total)}%`,
+            },
             { label: 'Total check-ins', value: summary.total },
             { label: 'Sites covered', value: summary.bySite.length },
           ]}
@@ -113,7 +138,9 @@ export default async function ComplianceReportPage({
 
       <section className="mt-6 rounded-xl border border-line bg-surface shadow-card">
         <div className="border-b border-line px-5 py-3">
-          <h2 className="text-base font-semibold text-ink">Compliance by site</h2>
+          <h2 className="text-base font-semibold text-ink">
+            Compliance by site
+          </h2>
         </div>
         {summary.bySite.length === 0 ? (
           <p className="px-5 py-8 text-center text-sm text-ink-subtle">
@@ -121,26 +148,34 @@ export default async function ComplianceReportPage({
           </p>
         ) : (
           <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-line text-left text-ink-subtle">
-                <th className="px-5 py-2 font-medium">Site</th>
-                <th className="px-5 py-2 text-right font-medium">Compliant</th>
-                <th className="px-5 py-2 text-right font-medium">Total</th>
-                <th className="px-5 py-2 text-right font-medium">%</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {summary.bySite.map((s) => (
-                <tr key={s.name}>
-                  <td className="px-5 py-2 text-ink">{s.name}</td>
-                  <td className="px-5 py-2 text-right tabular-nums text-ink">{s.compliant}</td>
-                  <td className="px-5 py-2 text-right tabular-nums text-ink-subtle">{s.total}</td>
-                  <td className="px-5 py-2 text-right tabular-nums font-semibold text-ink">{s.pct}%</td>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-ink-subtle">
+                  <th className="px-5 py-2 font-medium">Site</th>
+                  <th className="px-5 py-2 text-right font-medium">
+                    Compliant
+                  </th>
+                  <th className="px-5 py-2 text-right font-medium">Total</th>
+                  <th className="px-5 py-2 text-right font-medium">%</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {summary.bySite.map((s) => (
+                  <tr key={s.name}>
+                    <td className="px-5 py-2 text-ink">{s.name}</td>
+                    <td className="px-5 py-2 text-right tabular-nums text-ink">
+                      {s.compliant}
+                    </td>
+                    <td className="px-5 py-2 text-right tabular-nums text-ink-subtle">
+                      {s.total}
+                    </td>
+                    <td className="px-5 py-2 text-right font-semibold tabular-nums text-ink">
+                      {s.pct}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </section>
@@ -188,7 +223,9 @@ export default async function ComplianceReportPage({
                           {r.workerCompany}
                         </span>
                       </td>
-                      <td className="px-5 py-2 text-ink-subtle">{r.siteName}</td>
+                      <td className="px-5 py-2 text-ink-subtle">
+                        {r.siteName}
+                      </td>
                       <td className="whitespace-nowrap px-5 py-2 tabular-nums text-ink-subtle">
                         {formatDateTimeUK(r.checkedInAt)}
                       </td>
@@ -200,7 +237,9 @@ export default async function ComplianceReportPage({
                               : 'font-semibold text-hivis-600'
                           }
                         >
-                          {r.status === 'COMPLIANT' ? 'Compliant' : 'Incomplete'}
+                          {r.status === 'COMPLIANT'
+                            ? 'Compliant'
+                            : 'Incomplete'}
                         </span>
                       </td>
                       <Tick ok={r.ppe} />

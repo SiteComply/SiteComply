@@ -21,7 +21,10 @@ const REPORT = getReportType('workforce')!;
 export async function GET(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
-    return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: 'Not signed in.' },
+      { status: 401 },
+    );
   }
   if (!canExportReport(viewer, REPORT)) {
     return NextResponse.json(
@@ -31,8 +34,16 @@ export async function GET(req: NextRequest) {
   }
 
   const sp = req.nextUrl.searchParams;
-  const filters = parseReportFilters(
-    { from: sp.get('from') ?? undefined, to: sp.get('to') ?? undefined, sites: sp.getAll('sites') },
+  const filters = await parseReportFilters(
+    {
+      from: sp.get('from') ?? undefined,
+      to: sp.get('to') ?? undefined,
+      sites: sp.getAll('sites'),
+      // SC-025 — carried through so an export matches exactly what the screen
+      // showed. Without this a CSV would silently exclude completed projects
+      // even when the user had asked to include them.
+      includeCompleted: sp.get('includeCompleted') ?? undefined,
+    },
     viewer,
   );
 

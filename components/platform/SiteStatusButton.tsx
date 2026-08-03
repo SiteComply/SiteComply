@@ -1,5 +1,6 @@
 'use client';
 
+import type { SiteStatusValue } from '@/services/sites/siteStatusFilter';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/cn';
@@ -19,7 +20,7 @@ export function SiteStatusButton({
   status,
 }: {
   siteId: string;
-  status: 'ACTIVE' | 'ARCHIVED';
+  status: SiteStatusValue;
 }) {
   const router = useRouter();
   const toast = useToast();

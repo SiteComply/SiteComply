@@ -1,3 +1,4 @@
+import type { SiteStatusValue } from '@/services/sites/siteStatusFilter';
 import type { PermissionOverride } from '@/services/platformUsers/contractorAccessConstants';
 import type { SiteOverrides } from '@/services/platformUsers/contractorAccessConstants';
 import type { PlatformRoleValue } from '@/services/platformUsers/platformUserConstants';
@@ -17,7 +18,7 @@ export interface ViewerSite {
   jobReference: string;
   town: string;
   postcode: string;
-  status: 'ACTIVE' | 'ARCHIVED';
+  status: SiteStatusValue;
 }
 
 export interface PlatformViewer {

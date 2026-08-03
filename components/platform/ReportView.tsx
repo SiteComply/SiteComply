@@ -71,11 +71,21 @@ export function ReportFilterBar({
       <div className="flex flex-wrap items-end gap-4">
         <label className="text-sm">
           <span className="mb-1 block font-semibold text-ink">Date from</span>
-          <input type="date" name="from" defaultValue={filters.fromStr} className={field} />
+          <input
+            type="date"
+            name="from"
+            defaultValue={filters.fromStr}
+            className={field}
+          />
         </label>
         <label className="text-sm">
           <span className="mb-1 block font-semibold text-ink">Date to</span>
-          <input type="date" name="to" defaultValue={filters.toStr} className={field} />
+          <input
+            type="date"
+            name="to"
+            defaultValue={filters.toStr}
+            className={field}
+          />
         </label>
         <button
           type="submit"
@@ -84,6 +94,28 @@ export function ReportFilterBar({
           Apply filters
         </button>
       </div>
+
+      {/* SC-025 — completed projects are excluded by default so a finished job
+          stops dragging live compliance figures. The historical data is not
+          gone; this puts it back. Shown only when there is something to
+          include, so the control never appears as a puzzle. */}
+      {filters.completedCount > 0 && (
+        <label className="mt-4 flex items-center gap-2 border-t border-line pt-3 text-sm text-ink">
+          <input
+            type="checkbox"
+            name="includeCompleted"
+            value="1"
+            defaultChecked={filters.includeCompleted}
+            className="h-4 w-4 accent-brand-600"
+          />
+          Include completed projects
+          <span className="text-xs text-ink-subtle">
+            ({filters.completedCount} completed{' '}
+            {filters.completedCount === 1 ? 'project' : 'projects'} excluded by
+            default)
+          </span>
+        </label>
+      )}
 
       {viewer.sites.length > 1 && (
         <fieldset className="mt-4 border-t border-line pt-3">

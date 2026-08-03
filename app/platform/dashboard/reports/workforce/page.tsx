@@ -12,7 +12,10 @@ import {
 } from '@/services/platformUsers/platformAccess';
 import { getReportType } from '@/services/reports/reportRegistry';
 import { canRunReport, canExportReport } from '@/services/reports/reportAccess';
-import { parseReportFilters, reportFiltersQuery } from '@/services/reports/reportFilters';
+import {
+  parseReportFilters,
+  reportFiltersQuery,
+} from '@/services/reports/reportFilters';
 import { getWorkforceSummary } from '@/services/reports/workforceReport';
 
 export const dynamic = 'force-dynamic';
@@ -33,11 +36,17 @@ export default async function WorkforceReportPage({
   assertModuleView(viewer, 'reports');
   if (!canRunReport(viewer, REPORT)) redirect('/platform/dashboard/reports');
 
-  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const one = (v: string | string[] | undefined) =>
+    Array.isArray(v) ? v[0] : v;
   const many = (v: string | string[] | undefined) =>
     v == null ? [] : Array.isArray(v) ? v : [v];
-  const filters = parseReportFilters(
-    { from: one(searchParams.from), to: one(searchParams.to), sites: many(searchParams.sites) },
+  const filters = await parseReportFilters(
+    {
+      from: one(searchParams.from),
+      to: one(searchParams.to),
+      sites: many(searchParams.sites),
+      includeCompleted: one(searchParams.includeCompleted),
+    },
     viewer,
   );
 
@@ -82,24 +91,36 @@ export default async function WorkforceReportPage({
           </p>
         ) : (
           <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-line text-left text-ink-subtle">
-                <th className="px-5 py-2 font-medium">Company / subcontractor</th>
-                <th className="px-5 py-2 text-right font-medium">Unique workers</th>
-                <th className="px-5 py-2 text-right font-medium">Check-ins</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {summary.byCompany.map((c) => (
-                <tr key={c.company}>
-                  <td className="px-5 py-2 font-medium text-ink">{c.company}</td>
-                  <td className="px-5 py-2 text-right tabular-nums text-ink">{c.workers}</td>
-                  <td className="px-5 py-2 text-right tabular-nums text-ink-subtle">{c.checkIns}</td>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-ink-subtle">
+                  <th className="px-5 py-2 font-medium">
+                    Company / subcontractor
+                  </th>
+                  <th className="px-5 py-2 text-right font-medium">
+                    Unique workers
+                  </th>
+                  <th className="px-5 py-2 text-right font-medium">
+                    Check-ins
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {summary.byCompany.map((c) => (
+                  <tr key={c.company}>
+                    <td className="px-5 py-2 font-medium text-ink">
+                      {c.company}
+                    </td>
+                    <td className="px-5 py-2 text-right tabular-nums text-ink">
+                      {c.workers}
+                    </td>
+                    <td className="px-5 py-2 text-right tabular-nums text-ink-subtle">
+                      {c.checkIns}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </section>

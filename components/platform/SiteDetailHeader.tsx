@@ -113,13 +113,21 @@ export async function SiteDetailHeader({
             >
               Project setup
             </Link>
-            <Link
-              href={`/platform/dashboard/sites/${site.id}/edit`}
-              className="touch-target inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white shadow-sm shadow-brand-600/20 transition-colors hover:bg-brand-600"
-            >
-              Edit site
-            </Link>
-            <SiteStatusButton siteId={site.id} status={site.status} />
+{/* SC-025 — a completed project is read-only, so neither editing nor the
+                archive/reactivate control is offered. Reactivating here would
+                bypass the Director-only reopen flow, which requires a recorded
+                reason and restores suspended worker access. */}
+            {site.status !== 'COMPLETED' && (
+              <>
+                <Link
+                  href={`/platform/dashboard/sites/${site.id}/edit`}
+                  className="touch-target inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white shadow-sm shadow-brand-600/20 transition-colors hover:bg-brand-600"
+                >
+                  Edit site
+                </Link>
+                <SiteStatusButton siteId={site.id} status={site.status} />
+              </>
+            )}
           </div>
         )}
       </div>

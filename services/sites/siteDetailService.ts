@@ -1,3 +1,4 @@
+import type { SiteStatusValue } from '@/services/sites/siteStatusFilter';
 import { prisma } from '@/lib/prisma';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import {
@@ -40,8 +41,10 @@ export interface SiteDetail {
     addressLine1: string;
     town: string;
     postcode: string;
-    status: 'ACTIVE' | 'ARCHIVED';
+    status: SiteStatusValue;
     createdAt: Date;
+    completedAt: Date | null;
+    completedByName: string | null;
   };
   onSiteCount: number;
   currentWorkers: SiteDetailWorker[];
@@ -66,6 +69,9 @@ export async function getSiteDetailForViewer(
       postcode: true,
       status: true,
       createdAt: true,
+      // SC-025 — the completion panel shows who closed the project and when.
+      completedAt: true,
+      completedByName: true,
     },
   });
   if (!site) return null;
