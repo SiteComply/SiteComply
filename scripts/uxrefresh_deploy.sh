@@ -173,6 +173,33 @@ for f in 'app/platform/dashboard/actions/[id]/page.tsx' \
 done
 echo "      confirmed: WorkSurface in use, check-ins is a table, selection scoped, 5 record surfaces share RecordHeader."
 
+echo "[5f] Compliance outstanding-work workspace (Phase 5b)..."
+CP='app/platform/dashboard/sites/[id]/compliance/page.tsx'
+grep -q '<WorkSurface' "$CP" \
+  || { echo "ERROR: Compliance is not a work surface — aborting"; exit 1; }
+# The two separate panels must be gone, or it is still two lists.
+grep -qE '<Section title="Outstanding (audits|actions)">' "$CP" \
+  && { echo "ERROR: Compliance still renders separate audits/actions panels — aborting"; exit 1; }
+# THE STANDING RULE: merging lists must never merge permissions. The merged array
+# may only be built from the two already-gated variables, each of which is [] when
+# the viewer lacks that module. If a future edit sourced rows directly from a
+# service call here, a viewer without audits:view could see audit rows.
+grep -q 'const audits = canViewAudits' "$CP" \
+  && grep -q 'const actions = canViewActions' "$CP" \
+  || { echo "ERROR: audits/actions are no longer separately gated — aborting"; exit 1; }
+grep -q '\.\.\.audits\.map' "$CP" && grep -q '\.\.\.actions\.map' "$CP" \
+  || { echo "ERROR: the merged list is not built from the gated arrays — aborting"; exit 1; }
+if grep -E 'listOutstanding(Audits|Actions)ForSite' "$CP" | grep -v 'canView' | grep -q 'await'; then
+  echo "ERROR: an outstanding-work query bypasses its permission check — aborting"; exit 1
+fi
+# Ids must stay kind-prefixed or ?item= could select the wrong record.
+grep -q "id: \`audit:" "$CP" && grep -q "id: \`action:" "$CP" \
+  || { echo "ERROR: merged row ids are not kind-prefixed — aborting"; exit 1; }
+# The agreed order must come from the shared module, not a local sort.
+grep -q 'sortOutstandingWork(workRows, now)' "$CP" \
+  || { echo "ERROR: Compliance is not using the agreed outstanding-work order — aborting"; exit 1; }
+echo "      confirmed: one work surface, gates unmerged, ids prefixed, agreed order in use."
+
 echo "[6/8] Building..."
 npx prisma generate >/dev/null 2>&1 || { echo "ERROR: prisma generate failed"; exit 1; }
 rm -rf .next

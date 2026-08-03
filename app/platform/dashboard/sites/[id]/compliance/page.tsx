@@ -1,10 +1,21 @@
+import { Fragment } from 'react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { cn } from '@/lib/cn';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { SiteDetailHeader } from '@/components/platform/SiteDetailHeader';
-import { RowLink } from '@/components/platform/RowLink';
 import { Section, Empty, Rate } from '@/components/platform/siteDetailUi';
+import {
+  WorkSurface,
+  RailDetail,
+  selectedRowClass,
+  resolveSelected,
+} from '@/components/platform/WorkSurface';
+import {
+  sortOutstandingWork,
+  urgencyBucket,
+  type UrgencyBucket,
+} from '@/components/platform/outstandingWorkOrder';
 import {
   requirePlatformViewer,
   assertModuleView,
@@ -22,10 +33,7 @@ import {
   actionStatusLabel,
   actionPriorityLabel,
   ACTION_STATUS_BADGE,
-  ACTION_PRIORITY_BADGE,
-  ACTION_OVERDUE_BADGE,
   type ActionStatusValue,
-  type ActionPriorityValue,
 } from '@/services/actions/actionConstants';
 import { SiteServicesConfig } from '@/components/platform/SiteServicesConfig';
 import { getSiteServiceConfig } from '@/services/siteServices/siteServiceAvailability';
@@ -40,10 +48,19 @@ export const dynamic = 'force-dynamic';
  * site's outstanding audits and corrective actions. Each block keeps its own view
  * permission, exactly as on the former single page.
  */
+const URGENCY_LABEL: Record<UrgencyBucket, string> = {
+  overdue: 'Overdue',
+  'due-today': 'Due today',
+  upcoming: 'Upcoming',
+  undated: 'No due date',
+};
+
 export default async function SiteCompliancePage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams?: { item?: string };
 }) {
   const viewer = await requirePlatformViewer();
   assertModuleView(viewer, 'sites');
@@ -66,6 +83,62 @@ export default async function SiteCompliancePage({
   const actions = canViewActions
     ? await listOutstandingActionsForSite(viewer, params.id, 5, now)
     : [];
+
+  /**
+   * UX REFRESH PHASE 5b — one outstanding-work surface.
+   *
+   * The two lists were organised by DATA SOURCE — one panel per query — while
+   * the manager is asking a single question: "what needs doing on this site?"
+   * Two lists side by side are still two lists, however large the card.
+   *
+   * PERMISSIONS ARE NOT MERGED, ONLY ROWS. `audits` is already [] unless
+   * canViewAudits and `actions` is already [] unless canViewActions, so the
+   * merged array inherits both gates by construction. A viewer with actions but
+   * not audits sees only actions, and nothing on screen suggests rows were
+   * filtered out.
+   *
+   * Ids are PREFIXED by kind: an audit and an action could otherwise share an id
+   * and `?item=` would select the wrong record.
+   *
+   * NOTE ON ORDER: the agreed order is Overdue → Due today → Due date →
+   * Priority, and audits have NO due date in the schema, so every audit falls in
+   * the undated bucket and sorts last. Rather than let that silently bury them,
+   * the list is grouped by urgency with visible headings, so "No due date" is
+   * stated rather than merely happening.
+   */
+  const workRows = [
+    ...audits.map((a) => ({
+      id: `audit:${a.id}`,
+      kind: 'audit' as const,
+      title: a.title,
+      dueDate: null,
+      priority: null,
+      statusLabel: auditStatusLabel(a.status),
+      statusBadge: AUDIT_STATUS_BADGE[a.status as AuditStatusValue],
+      href: `/platform/dashboard/audits/${a.id}`,
+      createdAt: a.createdAt,
+      assignedTo: null as string | null,
+      assignedToCompany: null as string | null,
+      raisedFromAudit: false,
+    })),
+    ...actions.map((a) => ({
+      id: `action:${a.id}`,
+      kind: 'action' as const,
+      title: a.title,
+      dueDate: a.dueDate,
+      priority: a.priority as string | null,
+      statusLabel: actionStatusLabel(a.status),
+      statusBadge: ACTION_STATUS_BADGE[a.status as ActionStatusValue],
+      href: `/platform/dashboard/actions/${a.id}`,
+      createdAt: a.createdAt,
+      assignedTo: a.assignedTo,
+      assignedToCompany: a.assignedToCompany,
+      raisedFromAudit: a.auditFindingId != null,
+    })),
+  ];
+  const work = sortOutstandingWork(workRows, now);
+  const selectedWork = resolveSelected(searchParams?.item, work);
+  const compliancePath = `/platform/dashboard/sites/${params.id}/compliance`;
 
   // SC-021 — which permits and inspections this site uses. Read is open to
   // anyone who can see the tab; editing is gated on sites:edit, enforced in the
@@ -139,110 +212,178 @@ export default async function SiteCompliancePage({
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {canViewAudits && (
-          <Section title="Outstanding audits">
-            {audits.length === 0 ? (
-              <Empty>No outstanding audits for this site.</Empty>
-            ) : (
-              <ul className="space-y-1">
-                {audits.map((a) => (
-                  <li key={a.id}>
-                    <RowLink
-                      href={`/platform/dashboard/audits/${a.id}`}
-                      trailing={
-                        <span
+      <WorkSurface
+        railTitle={selectedWork ? 'Selected item' : 'Outstanding work'}
+        rail={
+          selectedWork && (
+            <>
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">
+                {selectedWork.kind === 'audit' ? 'Audit' : 'Action'}
+              </p>
+              <p className="mb-2 text-base font-semibold text-ink">
+                {selectedWork.title}
+              </p>
+              <dl>
+                <RailDetail
+                  label="Status"
+                  value={
+                    <span
+                      className={cn(
+                        'inline-flex rounded-full px-2 py-0.5 text-xs font-semibold',
+                        selectedWork.statusBadge,
+                      )}
+                    >
+                      {selectedWork.statusLabel}
+                    </span>
+                  }
+                />
+                <RailDetail
+                  label="Due"
+                  value={
+                    selectedWork.dueDate
+                      ? formatDateUK(selectedWork.dueDate)
+                      : 'No due date'
+                  }
+                />
+                {selectedWork.priority && (
+                  <RailDetail
+                    label="Priority"
+                    value={actionPriorityLabel(selectedWork.priority)}
+                  />
+                )}
+                {selectedWork.kind === 'action' && (
+                  <RailDetail
+                    label="Assigned to"
+                    value={
+                      selectedWork.assignedTo
+                        ? selectedWork.assignedToCompany
+                          ? `${selectedWork.assignedTo} · ${selectedWork.assignedToCompany}`
+                          : selectedWork.assignedTo
+                        : 'Nobody yet'
+                    }
+                  />
+                )}
+                <RailDetail
+                  label="Raised"
+                  value={formatDateUK(selectedWork.createdAt)}
+                />
+                {selectedWork.raisedFromAudit && (
+                  <RailDetail
+                    label="Origin"
+                    value="Raised from an audit finding"
+                  />
+                )}
+              </dl>
+              <Link
+                href={selectedWork.href}
+                className="mt-3 inline-block text-sm font-semibold text-brand-700 hover:underline"
+              >
+                Open {selectedWork.kind === 'audit' ? 'audit' : 'action'} →
+              </Link>
+            </>
+          )
+        }
+        footer={
+          <div className="flex flex-wrap gap-4 border-t border-line px-5 py-3 text-sm">
+            {canViewAudits && (
+              <Link
+                href={`/platform/dashboard/audits?site=${params.id}`}
+                className="font-semibold text-brand-700 hover:underline"
+              >
+                View all audits →
+              </Link>
+            )}
+            {canViewActions && (
+              <Link
+                href={`/platform/dashboard/actions?site=${params.id}`}
+                className="font-semibold text-brand-700 hover:underline"
+              >
+                View all actions →
+              </Link>
+            )}
+          </div>
+        }
+      >
+        {work.length === 0 ? (
+          <p className="px-5 py-10 text-center text-sm text-ink-subtle">
+            Nothing outstanding for this site.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-ink-subtle">
+                  <th className="px-5 py-2.5 font-medium">Item</th>
+                  <th className="px-5 py-2.5 font-medium">Type</th>
+                  <th className="px-5 py-2.5 font-medium">Status</th>
+                  <th className="px-5 py-2.5 font-medium">Due</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {work.map((row, i) => {
+                  const bucket = urgencyBucket(row, now);
+                  const isSelected = selectedWork?.id === row.id;
+                  // A heading whenever the urgency changes, so a row's position
+                  // is explained rather than merely happening.
+                  const startsBucket =
+                    i === 0 || urgencyBucket(work[i - 1]!, now) !== bucket;
+                  return (
+                    <Fragment key={row.id}>
+                      {startsBucket && (
+                        <tr className="bg-surface-sunken">
+                          <th
+                            colSpan={4}
+                            scope="colgroup"
+                            className="px-5 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-ink-subtle"
+                          >
+                            {URGENCY_LABEL[bucket]}
+                          </th>
+                        </tr>
+                      )}
+                      <tr
+                        className={selectedRowClass(isSelected)}
+                        aria-current={isSelected ? 'true' : undefined}
+                      >
+                        <td className="px-5 py-3">
+                          <Link
+                            href={`${compliancePath}?item=${encodeURIComponent(row.id)}`}
+                            className="font-semibold text-brand-700 hover:underline"
+                          >
+                            {row.title}
+                          </Link>
+                        </td>
+                        <td className="px-5 py-3 text-ink-muted">
+                          {row.kind === 'audit' ? 'Audit' : 'Action'}
+                        </td>
+                        <td className="px-5 py-3">
+                          <span
+                            className={cn(
+                              'inline-flex rounded-full px-2 py-0.5 text-xs font-semibold',
+                              row.statusBadge,
+                            )}
+                          >
+                            {row.statusLabel}
+                          </span>
+                        </td>
+                        <td
                           className={cn(
-                            'rounded-full px-2 py-0.5 text-xs font-semibold',
-                            AUDIT_STATUS_BADGE[a.status as AuditStatusValue],
+                            'px-5 py-3 tabular-nums',
+                            bucket === 'overdue'
+                              ? 'font-semibold text-danger-700'
+                              : 'text-ink-muted',
                           )}
                         >
-                          {auditStatusLabel(a.status)}
-                        </span>
-                      }
-                    >
-                      <span className="block truncate font-medium text-brand-700">
-                        {a.title}
-                      </span>
-                    </RowLink>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <Link
-              href={`/platform/dashboard/audits?site=${params.id}`}
-              className="mt-3 inline-block text-sm font-semibold text-brand-700 hover:underline"
-            >
-              View all audits →
-            </Link>
-          </Section>
-        )}
-
-        {canViewActions && (
-          <Section title="Outstanding actions">
-            {actions.length === 0 ? (
-              <Empty>No outstanding actions for this site.</Empty>
-            ) : (
-              <ul className="space-y-1">
-                {actions.map((a) => {
-                  const overdue = a.dueDate != null && a.dueDate < now;
-                  return (
-                    <li key={a.id}>
-                      <RowLink
-                        href={`/platform/dashboard/actions/${a.id}`}
-                        trailing={
-                          <>
-                            {overdue && (
-                              <span
-                                className={cn(
-                                  'rounded-full px-2 py-0.5 text-xs font-semibold',
-                                  ACTION_OVERDUE_BADGE,
-                                )}
-                              >
-                                Overdue
-                              </span>
-                            )}
-                            <span
-                              className={cn(
-                                'rounded-full px-2 py-0.5 text-xs font-semibold',
-                                ACTION_PRIORITY_BADGE[
-                                  a.priority as ActionPriorityValue
-                                ],
-                              )}
-                            >
-                              {actionPriorityLabel(a.priority)}
-                            </span>
-                            <span
-                              className={cn(
-                                'hidden rounded-full px-2 py-0.5 text-xs font-semibold sm:inline',
-                                ACTION_STATUS_BADGE[
-                                  a.status as ActionStatusValue
-                                ],
-                              )}
-                            >
-                              {actionStatusLabel(a.status)}
-                            </span>
-                          </>
-                        }
-                      >
-                        <span className="block truncate font-medium text-brand-700">
-                          {a.title}
-                        </span>
-                      </RowLink>
-                    </li>
+                          {row.dueDate ? formatDateUK(row.dueDate) : '—'}
+                        </td>
+                      </tr>
+                    </Fragment>
                   );
                 })}
-              </ul>
-            )}
-            <Link
-              href={`/platform/dashboard/actions?site=${params.id}`}
-              className="mt-3 inline-block text-sm font-semibold text-brand-700 hover:underline"
-            >
-              View all actions →
-            </Link>
-          </Section>
+              </tbody>
+            </table>
+          </div>
         )}
-      </div>
+      </WorkSurface>
 
       <details className="group mt-4 rounded-xl border border-line bg-surface shadow-card">
         <summary className="touch-target cursor-pointer list-none px-4 py-3 text-sm font-bold text-ink marker:content-none">
