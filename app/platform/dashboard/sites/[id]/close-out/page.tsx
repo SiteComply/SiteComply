@@ -5,6 +5,7 @@ import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
 import { CloseOutPackWizard } from '@/components/platform/CloseOutPackWizard';
 import { CloseOutArchiveButton } from '@/components/platform/CloseOutArchiveButton';
 import { CloseOutSupportingUpload } from '@/components/platform/CloseOutSupportingUpload';
+import { CloseOutShareManager } from '@/components/platform/CloseOutShareManager';
 import { viewerCan } from '@/services/platformUsers/effectivePermissions';
 import {
   requirePlatformViewer,
@@ -125,6 +126,11 @@ export default async function CloseOutPage({
                   >
                     Open
                   </Link>
+                  <CloseOutShareManager
+                    siteId={params.id}
+                    packId={p.id}
+                    hasZip={!!p.zip}
+                  />
                   <CloseOutArchiveButton
                     siteId={params.id}
                     packId={p.id}

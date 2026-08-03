@@ -16,7 +16,11 @@ import {
   parseSummaryOutput,
   type SummaryOutput,
 } from '@/services/ai/prompts';
-import { SUMMARY_TARGETS, type SummaryOpts } from '@/services/ai/summaryTargets';
+import {
+  SUMMARY_TARGETS,
+  type SummaryOpts,
+  getSummaryTarget,
+} from '@/services/ai/summaryTargets';
 import {
   recordAiSummary,
   countAiSummariesToday,
@@ -90,14 +94,25 @@ async function findCachedSummary(
   if (ttlHours <= 0) return null;
   const since = new Date(Date.now() - ttlHours * 3600 * 1000);
   const row = await prisma.aiSummary.findFirst({
-    where: { targetType, targetKey, contextHash, status: 'OK', createdAt: { gte: since } },
+    where: {
+      targetType,
+      targetKey,
+      contextHash,
+      status: 'OK',
+      createdAt: { gte: since },
+    },
     orderBy: { createdAt: 'desc' },
     select: { summary: true, provider: true, model: true, createdAt: true },
   });
   if (!row) return null;
   const summary = parseSummaryOutput(row.summary);
   if (!summary) return null;
-  return { summary, provider: row.provider, model: row.model, createdAt: row.createdAt };
+  return {
+    summary,
+    provider: row.provider,
+    model: row.model,
+    createdAt: row.createdAt,
+  };
 }
 
 export async function generateSummary(
@@ -111,12 +126,13 @@ export async function generateSummary(
   if (!runtime.allowedRoles.has(viewer.role.toUpperCase()))
     return { ok: false, reason: 'forbidden' };
 
-  const target = SUMMARY_TARGETS[targetType];
+  const target = getSummaryTarget(targetType);
   if (!target) return { ok: false, reason: 'bad_target' };
 
   // 2. Per-target authorisation — reuses canRunReport / permits (Org Overview
   //    stays Director-only, etc.).
-  if (!target.authorize(viewer, opts)) return { ok: false, reason: 'forbidden' };
+  if (!target.authorize(viewer, opts))
+    return { ok: false, reason: 'forbidden' };
 
   // 3. Build the viewer-scoped, PII-safe context (null = out of scope / missing).
   const built = await target.build(viewer, opts);
@@ -153,7 +169,12 @@ export async function generateSummary(
 
   // 6. Generate via the runtime-resolved provider (mock by default).
   const provider = await resolveAiProvider();
-  const user = buildUserPrompt(targetType, target.label, built.scopeLabel, built.context);
+  const user = buildUserPrompt(
+    targetType,
+    target.label,
+    built.scopeLabel,
+    built.context,
+  );
 
   const logBase = {
     targetType,

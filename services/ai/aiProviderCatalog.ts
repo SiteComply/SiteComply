@@ -80,7 +80,9 @@ export const AI_PROVIDERS: AiProviderDescriptor[] = [
   },
 ];
 
-export function getAiProviderDescriptor(id: string): AiProviderDescriptor | undefined {
+export function getAiProviderDescriptor(
+  id: string,
+): AiProviderDescriptor | undefined {
   return AI_PROVIDERS.find((p) => p.id === id);
 }
 

@@ -51,14 +51,17 @@ async function readRow() {
 const asSettings = (json: unknown): Settings =>
   (json && typeof json === 'object' ? json : {}) as Settings;
 const asRoles = (json: unknown): string[] =>
-  Array.isArray(json) ? (json.filter((r) => typeof r === 'string') as string[]) : [];
+  Array.isArray(json)
+    ? (json.filter((r) => typeof r === 'string') as string[])
+    : [];
 
 function providerConfigured(providerId: string, settings: Settings): boolean {
   const desc = getAiProviderDescriptor(providerId);
   if (!desc) return false;
   const stored = settings[providerId] ?? {};
   return desc.fields.every(
-    (f) => !f.required || (stored[f.key] && String(stored[f.key]).trim() !== ''),
+    (f) =>
+      !f.required || (stored[f.key] && String(stored[f.key]).trim() !== ''),
   );
 }
 
@@ -123,7 +126,9 @@ function toIntOrNull(v: unknown): number | null {
 export async function saveAiConfig(
   input: SaveAiConfigInput,
   admin: { adminId: string; name: string },
-): Promise<{ ok: true } | { ok: false; error?: string; errors?: Record<string, string> }> {
+): Promise<
+  { ok: true } | { ok: false; error?: string; errors?: Record<string, string> }
+> {
   const activeProvider = (input.activeProvider ?? '').trim();
   if (!isKnownAiProvider(activeProvider))
     return { ok: false, error: 'Choose a valid AI provider.' };
@@ -220,7 +225,9 @@ export interface AiRuntimeConfig {
 }
 
 function intEnv(name: string, fallback: number): number {
-  const n = process.env[name] ? Number.parseInt(process.env[name] as string, 10) : NaN;
+  const n = process.env[name]
+    ? Number.parseInt(process.env[name] as string, 10)
+    : NaN;
   return Number.isNaN(n) ? fallback : n;
 }
 
@@ -229,15 +236,19 @@ export async function getAiRuntimeConfig(): Promise<AiRuntimeConfig> {
   const row = await readRow();
   const roles = asRoles(row?.allowedRoles);
   const envRoles = process.env.AI_SUMMARY_ROLES
-    ? process.env.AI_SUMMARY_ROLES.split(',').map((r) => r.trim().toUpperCase()).filter(Boolean)
+    ? process.env.AI_SUMMARY_ROLES.split(',')
+        .map((r) => r.trim().toUpperCase())
+        .filter(Boolean)
     : DEFAULT_ROLES;
   return {
     enabled: row ? row.enabled : process.env.AI_SUMMARIES_ENABLED === 'true',
     activeProvider: row?.activeProvider ?? process.env.AI_PROVIDER ?? 'mock',
     allowedRoles: new Set(roles.length ? roles : envRoles),
     caps: {
-      dailyPerUser: row?.dailyPerUser ?? intEnv('AI_SUMMARY_DAILY_PER_USER', 20),
-      monthlyGlobal: row?.monthlyGlobal ?? intEnv('AI_SUMMARY_MONTHLY_GLOBAL', 1000),
+      dailyPerUser:
+        row?.dailyPerUser ?? intEnv('AI_SUMMARY_DAILY_PER_USER', 20),
+      monthlyGlobal:
+        row?.monthlyGlobal ?? intEnv('AI_SUMMARY_MONTHLY_GLOBAL', 1000),
       minIntervalSeconds: intEnv('AI_SUMMARY_MIN_INTERVAL_SECONDS', 10),
       cacheTtlHours: intEnv('AI_SUMMARY_CACHE_TTL_HOURS', 24),
     },

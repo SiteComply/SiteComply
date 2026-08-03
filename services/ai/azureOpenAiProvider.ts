@@ -1,4 +1,9 @@
-import { AiCompleteInput, AiCompleteResult, AiError, AiProvider } from './AiProvider';
+import {
+  AiCompleteInput,
+  AiCompleteResult,
+  AiError,
+  AiProvider,
+} from './AiProvider';
 import { requireEnv } from '@/lib/config';
 
 /**
@@ -28,11 +33,16 @@ export class AzureOpenAiProvider implements AiProvider {
   ) {}
 
   async complete(input: AiCompleteInput): Promise<AiCompleteResult> {
-    const endpoint = (this.config?.endpoint || requireEnv('AZURE_OPENAI_ENDPOINT')).replace(/\/+$/, '');
+    const endpoint = (
+      this.config?.endpoint || requireEnv('AZURE_OPENAI_ENDPOINT')
+    ).replace(/\/+$/, '');
     const key = this.config?.apiKey || requireEnv('AZURE_OPENAI_KEY');
-    const deployment = this.config?.deployment || requireEnv('AZURE_OPENAI_DEPLOYMENT');
+    const deployment =
+      this.config?.deployment || requireEnv('AZURE_OPENAI_DEPLOYMENT');
     const apiVersion =
-      this.config?.apiVersion || process.env.AZURE_OPENAI_API_VERSION || '2025-04-01-preview';
+      this.config?.apiVersion ||
+      process.env.AZURE_OPENAI_API_VERSION ||
+      '2025-04-01-preview';
     const url = `${endpoint}/openai/deployments/${encodeURIComponent(
       deployment,
     )}/chat/completions?api-version=${apiVersion}`;
@@ -50,7 +60,8 @@ export class AzureOpenAiProvider implements AiProvider {
     };
     // Reasoning models only accept the default temperature (1); sending any other
     // value is a 400. So only forward temperature when a caller explicitly sets one.
-    if (typeof input.temperature === 'number') body.temperature = input.temperature;
+    if (typeof input.temperature === 'number')
+      body.temperature = input.temperature;
     if (input.schema) {
       body.response_format = {
         type: 'json_schema',
@@ -71,7 +82,9 @@ export class AzureOpenAiProvider implements AiProvider {
 
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
-      throw new AiError(`Azure OpenAI returned HTTP ${res.status}: ${detail.slice(0, 300)}`);
+      throw new AiError(
+        `Azure OpenAI returned HTTP ${res.status}: ${detail.slice(0, 300)}`,
+      );
     }
 
     const data = (await res.json()) as {

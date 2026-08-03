@@ -1,4 +1,9 @@
-import { AiCompleteInput, AiCompleteResult, AiError, AiProvider } from './AiProvider';
+import {
+  AiCompleteInput,
+  AiCompleteResult,
+  AiError,
+  AiProvider,
+} from './AiProvider';
 import { requireEnv } from '@/lib/config';
 
 /**
@@ -15,10 +20,9 @@ export class OpenAiProvider implements AiProvider {
   async complete(input: AiCompleteInput): Promise<AiCompleteResult> {
     const key = requireEnv('OPENAI_API_KEY');
     const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-    const baseUrl = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(
-      /\/+$/,
-      '',
-    );
+    const baseUrl = (
+      process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1'
+    ).replace(/\/+$/, '');
 
     const body: Record<string, unknown> = {
       model,
@@ -40,7 +44,10 @@ export class OpenAiProvider implements AiProvider {
     try {
       res = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${key}`,
+        },
         body: JSON.stringify(body),
       });
     } catch (error) {
@@ -49,7 +56,9 @@ export class OpenAiProvider implements AiProvider {
 
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
-      throw new AiError(`OpenAI returned HTTP ${res.status}: ${detail.slice(0, 300)}`);
+      throw new AiError(
+        `OpenAI returned HTTP ${res.status}: ${detail.slice(0, 300)}`,
+      );
     }
 
     const data = (await res.json()) as {

@@ -9,6 +9,7 @@ import {
   uploadBlobStream,
 } from '@/services/documents/blobStorage';
 import { renderPack } from '@/services/closeOut/closeOutService';
+import { readStoredNarrative } from '@/services/closeOut/closeOutAi';
 import {
   getCompanyBranding,
   getCompanyLogo,
@@ -144,6 +145,13 @@ function packHtml(
   company: CompanyBranding,
   logoDataUri: string | null,
 ): string {
+  // The archived copy carries the SAME AI labelling as the on-screen pack. This
+  // is the copy that gets filed and read years later, so unlabelled machine
+  // prose here would be worse than none.
+  const narrative = readStoredNarrative(
+    pack.aiSummary,
+    pack.sections.map((sec) => sec.id),
+  );
   const esc = (v: string) =>
     v.replace(/[&<>"]/g, (c) =>
       c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&quot;',
@@ -169,7 +177,13 @@ function packHtml(
       const capped = s.cappedNote
         ? `<p class="note">${esc(s.cappedNote)}</p>`
         : '';
-      return `<section id="${s.id}"><h2>${i + 1}. ${esc(s.label)}</h2>${facts}${rows}${photos}${capped}</section>`;
+      const sectionNarrative = narrative?.sectionNarratives.find(
+        (x) => x.sectionId === s.id,
+      );
+      const ai = sectionNarrative
+        ? `<div class="ai"><span class="ai-badge">AI-generated</span><p>${esc(sectionNarrative.narrative)}</p></div>`
+        : '';
+      return `<section id="${s.id}"><h2>${i + 1}. ${esc(s.label)}</h2>${ai}${facts}${rows}${photos}${capped}</section>`;
     })
     .join('');
 
@@ -198,6 +212,10 @@ dt{font-weight:600}dd{margin:0;color:#444;white-space:pre-line}
 .logo{max-height:64px;max-width:220px;margin:0 auto 1rem;display:block}
 .meta{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;text-align:left;max-width:620px;margin:1.5rem auto 0;font-size:.85rem}
 .note{background:#fff8e1;border:1px solid #f0d68a;padding:.5rem .75rem;font-size:.8rem}
+.ai{border:1px solid rgba(56,181,74,.35);background:rgba(56,181,74,.06);padding:.5rem .75rem;margin:.5rem 0;font-size:.85rem}
+.ai p{margin:.25rem 0 0}
+.ai-badge{display:inline-block;border:1px solid rgba(56,181,74,.5);color:#2f8f3c;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:.05rem .3rem}
+.ai-note{font-size:.72rem;color:#666;margin-top:.35rem}
 .footer{margin-top:3rem;font-size:.75rem;color:#666;border-top:1px solid #ddd;padding-top:1rem}
 @media print{section{break-before:page}.cover{break-before:auto}}
 </style></head><body>
@@ -214,9 +232,18 @@ ${company.tagline ? `<p style="font-size:.8rem;color:#666">${esc(company.tagline
 </div>
 <p style="font-size:.75rem;color:#666;margin-top:1.5rem">Generated on ${pack.generatedAt.toLocaleDateString('en-GB')} · Version ${pack.version}.0</p>
 </div>
+${
+  narrative
+    ? `<section><h2>Executive summary</h2><div class="ai"><span class="ai-badge">AI-generated</span><p>${esc(narrative.executiveSummary)}</p></div><p class="ai-note">This narrative was written automatically from the records held in this project and is a descriptive summary only. It is not an assessment, certification or approval of compliance. The project team remains responsible for the accuracy and completeness of this pack.</p></section>`
+    : ''
+}
 <h2>Contents</h2><ol>${pack.sections.map((s) => `<li><a href="#${s.id}">${esc(s.label)}</a></li>`).join('')}${labels.length ? '<li>Appendices</li>' : ''}</ol>
 ${sections}${appendix}
-<p class="footer">This pack was compiled automatically from the records held in SiteComply for this project on ${pack.generatedAt.toLocaleDateString('en-GB')}. It is a record of what was captured, not an assessment or certification of compliance. The Principal Contractor remains responsible for the accuracy and completeness of project records under CDM 2015.<br><br>To save as PDF, open this file in a browser and print to PDF.</p>
+<p class="footer">This pack was compiled automatically from the records held in SiteComply for this project on ${pack.generatedAt.toLocaleDateString('en-GB')}. It is a record of what was captured, not an assessment or certification of compliance. The Principal Contractor remains responsible for the accuracy and completeness of project records under CDM 2015.<br><br>To save as PDF, open this file in a browser and print to PDF.${
+    narrative
+      ? '<br><br>Passages marked &ldquo;AI-generated&rdquo; were written automatically as descriptive summaries of the records above. They are not assessments, certifications or approvals of compliance.'
+      : ''
+  }</p>
 </body></html>`;
 }
 

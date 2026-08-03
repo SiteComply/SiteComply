@@ -289,6 +289,8 @@ export interface RenderedSection {
 
 export interface RenderedPack {
   id: string;
+  /** The project this pack belongs to — needed to collect its appendices. */
+  siteId: string;
   version: number;
   title: string;
   preparedFor: string | null;
@@ -302,6 +304,11 @@ export interface RenderedPack {
   sections: RenderedSection[];
   estimatedPages: number;
   photoCount: number;
+  /** SC-024 Phase 3 — the stored AI narrative (raw JSON) and its provenance. */
+  aiSummary: string | null;
+  aiModel: string | null;
+  aiGeneratedAt: Date | null;
+  aiGeneratedBy: string | null;
 }
 
 /**
@@ -354,6 +361,7 @@ export async function renderPack(
   const s = pack.jobSite;
   return {
     id: pack.id,
+    siteId: pack.jobSiteId,
     version: pack.version,
     title: pack.title,
     preparedFor: pack.preparedFor,
@@ -369,6 +377,10 @@ export async function renderPack(
     sections,
     estimatedPages: pages,
     photoCount,
+    aiSummary: pack.aiSummary,
+    aiModel: pack.aiModel,
+    aiGeneratedAt: pack.aiGeneratedAt,
+    aiGeneratedBy: pack.aiGeneratedBy,
   };
 }
 

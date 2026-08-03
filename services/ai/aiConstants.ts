@@ -19,8 +19,16 @@ export const AI_SUMMARY_TARGETS: {
   register: boolean;
 }[] = [
   { value: 'COMPLIANCE_REPORT', label: 'Compliance report', register: false },
-  { value: 'SCORECARD_REPORT', label: 'Site compliance scorecard', register: false },
-  { value: 'ORG_OVERVIEW_REPORT', label: 'Organisation overview', register: false },
+  {
+    value: 'SCORECARD_REPORT',
+    label: 'Site compliance scorecard',
+    register: false,
+  },
+  {
+    value: 'ORG_OVERVIEW_REPORT',
+    label: 'Organisation overview',
+    register: false,
+  },
   { value: 'AUDIT', label: 'Audit', register: false },
   { value: 'AUDITS_REGISTER', label: 'Audits register', register: true },
   { value: 'ACTIONS_REGISTER', label: 'Actions register', register: true },

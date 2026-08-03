@@ -65,7 +65,9 @@ export function countAiSummariesToday(
 }
 
 /** Count all successful live generations this calendar month (global cap). */
-export function countAiSummariesThisMonth(now: Date = new Date()): Promise<number> {
+export function countAiSummariesThisMonth(
+  now: Date = new Date(),
+): Promise<number> {
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   return prisma.aiSummary.count({
     where: { status: 'OK', createdAt: { gte: start } },

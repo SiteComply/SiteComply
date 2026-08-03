@@ -3,7 +3,11 @@ import { MockAiProvider } from './mockProvider';
 import { AzureOpenAiProvider } from './azureOpenAiProvider';
 import { OpenAiProvider } from './openAiProvider';
 
-export type { AiProvider, AiCompleteInput, AiCompleteResult } from './AiProvider';
+export type {
+  AiProvider,
+  AiCompleteInput,
+  AiCompleteResult,
+} from './AiProvider';
 export { AiError } from './AiProvider';
 
 let cached: AiProvider | undefined;

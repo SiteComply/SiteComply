@@ -237,6 +237,7 @@ enum AiSummaryTarget {
   AUDIT //                per-item (single audit)
   AUDITS_REGISTER //      register-level (all audits in scope)
   ACTIONS_REGISTER //     register-level (all actions in scope)
+  CLOSE_OUT_PACK //       per-item (one close-out pack) — SC-024 Phase 3
 }
 
 /// Lifecycle of an AI-generated question bank for a site induction (SC-005).
@@ -2743,8 +2744,82 @@ model CloseOutPack {
   zipTruncated   Boolean   @default(false)
   zipFileCount   Int?
 
+  /// SC-024 Phase 3 — provenance for the AI narrative above.
+  ///
+  /// The prose is stored ON THE PACK, not read back from the AiSummary cache:
+  /// that cache is keyed on a context hash and expires, so a pack reopened next
+  /// year would otherwise silently regenerate different wording (or none). A
+  /// handover document's narrative must not change after it is handed over.
+  /// `AiSummary` still records every generation for usage caps and audit.
+  aiGeneratedAt DateTime?
+  aiModel       String?
+  aiProvider    String?
+  aiGeneratedBy String?
+
+  shares CloseOutPackShare[]
+
   createdAt DateTime @default(now())
 
   @@unique([jobSiteId, version])
   @@index([jobSiteId, generatedAt])
+}
+
+/// SC-024 Phase 3 — a signed, expiring link giving an external stakeholder
+/// (client, Principal Contractor) read access to ONE pack revision.
+///
+/// The token is never stored: only its SHA-256 hash, exactly as a password
+/// would be. A leaked database therefore does not yield working links.
+///
+/// Storing the hash rather than issuing a self-contained signed token is the
+/// whole reason revocation works — a stateless HMAC token stays valid until it
+/// expires no matter what, and a close-out pack is precisely the document you
+/// need to be able to withdraw after sending it to the wrong address.
+model CloseOutPackShare {
+  id     String       @id @default(cuid())
+  pack   CloseOutPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  packId String
+
+  /// SHA-256 of the URL token. Unique so a lookup is a single indexed read.
+  tokenHash String @unique
+
+  /// Who it was shared with, for the audit trail — free text, e.g. a client name.
+  label String
+
+  /// Whether this link may also download the ZIP of original files. Defaults to
+  /// FALSE: the pack document is a summary, the ZIP is every underlying file,
+  /// and those are very different things to hand to an external party.
+  includeZip Boolean @default(false)
+
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  createdByUserId String?
+  createdByName   String
+  createdAt       DateTime @default(now())
+
+  lastViewedAt DateTime?
+  viewCount    Int       @default(0)
+
+  views CloseOutPackShareView[]
+
+  @@index([packId, createdAt])
+  @@index([expiresAt])
+}
+
+/// Append-only access log for a shared link — "who opened the handover pack, and
+/// when" is a question clients and Principal Contractors do ask.
+model CloseOutPackShareView {
+  id      String            @id @default(cuid())
+  share   CloseOutPackShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  shareId String
+
+  viewedAt DateTime @default(now())
+  /// 'VIEW' | 'ZIP'
+  action   String
+
+  /// Salted hash of the caller's IP — enough to spot "this link is being passed
+  /// around" without retaining an identifier for an unidentified person.
+  ipHash String?
+
+  @@index([shareId, viewedAt])
 }

@@ -3,7 +3,11 @@ import { prisma } from '@/lib/prisma';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { canUseAiSummaries } from '@/services/ai/aiConfig';
 import { resolvePage } from '@/lib/pagination';
-import { SUMMARY_TARGETS, type SummaryOpts } from '@/services/ai/summaryTargets';
+import {
+  SUMMARY_TARGETS,
+  type SummaryOpts,
+  getSummaryTarget,
+} from '@/services/ai/summaryTargets';
 import { parseSummaryOutput, type SummaryOutput } from '@/services/ai/prompts';
 
 /**
@@ -18,7 +22,11 @@ import { parseSummaryOutput, type SummaryOutput } from '@/services/ai/prompts';
  * is never surfaced. Reads a stored summary; it never calls the model.
  */
 
-export type HistoryReason = 'disabled' | 'forbidden' | 'bad_target' | 'not_found';
+export type HistoryReason =
+  | 'disabled'
+  | 'forbidden'
+  | 'bad_target'
+  | 'not_found';
 
 const PAGE_SIZE = 10;
 
@@ -58,7 +66,10 @@ export interface HistoryDetail {
 type Result<T> = { ok: true; data: T } | { ok: false; reason: HistoryReason };
 
 /** True only when every site in the summary's scope snapshot is one the viewer can see. */
-function scopeVisibleToViewer(siteIds: unknown, viewer: PlatformViewer): boolean {
+function scopeVisibleToViewer(
+  siteIds: unknown,
+  viewer: PlatformViewer,
+): boolean {
   if (!Array.isArray(siteIds)) return false;
   const scope = new Set(viewer.siteIds);
   return siteIds.every((s) => typeof s === 'string' && scope.has(s));
@@ -74,11 +85,13 @@ export async function listSummaryHistory(
   opts: SummaryOpts,
   rawPage: string | undefined,
 ): Promise<Result<HistoryPage>> {
-  if (!(await canUseAiSummaries(viewer.role))) return { ok: false, reason: 'disabled' };
+  if (!(await canUseAiSummaries(viewer.role)))
+    return { ok: false, reason: 'disabled' };
 
-  const target = SUMMARY_TARGETS[targetType];
+  const target = getSummaryTarget(targetType);
   if (!target) return { ok: false, reason: 'bad_target' };
-  if (!target.authorize(viewer, opts)) return { ok: false, reason: 'forbidden' };
+  if (!target.authorize(viewer, opts))
+    return { ok: false, reason: 'forbidden' };
 
   const key = await target.resolveKey(viewer, opts);
   if (!key) return { ok: false, reason: 'not_found' };
@@ -126,7 +139,8 @@ export async function getSummaryHistoryItem(
   viewer: PlatformViewer,
   id: string,
 ): Promise<Result<HistoryDetail>> {
-  if (!(await canUseAiSummaries(viewer.role))) return { ok: false, reason: 'disabled' };
+  if (!(await canUseAiSummaries(viewer.role)))
+    return { ok: false, reason: 'disabled' };
 
   const row = await prisma.aiSummary.findUnique({
     where: { id },
@@ -146,7 +160,7 @@ export async function getSummaryHistoryItem(
   });
   if (!row || row.status !== 'OK') return { ok: false, reason: 'not_found' };
 
-  const target = SUMMARY_TARGETS[row.targetType];
+  const target = getSummaryTarget(row.targetType);
   if (!target) return { ok: false, reason: 'not_found' };
 
   // Same authorisation the target enforces for generation (e.g. Org Overview is
@@ -154,7 +168,8 @@ export async function getSummaryHistoryItem(
   if (!target.authorize(viewer, { targetKey: row.targetKey }))
     return { ok: false, reason: 'forbidden' };
   // ...plus the scope snapshot must be entirely within the viewer's sites.
-  if (!scopeVisibleToViewer(row.siteIds, viewer)) return { ok: false, reason: 'forbidden' };
+  if (!scopeVisibleToViewer(row.siteIds, viewer))
+    return { ok: false, reason: 'forbidden' };
 
   const summary = parseSummaryOutput(row.summary);
   if (!summary) return { ok: false, reason: 'not_found' };

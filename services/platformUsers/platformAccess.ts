@@ -30,44 +30,23 @@ import { viewerCan as viewerCanImpl } from '@/services/platformUsers/effectivePe
  * view/create/edit/export) are NOT enforced here yet.
  */
 
-export interface ViewerSite {
-  id: string;
-  name: string;
-  jobReference: string;
-  town: string;
-  postcode: string;
-  status: 'ACTIVE' | 'ARCHIVED';
-}
+// Viewer types + the site column set now live in platformViewerTypes.ts so they
+// can be used outside a request (see viewerBuilder.ts). Re-exported here because
+// this is where the rest of the app already imports them from.
+export type {
+  ViewerSite,
+  PlatformViewer,
+} from '@/services/platformUsers/platformViewerTypes';
+export { SITE_FIELDS } from '@/services/platformUsers/platformViewerTypes';
 
-export interface PlatformViewer {
-  id: string;
-  name: string;
-  company: string;
-  role: PlatformRoleValue;
-  /** True for Director — sees all sites and ignores Assigned Sites. */
-  allSites: boolean;
-  /** Ids of every site the viewer may see (the access boundary). */
-  siteIds: string[];
-  /** The sites the viewer may see, for listing. */
-  sites: ViewerSite[];
-  /**
-   * SC-022 — per-site permission overrides NARROWING the role baseline.
-   * Keyed siteId → module → retained verbs. Only overridden entries appear;
-   * absence means the role baseline applies unchanged.
-   */
-  overrides: SiteOverrides;
-  /** SC-022 Phase 2 — the company-wide floor applying to this user. */
-  companyDefaults: PermissionOverride;
-}
+export { buildViewerForUser } from '@/services/platformUsers/viewerBuilder';
 
-const SITE_FIELDS = {
-  id: true,
-  name: true,
-  jobReference: true,
-  town: true,
-  postcode: true,
-  status: true,
-} as const;
+// Imported (not just re-exported) because the session resolver below uses them.
+import type { PlatformViewer } from '@/services/platformUsers/platformViewerTypes';
+import {
+  findUserForViewer,
+  buildViewerFromUser,
+} from '@/services/platformUsers/viewerBuilder';
 
 /**
  * The current platform viewer, or null if not signed in or no longer ACTIVE.
@@ -80,65 +59,9 @@ export const getPlatformViewer = cache(
     const session = getPlatformSession();
     if (!session) return null;
 
-    const user = await prisma.platformUser.findUnique({
-      where: { id: session.userId },
-      include: { assignedSites: { select: SITE_FIELDS } },
-    });
+    const user = await findUserForViewer(session.userId);
     if (!user || user.status !== 'ACTIVE') return null;
-
-    const role = user.role as PlatformRoleValue;
-    const allSites = roleHasAllSites(role);
-
-    const sites: ViewerSite[] = allSites
-      ? await prisma.jobSite.findMany({
-          orderBy: [{ status: 'asc' }, { name: 'asc' }],
-          select: SITE_FIELDS,
-        })
-      : [...user.assignedSites].sort((a, b) => a.name.localeCompare(b.name));
-
-    // SC-022 — one extra query per request, inside the same cached resolver, so
-    // every gate in the app sees the same effective permissions without any
-    // call site having to remember to look them up.
-    //
-    // A DIRECTOR is never narrowed: they are the only all-sites role, and an
-    // organisation that can lock its own Directors out of the platform has no
-    // way back in. Skipping the query for them is also the common case.
-    const overrides: SiteOverrides = {};
-    const companyDefaults: PermissionOverride = {};
-    if (role !== 'DIRECTOR') {
-      const [rows, companyRows] = await Promise.all([
-        prisma.siteUserPermission.findMany({
-          where: { platformUserId: user.id },
-          select: { jobSiteId: true, module: true, verbs: true },
-        }),
-        // SC-022 Phase 2 — a LIVE rule, read every request, so it covers people
-        // added to the company after it was set.
-        prisma.companyPermissionDefault.findMany({
-          where: { company: user.company },
-          select: { module: true, verbs: true },
-        }),
-      ]);
-      for (const r of rows) {
-        if (!isPlatformModule(r.module)) continue;
-        (overrides[r.jobSiteId] ??= {})[r.module] = r.verbs as PermissionVerb[];
-      }
-      for (const r of companyRows) {
-        if (!isPlatformModule(r.module)) continue;
-        companyDefaults[r.module] = r.verbs as PermissionVerb[];
-      }
-    }
-
-    return {
-      id: user.id,
-      name: user.name,
-      company: user.company,
-      role,
-      allSites,
-      siteIds: sites.map((s) => s.id),
-      sites,
-      overrides,
-      companyDefaults,
-    };
+    return buildViewerFromUser(user);
   },
 );
 
