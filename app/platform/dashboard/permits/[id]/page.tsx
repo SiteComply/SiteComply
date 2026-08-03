@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
+import { RecordHeader } from '@/components/platform/RecordHeader';
 import { PermitReviewControls } from '@/components/platform/PermitReviewControls';
 import {
   requirePlatformViewer,
@@ -41,28 +42,23 @@ export default async function PlatformPermitDetailPage({
 
   return (
     <PlatformShell>
-      <div className="mb-4">
-        <Link
-          href="/platform/dashboard/permits"
-          className="text-sm font-semibold text-brand-700 hover:underline"
-        >
-          ← Permits
-        </Link>
-      </div>
-
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink">
-            {permit.permitTypeName}
-          </h1>
-          <p className="font-mono text-sm text-ink-muted">{permit.reference}</p>
-        </div>
-        <span
-          className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${PERMIT_STATUS_BADGE[effectiveStatus]}`}
-        >
-          {permitStatusLabel(effectiveStatus)}
-        </span>
-      </header>
+      <RecordHeader
+        breadcrumbs={[
+          { label: 'Permits', href: '/platform/dashboard/permits' },
+          { label: permit.reference },
+        ]}
+        backHref="/platform/dashboard/permits"
+        backLabel="Permits"
+        title={permit.permitTypeName}
+        badges={
+          <span
+            className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${PERMIT_STATUS_BADGE[effectiveStatus]}`}
+          >
+            {permitStatusLabel(effectiveStatus)}
+          </span>
+        }
+        subtitle={<span className="font-mono">{permit.reference}</span>}
+      />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">

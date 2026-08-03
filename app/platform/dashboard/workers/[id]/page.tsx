@@ -4,7 +4,7 @@ import { cn } from '@/lib/cn';
 import { formatDateTimeUK, formatDateUK } from '@/lib/datetime';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { RowLink, DrillChevron } from '@/components/platform/RowLink';
-import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
+import { RecordHeader } from '@/components/platform/RecordHeader';
 import {
   requirePlatformViewer,
   assertModuleView,
@@ -34,37 +34,28 @@ export default async function WorkerDetailPage({
   if (!detail) notFound();
 
   const canSeeMobile = permits(viewer.role, 'checkins', 'export');
-  const { worker, complianceStatus, currentSite, totalCheckIns, history } = detail;
+  const { worker, complianceStatus, currentSite, totalCheckIns, history } =
+    detail;
 
   return (
     <PlatformShell>
-      <div className="mb-6">
-        <Breadcrumbs
-          items={[
-            { label: 'Check-ins', href: '/platform/dashboard/submissions' },
-            { label: worker.fullName },
-          ]}
-        />
-        <Link
-          href="/platform/dashboard/submissions"
-          className="text-sm font-semibold text-brand-700 hover:underline"
-        >
-          ← Check-ins
-        </Link>
-        <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-bold text-ink">{worker.fullName}</h1>
-              {currentSite ? (
-                <StatusPill label="On site" tone="good" />
-              ) : (
-                <StatusPill label="Not on site" tone="muted" />
-              )}
-            </div>
-            <p className="text-ink-muted">{worker.company}</p>
-          </div>
-        </div>
-      </div>
+      <RecordHeader
+        breadcrumbs={[
+          { label: 'Check-ins', href: '/platform/dashboard/submissions' },
+          { label: worker.fullName },
+        ]}
+        backHref="/platform/dashboard/submissions"
+        backLabel="Check-ins"
+        title={worker.fullName}
+        badges={
+          currentSite ? (
+            <StatusPill label="On site" tone="good" />
+          ) : (
+            <StatusPill label="Not on site" tone="muted" />
+          )
+        }
+        subtitle={worker.company}
+      />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -72,9 +63,16 @@ export default async function WorkerDetailPage({
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <Stat
                 label="Latest check-in"
-                value={complianceStatus.latestStatus === 'COMPLIANT' ? 'Compliant' : 'Incomplete'}
+                value={
+                  complianceStatus.latestStatus === 'COMPLIANT'
+                    ? 'Compliant'
+                    : 'Incomplete'
+                }
               />
-              <Stat label="Check-ins (your sites)" value={String(totalCheckIns)} />
+              <Stat
+                label="Check-ins (your sites)"
+                value={String(totalCheckIns)}
+              />
               <Stat
                 label="CSCS card"
                 value={
@@ -93,7 +91,8 @@ export default async function WorkerDetailPage({
               <Gate label="GDPR consent" ok={complianceStatus.gdpr} />
             </dl>
             <p className="mt-3 text-xs text-ink-subtle">
-              Compliance reflects the worker&rsquo;s most recent check-in on your sites.
+              Compliance reflects the worker&rsquo;s most recent check-in on
+              your sites.
             </p>
           </Section>
 
@@ -102,57 +101,65 @@ export default async function WorkerDetailPage({
               <Empty>No check-ins on your sites.</Empty>
             ) : (
               <>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-subtle">
-                      <th className="py-2 pr-3 font-medium">Site</th>
-                      <th className="py-2 pr-3 font-medium">Checked in</th>
-                      <th className="py-2 pr-3 font-medium">Checked out</th>
-                      <th className="py-2 font-medium">Status</th>
-                      <th className="w-6 py-2" aria-hidden="true"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line">
-                    {history.map((h) => (
-                      <tr
-                        key={h.id}
-                        className="group relative cursor-pointer transition-colors hover:bg-brand-50/60"
-                      >
-                        <td className="py-2.5 pr-3">
-                          {/* Stretched link — makes the whole row a drill-down to the site. */}
-                          <Link
-                            href={`/platform/dashboard/sites/${h.siteId}`}
-                            className="font-medium text-brand-700 after:absolute after:inset-0 group-hover:underline"
-                          >
-                            {h.siteName}
-                          </Link>
-                        </td>
-                        <td className="py-2.5 pr-3 tabular-nums text-ink-muted">
-                          {formatDateTimeUK(h.checkedInAt)}
-                        </td>
-                        <td className="py-2.5 pr-3 tabular-nums text-ink-muted">
-                          {h.checkedOutAt ? formatDateTimeUK(h.checkedOutAt) : (
-                            <span className="font-semibold text-safe-700">On site</span>
-                          )}
-                        </td>
-                        <td className="py-2.5">
-                          <StatusPill
-                            label={h.status === 'COMPLIANT' ? 'Compliant' : 'Incomplete'}
-                            tone={h.status === 'COMPLIANT' ? 'good' : 'warn'}
-                          />
-                        </td>
-                        <td className="py-2.5 pl-2 text-right align-middle">
-                          <DrillChevron />
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-subtle">
+                        <th className="py-2 pr-3 font-medium">Site</th>
+                        <th className="py-2 pr-3 font-medium">Checked in</th>
+                        <th className="py-2 pr-3 font-medium">Checked out</th>
+                        <th className="py-2 font-medium">Status</th>
+                        <th className="w-6 py-2" aria-hidden="true"></th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="mt-2 text-xs text-ink-subtle">
-                Select a row to open that site&rsquo;s details.
-              </p>
+                    </thead>
+                    <tbody className="divide-y divide-line">
+                      {history.map((h) => (
+                        <tr
+                          key={h.id}
+                          className="group relative cursor-pointer transition-colors hover:bg-brand-50/60"
+                        >
+                          <td className="py-2.5 pr-3">
+                            {/* Stretched link — makes the whole row a drill-down to the site. */}
+                            <Link
+                              href={`/platform/dashboard/sites/${h.siteId}`}
+                              className="font-medium text-brand-700 after:absolute after:inset-0 group-hover:underline"
+                            >
+                              {h.siteName}
+                            </Link>
+                          </td>
+                          <td className="py-2.5 pr-3 tabular-nums text-ink-muted">
+                            {formatDateTimeUK(h.checkedInAt)}
+                          </td>
+                          <td className="py-2.5 pr-3 tabular-nums text-ink-muted">
+                            {h.checkedOutAt ? (
+                              formatDateTimeUK(h.checkedOutAt)
+                            ) : (
+                              <span className="font-semibold text-safe-700">
+                                On site
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5">
+                            <StatusPill
+                              label={
+                                h.status === 'COMPLIANT'
+                                  ? 'Compliant'
+                                  : 'Incomplete'
+                              }
+                              tone={h.status === 'COMPLIANT' ? 'good' : 'warn'}
+                            />
+                          </td>
+                          <td className="py-2.5 pl-2 text-right align-middle">
+                            <DrillChevron />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-2 text-xs text-ink-subtle">
+                  Select a row to open that site&rsquo;s details.
+                </p>
               </>
             )}
           </Section>
@@ -165,7 +172,11 @@ export default async function WorkerDetailPage({
               {canSeeMobile && <Detail label="Mobile" value={worker.mobile} />}
               <Detail
                 label="CSCS card"
-                value={worker.cscsCardType ? CSCS_CARD_LABELS[worker.cscsCardType] : 'None recorded'}
+                value={
+                  worker.cscsCardType
+                    ? CSCS_CARD_LABELS[worker.cscsCardType]
+                    : 'None recorded'
+                }
               />
               {worker.cscsCardNumber && (
                 <Detail label="CSCS number" value={worker.cscsCardNumber} />
@@ -185,11 +196,15 @@ export default async function WorkerDetailPage({
                   </dt>
                   <dd className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-ink">
                     <StatusPill
-                      label={cscsVerificationLabel(worker.cscsVerificationStatus)}
+                      label={cscsVerificationLabel(
+                        worker.cscsVerificationStatus,
+                      )}
                       tone={worker.cscsVerified ? 'good' : 'warn'}
                     />
                     {worker.cscsScheme && (
-                      <span className="text-ink-muted">{worker.cscsScheme}</span>
+                      <span className="text-ink-muted">
+                        {worker.cscsScheme}
+                      </span>
                     )}
                     {worker.cscsVerifiedAt && (
                       <span className="text-xs text-ink-subtle">
@@ -202,7 +217,10 @@ export default async function WorkerDetailPage({
               {worker.cscsHolderName && (
                 <Detail label="Name on card" value={worker.cscsHolderName} />
               )}
-              <Detail label="First seen" value={formatDateUK(worker.createdAt)} />
+              <Detail
+                label="First seen"
+                value={formatDateUK(worker.createdAt)}
+              />
             </dl>
             {worker.cscsQualifications.length > 0 && (
               <div className="mt-4">
@@ -248,7 +266,13 @@ export default async function WorkerDetailPage({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-subtle">
@@ -262,7 +286,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-ink-subtle">{label}</dt>
+      <dt className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
+        {label}
+      </dt>
       <dd className="mt-0.5 break-words text-sm text-ink">{value}</dd>
     </div>
   );
@@ -311,7 +337,8 @@ function StatusPill({
         'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
         tone === 'good' && 'bg-safe-50 text-safe-700',
         tone === 'warn' && 'bg-hivis-400/25 text-ink',
-        tone === 'muted' && 'border border-line bg-surface-sunken text-ink-muted',
+        tone === 'muted' &&
+          'border border-line bg-surface-sunken text-ink-muted',
       )}
     >
       {label}

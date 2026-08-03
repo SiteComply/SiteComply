@@ -1,0 +1,104 @@
+/**
+ * Phase 5 — proves the agreed outstanding-work order before Phase 5b depends on
+ * it. Scratchpad, not the repo: scripts/*.ts are type-checked by `next build`
+ * and would land in the refresh footprint.
+ */
+import {
+  sortOutstandingWork,
+  urgencyBucket,
+  compareOutstandingWork,
+} from '/home/cc-dev-1/sitecomply/components/platform/outstandingWorkOrder';
+
+let pass = 0;
+let fail = 0;
+function check(name: string, cond: boolean) {
+  if (cond) {
+    pass++;
+    console.log(`  ok   ${name}`);
+  } else {
+    fail++;
+    console.log(`  FAIL ${name}`);
+  }
+}
+
+// A fixed "now" — 2026-08-03 10:00 London.
+const now = new Date('2026-08-03T09:00:00Z');
+const d = (iso: string) => new Date(iso);
+
+console.log('buckets');
+check('past date is overdue', urgencyBucket({ id: 'a', dueDate: d('2026-08-01T09:00:00Z') }, now) === 'overdue');
+check('same London day is due-today', urgencyBucket({ id: 'b', dueDate: d('2026-08-03T22:00:00Z') }, now) === 'due-today');
+check('future date is upcoming', urgencyBucket({ id: 'c', dueDate: d('2026-08-09T09:00:00Z') }, now) === 'upcoming');
+check('null date is undated', urgencyBucket({ id: 'd', dueDate: null }, now) === 'undated');
+// 00:30 London on the 3rd is 23:30 UTC on the 2nd — a UTC-based check would
+// call this yesterday and wrongly mark it overdue.
+check('early-morning London time still counts as today', urgencyBucket({ id: 'e', dueDate: d('2026-08-02T23:30:00Z') }, now) === 'due-today');
+
+console.log('agreed order: Overdue -> Due today -> Due date -> Priority');
+const rows = [
+  { id: 'low-undated', dueDate: null, priority: 'LOW' },
+  { id: 'critical-undated', dueDate: null, priority: 'CRITICAL' },
+  { id: 'upcoming-far', dueDate: d('2026-08-20T09:00:00Z'), priority: 'CRITICAL' },
+  { id: 'upcoming-near', dueDate: d('2026-08-05T09:00:00Z'), priority: 'LOW' },
+  { id: 'today-low', dueDate: d('2026-08-03T15:00:00Z'), priority: 'LOW' },
+  { id: 'today-critical', dueDate: d('2026-08-03T08:00:00Z'), priority: 'CRITICAL' },
+  { id: 'overdue-low', dueDate: d('2026-08-01T09:00:00Z'), priority: 'LOW' },
+  { id: 'overdue-older', dueDate: d('2026-07-20T09:00:00Z'), priority: 'MEDIUM' },
+];
+const sorted = sortOutstandingWork(rows, now).map((r) => r.id);
+console.log('   ->', sorted.join(' | '));
+check('overdue first, oldest overdue first', sorted[0] === 'overdue-older' && sorted[1] === 'overdue-low');
+check('due today next', sorted[2] === 'today-critical' && sorted[3] === 'today-low');
+check('then upcoming by due date, not priority', sorted[4] === 'upcoming-near' && sorted[5] === 'upcoming-far');
+check('undated last', sorted[6] === 'critical-undated' && sorted[7] === 'low-undated');
+check('priority breaks ties only within a bucket+date', sorted[6] === 'critical-undated');
+
+console.log('priority tie-break on identical due dates');
+const same = sortOutstandingWork(
+  [
+    { id: 'b-medium', dueDate: d('2026-08-10T09:00:00Z'), priority: 'MEDIUM' },
+    { id: 'a-critical', dueDate: d('2026-08-10T09:00:00Z'), priority: 'CRITICAL' },
+    { id: 'c-high', dueDate: d('2026-08-10T09:00:00Z'), priority: 'HIGH' },
+  ],
+  now,
+).map((r) => r.id);
+check('critical > high > medium on the same date', same.join() === 'a-critical,c-high,b-medium');
+
+console.log('rows with no priority at all (audits have none)');
+const mixed = sortOutstandingWork(
+  [
+    { id: 'audit', dueDate: d('2026-08-10T09:00:00Z') },
+    { id: 'action-critical', dueDate: d('2026-08-10T09:00:00Z'), priority: 'CRITICAL' },
+  ],
+  now,
+).map((r) => r.id);
+check('a prioritised row outranks an unprioritised one on the same date', mixed.join() === 'action-critical,audit');
+
+console.log('properties');
+check('sort does not mutate the input', (() => {
+  const input = [
+    { id: 'z', dueDate: d('2026-08-20T09:00:00Z') },
+    { id: 'a', dueDate: d('2026-08-01T09:00:00Z') },
+  ];
+  const before = input.map((r) => r.id).join();
+  sortOutstandingWork(input, now);
+  return input.map((r) => r.id).join() === before;
+})());
+check('order is stable across repeated sorts', (() => {
+  const once = sortOutstandingWork(rows, now).map((r) => r.id).join();
+  const twice = sortOutstandingWork(sortOutstandingWork(rows, now), now).map((r) => r.id).join();
+  return once === twice;
+})());
+check('comparator is antisymmetric', (() => {
+  const a = { id: 'a', dueDate: d('2026-08-01T09:00:00Z'), priority: 'LOW' };
+  const b = { id: 'b', dueDate: d('2026-08-10T09:00:00Z'), priority: 'CRITICAL' };
+  return Math.sign(compareOutstandingWork(a, b, now)) === -Math.sign(compareOutstandingWork(b, a, now));
+})());
+check('identical rows compare equal only by id', compareOutstandingWork(
+  { id: 'x', dueDate: d('2026-08-10T09:00:00Z'), priority: 'HIGH' },
+  { id: 'x', dueDate: d('2026-08-10T09:00:00Z'), priority: 'HIGH' },
+  now,
+) === 0);
+
+console.log(`\n${pass}/${pass + fail} checks passed`);
+process.exit(fail === 0 ? 0 : 1);

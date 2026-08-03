@@ -149,6 +149,30 @@ grep -q "site.status !== 'COMPLETED' && (" components/platform/SiteDetailHeader.
   || { echo "ERROR: a completed project would be offered edit/archive — aborting"; exit 1; }
 echo "      confirmed: shared status labels, no duplicate heading, RecordHeader in use, SC-025 completion behaviour intact."
 
+echo "[5e] WorkSurface pattern (Phase 5)..."
+[ -f components/platform/WorkSurface.tsx ] \
+  && [ -f components/platform/outstandingWorkOrder.ts ] \
+  || { echo "ERROR: WorkSurface / outstanding-work order missing — aborting"; exit 1; }
+# The last register that rendered one card per row must stay a table.
+grep -q '<WorkSurface' app/platform/dashboard/submissions/page.tsx \
+  || { echo "ERROR: Check-ins is not using the work surface — aborting"; exit 1; }
+grep -q 'space-y-3' app/platform/dashboard/submissions/page.tsx \
+  && { echo "ERROR: Check-ins has reverted to stacked row-cards — aborting"; exit 1; }
+# Selection must resolve against rows the viewer actually received, never a raw
+# id lookup — otherwise a guessed id could confirm a record exists out of scope.
+grep -q 'resolveSelected(searchParams.item, submissions)' app/platform/dashboard/submissions/page.tsx \
+  || { echo "ERROR: check-in selection is not scoped to the returned rows — aborting"; exit 1; }
+# Every record surface opens the same way.
+for f in 'app/platform/dashboard/actions/[id]/page.tsx' \
+         'app/platform/dashboard/audits/[id]/page.tsx' \
+         'app/platform/dashboard/permits/[id]/page.tsx' \
+         'app/platform/dashboard/workers/[id]/page.tsx' \
+         components/platform/SiteDetailHeader.tsx; do
+  grep -q '<RecordHeader' "$f" \
+    || { echo "ERROR: $f is not using RecordHeader — aborting"; exit 1; }
+done
+echo "      confirmed: WorkSurface in use, check-ins is a table, selection scoped, 5 record surfaces share RecordHeader."
+
 echo "[6/8] Building..."
 npx prisma generate >/dev/null 2>&1 || { echo "ERROR: prisma generate failed"; exit 1; }
 rm -rf .next

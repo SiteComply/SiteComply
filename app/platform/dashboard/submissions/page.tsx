@@ -1,8 +1,14 @@
 import Link from 'next/link';
 import { cn } from '@/lib/cn';
-import { formatDateTimeUK } from '@/lib/datetime';
+import { formatDateTimeUK, formatHoursMinutes } from '@/lib/datetime';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { PageHeader } from '@/components/platform/PageHeader';
+import {
+  WorkSurface,
+  RailDetail,
+  selectedRowClass,
+  resolveSelected,
+} from '@/components/platform/WorkSurface';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import {
   requirePlatformViewer,
@@ -32,7 +38,7 @@ export const dynamic = 'force-dynamic';
 export default async function PlatformSubmissionsPage({
   searchParams,
 }: {
-  searchParams: { status?: string };
+  searchParams: { status?: string; item?: string };
 }) {
   const viewer = await requirePlatformViewer();
   assertModuleView(viewer, 'checkins');
@@ -44,6 +50,12 @@ export default async function PlatformSubmissionsPage({
     getCheckinCounts(viewer),
     listCheckinsForViewer(viewer, status),
   ]);
+
+  // Selection is resolved against the rows ACTUALLY returned for this viewer
+  // and filter, so an id for a check-in outside their scope simply shows the
+  // empty rail — it never confirms the record exists.
+  const selected = resolveSelected(searchParams.item, submissions);
+  const basePath = '/platform/dashboard/submissions';
 
   const countByFilter: Record<CheckinStatusFilter, number> = {
     all: counts.all,
@@ -119,6 +131,15 @@ export default async function PlatformSubmissionsPage({
             })}
           </nav>
 
+          {/* UX REFRESH PHASE 5 — this was the last register still rendering one
+              bordered card per row: literally card, card, card. It is now a work
+              surface — a table to scan, and a rail carrying the selected
+              check-in's detail.
+
+              The row used to navigate straight to the worker's record, which
+              meant losing your filtered list to answer "when did they check
+              out?". Selecting a row now answers that in place; the worker record
+              is still one click away from the rail. */}
           {submissions.length === 0 ? (
             <p className="rounded-xl border border-line bg-surface px-4 py-8 text-center text-ink-muted">
               {status === 'on-site'
@@ -128,43 +149,124 @@ export default async function PlatformSubmissionsPage({
                   : 'No check-ins to show.'}
             </p>
           ) : (
-            <ul className="space-y-3">
-              {submissions.map((s) => {
-                const onSite = !s.checkedOutAt;
-                return (
-                  <li key={s.id}>
+            <WorkSurface
+              railTitle={selected ? 'Check-in' : 'Check-in details'}
+              rail={
+                selected && (
+                  <>
+                    <p className="text-base font-semibold text-ink">
+                      {selected.worker.fullName}
+                    </p>
+                    <p className="mb-2 text-sm text-ink-subtle">
+                      {selected.worker.company}
+                    </p>
+                    <dl>
+                      <RailDetail label="Site" value={selected.jobSite.name} />
+                      <RailDetail
+                        label="Status"
+                        value={
+                          selected.checkedOutAt ? 'Checked out' : 'On site now'
+                        }
+                      />
+                      <RailDetail
+                        label="Checked in"
+                        value={formatDateTimeUK(selected.checkedInAt)}
+                      />
+                      <RailDetail
+                        label="Checked out"
+                        value={
+                          selected.checkedOutAt
+                            ? formatDateTimeUK(selected.checkedOutAt)
+                            : '— still on site'
+                        }
+                      />
+                      {/* Derived from the two timestamps already loaded; no new
+                          query, and it is the one figure the table cannot show
+                          without becoming a wall of numbers. */}
+                      <RailDetail
+                        label="Time on site"
+                        value={
+                          selected.checkedOutAt
+                            ? formatHoursMinutes(
+                                Math.max(
+                                  0,
+                                  Math.round(
+                                    (selected.checkedOutAt.getTime() -
+                                      selected.checkedInAt.getTime()) /
+                                      60000,
+                                  ),
+                                ),
+                              )
+                            : '—'
+                        }
+                      />
+                    </dl>
                     <Link
-                      href={`/platform/dashboard/workers/${s.worker.id}`}
-                      className="hover:border-brand-300 flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 shadow-card transition-colors hover:bg-brand-50/40"
+                      href={`/platform/dashboard/workers/${selected.worker.id}`}
+                      className="mt-3 inline-block text-sm font-semibold text-brand-700 hover:underline"
                     >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate font-semibold text-brand-700">
-                            {s.worker.fullName}
-                          </span>
-                          <span
-                            className={cn(
-                              'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
-                              onSite
-                                ? 'bg-safe-50 text-safe-700'
-                                : 'border border-line bg-surface-sunken text-ink-muted',
-                            )}
-                          >
-                            {onSite ? 'On site' : 'Checked out'}
-                          </span>
-                        </div>
-                        <p className="mt-0.5 truncate text-sm text-ink-subtle">
-                          {s.worker.company} · {s.jobSite.name}
-                        </p>
-                      </div>
-                      <span className="shrink-0 text-right text-xs tabular-nums text-ink-subtle">
-                        {formatDateTimeUK(s.checkedInAt)}
-                      </span>
+                      View worker record →
                     </Link>
-                  </li>
-                );
-              })}
-            </ul>
+                  </>
+                )
+              }
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-line text-left text-ink-subtle">
+                      <th className="px-5 py-2.5 font-medium">Worker</th>
+                      <th className="px-5 py-2.5 font-medium">Site</th>
+                      <th className="px-5 py-2.5 font-medium">Status</th>
+                      <th className="px-5 py-2.5 font-medium">Checked in</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {submissions.map((s) => {
+                      const onSite = !s.checkedOutAt;
+                      const isSelected = selected?.id === s.id;
+                      return (
+                        <tr
+                          key={s.id}
+                          className={selectedRowClass(isSelected)}
+                          aria-current={isSelected ? 'true' : undefined}
+                        >
+                          <td className="px-5 py-3">
+                            <Link
+                              href={`${basePath}?${new URLSearchParams({
+                                ...(status === 'all' ? {} : { status }),
+                                item: s.id,
+                              }).toString()}`}
+                              className="font-semibold text-brand-700 hover:underline"
+                            >
+                              {s.worker.fullName}
+                            </Link>
+                          </td>
+                          <td className="px-5 py-3 text-ink">
+                            {s.jobSite.name}
+                          </td>
+                          <td className="px-5 py-3">
+                            <span
+                              className={cn(
+                                'inline-flex rounded-full px-2 py-0.5 text-xs font-semibold',
+                                onSite
+                                  ? 'bg-safe-50 text-safe-700'
+                                  : 'border border-line bg-surface-sunken text-ink-muted',
+                              )}
+                            >
+                              {onSite ? 'On site' : 'Checked out'}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 tabular-nums text-ink-muted">
+                            {formatDateTimeUK(s.checkedInAt)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </WorkSurface>
           )}
         </>
       )}
