@@ -3,6 +3,9 @@ import { notFound, redirect } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
 import { CloseOutPackWizard } from '@/components/platform/CloseOutPackWizard';
+import { CloseOutArchiveButton } from '@/components/platform/CloseOutArchiveButton';
+import { CloseOutSupportingUpload } from '@/components/platform/CloseOutSupportingUpload';
+import { viewerCan } from '@/services/platformUsers/effectivePermissions';
 import {
   requirePlatformViewer,
   assertModuleView,
@@ -88,6 +91,10 @@ export default async function CloseOutPage({
         preparedBy={viewer.name}
       />
 
+      {viewerCan(viewer, 'documents', 'create', params.id) ? (
+        <CloseOutSupportingUpload siteId={params.id} />
+      ) : null}
+
       {packs && packs.length > 0 ? (
         <div className="mt-6 rounded-2xl border border-line bg-surface p-5">
           <h2 className="text-base font-bold text-ink">Revision history</h2>
@@ -111,12 +118,26 @@ export default async function CloseOutPage({
                     {p.preparedFor ? ` · for ${p.preparedFor}` : ''}
                   </p>
                 </div>
-                <Link
-                  href={`/platform/dashboard/sites/${params.id}/close-out/${p.id}`}
-                  className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink"
-                >
-                  Open
-                </Link>
+                <div className="flex flex-wrap items-start gap-2">
+                  <Link
+                    href={`/platform/dashboard/sites/${params.id}/close-out/${p.id}`}
+                    className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink"
+                  >
+                    Open
+                  </Link>
+                  <CloseOutArchiveButton
+                    siteId={params.id}
+                    packId={p.id}
+                    zip={
+                      p.zip
+                        ? {
+                            ...p.zip,
+                            generatedAt: p.zip.generatedAt.toISOString(),
+                          }
+                        : null
+                    }
+                  />
+                </div>
               </li>
             ))}
           </ul>

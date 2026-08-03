@@ -4,6 +4,14 @@
 // service without touching the frontend.
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    // SC-024 Phase 2: archiver (and its dependency tree) ships an exports map
+    // webpack 5 rejects with "Default condition should be last one". It is a
+    // server-only, Node-only library used solely to stream the close-out ZIP,
+    // so it is loaded at runtime rather than bundled. node_modules ships with
+    // the deployment artifact, so it is present in production.
+    serverComponentsExternalPackages: ['archiver'],
+  },
   // Europe/London is the canonical timezone for all server-side date handling.
   // Times are stored in UTC and only formatted to British conventions at the edge.
   env: {

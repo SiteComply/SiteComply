@@ -154,6 +154,13 @@ export interface PackSummary {
   generatedAt: Date;
   sectionCount: number;
   preparedFor: string | null;
+  /** SC-024 Phase 2 — the stored ZIP artefact, if one has been built. */
+  zip: {
+    generatedAt: Date;
+    sizeBytes: number;
+    fileCount: number;
+    truncated: boolean;
+  } | null;
 }
 
 /** Revision history for a project, newest first. */
@@ -174,6 +181,15 @@ export async function listPacks(
     generatedAt: r.generatedAt,
     sectionCount: normaliseSelection(r.sections).length,
     preparedFor: r.preparedFor,
+    zip:
+      r.zipBlobPath && r.zipGeneratedAt
+        ? {
+            generatedAt: r.zipGeneratedAt,
+            sizeBytes: r.zipSizeBytes ?? 0,
+            fileCount: r.zipFileCount ?? 0,
+            truncated: r.zipTruncated,
+          }
+        : null,
   }));
 }
 

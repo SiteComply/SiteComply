@@ -12,6 +12,8 @@ import {
   renderPack,
 } from '@/services/closeOut/closeOutService';
 import { formatDateUK, formatDateTimeUK } from '@/lib/datetime';
+import { getCompanyBranding } from '@/services/company/companyConfigService';
+import { collectAppendices } from '@/services/closeOut/closeOutArchive';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +40,13 @@ export default async function CloseOutPackPage({
 
   const pack = await renderPack(viewer, params.packId);
   if (!pack) notFound();
+
+  // Appendices are collected under the SAME viewer permissions as the pack, so
+  // the appendix list can never name a file this person is not allowed to see.
+  const [branding, { labels }] = await Promise.all([
+    getCompanyBranding(),
+    collectAppendices(viewer, params.id),
+  ]);
 
   return (
     <PlatformShell>
@@ -76,9 +85,23 @@ export default async function CloseOutPackPage({
       <article className="rounded-2xl border border-line bg-surface p-8 print:border-0 print:p-0">
         {/* Cover page */}
         <header className="border-b border-line pb-8 text-center">
-          <p className="text-sm font-bold uppercase tracking-widest text-brand-700">
-            SiteComply
+          {branding.hasLogo ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src="/api/company/logo"
+              alt={branding.companyName}
+              className="mx-auto mb-4 max-h-16 max-w-[220px] object-contain"
+            />
+          ) : null}
+          <p
+            className="text-sm font-bold uppercase tracking-widest"
+            style={{ color: branding.primaryColor }}
+          >
+            {branding.companyName}
           </p>
+          {branding.tagline ? (
+            <p className="mt-1 text-xs text-ink-subtle">{branding.tagline}</p>
+          ) : null}
           <h2 className="mt-6 text-2xl font-bold uppercase text-ink">
             {pack.site.name}
           </h2>
@@ -122,6 +145,7 @@ export default async function CloseOutPackPage({
                 </a>
               </li>
             ))}
+            {labels.length > 0 ? <li>Appendices</li> : null}
           </ol>
         </nav>
 
@@ -202,15 +226,51 @@ export default async function CloseOutPackPage({
           </section>
         ))}
 
+        {/* Supporting appendices — the register that ties this document to the
+            original files in the ZIP export. Numbering is shared with the
+            archive, so "Appendix A3" here is the file named A3 in the zip. */}
+        {labels.length > 0 ? (
+          <section className="border-t border-line py-6 print:break-before-page">
+            <h3 className="mb-3 text-base font-bold text-ink">Appendices</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="text-ink-subtle">
+                  <tr>
+                    <th className="pb-1 pr-3 font-medium">Ref</th>
+                    <th className="pb-1 pr-3 font-medium">Title</th>
+                    <th className="pb-1 pr-3 font-medium">Source</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {labels.map((l) => (
+                    <tr key={l.ref}>
+                      <td className="py-1.5 pr-3 font-semibold text-ink">
+                        {l.ref}
+                      </td>
+                      <td className="py-1.5 pr-3 text-ink">{l.title}</td>
+                      <td className="py-1.5 pr-3 text-ink-muted">{l.source}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-2 text-xs text-ink-subtle">
+              The original files are included in the <code>originals/</code>{' '}
+              folder of the ZIP export, named by their reference above.
+            </p>
+          </section>
+        ) : null}
+
         {/* The honesty footer, following SC-019's CPP: this is a compilation of
             records, not a certificate of compliance. */}
         <footer className="pt-6 text-xs text-ink-subtle">
           <p>
-            This pack was compiled automatically from the records held in
-            SiteComply for this project on {formatDateUK(pack.generatedAt)}. It
-            is a record of what was captured, not an assessment or certification
-            of compliance. The Principal Contractor remains responsible for the
-            accuracy and completeness of project records under CDM 2015.
+            This pack was compiled automatically from the records held in{' '}
+            {branding.companyName} for this project on{' '}
+            {formatDateUK(pack.generatedAt)}. It is a record of what was
+            captured, not an assessment or certification of compliance. The
+            Principal Contractor remains responsible for the accuracy and
+            completeness of project records under CDM 2015.
           </p>
         </footer>
       </article>

@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import { randomUUID } from 'crypto';
 import {
   BlobServiceClient,
@@ -71,4 +72,41 @@ export async function deleteDocumentBlob(blobPath: string): Promise<void> {
   } catch {
     // Swallow — deletion is best-effort; an orphaned blob is not user-facing.
   }
+}
+
+/**
+ * Stream a blob's bytes rather than buffering them.
+ *
+ * SC-024 Phase 2 builds a ZIP of every original document on a project. Reading
+ * each file into memory first would put the whole archive through a 1.75 GB
+ * App Service one Buffer at a time; streaming keeps only the current chunk.
+ *
+ * Returns null when the blob is missing, so a deleted file skips the archive
+ * instead of failing the whole export.
+ */
+export async function openDocumentBlobStream(
+  blobPath: string,
+): Promise<NodeJS.ReadableStream | null> {
+  try {
+    const blockBlob = getContainer().getBlockBlobClient(blobPath);
+    const res = await blockBlob.download();
+    return res.readableStreamBody ?? null;
+  } catch (error) {
+    if (error instanceof RestError && error.statusCode === 404) return null;
+    throw error;
+  }
+}
+
+/** Upload from a stream — used for the close-out archive. */
+export async function uploadBlobStream(
+  blobPath: string,
+  stream: Readable,
+  mimeType: string,
+): Promise<void> {
+  const blockBlob = getContainer().getBlockBlobClient(blobPath);
+  // 4 MB buffers, 4 in flight: enough to keep the upload saturated without
+  // holding more than ~16 MB of the archive in memory at once.
+  await blockBlob.uploadStream(stream, 4 * 1024 * 1024, 4, {
+    blobHTTPHeaders: { blobContentType: mimeType },
+  });
 }

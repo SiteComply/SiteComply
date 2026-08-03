@@ -2727,6 +2727,22 @@ model CloseOutPack {
   generatedByName   String
   generatedAt       DateTime @default(now())
 
+  /// SC-024 Phase 2 — the stored ZIP artefact.
+  ///
+  /// This is what makes the pack "permanently stored against the project": the
+  /// pack record alone re-renders from live data, which is right for viewing but
+  /// wrong for a handover, where a client needs the documents exactly as they
+  /// were at the moment of handover.
+  zipBlobPath    String?
+  zipSizeBytes   Int?
+  zipGeneratedAt DateTime?
+  /// True when the archive hit the size ceiling and some originals were left
+  /// out. Recorded so the pack can SAY it is partial rather than appearing
+  /// complete — a handover archive that quietly drops files is worse than one
+  /// that admits what is missing.
+  zipTruncated   Boolean   @default(false)
+  zipFileCount   Int?
+
   createdAt DateTime @default(now())
 
   @@unique([jobSiteId, version])

@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# SC-024 Phase 2 production CODE deploy (close-out ZIP export + branding +
+# appendices + upload-before-generation). The additive migration
+# 20260808090000_add_close_out_zip must already be applied — run
+# scripts/sc024p2_migrate.sh first. Same proven flow as SC-005..023.
+set -uo pipefail
+export PATH="$HOME/.local/bin:$PATH"
+cd /home/cc-dev-1/sitecomply
+
+RG=rgSiteComply
+APP=sitecomply-web
+SCM="https://${APP}.scm.azurewebsites.net"
+HEALTH="https://${APP}.azurewebsites.net/api/health"
+ZIP=/tmp/sc024p2_deploy.zip
+
+kudu_buildid() {
+  local tok
+  tok=$(az account get-access-token --query accessToken -o tsv 2>/dev/null) || return 1
+  curl -s --max-time 20 -H "Authorization: Bearer $tok" \
+    "${SCM}/api/vfs/site/wwwroot/.next/BUILD_ID" 2>/dev/null | tr -d '[:space:]'
+}
+
+echo "== SC-024 PHASE 2 CODE DEPLOY =="
+echo "on commit: $(git rev-parse --short HEAD) ($(git rev-parse --abbrev-ref HEAD))"
+
+echo "[1/8] Current prod build id:"
+OLD_BUILD=$(kudu_buildid); echo "      OLD_BUILD=${OLD_BUILD:-<unknown>}"
+
+echo "[2/8] Confirming SC-024 Phase 2 code IS present in this artifact..."
+# These assert BEHAVIOUR, not just that files exist: the ZIP builder, the
+# streaming blob helpers, the branded cover, the appendix register, the upload
+# panel, and archiver being external to the webpack bundle.
+[ -f services/closeOut/closeOutArchive.ts ] \
+  && [ -f 'app/api/platform/sites/[id]/close-out/[packId]/archive/route.ts' ] \
+  && [ -f components/platform/CloseOutArchiveButton.tsx ] \
+  && [ -f components/platform/CloseOutSupportingUpload.tsx ] \
+  && grep -q "ZIP_LIMIT_BYTES = 250 \* 1024 \* 1024" services/closeOut/closeOutArchive.ts \
+  && grep -q 'ZipArchive' services/closeOut/closeOutArchive.ts \
+  && grep -q 'openDocumentBlobStream' services/documents/blobStorage.ts \
+  && grep -q 'uploadBlobStream' services/documents/blobStorage.ts \
+  && grep -q 'getStoredArchive' services/closeOut/closeOutArchive.ts \
+  && grep -q 'getCompanyBranding' services/closeOut/closeOutArchive.ts \
+  && grep -q 'zipBlobPath' prisma/schema.prisma \
+  && grep -q 'zipTruncated' prisma/schema.prisma \
+  && grep -q "serverComponentsExternalPackages: \['archiver'\]" next.config.js \
+  && [ -d node_modules/archiver ] \
+  && grep -q '"archiver"' package.json \
+  && grep -q 'getCompanyBranding' 'app/platform/dashboard/sites/[id]/close-out/[packId]/page.tsx' \
+  && grep -q 'Appendices' 'app/platform/dashboard/sites/[id]/close-out/[packId]/page.tsx' \
+  && grep -q 'CloseOutSupportingUpload' 'app/platform/dashboard/sites/[id]/close-out/page.tsx' \
+  && grep -q 'CloseOutArchiveButton' 'app/platform/dashboard/sites/[id]/close-out/page.tsx' \
+  && echo "      confirmed: archive builder + route + branding + appendices + upload panel." \
+  || { echo "ERROR: SC-024 Phase 2 code missing — aborting"; exit 1; }
+
+# The hardcoded cover-page brand must be GONE from the pack page — its presence
+# would mean the branding change silently did not apply.
+if grep -q 'SiteComply' 'app/platform/dashboard/sites/[id]/close-out/[packId]/page.tsx'; then
+  echo "ERROR: pack page still hardcodes the SiteComply cover brand — aborting"; exit 1
+fi
+echo "      confirmed: hardcoded cover brand replaced by CompanyConfig branding."
+
+echo "[3/8] Generating Prisma client..."
+npx prisma generate >/dev/null 2>&1 || { echo "ERROR: prisma generate failed"; exit 1; }
+
+echo "[4/8] Building..."
+rm -rf .next
+npm run build 2>&1 | tail -5
+[ -f .next/BUILD_ID ] || { echo "ERROR: build produced no .next/BUILD_ID"; exit 1; }
+NEW_BUILD=$(tr -d '[:space:]' < .next/BUILD_ID); echo "      NEW_BUILD=${NEW_BUILD}"
+
+echo "[5/8] Packaging zip..."
+rm -f "$ZIP"
+zip -rq "$ZIP" . -x '.git/*' -x '.env' -x '.next/cache/*' -x 'scripts/*'
+echo "      $(du -h "$ZIP" | cut -f1) -> $ZIP"
+
+echo "[6/8] Deploying to App Service..."
+az webapp deploy -g "$RG" -n "$APP" --type zip --src-path "$ZIP" --async true -o none || true
+
+echo "[7/8] Waiting for prod BUILD_ID to flip to ${NEW_BUILD}..."
+LANDED=""
+for i in $(seq 1 40); do
+  sleep 15
+  CURB=$(kudu_buildid)
+  echo "      [$i] prod build id now: ${CURB:-<unreadable>}"
+  if [ "$CURB" = "$NEW_BUILD" ]; then LANDED=yes; break; fi
+done
+if [ -z "$LANDED" ]; then
+  echo "WARNING: new build id not confirmed on disk yet. NOT cutting over."
+  exit 2
+fi
+echo "      new build landed on disk."
+
+echo "[8/8] Cutting over (stop/start) and health-checking..."
+az webapp stop  -g "$RG" -n "$APP" -o none
+az webapp start -g "$RG" -n "$APP" -o none
+CODE=""
+for i in $(seq 1 20); do
+  sleep 15
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$HEALTH" || echo 000)
+  echo "      [$i] health: HTTP ${CODE}"
+  [ "$CODE" = "200" ] && break
+done
+
+echo "== DEPLOY SUMMARY =="
+echo "   old build: ${OLD_BUILD:-<unknown>}"
+echo "   new build: ${NEW_BUILD}"
+echo "   health:    HTTP ${CODE}"
+[ "$CODE" = "200" ] && echo "== SC-024 PHASE 2 CODE DEPLOY COMPLETE ==" || echo "== HEALTH NOT 200 — investigate =="
