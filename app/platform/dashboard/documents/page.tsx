@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { PlatformShell } from '@/components/platform/PlatformShell';
+import { PageHeader } from '@/components/platform/PageHeader';
 import { PlatformIcon } from '@/components/platform/icons';
 import {
   requirePlatformViewer,
@@ -69,28 +70,28 @@ export default async function PlatformDocumentsPage({
 
   return (
     <PlatformShell>
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink">Documents</h1>
-          <p className="text-ink-muted">
-            Method statements, RAMS, permits and site paperwork.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
+      <PageHeader
+        title="Documents"
+        description="Method statements, RAMS, permits and site paperwork."
+        meta={
           <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
             {describeScope(viewer)}
           </span>
-          {canCreate && (
-            <Link
-              href="/platform/dashboard/documents/upload"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
-            >
-              <PlatformIcon name="doc" />
-              Upload document
-            </Link>
-          )}
-        </div>
-      </header>
+        }
+        actions={
+          <>
+            {canCreate && (
+              <Link
+                href="/platform/dashboard/documents/upload"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
+              >
+                <PlatformIcon name="doc" />
+                Upload document
+              </Link>
+            )}
+          </>
+        }
+      />
 
       {/* Filters — a no-JS GET form (Apply to submit). */}
       <form

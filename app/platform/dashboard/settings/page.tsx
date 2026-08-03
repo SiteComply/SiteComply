@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
+import { PageHeader } from '@/components/platform/PageHeader';
 import {
   requirePlatformViewer,
   assertModuleView,
@@ -36,12 +37,10 @@ export default async function SettingsPage() {
 
   return (
     <PlatformShell>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-ink">Settings</h1>
-        <p className="text-ink-muted">
-          Organisation-wide configuration that applies across every site.
-        </p>
-      </div>
+      <PageHeader
+        title="Settings"
+        description="Organisation-wide configuration that applies across every site."
+      />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Link

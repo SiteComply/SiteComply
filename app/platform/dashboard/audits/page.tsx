@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { PlatformShell } from '@/components/platform/PlatformShell';
+import { PageHeader } from '@/components/platform/PageHeader';
 import { PlatformIcon } from '@/components/platform/icons';
 import {
   requirePlatformViewer,
@@ -57,34 +58,34 @@ export default async function PlatformAuditsPage({
 
   return (
     <PlatformShell>
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink">Audits</h1>
-          <p className="text-ink-muted">
-            Site inspections and audit records across your sites.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
+      <PageHeader
+        title="Audits"
+        description="Site inspections and audit records across your sites."
+        meta={
           <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
             {describeScope(viewer)}
           </span>
-          <Link
-            href="/platform/dashboard/audits/templates"
-            className="rounded-xl border border-line px-4 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken"
-          >
-            Templates
-          </Link>
-          {canCreate && (
+        }
+        actions={
+          <>
             <Link
-              href="/platform/dashboard/audits/new"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
+              href="/platform/dashboard/audits/templates"
+              className="rounded-xl border border-line px-4 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken"
             >
-              <PlatformIcon name="shield" />
-              New audit
+              Templates
             </Link>
-          )}
-        </div>
-      </header>
+            {canCreate && (
+              <Link
+                href="/platform/dashboard/audits/new"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
+              >
+                <PlatformIcon name="shield" />
+                New audit
+              </Link>
+            )}
+          </>
+        }
+      />
 
       {/* Filters — a no-JS GET form (Apply to submit). */}
       <form

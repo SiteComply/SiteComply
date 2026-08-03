@@ -14,12 +14,27 @@ import { PlatformIcon, type PlatformIconName } from './icons';
  * Left-hand navigation for the Platform dashboard. Vertical on desktop; collapses
  * to a horizontal scroller on small screens. Items are shown only if the viewer
  * may view that module (enforced for Director/Project Manager/Client).
+ *
+ * UX REFRESH PHASE 1 — the eleven entries are now clustered by the kind of work
+ * they represent (overview / operations / records / administration). Eleven flat
+ * items give the eye no structure to land on; four short runs do, and the
+ * clusters are expressed purely as SPACING — no group headings, because labels
+ * would add the explanatory chrome the brief is asking us to remove.
+ *
+ * The grouping is cosmetic and nothing else reads it: items are still filtered
+ * exactly as before, one at a time, by effective module permission and the
+ * optional role restriction. Order within the nav is unchanged.
  */
+
+/** Cosmetic clusters, rendered as spacing between runs. NOT a permission. */
+type NavGroup = 'overview' | 'projects' | 'insight' | 'compliance' | 'admin';
+
 export const PLATFORM_NAV: {
   href: string;
   label: string;
   icon: PlatformIconName;
   module: PlatformModule;
+  group: NavGroup;
   /**
    * Optional extra restriction ON TOP of the module gate — NOT a permission.
    * The pages behind these entries keep their own gates unchanged; this only
@@ -33,36 +48,42 @@ export const PLATFORM_NAV: {
     label: 'Dashboard',
     icon: 'grid',
     module: 'dashboard',
+    group: 'overview',
   },
   {
     href: '/platform/dashboard/notifications',
     label: 'Notifications',
     icon: 'bell',
     module: 'dashboard',
+    group: 'overview',
   },
   {
     href: '/platform/dashboard/sites',
     label: 'Sites',
     icon: 'pin',
     module: 'sites',
+    group: 'projects',
   },
   {
     href: '/platform/dashboard/submissions',
     label: 'Check-ins',
     icon: 'clipboard',
     module: 'checkins',
+    group: 'projects',
   },
   {
     href: '/platform/dashboard/reports',
     label: 'Reports',
     icon: 'chart',
     module: 'reports',
+    group: 'insight',
   },
   {
     href: '/platform/dashboard/documents',
     label: 'Documents',
     icon: 'doc',
     module: 'documents',
+    group: 'insight',
   },
   {
     href: '/platform/dashboard/compliance-calendar',
@@ -71,24 +92,28 @@ export const PLATFORM_NAV: {
     // SC-020: scheduling recurring audits, so it sits under the audits module —
     // no RBAC matrix change was needed.
     module: 'audits',
+    group: 'compliance',
   },
   {
     href: '/platform/dashboard/audits',
     label: 'Audits',
     icon: 'shield',
     module: 'audits',
+    group: 'compliance',
   },
   {
     href: '/platform/dashboard/actions',
     label: 'Actions',
     icon: 'bolt',
     module: 'actions',
+    group: 'compliance',
   },
   {
     href: '/platform/dashboard/permits',
     label: 'Permits',
     icon: 'permit',
     module: 'permits',
+    group: 'compliance',
   },
   {
     // SC-021 — organisation-wide configuration. Deliberately LAST: it is
@@ -102,6 +127,7 @@ export const PLATFORM_NAV: {
     label: 'Settings',
     icon: 'sliders',
     module: 'sites',
+    group: 'admin',
     roles: ['DIRECTOR', 'PROJECT_MANAGER'],
   },
 ];
@@ -138,11 +164,15 @@ export function PlatformNav({
       aria-label="Platform sections"
       className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible"
     >
-      {items.map((item) => {
+      {items.map((item, i) => {
         const active =
           item.href === '/platform/dashboard'
             ? pathname === '/platform/dashboard'
             : pathname.startsWith(item.href);
+        // First item of a new cluster gets breathing room above it. Expressed as
+        // a margin on the item rather than a separator element, so the grouping
+        // stays purely visual and adds nothing to the accessibility tree.
+        const startsGroup = i > 0 && items[i - 1].group !== item.group;
         return (
           <Link
             key={item.href}
@@ -150,6 +180,7 @@ export function PlatformNav({
             aria-current={active ? 'page' : undefined}
             className={cn(
               'flex items-center gap-3 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+              startsGroup && 'md:mt-3',
               active
                 ? 'bg-brand-500 text-white shadow-sm shadow-brand-600/20'
                 : 'text-ink-muted hover:bg-brand-50 hover:text-brand-700',

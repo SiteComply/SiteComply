@@ -1,4 +1,5 @@
 import { PlatformShell } from '@/components/platform/PlatformShell';
+import { PageHeader } from '@/components/platform/PageHeader';
 import { PlatformIcon } from '@/components/platform/icons';
 import {
   requirePlatformViewer,
@@ -22,17 +23,15 @@ export default async function PlatformNotificationsPage() {
 
   return (
     <PlatformShell>
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink">Notifications</h1>
-          <p className="text-ink-muted">
-            Document expiry and action reminders across your sites.
-          </p>
-        </div>
-        <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
-          {describeScope(viewer)}
-        </span>
-      </header>
+      <PageHeader
+        title="Notifications"
+        description="Document expiry and action reminders across your sites."
+        meta={
+          <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+            {describeScope(viewer)}
+          </span>
+        }
+      />
 
       {notifications.length === 0 ? (
         <div className="rounded-xl border border-line bg-surface p-10 text-center shadow-card">

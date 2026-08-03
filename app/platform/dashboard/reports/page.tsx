@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { PlatformShell } from '@/components/platform/PlatformShell';
+import { PageHeader } from '@/components/platform/PageHeader';
 import { PlatformIcon } from '@/components/platform/icons';
 import {
   requirePlatformViewer,
@@ -25,17 +26,15 @@ export default async function PlatformReportsPage() {
 
   return (
     <PlatformShell>
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink">Reports</h1>
-          <p className="text-ink-muted">
-            Compliance and attendance reporting across your sites.
-          </p>
-        </div>
-        <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
-          {describeScope(viewer)}
-        </span>
-      </header>
+      <PageHeader
+        title="Reports"
+        description="Compliance and attendance reporting across your sites."
+        meta={
+          <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+            {describeScope(viewer)}
+          </span>
+        }
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {reports.map((report) => (

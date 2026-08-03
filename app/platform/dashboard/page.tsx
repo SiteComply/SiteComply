@@ -3,6 +3,7 @@ import { cn } from '@/lib/cn';
 import { prisma } from '@/lib/prisma';
 import { formatDateTimeUK } from '@/lib/datetime';
 import { PlatformShell } from '@/components/platform/PlatformShell';
+import { PageHeader } from '@/components/platform/PageHeader';
 import {
   PlatformIcon,
   type PlatformIconName,
@@ -217,18 +218,15 @@ export default async function PlatformDashboardPage() {
 
   return (
     <PlatformShell>
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink">Platform Dashboard</h1>
-          <p className="text-ink-muted">
-            A high-level view across your organisation’s sites and compliance.
-          </p>
-        </div>
-        {/* The dashboard is a high-level monitoring and reporting screen, not an
-            operational task-creation one. SC-013's "Start new audit" shortcut was
-            removed deliberately: audit creation lives in the Audits module, where
-            users expect to find it. Do not reintroduce quick-create actions here. */}
-      </header>
+      {/* The dashboard is a high-level monitoring and reporting screen, not an
+          operational task-creation one. SC-013's "Start new audit" shortcut was
+          removed deliberately: audit creation lives in the Audits module, where
+          users expect to find it. Do not reintroduce quick-create actions here —
+          which is why this header passes no `actions`. */}
+      <PageHeader
+        title="Platform Dashboard"
+        description="A high-level view across your organisation’s sites and compliance."
+      />
 
       <ScopeBanner viewer={viewer} />
 

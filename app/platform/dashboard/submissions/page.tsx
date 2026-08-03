@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { cn } from '@/lib/cn';
 import { formatDateTimeUK } from '@/lib/datetime';
 import { PlatformShell } from '@/components/platform/PlatformShell';
+import { PageHeader } from '@/components/platform/PageHeader';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import {
   requirePlatformViewer,
@@ -52,27 +53,27 @@ export default async function PlatformSubmissionsPage({
 
   return (
     <PlatformShell>
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink">Check-ins</h1>
-          <p className="text-ink-muted">
-            Worker site check-in and induction records across your sites.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Check-ins"
+        description="Worker site check-in and induction records across your sites."
+        meta={
           <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
             {describeScope(viewer)}
           </span>
-          {canExport && counts.all > 0 && (
-            <a
-              href="/api/platform/submissions/export"
-              className="touch-target inline-flex items-center rounded-lg border border-brand-200 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
-            >
-              Export CSV
-            </a>
-          )}
-        </div>
-      </header>
+        }
+        actions={
+          <>
+            {canExport && counts.all > 0 && (
+              <a
+                href="/api/platform/submissions/export"
+                className="touch-target inline-flex items-center rounded-lg border border-brand-200 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+              >
+                Export CSV
+              </a>
+            )}
+          </>
+        }
+      />
 
       {counts.all === 0 ? (
         <p className="rounded-xl border border-line bg-surface px-4 py-8 text-center text-ink-muted">

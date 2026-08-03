@@ -20,6 +20,28 @@ import { PLATFORM_MODULES } from '@/services/platformUsers/platformPermissions';
  * Platform area has a left-hand sidebar navigation and a solid-blue "Platform"
  * identity, while reusing SiteComply's header, brand stripe, spacing and cards.
  * Shows the signed-in user, their site-access scope and a sign-out link.
+ *
+ * UX REFRESH PHASE 1 — the application frame. Two things changed here, both
+ * presentation:
+ *
+ * 1. THE SIDEBAR IS NOW CHROME, NOT CONTENT. It used to render as a floating
+ *    card (`rounded-xl border bg-surface shadow-card`) sitting inside the page,
+ *    in the same visual language as the panels beside it — so navigation
+ *    competed with content instead of framing it. It is now a flush, full-height
+ *    rail carrying the product identity at the top and the signed-in user at the
+ *    bottom, which is what makes the portal read as one application.
+ *
+ * 2. THE WIDTH CAP MOVED OFF THE WHOLE PORTAL. Everything was previously capped
+ *    at `max-w-6xl` (1152px) INCLUDING the sidebar, leaving roughly 900px of
+ *    content on any monitor and ~750px of dead space either side at 1920. The
+ *    rail now sits outside the measure and only the content area is capped, at a
+ *    width that still reads comfortably. This is the direct fix for the brief's
+ *    "many screens waste space" and most of its "too much scrolling" — a layout
+ *    with nowhere to go sideways can only grow downwards.
+ *
+ * Unchanged on purpose: every colour token, the brand stripe, the logo, the
+ * "Platform" chip, the skip link, the notification poller, and the fact that
+ * which nav items appear is decided by effective permissions.
  */
 export async function PlatformShell({ children }: { children: ReactNode }) {
   const viewer = await getPlatformViewer();
@@ -30,8 +52,48 @@ export async function PlatformShell({ children }: { children: ReactNode }) {
     ? await countUnreadPlatformNotifications(viewer)
     : 0;
 
+  // SC-022 — modules the viewer can view on AT LEAST ONE assigned site. The nav
+  // is global while permissions are per-site, so a single answer has to cover
+  // several sites; the page gate and the queries beneath it still enforce
+  // per-site truth, so a visible section can never leak data from a site they
+  // have lost.
+  const allowedModules = viewer
+    ? PLATFORM_MODULES.filter((m) => viewerCan(viewer, m, 'view'))
+    : undefined;
+
+  const identity = viewer ? (
+    <div className="min-w-0">
+      <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+        <span className="truncate">{viewer.name}</span>
+        {isReadOnlyRole(viewer.role) && (
+          <span className="shrink-0 rounded bg-surface-sunken px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
+            Read-only
+          </span>
+        )}
+      </span>
+      {/* The rail is narrower than the old full-width header, so a long scope
+          ("Organisation-wide · all 12 sites") can truncate. `title` keeps the
+          full value reachable rather than lost. */}
+      <span
+        className="mt-0.5 block truncate text-xs text-ink-subtle"
+        title={`${ROLE_LABELS[viewer.role]} · ${describeScope(viewer)}`}
+      >
+        {ROLE_LABELS[viewer.role]} · {describeScope(viewer)}
+      </span>
+    </div>
+  ) : null;
+
+  const signOut = (
+    <a
+      href="/api/platform/auth/logout"
+      className="touch-target inline-flex items-center rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken"
+    >
+      Sign out
+    </a>
+  );
+
   return (
-    <div className="flex min-h-dvh flex-col bg-surface-sunken">
+    <div className="min-h-dvh bg-surface-sunken">
       {/* SC-016: keeps the badge live without a manual refresh. */}
       {viewer && <NotificationPoller initialCount={notificationCount} />}
       <a
@@ -41,66 +103,66 @@ export async function PlatformShell({ children }: { children: ReactNode }) {
         Skip to content
       </a>
 
-      <header className="border-b border-line bg-surface">
-        <div className="h-1 w-full bg-brand-500" aria-hidden="true" />
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Link href="/" aria-label="SiteComply home" className="inline-flex">
-              <Logo />
-            </Link>
-            <span className="rounded-md bg-brand-500 px-2 py-0.5 text-xs font-semibold text-white">
-              Platform
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            {viewer && (
-              <span className="hidden text-right sm:block">
-                <span className="flex items-center justify-end gap-2 text-sm font-semibold text-ink">
-                  {viewer.name}
-                  {isReadOnlyRole(viewer.role) && (
-                    <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
-                      Read-only
-                    </span>
-                  )}
+      <div className="flex min-h-dvh flex-col md:flex-row">
+        {/* The rail. Flush to the viewport edge, full height, its own surface —
+            chrome that frames the work rather than a card that competes with it.
+            Below `md` it collapses to the stacked header + horizontal nav
+            scroller it has always used on phones. */}
+        <aside className="shrink-0 border-b border-line bg-surface md:sticky md:top-0 md:h-dvh md:w-60 md:border-b-0 md:border-r">
+          <div className="h-1 w-full bg-brand-500" aria-hidden="true" />
+          <div className="flex h-[calc(100%-0.25rem)] flex-col">
+            <div className="flex items-center justify-between gap-2 px-4 py-3 md:justify-start">
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/"
+                  aria-label="SiteComply home"
+                  className="inline-flex"
+                >
+                  <Logo />
+                </Link>
+                <span className="rounded-md bg-brand-500 px-2 py-0.5 text-xs font-semibold text-white">
+                  Platform
                 </span>
-                <span className="block text-xs text-ink-subtle">
-                  {ROLE_LABELS[viewer.role]} · {describeScope(viewer)}
-                </span>
-              </span>
-            )}
-            <a
-              href="/api/platform/auth/logout"
-              className="touch-target inline-flex items-center rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken"
-            >
-              Sign out
-            </a>
-          </div>
-        </div>
-      </header>
+              </div>
+              {/* On phones the sign-out has nowhere else to go, so it stays in
+                  the top row beside the logo. */}
+              <div className="md:hidden">{signOut}</div>
+            </div>
 
-      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 md:flex-row">
-        <aside className="shrink-0 md:w-52">
-          <div className="rounded-xl border border-line bg-surface p-2 shadow-card md:sticky md:top-6">
-            <PlatformNav
-              role={viewer?.role}
-              // SC-022 — modules the viewer can view on AT LEAST ONE assigned
-              // site. The nav is global while permissions are per-site, so a
-              // single answer has to cover several sites; the page gate and the
-              // queries beneath it still enforce per-site truth, so a visible
-              // section can never leak data from a site they have lost.
-              allowedModules={
-                viewer
-                  ? PLATFORM_MODULES.filter((m) => viewerCan(viewer, m, 'view'))
-                  : undefined
-              }
-              notificationCount={notificationCount}
-            />
+            <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 md:pb-0">
+              <PlatformNav
+                role={viewer?.role}
+                allowedModules={allowedModules}
+                notificationCount={notificationCount}
+              />
+            </div>
+
+            {/* Identity sits at the foot of the rail on desktop — present, but
+                out of the way of the work. */}
+            {viewer && (
+              <div className="hidden border-t border-line px-4 py-3 md:block">
+                {identity}
+                <div className="mt-2">{signOut}</div>
+              </div>
+            )}
           </div>
         </aside>
 
-        <main id="main" className="min-w-0 flex-1">
-          {children}
-        </main>
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* The signed-in identity on phones, where the rail's footer is
+              hidden. Desktop gets it in the rail instead. */}
+          {viewer && (
+            <div className="border-b border-line bg-surface px-4 py-2 md:hidden">
+              {identity}
+            </div>
+          )}
+          <main
+            id="main"
+            className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 px-4 py-6 md:px-8"
+          >
+            {children}
+          </main>
+        </div>
       </div>
     </div>
   );
