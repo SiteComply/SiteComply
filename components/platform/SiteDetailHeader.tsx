@@ -15,6 +15,7 @@ import {
 } from '@/services/platformUsers/platformPermissions';
 import { getSiteForEditByViewer } from '@/services/sites/platformSiteService';
 import { canManageContractorAccess } from '@/services/platformUsers/contractorAccessService';
+import { canGenerateCloseOutPack } from '@/services/closeOut/closeOutService';
 
 /**
  * Shared chrome for every Site Details tab: breadcrumb, title, status, the
@@ -95,6 +96,17 @@ export async function SiteDetailHeader({
             >
               CPP draft
             </Link>
+            {/* SC-024 — sits beside the CPP: both are project documents
+                assembled from records already held, and a manager reaching for
+                one is likely to want the other. */}
+            {canGenerateCloseOutPack(viewer.role) && (
+              <Link
+                href={`/platform/dashboard/sites/${site.id}/close-out`}
+                className="touch-target inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink-muted transition-colors hover:bg-surface-sunken"
+              >
+                Close-out pack
+              </Link>
+            )}
             <Link
               href={`/platform/dashboard/sites/${site.id}/setup`}
               className="touch-target inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-brand-500 px-3 py-2 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50"

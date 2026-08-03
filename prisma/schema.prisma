@@ -411,6 +411,8 @@ model JobSite {
   workerPanelSettings WorkerPanelSetting[]
   /// SC-023 Phase 3 — competency and induction requirements for access.
   accessRequirements  SiteAccessRequirement[]
+  /// SC-024 — generated project close-out packs.
+  closeOutPacks       CloseOutPack[]
 
   /// SC-023 — when TRUE, only invited-and-approved workers may check in here.
   ///
@@ -2688,4 +2690,45 @@ model SiteAccessRequirement {
 
   @@unique([jobSiteId, requirement])
   @@index([jobSiteId, enabled])
+}
+
+/// SC-024 — a generated Project Close-Out Pack.
+///
+/// SNAPSHOTS THE SELECTION, NOT THE DATA. A pack records WHICH sections were
+/// included and in what order; the content itself is re-read from the live
+/// records when the pack is rendered. Copying every audit, permit and photo
+/// into the pack would double the database and immediately start drifting from
+/// the truth it is supposed to evidence.
+///
+/// Each generation is a new row, so `version` and the row history ARE the
+/// revision history the requirement asks for — nothing extra to maintain.
+model CloseOutPack {
+  id        String  @id @default(cuid())
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+
+  /// 1, 2, 3… per site. Shown as "Version 1.0" on the cover page.
+  version Int
+  title   String
+
+  /// The chosen sections and their order, as
+  /// [{ section, order }]. Snapshotted so an old version still renders in the
+  /// order it was generated in, even after the catalogue changes.
+  sections Json
+
+  /// Optional AI-written executive summary. NARRATIVE ONLY — never a compliance
+  /// conclusion, judgement or approval. Null when AI was not used.
+  aiSummary       String?
+  aiPromptVersion String?
+
+  preparedFor String?
+
+  generatedByUserId String?
+  generatedByName   String
+  generatedAt       DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@unique([jobSiteId, version])
+  @@index([jobSiteId, generatedAt])
 }
