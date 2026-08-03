@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+#
+# Platform UX Refresh — production CODE deploy. NO migration: the refresh
+# introduces no schema change, which is what keeps rollback code-only.
+#
+# The scXXX_deploy.sh guards assert that a FEATURE's code is present. A UX
+# refresh ships no feature, so the guards here assert the opposite kind of
+# thing: that the frame changed as intended AND that the things a layout
+# refactor silently breaks are still intact.
+#
+# Rollback: scripts/uxrefresh_rollback.sh --confirm
+#
+set -uo pipefail
+export PATH="$HOME/.local/bin:$PATH"
+cd /home/cc-dev-1/sitecomply
+
+RG=rgSiteComply
+APP=sitecomply-web
+SCM="https://${APP}.scm.azurewebsites.net"
+HEALTH="https://${APP}.azurewebsites.net/api/health"
+ZIP=/tmp/uxrefresh_deploy.zip
+
+kudu_buildid() {
+  local tok
+  tok=$(az account get-access-token --query accessToken -o tsv 2>/dev/null) || return 1
+  curl -s --max-time 20 -H "Authorization: Bearer $tok" \
+    "${SCM}/api/vfs/site/wwwroot/.next/BUILD_ID" 2>/dev/null | tr -d '[:space:]'
+}
+
+echo "== UX REFRESH CODE DEPLOY =="
+echo "on commit: $(git rev-parse --short HEAD) ($(git rev-parse --abbrev-ref HEAD))"
+
+echo "[1/8] Current prod build id:"
+OLD_BUILD=$(kudu_buildid); echo "      OLD_BUILD=${OLD_BUILD:-<unknown>}"
+
+echo "[2/8] Scope gate — the diff must be presentation-only..."
+bash scripts/uxrefresh_gate.sh >/tmp/uxgate.out 2>&1 \
+  || { echo "ERROR: scope gate FAILED — refusing to deploy:"; cat /tmp/uxgate.out; exit 1; }
+echo "      confirmed: no logic, permission, migration, dependency or token change."
+
+echo "[3/8] Frame invariants..."
+# The width cap must be off the portal shell. Checked on the className, not the
+# file — the explanatory comment mentions the old value on purpose.
+grep -q 'max-w-\[1600px\]' components/platform/PlatformShell.tsx \
+  || { echo "ERROR: content width cap missing — aborting"; exit 1; }
+grep -q 'className="mx-auto flex w-full max-w-6xl' components/platform/PlatformShell.tsx \
+  && { echo "ERROR: the old portal-wide max-w-6xl container is still present — aborting"; exit 1; }
+# The rail must not be a card again.
+grep -q 'rounded-xl border border-line bg-surface p-2 shadow-card' components/platform/PlatformShell.tsx \
+  && { echo "ERROR: the sidebar is rendering as a card again — aborting"; exit 1; }
+echo "      confirmed: content capped at 1600px, rail is not a card."
+
+echo "[4/8] Things a layout refactor breaks silently..."
+# SC-016's live badge is mounted in the shell. Lose it and notifications quietly
+# stop updating without anything looking wrong.
+grep -q '<NotificationPoller initialCount={notificationCount} />' components/platform/PlatformShell.tsx \
+  || { echo "ERROR: NotificationPoller not mounted — the live badge would die — aborting"; exit 1; }
+# Keyboard users reach content through this.
+grep -q 'Skip to content' components/platform/PlatformShell.tsx \
+  || { echo "ERROR: skip link missing — aborting"; exit 1; }
+# The nav must still be filtered by EFFECTIVE per-site permissions (SC-022).
+grep -q 'allowedModules' components/platform/PlatformShell.tsx \
+  && grep -q 'allowedModules.includes(item.module)' components/platform/PlatformNav.tsx \
+  || { echo "ERROR: nav is no longer filtered by effective permissions — aborting"; exit 1; }
+grep -q "aria-current={active ? 'page' : undefined}" components/platform/PlatformNav.tsx \
+  || { echo "ERROR: nav lost aria-current — aborting"; exit 1; }
+echo "      confirmed: live badge, skip link, effective-permission filtering, aria-current."
+
+echo "[5/8] Nav clusters must be CONTIGUOUS..."
+# Interleaved clusters put the spacing in arbitrary places and split items that
+# belong together. This caught exactly that during Phase 1.
+node -e "
+const s=require('fs').readFileSync('components/platform/PlatformNav.tsx','utf8');
+const seq=[...s.matchAll(/group: '([a-z]+)'/g)].map(m=>m[1]);
+if(seq.length!==11){console.error('expected 11 grouped nav items, got '+seq.length);process.exit(1);}
+const runs=seq.filter((g,i)=>i===0||g!==seq[i-1]);
+if(new Set(runs).size!==runs.length){console.error('nav clusters are NOT contiguous: '+runs.join(','));process.exit(1);}
+console.log('      confirmed: '+runs.length+' contiguous clusters — '+runs.join(' | '));
+" || exit 1
+
+echo "[6/8] Building..."
+npx prisma generate >/dev/null 2>&1 || { echo "ERROR: prisma generate failed"; exit 1; }
+rm -rf .next
+npm run build 2>&1 | tail -5
+[ -f .next/BUILD_ID ] || { echo "ERROR: build produced no .next/BUILD_ID"; exit 1; }
+NEW_BUILD=$(tr -d '[:space:]' < .next/BUILD_ID); echo "      NEW_BUILD=${NEW_BUILD}"
+
+echo "[7/8] Packaging and deploying..."
+rm -f "$ZIP"
+zip -rq "$ZIP" . -x '.git/*' -x '.env' -x '.next/cache/*' -x 'scripts/*'
+echo "      $(du -h "$ZIP" | cut -f1) -> $ZIP"
+az webapp deploy -g "$RG" -n "$APP" --type zip --src-path "$ZIP" --async true -o none || true
+
+echo "      waiting for prod BUILD_ID to flip to ${NEW_BUILD}..."
+LANDED=""
+for i in $(seq 1 40); do
+  sleep 15
+  CURB=$(kudu_buildid)
+  echo "      [$i] prod build id now: ${CURB:-<unreadable>}"
+  if [ "$CURB" = "$NEW_BUILD" ]; then LANDED=yes; break; fi
+done
+if [ -z "$LANDED" ]; then
+  echo "WARNING: new build id not confirmed on disk. NOT cutting over."
+  exit 2
+fi
+
+echo "[8/8] Cutting over (stop/start) and health-checking..."
+az webapp stop  -g "$RG" -n "$APP" -o none
+az webapp start -g "$RG" -n "$APP" -o none
+CODE=""
+for i in $(seq 1 20); do
+  sleep 15
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$HEALTH" || echo 000)
+  echo "      [$i] health: HTTP ${CODE}"
+  [ "$CODE" = "200" ] && break
+done
+
+echo
+echo "== DEPLOY SUMMARY =="
+echo "   old build: ${OLD_BUILD:-<unknown>}"
+echo "   new build: ${NEW_BUILD}"
+echo "   health:    HTTP ${CODE}"
+[ "$CODE" = "200" ] && echo "== UX REFRESH PHASE DEPLOYED ==" || echo "== HEALTH NOT 200 — investigate =="
