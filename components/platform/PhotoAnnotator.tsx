@@ -133,14 +133,35 @@ export function PhotoAnnotator({
 
   useEffect(() => {
     if (!ready) return;
-    if (render()) return;
-    // Not paintable yet. Retry on animation frames rather than a timer, so the
-    // attempts line up with the browser's own paint cycle, and give up after a
-    // second rather than spinning forever on a genuinely broken image.
+
+    // Draw straight away so the photo is there as early as it can be...
+    render();
+
+    // ...and ALWAYS draw again on the next animation frame, even when that first
+    // draw succeeded.
+    //
+    // WHY, and this is the reported bug: the first draw happens in an effect,
+    // which runs BEFORE the browser has painted the newly mounted canvas. The
+    // canvas bitmap is then correct — reading it back proves it — but on Firefox
+    // with GPU-composited canvas the layer on screen can stay blank until
+    // something invalidates it, which is why the photo appeared the moment a
+    // tool was touched. Headless browsers composite in software and never show
+    // it, which is why this took a second pass to find.
+    //
+    // A draw inside requestAnimationFrame happens after that first paint, so the
+    // compositor has a laid-out, painted canvas to update. It costs one extra
+    // drawImage on open and nothing else.
     let frames = 0;
     let raf = 0;
     const attempt = () => {
-      if (render() || frames++ > 60) return;
+      const painted = render();
+      frames += 1;
+      // Two post-paint draws, not one: a single frame is easy to miss if layout
+      // settles a frame late, and a second drawImage costs nothing next to a
+      // blank annotator. Beyond that, keep going only while there is still no
+      // image to paint, and give up after about a second rather than spinning.
+      if (painted && frames >= 2) return;
+      if (frames > 60) return;
       raf = requestAnimationFrame(attempt);
     };
     raf = requestAnimationFrame(attempt);
