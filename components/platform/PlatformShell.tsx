@@ -108,7 +108,14 @@ export async function PlatformShell({ children }: { children: ReactNode }) {
             chrome that frames the work rather than a card that competes with it.
             Below `md` it collapses to the stacked header + horizontal nav
             scroller it has always used on phones. */}
-        <aside className="shrink-0 border-b border-line bg-surface md:sticky md:top-0 md:h-dvh md:w-60 md:border-b-0 md:border-r">
+        {/* UX REFRESH PHASE 7 — `print:hidden` fixes a defect the print check
+            caught on the CPP: the whole navigation rail was printing down the
+            left of the page, squeezing a legal handover document into the
+            remaining two thirds. PRE-EXISTING, not introduced by the refresh —
+            the shell has never carried print rules, so the old header and
+            sidebar printed too. Application chrome has no business on a
+            document a duty-holder signs. */}
+        <aside className="shrink-0 border-b border-line bg-surface md:sticky md:top-0 md:h-dvh md:w-60 md:border-b-0 md:border-r print:hidden">
           <div className="h-1 w-full bg-brand-500" aria-hidden="true" />
           <div className="flex h-[calc(100%-0.25rem)] flex-col">
             <div className="flex items-center justify-between gap-2 px-4 py-3 md:justify-start">
@@ -152,13 +159,13 @@ export async function PlatformShell({ children }: { children: ReactNode }) {
           {/* The signed-in identity on phones, where the rail's footer is
               hidden. Desktop gets it in the rail instead. */}
           {viewer && (
-            <div className="border-b border-line bg-surface px-4 py-2 md:hidden">
+            <div className="border-b border-line bg-surface px-4 py-2 md:hidden print:hidden">
               {identity}
             </div>
           )}
           <main
             id="main"
-            className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 px-4 py-6 md:px-8"
+            className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 px-4 py-6 md:px-8 print:max-w-none print:p-0"
           >
             {children}
           </main>

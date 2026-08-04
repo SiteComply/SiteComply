@@ -1,5 +1,7 @@
 'use client';
 
+import { Panel } from '@/components/platform/Panel';
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type {
@@ -140,7 +142,11 @@ export function PermissionTemplateLibrary({
   const matchedUsers = companies.find((c) => c.company === company)?.users ?? 0;
 
   return (
-    <div className="space-y-8">
+    // UX REFRESH PHASE 7 — the two template libraries solved the same problem
+    // with independently invented chrome: bare, unframed regions whose content
+    // floated on the page, while every other governance screen sat in a panel.
+    // Both now use the shared Panel, so Settings reads as one area.
+    <div className="space-y-4">
       {error ? (
         <p
           role="alert"
@@ -155,7 +161,7 @@ export function PermissionTemplateLibrary({
         </p>
       ) : null}
 
-      <section>
+      <Panel>
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-bold text-ink">
@@ -333,10 +339,10 @@ export function PermissionTemplateLibrary({
             </li>
           ))}
         </ul>
-      </section>
+      </Panel>
 
       {canSetCompanyDefaults ? (
-        <section>
+        <Panel>
           <h2 className="text-base font-bold text-ink">
             Company default access
           </h2>
@@ -434,7 +440,7 @@ export function PermissionTemplateLibrary({
               );
             })}
           </ul>
-        </section>
+        </Panel>
       ) : null}
     </div>
   );

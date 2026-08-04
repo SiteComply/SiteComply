@@ -1,5 +1,7 @@
 'use client';
 
+import { Panel } from '@/components/platform/Panel';
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type {
@@ -252,7 +254,11 @@ export function ConfigTemplateLibrary({
   }
 
   return (
-    <div className="space-y-8">
+    // UX REFRESH PHASE 7 — the two template libraries solved the same problem
+    // with independently invented chrome: bare, unframed regions whose content
+    // floated on the page, while every other governance screen sat in a panel.
+    // Both now use the shared Panel, so Settings reads as one area.
+    <div className="space-y-4">
       {error ? (
         <p
           role="alert"
@@ -267,7 +273,7 @@ export function ConfigTemplateLibrary({
         </p>
       ) : null}
 
-      <section>
+      <Panel>
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-bold text-ink">
@@ -453,10 +459,10 @@ export function ConfigTemplateLibrary({
             ))}
           </ul>
         )}
-      </section>
+      </Panel>
 
       {canSetPolicy ? (
-        <section>
+        <Panel>
           <h2 className="text-base font-bold text-ink">Company requirements</h2>
           <p className="mb-3 text-sm text-ink-muted">
             Services required on every site. A required service is switched on
@@ -533,7 +539,7 @@ export function ConfigTemplateLibrary({
               </ul>
             </div>
           ))}
-        </section>
+        </Panel>
       ) : null}
     </div>
   );

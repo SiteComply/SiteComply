@@ -93,7 +93,17 @@ export default async function SiteCppPage({
       )}
 
       {/* ---------------- The document itself ---------------- */}
-      <article className="rounded-xl border border-line bg-surface p-6 shadow-card print:rounded-none print:border-0 print:p-0 print:shadow-none">
+      {/* UX REFRESH PHASE 7 — the one place in this refresh where LESS width is
+          the improvement. Everywhere else the brief's "use more page width" is
+          right, because those screens are dashboards, registers and workspaces.
+          This is a formal document a duty-holder reads end to end, and prose set
+          across 1600px is genuinely hard to follow — measure is readability, not
+          decoration. The document gets a comfortable measure and centres in the
+          wider frame.
+
+          `print:max-w-none` matters: on paper the page IS the measure, so the
+          screen cap must not also constrain the printed CPP. */}
+      <article className="mx-auto max-w-5xl rounded-xl border border-line bg-surface p-6 shadow-card print:max-w-none print:rounded-none print:border-0 print:p-0 print:shadow-none">
         {/* DRAFT status is stated on screen AND in print. Software can assemble a
             CPP; it cannot warrant that the plan is adequate — that is the
             Principal Contractor's duty under CDM 2015. */}

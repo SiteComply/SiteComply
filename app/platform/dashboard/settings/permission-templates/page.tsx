@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
+import { PageHeader } from '@/components/platform/PageHeader';
 import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
 import { PermissionTemplateLibrary } from '@/components/platform/PermissionTemplateLibrary';
 import {
@@ -68,21 +69,18 @@ export default async function PermissionTemplatesPage() {
 
   return (
     <PlatformShell>
-      <Breadcrumbs
-        items={[
-          { label: 'Settings', href: '/platform/dashboard/settings' },
-          { label: 'Permission templates' },
-        ]}
+      <PageHeader
+        breadcrumbs={
+          <Breadcrumbs
+            items={[
+              { label: 'Settings', href: '/platform/dashboard/settings' },
+              { label: 'Permission templates' },
+            ]}
+          />
+        }
+        title="Permission templates"
+        description="Reusable access restrictions for contractor types, and company-wide defaults."
       />
-      <div className="mb-6">
-        <h1 className="mt-1 text-2xl font-bold text-ink">
-          Permission templates
-        </h1>
-        <p className="text-ink-muted">
-          Reusable access restrictions for contractor types, and company-wide
-          defaults.
-        </p>
-      </div>
 
       <PermissionTemplateLibrary
         templates={templates}

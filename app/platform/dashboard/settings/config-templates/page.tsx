@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { PlatformShell } from '@/components/platform/PlatformShell';
+import { PageHeader } from '@/components/platform/PageHeader';
 import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
 import { ConfigTemplateLibrary } from '@/components/platform/ConfigTemplateLibrary';
 import {
@@ -74,21 +75,18 @@ export default async function ConfigTemplatesPage() {
 
   return (
     <PlatformShell>
-      <Breadcrumbs
-        items={[
-          { label: 'Settings', href: '/platform/dashboard/settings' },
-          { label: 'Configuration templates' },
-        ]}
+      <PageHeader
+        breadcrumbs={
+          <Breadcrumbs
+            items={[
+              { label: 'Settings', href: '/platform/dashboard/settings' },
+              { label: 'Configuration templates' },
+            ]}
+          />
+        }
+        title="Configuration templates"
+        description="Reuse a set of permits and inspections across similar projects, and set the services every site must have."
       />
-      <div className="mb-6">
-        <h1 className="mt-1 text-2xl font-bold text-ink">
-          Configuration templates
-        </h1>
-        <p className="text-ink-muted">
-          Reuse a set of permits and inspections across similar projects, and
-          set the services every site must have.
-        </p>
-      </div>
 
       <ConfigTemplateLibrary
         templates={templates}

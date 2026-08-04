@@ -285,6 +285,30 @@ for (const must of ['AI executive summary','always verify against the']) {
 console.log('      confirmed: AI badge, heading and verification warning stay always-visible.');
 " || exit 1
 
+echo "[5i] Settings, libraries and print output (Phase 7)..."
+# Both template libraries must use the shared panel — they are the same kind of
+# governance screen and previously each invented its own chrome.
+for f in components/platform/ConfigTemplateLibrary.tsx \
+         components/platform/PermissionTemplateLibrary.tsx; do
+  grep -q "from '@/components/platform/Panel'" "$f" \
+    || { echo "ERROR: $f is not using the shared Panel — aborting"; exit 1; }
+done
+# APPLICATION CHROME MUST NOT PRINT. The CPP and the close-out pack are handover
+# documents; the print check found the whole navigation rail printing down the
+# left of the CPP, squeezing it into two thirds of the page.
+grep -q 'md:border-r print:hidden' components/platform/PlatformShell.tsx \
+  || { echo "ERROR: the navigation rail would print on handover documents — aborting"; exit 1; }
+grep -q 'print:max-w-none print:p-0' components/platform/PlatformShell.tsx \
+  || { echo "ERROR: the screen container is not neutralised in print — aborting"; exit 1; }
+# The CPP's on-screen reading measure must not constrain the printed page.
+grep -q 'max-w-5xl' 'app/platform/dashboard/sites/[id]/cpp/page.tsx' \
+  && grep -q 'print:max-w-none' 'app/platform/dashboard/sites/[id]/cpp/page.tsx' \
+  || { echo "ERROR: CPP measure/print rules missing — aborting"; exit 1; }
+# The DRAFT framing is a CDM commitment, not decoration.
+grep -q 'DRAFT' 'app/platform/dashboard/sites/[id]/cpp/page.tsx' \
+  || { echo "ERROR: the CPP DRAFT banner is gone — aborting"; exit 1; }
+echo "      confirmed: shared Panel in both libraries, chrome hidden in print, CPP measure + DRAFT intact."
+
 echo "[6/8] Building..."
 npx prisma generate >/dev/null 2>&1 || { echo "ERROR: prisma generate failed"; exit 1; }
 rm -rf .next
