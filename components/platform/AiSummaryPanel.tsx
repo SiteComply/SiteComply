@@ -72,7 +72,8 @@ export function AiSummaryPanel({
     if (targetKey) p.set('targetKey', targetKey);
     if (filters?.from) p.set('from', filters.from);
     if (filters?.to) p.set('to', filters.to);
-    if (filters?.sites && filters.sites.length) p.set('sites', filters.sites.join(','));
+    if (filters?.sites && filters.sites.length)
+      p.set('sites', filters.sites.join(','));
     p.set('page', String(page));
     return p.toString();
   }
@@ -88,7 +89,9 @@ export function AiSummaryPanel({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
-        setError(data.error ?? 'The summary could not be generated. Please try again.');
+        setError(
+          data.error ?? 'The summary could not be generated. Please try again.',
+        );
         return;
       }
       setLoaded({
@@ -109,7 +112,9 @@ export function AiSummaryPanel({
     setHistoryBusy(true);
     setHistoryError(undefined);
     try {
-      const res = await fetch(`/api/platform/ai/summary/history?${historyQuery(page)}`);
+      const res = await fetch(
+        `/api/platform/ai/summary/history?${historyQuery(page)}`,
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
         setHistoryError(data.error ?? 'History could not be loaded.');
@@ -161,6 +166,19 @@ export function AiSummaryPanel({
 
   const showingHistory = history !== undefined;
 
+  /**
+   * How many detail sections the collapsed summary is holding, so the disclosure
+   * states what is behind it rather than hiding an unknown quantity.
+   */
+  const detailCount = loaded
+    ? [
+        loaded.summary.positiveObservations,
+        loaded.summary.keyRisks,
+        loaded.summary.recommendedActions,
+        loaded.summary.priorityFocus,
+      ].filter((list) => list.length > 0).length
+    : 0;
+
   return (
     <section className="mb-6 rounded-xl border border-brand-200 bg-brand-50/40 p-5 shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -168,16 +186,24 @@ export function AiSummaryPanel({
           <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
             AI
           </span>
-          <h2 className="text-base font-semibold text-ink">AI executive summary</h2>
+          <h2 className="text-base font-semibold text-ink">
+            AI executive summary
+          </h2>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => (showingHistory ? setHistory(undefined) : openHistory(1))}
+            onClick={() =>
+              showingHistory ? setHistory(undefined) : openHistory(1)
+            }
             disabled={historyBusy || busy}
-            className="rounded-xl border border-brand-300 bg-white px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm hover:bg-brand-50 disabled:opacity-60"
+            className="border-brand-300 rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm hover:bg-brand-50 disabled:opacity-60"
           >
-            {historyBusy ? 'Loading…' : showingHistory ? 'Hide history' : 'View history'}
+            {historyBusy
+              ? 'Loading…'
+              : showingHistory
+                ? 'Hide history'
+                : 'View history'}
           </button>
           <button
             type="button"
@@ -185,7 +211,11 @@ export function AiSummaryPanel({
             disabled={busy}
             className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 disabled:opacity-60"
           >
-            {busy ? 'Generating…' : loaded ? 'Regenerate' : 'Generate AI summary'}
+            {busy
+              ? 'Generating…'
+              : loaded
+                ? 'Regenerate'
+                : 'Generate AI summary'}
           </button>
         </div>
       </div>
@@ -223,8 +253,11 @@ export function AiSummaryPanel({
           {loaded.historical && (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand-200 bg-white px-3 py-2 text-xs text-ink-muted">
               <span>
-                Historical summary — generated {formatDateTimeUK(loaded.generatedAt)}
-                {loaded.historical.generatedByName ? ` by ${loaded.historical.generatedByName}` : ''}
+                Historical summary — generated{' '}
+                {formatDateTimeUK(loaded.generatedAt)}
+                {loaded.historical.generatedByName
+                  ? ` by ${loaded.historical.generatedByName}`
+                  : ''}
                 {` · ${loaded.provider} · prompt ${loaded.historical.promptVersion}`}
               </span>
               <button
@@ -237,28 +270,77 @@ export function AiSummaryPanel({
             </div>
           )}
 
-          <p className="text-base font-semibold text-ink">{loaded.summary.headline}</p>
+          <p className="text-base font-semibold text-ink">
+            {loaded.summary.headline}
+          </p>
 
           {loaded.summary.executiveSummary && (
-            <p className="text-sm text-ink">{loaded.summary.executiveSummary}</p>
+            <p className="text-sm text-ink">
+              {loaded.summary.executiveSummary}
+            </p>
           )}
 
-          {loaded.summary.positiveObservations.length > 0 && (
-            <Block title="Strengths & achievements" items={loaded.summary.positiveObservations} />
-          )}
-          {loaded.summary.keyRisks.length > 0 && (
-            <Block title="Key risks" items={loaded.summary.keyRisks} />
-          )}
-          {loaded.summary.recommendedActions.length > 0 && (
-            <Block title="Recommended actions" items={loaded.summary.recommendedActions} />
-          )}
-          {loaded.summary.priorityFocus.length > 0 && (
-            <Block title="Priority focus areas" items={loaded.summary.priorityFocus} ordered />
+          {/* UX REFRESH PHASE 6 — the brief asks that AI content "summarise,
+              highlight and support" rather than dominate the page. Four lists
+              could run longer than the report they sit above. The headline and
+              executive summary stay open; the detail collapses.
+
+              WHAT DOES NOT COLLAPSE, deliberately: the "AI executive summary"
+              heading above and the verification warning below. Hiding either
+              behind a click would weaken a standing commitment that AI output
+              is labelled and carries its caveat wherever it appears — the same
+              rule SC-024 Phase 3 applies to the close-out narrative. Only the
+              prose is condensed, never the labelling. */}
+          {detailCount > 0 && (
+            <details className="group border-t border-brand-200 pt-3">
+              <summary className="touch-target cursor-pointer list-none text-sm font-semibold text-brand-700 marker:content-none">
+                <span className="inline-flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="transition-transform group-open:rotate-90"
+                  >
+                    ›
+                  </span>
+                  <span className="group-open:hidden">
+                    Show full summary ({detailCount}{' '}
+                    {detailCount === 1 ? 'section' : 'sections'})
+                  </span>
+                  <span className="hidden group-open:inline">
+                    Hide full summary
+                  </span>
+                </span>
+              </summary>
+              <div className="mt-3 space-y-4">
+                {loaded.summary.positiveObservations.length > 0 && (
+                  <Block
+                    title="Strengths & achievements"
+                    items={loaded.summary.positiveObservations}
+                  />
+                )}
+                {loaded.summary.keyRisks.length > 0 && (
+                  <Block title="Key risks" items={loaded.summary.keyRisks} />
+                )}
+                {loaded.summary.recommendedActions.length > 0 && (
+                  <Block
+                    title="Recommended actions"
+                    items={loaded.summary.recommendedActions}
+                  />
+                )}
+                {loaded.summary.priorityFocus.length > 0 && (
+                  <Block
+                    title="Priority focus areas"
+                    items={loaded.summary.priorityFocus}
+                    ordered
+                  />
+                )}
+              </div>
+            </details>
           )}
 
           <p className="border-t border-brand-200 pt-3 text-xs text-ink-subtle">
             ⚠︎ AI-generated from this report’s data — always verify against the
-            underlying report before acting. Generated {formatDateTimeUK(loaded.generatedAt)}
+            underlying report before acting. Generated{' '}
+            {formatDateTimeUK(loaded.generatedAt)}
             {` · ${loaded.provider}`}
             {loaded.cached ? ' · from cache' : ''}.
           </p>
@@ -370,13 +452,17 @@ function HistoryRow({
         className={`group flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
           latest
             ? 'border-brand-300 bg-brand-50/70 hover:bg-brand-50'
-            : 'border-brand-100 bg-white hover:border-brand-300 hover:bg-brand-50/60'
+            : 'hover:border-brand-300 border-brand-100 bg-white hover:bg-brand-50/60'
         }`}
       >
         <span className="min-w-0">
           <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className="text-sm font-semibold text-ink">{formatDateUK(item.createdAt)}</span>
-            <span className="text-sm tabular-nums text-ink-muted">{formatTimeUK(item.createdAt)}</span>
+            <span className="text-sm font-semibold text-ink">
+              {formatDateUK(item.createdAt)}
+            </span>
+            <span className="text-sm tabular-nums text-ink-muted">
+              {formatTimeUK(item.createdAt)}
+            </span>
             {latest && (
               <span className="inline-flex items-center rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
                 Latest

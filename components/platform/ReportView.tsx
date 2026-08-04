@@ -1,4 +1,6 @@
-import Link from 'next/link';
+import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
+import { PageHeader } from '@/components/platform/PageHeader';
+import { Panel } from '@/components/platform/Panel';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import type { ReportFilters } from '@/services/reports/reportFilters';
 
@@ -20,33 +22,33 @@ export function ReportHeader({
   exportHref?: string;
 }) {
   return (
-    <header className="mb-6">
-      <Link
-        href="/platform/dashboard/reports"
-        className="text-sm font-semibold text-brand-700"
-      >
-        ← All reports
-      </Link>
-      <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink">{title}</h1>
-          <p className="text-ink-muted">{description}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
-            {scope}
-          </span>
-          {exportHref && (
-            <a
-              href={exportHref}
-              className="touch-target inline-flex items-center rounded-lg border border-brand-200 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
-            >
-              Export CSV
-            </a>
-          )}
-        </div>
-      </div>
-    </header>
+    <PageHeader
+      breadcrumbs={
+        <Breadcrumbs
+          items={[
+            { label: 'Reports', href: '/platform/dashboard/reports' },
+            { label: title },
+          ]}
+        />
+      }
+      title={title}
+      description={description}
+      meta={
+        <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+          {scope}
+        </span>
+      }
+      actions={
+        exportHref && (
+          <a
+            href={exportHref}
+            className="touch-target inline-flex items-center rounded-lg border border-brand-200 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+          >
+            Export CSV
+          </a>
+        )
+      }
+    />
   );
 }
 
@@ -66,9 +68,9 @@ export function ReportFilterBar({
     <form
       method="get"
       action={action}
-      className="mb-6 rounded-xl border border-line bg-surface p-4 shadow-card"
+      className="mb-4 rounded-xl border border-line bg-surface-sunken px-4 py-3"
     >
-      <div className="flex flex-wrap items-end gap-4">
+      <div className="flex flex-wrap items-end gap-3">
         <label className="text-sm">
           <span className="mb-1 block font-semibold text-ink">Date from</span>
           <input
@@ -100,7 +102,7 @@ export function ReportFilterBar({
           gone; this puts it back. Shown only when there is something to
           include, so the control never appears as a puzzle. */}
       {filters.completedCount > 0 && (
-        <label className="mt-4 flex items-center gap-2 border-t border-line pt-3 text-sm text-ink">
+        <label className="mt-3 flex items-center gap-2 border-t border-line pt-3 text-sm text-ink">
           <input
             type="checkbox"
             name="includeCompleted"
@@ -118,10 +120,24 @@ export function ReportFilterBar({
       )}
 
       {viewer.sites.length > 1 && (
-        <fieldset className="mt-4 border-t border-line pt-3">
-          <legend className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">
-            Sites
-          </legend>
+        <details
+          className="group mt-3 border-t border-line pt-3"
+          open={viewer.sites.length <= 6}
+        >
+          <summary className="touch-target cursor-pointer list-none text-xs font-semibold uppercase tracking-wide text-ink-subtle marker:content-none">
+            <span className="inline-flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="transition-transform group-open:rotate-90"
+              >
+                ›
+              </span>
+              Sites
+              <span className="normal-case tracking-normal text-ink-subtle">
+                ({selected.size} of {viewer.sites.length} selected)
+              </span>
+            </span>
+          </summary>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
             {viewer.sites.map((s) => (
               <label
@@ -139,7 +155,7 @@ export function ReportFilterBar({
               </label>
             ))}
           </div>
-        </fieldset>
+        </details>
       )}
     </form>
   );
@@ -150,20 +166,25 @@ export function KpiCards({
 }: {
   items: { label: string; value: string | number; sub?: string }[];
 }) {
+  // Was four separate p-5 cards in their own grid — a row of widgets above the
+  // report they describe. One strip now, matching the project summary on Site
+  // Overview, so the figures read as one reading of one report.
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {items.map((k) => (
-        <div
-          key={k.label}
-          className="rounded-xl border border-line bg-surface p-5 shadow-card"
-        >
-          <p className="text-sm font-medium text-ink-subtle">{k.label}</p>
-          <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-ink">
-            {k.value}
-          </p>
-          {k.sub && <p className="mt-0.5 text-xs text-ink-subtle">{k.sub}</p>}
-        </div>
-      ))}
-    </div>
+    <Panel className="mb-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+        {items.map((k) => (
+          <div
+            key={k.label}
+            className="rounded-lg border border-line bg-surface-sunken px-3 py-2"
+          >
+            <p className="text-xs font-medium text-ink-subtle">{k.label}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums tracking-tight text-ink">
+              {k.value}
+            </p>
+            {k.sub && <p className="mt-0.5 text-xs text-ink-subtle">{k.sub}</p>}
+          </div>
+        ))}
+      </div>
+    </Panel>
   );
 }

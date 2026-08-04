@@ -36,7 +36,11 @@ export default async function PlatformReportsPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* UX REFRESH PHASE 6 — an index of 13 reports rendered as a 3-column
+          grid of equal-weight cards, so nothing was easier to find than
+          anything else. A list scans faster and lets the description carry its
+          weight. */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {reports.map((report) => (
           <ReportCard key={report.id} report={report} />
         ))}

@@ -252,6 +252,39 @@ grep -q 'canSetEnforcement={canSetEnforcement(viewer.role)}' "$WK" \
   || { echo "ERROR: enforcement is no longer gated on canSetEnforcement — aborting"; exit 1; }
 echo "      confirmed: one roster keyed per worker, assignments gated, SC-023 management intact."
 
+echo "[5h] Reports + AI density (Phase 6)..."
+RV=components/platform/ReportView.tsx
+# THE FILTER CONTRACT IS FROZEN. Reports are in scope for layout only — every
+# input name, value and default must survive, because the CSV exports read the
+# same query parameters and an export must always match the screen.
+for tok in 'name="from"' 'name="to"' 'name="sites"' 'name="includeCompleted"' \
+           'defaultValue={filters.fromStr}' 'defaultValue={filters.toStr}' \
+           'defaultChecked={filters.includeCompleted}' 'defaultChecked={selected.has(s.id)}' \
+           'method="get"' 'action={action}'; do
+  grep -qF "$tok" "$RV" \
+    || { echo "ERROR: report filter contract broken — $tok missing — aborting"; exit 1; }
+done
+# SC-025's opt-in must stay conditional on there being something to include.
+grep -q 'filters.completedCount > 0' "$RV" \
+  || { echo "ERROR: the include-completed control is no longer conditional — aborting"; exit 1; }
+echo "      confirmed: report filter contract intact (names, values, defaults)."
+
+# AI LABELLING MUST NOT COLLAPSE. Condensing the prose is in scope; hiding the
+# badge or the verification warning behind a click is not — SC-024 Phase 3's
+# commitment is that AI output is labelled and carries its caveat wherever it
+# appears.
+node -e "
+const s=require('fs').readFileSync('components/platform/AiSummaryPanel.tsx','utf8');
+const i=s.indexOf('<details'), j=s.indexOf('</details>');
+if (i === -1) { console.log('      (no disclosure in the AI panel)'); process.exit(0); }
+const inside=s.slice(i,j);
+for (const must of ['AI executive summary','always verify against the']) {
+  if (!s.includes(must)) { console.error('ERROR: AI labelling LOST: '+must); process.exit(1); }
+  if (inside.includes(must)) { console.error('ERROR: AI labelling is inside a disclosure: '+must); process.exit(1); }
+}
+console.log('      confirmed: AI badge, heading and verification warning stay always-visible.');
+" || exit 1
+
 echo "[6/8] Building..."
 npx prisma generate >/dev/null 2>&1 || { echo "ERROR: prisma generate failed"; exit 1; }
 rm -rf .next
