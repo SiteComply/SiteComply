@@ -21,7 +21,19 @@ export type PlatformIconName =
   | 'weight'
   | 'check'
   | 'alert'
-  | 'info';
+  | 'info'
+  // SC-017 annotation toolbar. Each of these draws the thing the tool makes, or
+  // the instrument that makes it. The palette previously borrowed navigation
+  // icons — a grid for Select, a weight for Draw, a document for Rectangle —
+  // which say nothing about what the button does; on a toolbar of six, where the
+  // label is small and the icon is what the eye lands on, that is the difference
+  // between recognising a tool and reading the whole row.
+  | 'cursor'
+  | 'pencil'
+  | 'arrow'
+  | 'circle'
+  | 'square'
+  | 'text';
 
 const PATHS: Record<PlatformIconName, ReactNode> = {
   permit: (
@@ -124,6 +136,37 @@ const PATHS: Record<PlatformIconName, ReactNode> = {
     <>
       <circle cx="12" cy="12" r="9" />
       <path d="M12 11v5M12 7.8v.1" />
+    </>
+  ),
+
+  // --- SC-017 annotation tools ---------------------------------------------
+  /** Select: the pointer itself — the one shape everyone already reads as
+   *  "stop drawing and just point at things". */
+  cursor: <path d="M6 3.4v14.3l3.7-3.6 2.2 5.1 2.6-1.1-2.2-5h5.2z" />,
+  /** Draw: a pencil, angled as one is held. Freehand is the pencil's job. */
+  pencil: (
+    <>
+      <path d="M4 20h4L18.2 9.8a2.55 2.55 0 0 0-3.6-3.6L4 16.4z" />
+      <path d="m13.9 6.9 3.6 3.6" />
+    </>
+  ),
+  /** Arrow: a line with a head, drawn diagonally — the mark the tool leaves. */
+  arrow: (
+    <>
+      <path d="M5 19 18.5 5.5" />
+      <path d="M10.5 5.5h8v8" />
+    </>
+  ),
+  /** Circle: the outline the tool draws, nothing else in it. */
+  circle: <circle cx="12" cy="12" r="8" />,
+  /** Rectangle: likewise — a plain box, not a document. */
+  square: <rect x="4" y="5.5" width="16" height="13" rx="1.5" />,
+  /** Text: the serifed T every editor uses for a text tool. */
+  text: (
+    <>
+      <path d="M5 7V5h14v2" />
+      <path d="M12 5v14" />
+      <path d="M9 19h6" />
     </>
   ),
 };

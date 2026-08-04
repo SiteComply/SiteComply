@@ -179,9 +179,18 @@ export function encodeCanvas(canvas: HTMLCanvasElement): Promise<Blob> {
  * tell that apart from a photograph of something dark, so the check has to
  * happen here, before the bytes are ever uploaded.
  *
- * "Blank" is judged as near-uniform: an image whose pixels barely vary carries
- * no evidence whatever colour it is. Sampled on a small thumbnail so the cost is
- * a few milliseconds regardless of photo size.
+ * "Blank" is near-uniform AND essentially black or essentially white — the two
+ * things an EMPTY canvas encodes to: black when nothing was drawn at all
+ * (transparent, and JPEG has no alpha), white when the backdrop was painted and
+ * the photo was not.
+ *
+ * Uniformity alone is NOT enough, and testing caught that: a photo that is one
+ * flat colour — a painted wall, a solid-colour screenshot — is perfectly uniform
+ * and perfectly legitimate, and an earlier version of this check refused to save
+ * it. Refusing real evidence to avoid storing a blank is the wrong trade.
+ *
+ * Sampled on a small thumbnail so the cost is a few milliseconds regardless of
+ * photo size.
  */
 export async function looksBlank(blob: Blob): Promise<boolean> {
   try {
@@ -198,14 +207,20 @@ export async function looksBlank(blob: Blob): Promise<boolean> {
     const { data } = ctx.getImageData(0, 0, w, h);
     let min = 255;
     let max = 0;
+    let total = 0;
+    let count = 0;
     for (let i = 0; i < data.length; i += 4) {
       // Luminance is enough: a real photo varies, a blank export does not.
       const l =
         (data[i]! * 299 + data[i + 1]! * 587 + data[i + 2]! * 114) / 1000;
       if (l < min) min = l;
       if (l > max) max = l;
+      total += l;
+      count += 1;
     }
-    return max - min < 4;
+    const uniform = max - min < 4;
+    const mean = count ? total / count : 0;
+    return uniform && (mean < 12 || mean > 243);
   } catch {
     // If it cannot even be decoded, treat it as unusable rather than storing it.
     return true;

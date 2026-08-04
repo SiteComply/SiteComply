@@ -36,12 +36,18 @@ const TOOLS: {
   label: string;
   icon: Parameters<typeof PlatformIcon>[0]['name'];
 }[] = [
-  { value: 'select', label: 'Select', icon: 'grid' },
-  { value: 'draw', label: 'Draw', icon: 'weight' },
-  { value: 'arrow', label: 'Arrow', icon: 'bolt' },
-  { value: 'circle', label: 'Circle', icon: 'info' },
-  { value: 'rectangle', label: 'Rectangle', icon: 'doc' },
-  { value: 'text', label: 'Text', icon: 'clipboard' },
+  // Each icon now depicts the mark the tool leaves, or the instrument that
+  // leaves it. These were navigation icons borrowed for want of better ones — a
+  // grid for Select, a weight for Draw, a lightning bolt for Arrow, an info
+  // circle for Circle, a document for Rectangle and a clipboard for Text — none
+  // of which describe the action. Labels, order, behaviour and colours are
+  // unchanged; only the glyphs.
+  { value: 'select', label: 'Select', icon: 'cursor' },
+  { value: 'draw', label: 'Draw', icon: 'pencil' },
+  { value: 'arrow', label: 'Arrow', icon: 'arrow' },
+  { value: 'circle', label: 'Circle', icon: 'circle' },
+  { value: 'rectangle', label: 'Rectangle', icon: 'square' },
+  { value: 'text', label: 'Text', icon: 'text' },
 ];
 
 let seq = 0;
