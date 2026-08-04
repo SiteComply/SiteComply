@@ -159,20 +159,37 @@ node -e "
 const fs=require('fs');
 const strip=(f)=>fs.readFileSync(f,'utf8').replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*\$/gm,'');
 const render=strip('lib/annotationRender.ts');
+const annot=strip('components/platform/PhotoAnnotator.tsx');
+
 if(!/export function drawPhoto/.test(render)){
   console.error('ERROR: the shared photo backdrop helper is gone — aborting');process.exit(1);}
 if(!/fillRect\(0, 0, width, height\)/.test(render)){
   console.error('ERROR: drawPhoto no longer paints an opaque backdrop — a transparent PNG would save black');process.exit(1);}
-// flatten must go through it, not draw the image bare.
-const flat=render.slice(render.indexOf('export function flatten'));
-if(!/drawPhoto\(ctx, image, width, height\)/.test(flat)){
-  console.error('ERROR: flatten no longer paints the backdrop — saved photos would be black');process.exit(1);}
-if(/ctx\.drawImage\(image, 0, 0, width, height\)/.test(flat)){
-  console.error('ERROR: flatten draws the image bare again, bypassing the backdrop');process.exit(1);}
-// and the editor must use the same helper, so preview matches the file.
-const annot=strip('components/platform/PhotoAnnotator.tsx');
 if(!/drawPhoto\(ctx, image, width, height\)/.test(annot)){
-  console.error('ERROR: the editor no longer previews what will be saved');process.exit(1);}
+  console.error('ERROR: the editor no longer paints the backdrop before the photo');process.exit(1);}
+
+// THE SAVED FILE MUST BE THE CANVAS THE USER LOOKED AT. Re-rendering into a
+// detached canvas is what produced black images: never composited, and a second
+// chance for the draw to come out empty, after which JPEG encodes empty as black.
+if(!/export function encodeCanvas/.test(render)){
+  console.error('ERROR: encodeCanvas is gone — the export would be re-rendered instead of taken from the screen');process.exit(1);}
+if(/document\.createElement\('canvas'\)/.test(render.slice(render.indexOf('export function encodeCanvas'), render.indexOf('export async function looksBlank')))){
+  console.error('ERROR: the export builds its own canvas again instead of encoding the visible one');process.exit(1);}
+if(!/encodeCanvas\(canvas\)/.test(annot)){
+  console.error('ERROR: save() no longer exports the on-screen canvas');process.exit(1);}
+
+// AND A BLANK EXPORT MUST NEVER BE STORED. A blank canvas encodes to a valid,
+// plausible, completely black JPEG that nothing downstream can distinguish from
+// a dark photograph — so it has to be caught before upload.
+if(!/export async function looksBlank/.test(render)){
+  console.error('ERROR: the blank-export check is gone — a black JPEG could be stored as evidence');process.exit(1);}
+const save=annot.slice(annot.indexOf('async function save'));
+if(!/await looksBlank\(blob\)/.test(save)){
+  console.error('ERROR: save() no longer checks the export before uploading it');process.exit(1);}
+const blankIdx=save.indexOf('await looksBlank(blob)');
+const uploadIdx=save.indexOf('await onSave(');
+if(blankIdx<0||uploadIdx<0||blankIdx>uploadIdx){
+  console.error('ERROR: the blank check no longer runs BEFORE the upload');process.exit(1);}
 " || exit 1
 echo "      confirmed: link recorded, rule + checks present, pack de-duplicated,"
 echo "                 original retained and reachable, nothing deleted,"

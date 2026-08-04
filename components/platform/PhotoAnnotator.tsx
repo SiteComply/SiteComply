@@ -12,7 +12,12 @@ import {
   type AnnotationTool,
   type Point,
 } from '@/services/annotations/annotationTypes';
-import { drawAnnotations, drawPhoto, flatten } from '@/lib/annotationRender';
+import {
+  drawAnnotations,
+  drawPhoto,
+  encodeCanvas,
+  looksBlank,
+} from '@/lib/annotationRender';
 import { prepareForAnnotation } from '@/lib/imagePrep';
 
 /**
@@ -274,10 +279,9 @@ export function PhotoAnnotator({
     const image = imageRef.current;
     const original = preparedRef.current;
     if (!image || !original) return;
-    // `flatten` paints this same image onto a fresh canvas, so an image with no
-    // decoded frame would be saved as the markings alone on a black JPEG — an
-    // evidence photo with the evidence missing. Refuse instead: a manager can
-    // retry, and cannot be handed a silently empty record.
+    // An image with no decoded frame would produce markings on an empty
+    // backdrop. Refuse early: a manager can retry, and cannot be handed a
+    // silently empty record.
     if (!image.complete || image.naturalWidth === 0) {
       setError('The photo is still loading. Please try again in a moment.');
       return;
@@ -285,8 +289,29 @@ export function PhotoAnnotator({
     setSaving(true);
     setError(null);
     try {
-      const { width, height } = sizeRef.current;
-      const blob = await flatten(image, annotations, width, height);
+      // Export the canvas ON SCREEN — the one showing the photo and the markings
+      // — rather than re-drawing into a detached canvas that nobody has seen.
+      // Redraw first so it is definitely current (no in-progress draft is left,
+      // since saving happens after the pointer is released).
+      const canvas = canvasRef.current;
+      if (!canvas || !render()) {
+        setError('The photo is still loading. Please try again in a moment.');
+        return;
+      }
+      const blob = await encodeCanvas(canvas);
+
+      // NEVER STORE AN IMAGE WE CANNOT PROVE HAS CONTENT. A blank canvas encodes
+      // to a valid, plausible-sized, completely black JPEG, and nothing further
+      // down the line can tell that from a dark photograph — not the upload, not
+      // the thumbnail, not the close-out pack. An annotated photo that is black
+      // is worse than no photo: it looks like evidence and is not.
+      if (await looksBlank(blob)) {
+        setError(
+          'The annotated image came out blank, so it has not been saved. Your photo and markings are still here — please try Save again, and if it keeps happening tell your administrator which browser you are using.',
+        );
+        return;
+      }
+
       await onSave({
         annotatedBlob: blob,
         originalFile: original,

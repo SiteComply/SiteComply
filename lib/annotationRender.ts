@@ -146,22 +146,20 @@ export function drawAnnotations(
 }
 
 /**
- * Flatten a photo plus its annotations into a JPEG blob — what actually gets
- * uploaded and shown in reports and print views.
+ * Encode a canvas that is ALREADY DRAWN into a JPEG blob.
+ *
+ * The saved photo is now exported from the canvas the user has been looking at,
+ * rather than re-rendered into a second, detached one. That detached canvas was
+ * where the black images came from: it is never inserted in the document and
+ * never composited, and re-doing the drawing into it is a second chance for the
+ * draw to come out empty — after which `toBlob` encodes an untouched canvas, and
+ * JPEG turns "untouched" into solid black.
+ *
+ * Exporting the visible canvas removes the whole class of failure: the pixels
+ * being encoded are the pixels on screen, so if the editor shows the photo, the
+ * file has the photo. What you see is literally what is stored.
  */
-export function flatten(
-  image: CanvasImageSource,
-  annotations: Annotation[],
-  width: number,
-  height: number,
-): Promise<Blob> {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return Promise.reject(new Error('Canvas is not available.'));
-  drawPhoto(ctx, image, width, height);
-  drawAnnotations(ctx, annotations, width, height);
+export function encodeCanvas(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) =>
@@ -170,4 +168,46 @@ export function flatten(
       0.92,
     );
   });
+}
+
+/**
+ * Decode a JPEG blob and report whether it actually contains an image.
+ *
+ * THE LAST LINE OF DEFENCE, and the one that does not depend on knowing why a
+ * save failed. A blank canvas encodes to a perfectly valid, perfectly black
+ * JPEG — no error, no exception, a sensible file size. Nothing downstream can
+ * tell that apart from a photograph of something dark, so the check has to
+ * happen here, before the bytes are ever uploaded.
+ *
+ * "Blank" is judged as near-uniform: an image whose pixels barely vary carries
+ * no evidence whatever colour it is. Sampled on a small thumbnail so the cost is
+ * a few milliseconds regardless of photo size.
+ */
+export async function looksBlank(blob: Blob): Promise<boolean> {
+  try {
+    const bitmap = await createImageBitmap(blob);
+    const w = Math.min(64, bitmap.width);
+    const h = Math.min(64, bitmap.height);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return false;
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close?.();
+    const { data } = ctx.getImageData(0, 0, w, h);
+    let min = 255;
+    let max = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      // Luminance is enough: a real photo varies, a blank export does not.
+      const l =
+        (data[i]! * 299 + data[i + 1]! * 587 + data[i + 2]! * 114) / 1000;
+      if (l < min) min = l;
+      if (l > max) max = l;
+    }
+    return max - min < 4;
+  } catch {
+    // If it cannot even be decoded, treat it as unusable rather than storing it.
+    return true;
+  }
 }
