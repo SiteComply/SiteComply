@@ -1,115 +1,28 @@
-import Link from 'next/link';
 import { PlatformShell } from '@/components/platform/PlatformShell';
-import { PageHeader } from '@/components/platform/PageHeader';
-import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
-import { ConfigTemplateLibrary } from '@/components/platform/ConfigTemplateLibrary';
-import {
-  requirePlatformViewer,
-  assertModuleView,
-} from '@/services/platformUsers/platformAccess';
-import {
-  permits,
-  canManageSiteConfigTemplates,
-} from '@/services/platformUsers/platformPermissions';
-import {
-  listAllConfigTemplates,
-  listMandatoryPolicy,
-  getConfigTemplate,
-} from '@/services/siteServices/siteConfigTemplateService';
-import { listServiceCatalog } from '@/services/siteServices/siteServiceAvailability';
+import { SettingsWorkspace } from '@/components/platform/SettingsWorkspace';
+import { ConfigTemplatesSection } from '@/components/platform/ConfigTemplatesSection';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * SC-021 Phase 2 — shared configuration templates and company requirements.
+ * Settings → Configuration templates.
  *
- * Lives under Settings because this is GOVERNANCE — defining an organisation
- * standard — not scheduling and not site records. Applying a template is a
- * different job with a different owner and cadence, and stays embedded in the
- * site experience; only authoring and company requirements live here.
+ * UX REFRESH PHASE 8 — the page body moved into ConfigTemplatesSection so the
+ * Settings landing page can render the SAME area without duplicating its
+ * loading. Every gate this page had is inside that section, unchanged; this file
+ * only supplies the shell and says which area is active.
  *
- * An organisation-wide artefact must not be administered from inside one
- * arbitrary site: deleting a shared template from within a single site would
- * read as a site action while affecting every future project.
- *
- * Viewing still needs `sites:view`, deliberately UNCHANGED by the move: every
- * role holds both `sites:view` and `audits:view`, so switching the gate would
- * alter nothing in practice while still being an edit to permission code. The
- * mismatch between the URL's section and the gate's module is intentional, not
- * an oversight.
- *
- * Managing a shared template is Director/Project Manager; setting a company
- * requirement is Director only. Each gate is enforced in the service and the
- * API too — this page only decides what to show.
+ * NOTE the deliberate asymmetry with the other two settings routes: this one has
+ * never redirected a non-manager away. It passes `canManage` down and renders
+ * read-only instead. That is preserved — adding a redirect here would be a
+ * permission change wearing a layout change's clothes.
  */
 export default async function ConfigTemplatesPage() {
-  const viewer = await requirePlatformViewer();
-  assertModuleView(viewer, 'sites');
-
-  const [templates, policy, catalogue] = await Promise.all([
-    listAllConfigTemplates(),
-    viewer.role === 'DIRECTOR' ? listMandatoryPolicy() : Promise.resolve([]),
-    // The catalogue lets a template be authored here directly, rather than only
-    // by copying a site that already happens to be configured correctly.
-    listServiceCatalog(),
-  ]);
-
-  // Full item sets, so an existing template can be EDITED in place rather than
-  // only activated, deactivated or deleted.
-  const details = await Promise.all(
-    templates.map((t) => getConfigTemplate(t.id)),
-  );
-  const itemsByTemplate: Record<
-    string,
-    { kind: string; refId: string; enabled: boolean }[]
-  > = {};
-  for (const d of details) {
-    if (d) {
-      itemsByTemplate[d.id] = d.items.map((i) => ({
-        kind: i.kind,
-        refId: i.refId,
-        enabled: i.enabled,
-      }));
-    }
-  }
-
   return (
     <PlatformShell>
-      <PageHeader
-        breadcrumbs={
-          <Breadcrumbs
-            items={[
-              { label: 'Settings', href: '/platform/dashboard/settings' },
-              { label: 'Configuration templates' },
-            ]}
-          />
-        }
-        title="Configuration templates"
-        description="Reuse a set of permits and inspections across similar projects, and set the services every site must have."
-      />
-
-      <ConfigTemplateLibrary
-        templates={templates}
-        canManage={canManageSiteConfigTemplates(viewer.role)}
-        policy={policy}
-        canSetPolicy={viewer.role === 'DIRECTOR'}
-        catalogue={catalogue}
-        itemsByTemplate={itemsByTemplate}
-      />
-
-      {permits(viewer.role, 'sites', 'edit') ? (
-        <p className="mt-6 text-sm text-ink-subtle">
-          To create a template, open a site’s{' '}
-          <Link
-            href="/platform/dashboard/sites"
-            className="font-semibold text-brand-700 hover:underline"
-          >
-            Compliance tab
-          </Link>
-          , set which permits and inspections apply, then choose “Save this site
-          as a template”.
-        </p>
-      ) : null}
+      <SettingsWorkspace active="config-templates">
+        <ConfigTemplatesSection />
+      </SettingsWorkspace>
     </PlatformShell>
   );
 }

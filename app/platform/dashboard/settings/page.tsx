@@ -1,7 +1,7 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
-import { PageHeader } from '@/components/platform/PageHeader';
+import { SettingsWorkspace } from '@/components/platform/SettingsWorkspace';
+import { ConfigTemplatesSection } from '@/components/platform/ConfigTemplatesSection';
 import {
   requirePlatformViewer,
   assertModuleView,
@@ -37,42 +37,18 @@ export default async function SettingsPage() {
 
   return (
     <PlatformShell>
-      <PageHeader
-        title="Settings"
-        description="Organisation-wide configuration that applies across every site."
-      />
+      {/* UX REFRESH PHASE 8 — this page used to contain nothing but two feature
+          cards linking elsewhere: a menu, not a screen, and the reason two
+          related governance functions read as independent widgets. It now lands
+          directly in the first area, with the other one click away in the
+          workspace navigator.
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Link
-          href="/platform/dashboard/settings/config-templates"
-          className="group rounded-xl border border-line bg-surface p-5 transition-colors hover:border-brand-200 hover:bg-brand-50"
-        >
-          <h2 className="text-base font-bold text-ink group-hover:text-brand-700">
-            Configuration templates
-          </h2>
-          <p className="mt-1 text-sm text-ink-muted">
-            Reusable sets of permits and inspections for a project type, client
-            or industry — and the services every site must have.
-          </p>
-        </Link>
-        <Link
-          href="/platform/dashboard/settings/permission-templates"
-          className="group rounded-xl border border-line bg-surface p-5 transition-colors hover:border-brand-200 hover:bg-brand-50"
-        >
-          <h2 className="text-base font-bold text-ink group-hover:text-brand-700">
-            Permission templates
-          </h2>
-          <p className="mt-1 text-sm text-ink-muted">
-            Reusable access restrictions for contractor types, and company-wide
-            defaults that a site cannot loosen.
-          </p>
-        </Link>
-      </div>
-
-      <p className="mt-6 text-sm text-ink-subtle">
-        Applying a template to a site is done from the site itself — open a
-        site’s Compliance tab or its project setup.
-      </p>
+          The redirect above is UNCHANGED and stays here deliberately: unlike
+          /settings/config-templates, this route has always turned a non-manager
+          away, and rendering the section must not quietly relax that. */}
+      <SettingsWorkspace active="config-templates">
+        <ConfigTemplatesSection />
+      </SettingsWorkspace>
     </PlatformShell>
   );
 }

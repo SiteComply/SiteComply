@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
-import { PageHeader } from '@/components/platform/PageHeader';
-import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
+import { SettingsWorkspace } from '@/components/platform/SettingsWorkspace';
 import { PermissionTemplateLibrary } from '@/components/platform/PermissionTemplateLibrary';
 import {
   requirePlatformViewer,
@@ -69,33 +68,25 @@ export default async function PermissionTemplatesPage() {
 
   return (
     <PlatformShell>
-      <PageHeader
-        breadcrumbs={
-          <Breadcrumbs
-            items={[
-              { label: 'Settings', href: '/platform/dashboard/settings' },
-              { label: 'Permission templates' },
-            ]}
-          />
-        }
-        title="Permission templates"
-        description="Reusable access restrictions for contractor types, and company-wide defaults."
-      />
+      {/* UX REFRESH PHASE 8 — an area inside the Settings workspace rather than
+          a separate destination reached from a chooser. The route is unchanged,
+          so links here and the two historical redirects still resolve. */}
+      <SettingsWorkspace active="permission-templates">
+        <PermissionTemplateLibrary
+          templates={templates}
+          companies={companies}
+          companyDefaults={companyDefaults}
+          canManageTemplates={canManageSiteConfigTemplates(viewer.role)}
+          canSetCompanyDefaults={isDirector}
+          itemsByTemplate={itemsByTemplate}
+        />
 
-      <PermissionTemplateLibrary
-        templates={templates}
-        companies={companies}
-        companyDefaults={companyDefaults}
-        canManageTemplates={canManageSiteConfigTemplates(viewer.role)}
-        canSetCompanyDefaults={isDirector}
-        itemsByTemplate={itemsByTemplate}
-      />
-
-      <p className="mt-6 text-sm text-ink-subtle">
-        These only ever remove access — nothing here can grant someone more than
-        their role already allows. Apply a template to a person from a site’s
-        Access tab.
-      </p>
+        <p className="mt-6 text-sm text-ink-subtle">
+          These only ever remove access — nothing here can grant someone more
+          than their role already allows. Apply a template to a person from a
+          site’s Access tab.
+        </p>
+      </SettingsWorkspace>
     </PlatformShell>
   );
 }

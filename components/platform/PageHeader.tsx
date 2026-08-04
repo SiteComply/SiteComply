@@ -50,8 +50,14 @@ export function PageHeader({
             <p className="mt-1 text-sm text-ink-muted">{description}</p>
           )}
         </div>
+        {/* UX REFRESH PHASE 8 (mobile pass) — `shrink-0` held this row at its
+            content width, so a site header with five buttons forced the whole
+            PAGE 184px wider than a 390px phone and every site tab scrolled
+            sideways. It only needs to resist shrinking once there is room to sit
+            beside the title, so the rule now starts at `sm`. Pre-existing: the
+            same construct was in SiteDetailHeader at rev1-complete. */}
         {actions && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
             {actions}
           </div>
         )}

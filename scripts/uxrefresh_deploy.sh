@@ -309,6 +309,40 @@ grep -q 'DRAFT' 'app/platform/dashboard/sites/[id]/cpp/page.tsx' \
   || { echo "ERROR: the CPP DRAFT banner is gone — aborting"; exit 1; }
 echo "      confirmed: shared Panel in both libraries, chrome hidden in print, CPP measure + DRAFT intact."
 
+echo "[5j] Settings workspace + mobile/print sweep (Phase 8)..."
+# Settings is ONE workspace: all three routes render it, and the URLs are
+# unchanged so links elsewhere and SC-021 P2's historical redirects still resolve.
+for f in app/platform/dashboard/settings/page.tsx \
+         app/platform/dashboard/settings/config-templates/page.tsx \
+         app/platform/dashboard/settings/permission-templates/page.tsx; do
+  grep -q '<SettingsWorkspace' "$f" \
+    || { echo "ERROR: $f is not rendering the Settings workspace — aborting"; exit 1; }
+done
+# The chooser must not come back.
+grep -q 'grid gap-4 sm:grid-cols-2' app/platform/dashboard/settings/page.tsx \
+  && { echo "ERROR: the two Settings feature cards are back — aborting"; exit 1; }
+# GATES MOVED, NOT LOST. The config-templates page body now lives in a section
+# component so /settings can render the same area; every gate went with it. The
+# structural baseline only scans page files, so it reports these as removed —
+# they are not, and this is where that is proven on every deploy.
+for g in 'requirePlatformViewer' "assertModuleView(viewer, 'sites')" \
+         'canManageSiteConfigTemplates(viewer.role)' "permits(viewer.role, 'sites', 'edit')"; do
+  grep -qF "$g" components/platform/ConfigTemplatesSection.tsx \
+    || { echo "ERROR: ConfigTemplatesSection lost the gate: $g — aborting"; exit 1; }
+done
+# /settings has ALWAYS turned a non-manager away, unlike /settings/config-templates.
+# Rendering the section there must not quietly relax that.
+grep -q 'redirect(' app/platform/dashboard/settings/page.tsx \
+  || { echo "ERROR: /settings lost its non-manager redirect — aborting"; exit 1; }
+grep -q 'redirect(' app/platform/dashboard/settings/permission-templates/page.tsx \
+  || { echo "ERROR: permission-templates lost its redirect — aborting"; exit 1; }
+# Mobile pass: a header action row held at content width forced every site tab
+# 184px wider than a 390px phone.
+grep -q 'sm:shrink-0' components/platform/RecordHeader.tsx \
+  && grep -q 'sm:shrink-0' components/platform/PageHeader.tsx \
+  || { echo "ERROR: header action rows would force horizontal page scroll on phones — aborting"; exit 1; }
+echo "      confirmed: one Settings workspace, gates moved intact, redirects kept, headers wrap on phones."
+
 echo "[6/8] Building..."
 npx prisma generate >/dev/null 2>&1 || { echo "ERROR: prisma generate failed"; exit 1; }
 rm -rf .next
