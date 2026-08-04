@@ -12,7 +12,7 @@ import {
   type AnnotationTool,
   type Point,
 } from '@/services/annotations/annotationTypes';
-import { drawAnnotations, flatten } from '@/lib/annotationRender';
+import { drawAnnotations, drawPhoto, flatten } from '@/lib/annotationRender';
 import { prepareForAnnotation } from '@/lib/imagePrep';
 
 /**
@@ -121,7 +121,11 @@ export function PhotoAnnotator({
     if (!ctx) return false;
     const paintable = image.complete && image.naturalWidth > 0;
     ctx.clearRect(0, 0, width, height);
-    if (paintable) ctx.drawImage(image, 0, 0, width, height);
+    // Same backdrop-then-photo the export uses, so the editor shows exactly what
+    // will be stored. Without it a part-transparent PNG looked right here and
+    // saved black, because the panel behind the canvas was doing the work that
+    // the white backdrop does in the file.
+    if (paintable) drawPhoto(ctx, image, width, height);
     drawAnnotations(
       ctx,
       draft ? [...annotations, draft] : annotations,

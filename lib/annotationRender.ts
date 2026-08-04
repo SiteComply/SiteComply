@@ -12,6 +12,43 @@ export function denormalise(p: Point, w: number, h: number): Point {
   return { x: p.x * w, y: p.y * h };
 }
 
+/**
+ * The backdrop every annotated photo is composed on.
+ *
+ * A PNG can carry an alpha channel and JPEG cannot. Drawing a part-transparent
+ * PNG onto a fresh canvas leaves those pixels transparent, and JPEG encodes
+ * transparent as BLACK — so a screenshot or exported diagram saved through the
+ * annotator came out as a black image, or a black background with the content
+ * floating on it.
+ *
+ * Worse, it looked fine while you worked: the editor canvas is transparent too,
+ * so the light panel behind it showed through and the photo appeared normal
+ * right up until it was saved.
+ *
+ * So both the editor and the export now paint an opaque white backdrop first.
+ * White rather than the panel's grey because these end up printed into close-out
+ * packs and audit reports, on paper that is white.
+ */
+export const PHOTO_BACKDROP = '#ffffff';
+
+/**
+ * Paint the opaque backdrop, then the photo. Used by BOTH the live editor and
+ * flatten-on-save, so what you see is what is stored — the two drifting apart is
+ * how a transparent PNG looked correct on screen and black in the record.
+ */
+export function drawPhoto(
+  ctx: CanvasRenderingContext2D,
+  image: CanvasImageSource,
+  width: number,
+  height: number,
+): void {
+  ctx.save();
+  ctx.fillStyle = PHOTO_BACKDROP;
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
+  ctx.drawImage(image, 0, 0, width, height);
+}
+
 export function drawAnnotations(
   ctx: CanvasRenderingContext2D,
   annotations: Annotation[],
@@ -123,7 +160,7 @@ export function flatten(
   canvas.height = height;
   const ctx = canvas.getContext('2d');
   if (!ctx) return Promise.reject(new Error('Canvas is not available.'));
-  ctx.drawImage(image, 0, 0, width, height);
+  drawPhoto(ctx, image, width, height);
   drawAnnotations(ctx, annotations, width, height);
   return new Promise((resolve, reject) => {
     canvas.toBlob(

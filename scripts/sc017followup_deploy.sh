@@ -146,6 +146,34 @@ if(/onload\s*=\s*\(\)\s*=>\s*\{[^}]*revokeObjectURL/.test(s)){
 # Save must refuse an image with no frame rather than store a blank photo.
 grep -qF 'The photo is still loading. Please try again in a moment.' components/platform/PhotoAnnotator.tsx \
   || { echo "ERROR: the annotator would save an unpainted photo — aborting"; exit 1; }
+
+# AN ANNOTATED PHOTO IS EXPORTED AS JPEG, WHICH HAS NO ALPHA.
+#
+# A part-transparent PNG — a screenshot, an exported diagram — drawn onto a bare
+# canvas leaves those pixels transparent, and JPEG encodes transparent as BLACK.
+# It looked correct while editing, because the light panel behind the canvas
+# showed through, and saved as a black image. Both the editor and the export must
+# paint an opaque backdrop first, from the SAME function, or the two drift apart
+# again and the screen stops telling the truth about the file.
+node -e "
+const fs=require('fs');
+const strip=(f)=>fs.readFileSync(f,'utf8').replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*\$/gm,'');
+const render=strip('lib/annotationRender.ts');
+if(!/export function drawPhoto/.test(render)){
+  console.error('ERROR: the shared photo backdrop helper is gone — aborting');process.exit(1);}
+if(!/fillRect\(0, 0, width, height\)/.test(render)){
+  console.error('ERROR: drawPhoto no longer paints an opaque backdrop — a transparent PNG would save black');process.exit(1);}
+// flatten must go through it, not draw the image bare.
+const flat=render.slice(render.indexOf('export function flatten'));
+if(!/drawPhoto\(ctx, image, width, height\)/.test(flat)){
+  console.error('ERROR: flatten no longer paints the backdrop — saved photos would be black');process.exit(1);}
+if(/ctx\.drawImage\(image, 0, 0, width, height\)/.test(flat)){
+  console.error('ERROR: flatten draws the image bare again, bypassing the backdrop');process.exit(1);}
+// and the editor must use the same helper, so preview matches the file.
+const annot=strip('components/platform/PhotoAnnotator.tsx');
+if(!/drawPhoto\(ctx, image, width, height\)/.test(annot)){
+  console.error('ERROR: the editor no longer previews what will be saved');process.exit(1);}
+" || exit 1
 echo "      confirmed: link recorded, rule + checks present, pack de-duplicated,"
 echo "                 original retained and reachable, nothing deleted,"
 echo "                 image decoded before the URL is revoked, blank saves refused."
