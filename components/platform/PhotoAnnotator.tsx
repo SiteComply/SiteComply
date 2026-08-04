@@ -95,29 +95,56 @@ export function PhotoAnnotator({
   }, [file]);
 
   // --- render ---------------------------------------------------------------
-  const render = useCallback(() => {
+  /**
+   * A photo that has not been painted yet is the reported "blank annotator":
+   * `drawImage` does NOT throw on an image without a decoded frame, it simply
+   * draws nothing, and nothing here would ever try again — the next redraw only
+   * comes when an annotation changes, which is why the picture appeared the
+   * moment someone started drawing.
+   *
+   * So the draw now reports whether it actually had something to paint, and the
+   * caller retries on the next frame if it did not. `imagePrep` decodes before
+   * resolving, which should make this unnecessary; this is the belt to that
+   * pair of braces, because the failure is silent and the cost of it is a
+   * manager marking up a photo they cannot see.
+   */
+  const render = useCallback((): boolean => {
     const canvas = canvasRef.current;
     const image = imageRef.current;
-    if (!canvas || !image) return;
+    if (!canvas || !image) return false;
     const { width, height } = sizeRef.current;
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width;
       canvas.height = height;
     }
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) return false;
+    const paintable = image.complete && image.naturalWidth > 0;
     ctx.clearRect(0, 0, width, height);
-    ctx.drawImage(image, 0, 0, width, height);
+    if (paintable) ctx.drawImage(image, 0, 0, width, height);
     drawAnnotations(
       ctx,
       draft ? [...annotations, draft] : annotations,
       width,
       height,
     );
+    return paintable;
   }, [annotations, draft]);
 
   useEffect(() => {
-    if (ready) render();
+    if (!ready) return;
+    if (render()) return;
+    // Not paintable yet. Retry on animation frames rather than a timer, so the
+    // attempts line up with the browser's own paint cycle, and give up after a
+    // second rather than spinning forever on a genuinely broken image.
+    let frames = 0;
+    let raf = 0;
+    const attempt = () => {
+      if (render() || frames++ > 60) return;
+      raf = requestAnimationFrame(attempt);
+    };
+    raf = requestAnimationFrame(attempt);
+    return () => cancelAnimationFrame(raf);
   }, [ready, render]);
 
   // --- pointer handling -----------------------------------------------------
@@ -222,6 +249,14 @@ export function PhotoAnnotator({
     const image = imageRef.current;
     const original = preparedRef.current;
     if (!image || !original) return;
+    // `flatten` paints this same image onto a fresh canvas, so an image with no
+    // decoded frame would be saved as the markings alone on a black JPEG — an
+    // evidence photo with the evidence missing. Refuse instead: a manager can
+    // retry, and cannot be handed a silently empty record.
+    if (!image.complete || image.naturalWidth === 0) {
+      setError('The photo is still loading. Please try again in a moment.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {

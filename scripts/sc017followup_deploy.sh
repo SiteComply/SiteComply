@@ -124,8 +124,31 @@ if(exported!=='markSuperseded,supersededOriginalIds'){
   console.error('ERROR: the superseded rule exports changed: '+exported);process.exit(1);
 }
 " || exit 1
+# THE ANNOTATOR MUST HAVE A PAINTABLE IMAGE BEFORE IT DRAWS.
+#
+# `onload` means the bytes arrived, not that a frame exists to paint. Revoking
+# the object URL at that moment is a pattern WebKit is known to fail on, and
+# `drawImage` does not throw when it has nothing to paint — it draws nothing, so
+# the annotator opens blank AND Save flattens that blank canvas into the stored
+# evidence photo. Order asserted on code with comments stripped: decode first,
+# revoke last.
+node -e "
+const raw=require('fs').readFileSync('lib/imagePrep.ts','utf8');
+const s=raw.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*\$/gm,'');
+const decode=s.indexOf('image.decode()');
+const revoke=s.indexOf('revokeObjectURL');
+if(decode<0){console.error('ERROR: loadImage no longer waits for the image to decode — aborting');process.exit(1);}
+if(revoke<0||revoke<decode){console.error('ERROR: the object URL is revoked before the image is decoded — aborting');process.exit(1);}
+if(/onload\s*=\s*\(\)\s*=>\s*\{[^}]*revokeObjectURL/.test(s)){
+  console.error('ERROR: the URL is being revoked inside onload again — aborting');process.exit(1);
+}
+" || exit 1
+# Save must refuse an image with no frame rather than store a blank photo.
+grep -qF 'The photo is still loading. Please try again in a moment.' components/platform/PhotoAnnotator.tsx \
+  || { echo "ERROR: the annotator would save an unpainted photo — aborting"; exit 1; }
 echo "      confirmed: link recorded, rule + checks present, pack de-duplicated,"
-echo "                 original retained and reachable, nothing deleted."
+echo "                 original retained and reachable, nothing deleted,"
+echo "                 image decoded before the URL is revoked, blank saves refused."
 
 echo "[3/8] Generating Prisma client..."
 npx prisma generate >/dev/null 2>&1 || { echo "ERROR: prisma generate failed"; exit 1; }

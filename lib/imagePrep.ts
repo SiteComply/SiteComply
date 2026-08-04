@@ -62,21 +62,48 @@ export async function convertHeicIfNeeded(file: File): Promise<File> {
   });
 }
 
-/** Load a File into an HTMLImageElement, cleaning up its object URL. */
+/**
+ * Load a File into an HTMLImageElement that is READY TO DRAW, then clean up its
+ * object URL.
+ *
+ * THE ORDER HERE IS THE WHOLE BUG. This used to revoke the object URL inside
+ * `onload` and resolve immediately. `onload` means the bytes arrived, NOT that a
+ * frame exists to paint: revoking at that moment pulls the source away before
+ * the browser has decoded it, and `ctx.drawImage` then draws NOTHING — silently,
+ * because drawImage does not throw on an undecodable image.
+ *
+ * The visible symptom was an annotator that opened on an empty canvas. The
+ * serious one was that Save flattened that same empty canvas, so an annotated
+ * evidence photo was stored as the markings alone on a black JPEG, with the
+ * photograph gone. Both come from these four lines.
+ *
+ * `decode()` resolves only when a frame is ready to paint, so the revoke now
+ * happens after the image can no longer need its URL.
+ */
 export function loadImage(file: File | Blob): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(img);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Could not read that image.'));
-    };
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Could not read that image.'));
     img.src = url;
-  });
+  })
+    .then(async (image) => {
+      // Safari 14 and older lack decode(). There, onload plus a retained URL is
+      // the best available guarantee — which is why the revoke moved to the end
+      // rather than being dropped in favour of decode() alone.
+      if (typeof image.decode === 'function') {
+        try {
+          await image.decode();
+        } catch {
+          // Already decoded, or a decoder that refuses a second call. The image
+          // still loaded; failing the whole open here would be worse.
+        }
+      }
+      return image;
+    })
+    .finally(() => URL.revokeObjectURL(url));
 }
 
 /** Scale factor to fit an image inside the long-edge cap (never upscales). */
