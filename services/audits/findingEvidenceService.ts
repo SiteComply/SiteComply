@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import type { AnnotationMeta } from '@/services/annotations/annotationUpload';
+import { markSuperseded } from '@/services/annotations/supersededEvidence';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { getFindingForViewer } from '@/services/audits/findingService';
 import {
@@ -44,6 +45,8 @@ function toView(e: {
   return {
     annotated: e.annotated,
     originalEvidenceId: e.originalEvidenceId,
+    // Set by markSuperseded once the whole result set is known.
+    supersededOriginal: false,
     id: e.id,
     fileName: e.fileName,
     mimeType: e.mimeType,
@@ -62,7 +65,7 @@ export async function listFindingEvidence(
     where: { findingId },
     orderBy: { createdAt: 'desc' },
   });
-  return rows.map(toView);
+  return markSuperseded(rows.map(toView));
 }
 
 /** Evidence for many findings at once (audit detail page), grouped by findingId. */
@@ -77,6 +80,12 @@ export async function listEvidenceForFindings(
   });
   for (const r of rows) {
     (out[r.findingId] ??= []).push(toView(r));
+  }
+  // Marked PER FINDING, not across the whole audit: a photo and its annotated
+  // copy always belong to the same finding, and pooling the audit's rows would
+  // let an id from one finding decide another finding's evidence.
+  for (const findingId of Object.keys(out)) {
+    out[findingId] = markSuperseded(out[findingId]!);
   }
   return out;
 }

@@ -7,6 +7,8 @@ import { formatDateTimeUK } from '@/lib/datetime';
 import { PhotoAnnotator } from '@/components/platform/PhotoAnnotator';
 import { isAnnotatable } from '@/lib/imagePrep';
 import type { AnnotationDocument } from '@/services/annotations/annotationTypes';
+import { supersededOriginalIds } from '@/services/annotations/supersededEvidence';
+import { uploadAnnotatedPair } from '@/components/platform/annotatedUpload';
 
 export interface EvidenceItem {
   id: string;
@@ -18,6 +20,11 @@ export interface EvidenceItem {
   annotated?: boolean;
   /** SC-017: on the annotated copy, the id of the original it came from. */
   originalEvidenceId?: string | null;
+  /**
+   * SC-017 FOLLOW-UP: the original of an annotated photo that is still present.
+   * Retained for audit, kept out of normal viewing and out of reporting.
+   */
+  supersededOriginal?: boolean;
   uploadedByName: string | null;
   createdAt: string; // ISO
 }
@@ -97,28 +104,30 @@ export function EvidenceGallery({
    * Save order matters: the ORIGINAL is uploaded first so the annotated copy can
    * point back at it. Both are kept — the untouched photo stays part of the
    * record, and the annotated copy carries the editable annotation data.
+   *
+   * SC-017 FOLLOW-UP: that sequence moved into `uploadAnnotatedPair` so the
+   * finding form can use exactly the same one. Two copies of "original first,
+   * then the copy that links to it" would be two chances to get it backwards.
    */
   async function saveAnnotated(result: {
     annotatedBlob: Blob;
     originalFile: File;
     document: AnnotationDocument;
   }) {
-    const originalId = await upload(result.originalFile);
-    if (!originalId) return;
-
-    const base = result.originalFile.name.replace(/\.[^.]+$/, '') || 'photo';
-    const annotatedFile = new File(
-      [result.annotatedBlob],
-      `${base}-annotated.jpg`,
-      { type: 'image/jpeg' },
-    );
-    await upload(annotatedFile, {
-      annotated: 'true',
-      originalEvidenceId: originalId,
-      annotationData: JSON.stringify(result.document),
-    });
-    setAnnotating(null);
-    router.refresh();
+    setBusy(true);
+    setError(undefined);
+    try {
+      const out = await uploadAnnotatedPair(basePath, result);
+      if (!out.ok) {
+        setError(out.error);
+        return;
+      }
+      setAnnotating(null);
+      router.refresh();
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
   }
 
   async function remove(id: string) {
@@ -141,10 +150,18 @@ export function EvidenceGallery({
 
   /**
    * SC-017 UX: an annotated photo and the original it was made from are ONE
-   * piece of evidence in two files. Listing them as unrelated rows was confusing
-   * once a finding had several photos, so they are grouped into a single card
-   * and each part is explicitly labelled. Purely presentational — the storage
-   * model (original untouched, annotated copy linked to it) is unchanged.
+   * piece of evidence. They were first listed as two unrelated rows, then
+   * grouped into a card showing both.
+   *
+   * SC-017 FOLLOW-UP: showing both was still duplication — two thumbnails, two
+   * file names and two sets of controls for one photo. The annotated version is
+   * now THE evidence and is all you see; the original is retained unchanged and
+   * reachable behind one deliberate click, labelled as the audit copy and stated
+   * to be excluded from reports.
+   *
+   * Storage is untouched. The original still exists with its uploader, timestamp
+   * and blob; `supersededOriginal` is derived from the surviving link, so
+   * removing the annotated copy brings the original straight back into the list.
    */
   type Group = {
     key: string;
@@ -152,11 +169,16 @@ export function EvidenceGallery({
     annotated?: EvidenceItem;
   };
   const byId = new Map(evidence.map((e) => [e.id, e]));
-  const pairedOriginalIds = new Set(
-    evidence
-      .filter((e) => e.annotated && e.originalEvidenceId)
-      .map((e) => e.originalEvidenceId as string)
-      .filter((id) => byId.has(id)),
+  // The SAME rule the services use to keep superseded originals out of reports —
+  // imported, not re-implemented. `supersededEvidence` is pure and has no server
+  // imports precisely so both sides can share it; two copies of this rule would
+  // be free to disagree about which photo is the evidence.
+  const pairedOriginalIds = supersededOriginalIds(
+    evidence.map((e) => ({
+      id: e.id,
+      annotated: Boolean(e.annotated),
+      originalEvidenceId: e.originalEvidenceId ?? null,
+    })),
   );
 
   const groups: Group[] = [];
@@ -239,41 +261,45 @@ export function EvidenceGallery({
               >
                 {pair && (
                   <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-700">
-                    <span aria-hidden>🔗</span> Annotated photo · 2 files
+                    <span aria-hidden>✎</span> Annotated photo
                   </p>
                 )}
-                <div
-                  className={cn(
-                    'space-y-2',
-                    pair && 'divide-y divide-brand-200',
-                  )}
-                >
-                  {/* Annotated version first — it is the one people look at. */}
-                  {g.annotated && (
-                    <EvidenceRow
-                      item={g.annotated}
-                      role="Annotated"
-                      src={src}
-                      canManage={canManage}
-                      deletingId={deletingId}
-                      onRemove={remove}
-                    />
-                  )}
-                  <div className={cn(pair && 'pt-2')}>
-                    <EvidenceRow
-                      item={g.original}
-                      role={pair ? 'Original' : undefined}
-                      src={src}
-                      canManage={canManage}
-                      deletingId={deletingId}
-                      onRemove={remove}
-                    />
-                  </div>
-                </div>
+                {/* The annotated version IS the evidence when there is one. */}
+                <EvidenceRow
+                  item={g.annotated ?? g.original}
+                  role={pair ? 'Annotated' : undefined}
+                  src={src}
+                  canManage={canManage}
+                  deletingId={deletingId}
+                  onRemove={remove}
+                />
                 {pair && (
-                  <p className="mt-2 text-[11px] text-ink-subtle">
-                    The original is kept unchanged as the source record.
-                  </p>
+                  /* The audit copy. A native <details> so it costs nothing until
+                     someone actually needs to produce the unmarked photo — and
+                     so it is never open by accident in a screen share or a
+                     printout. `print:hidden` keeps it out of printed output for
+                     the same reason it is out of the pack. */
+                  <details className="mt-2 print:hidden">
+                    <summary className="cursor-pointer text-[11px] font-semibold text-ink-subtle hover:text-ink">
+                      Original photo (kept for audit)
+                    </summary>
+                    <div className="mt-2 border-t border-brand-200 pt-2">
+                      <EvidenceRow
+                        item={g.original}
+                        role="Original"
+                        src={src}
+                        canManage={canManage}
+                        deletingId={deletingId}
+                        onRemove={remove}
+                      />
+                      <p className="mt-2 text-[11px] text-ink-subtle">
+                        Kept unchanged as the source record. It is not included
+                        in reports or close-out packs — the annotated photo is
+                        the evidence. Remove the annotated version and this
+                        original returns to the list.
+                      </p>
+                    </div>
+                  </details>
                 )}
               </li>
             );

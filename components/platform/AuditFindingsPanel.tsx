@@ -24,6 +24,11 @@ import {
   EvidenceGallery,
   type EvidenceItem,
 } from '@/components/platform/EvidenceGallery';
+import {
+  PendingPhotos,
+  type PendingPhoto,
+} from '@/components/platform/PendingPhotos';
+import { uploadAnnotatedPair } from '@/components/platform/annotatedUpload';
 import type { AssignablePerson } from '@/services/actions/actionAssigneeService';
 
 export interface FindingRow {
@@ -92,6 +97,11 @@ export function AuditFindingsPanel({
   const [peopleLoading, setPeopleLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  // SC-017 FOLLOW-UP — a finding can now save successfully while one of its
+  // photos does not. Closing the form would take that message with it, so the
+  // panel holds it: the finding IS in the list, and the reader needs to know
+  // which photo to add.
+  const [notice, setNotice] = useState<string | undefined>();
 
   async function quickStatus(id: string, status: string) {
     setBusyId(id);
@@ -192,6 +202,22 @@ export function AuditFindingsPanel({
         )}
       </div>
 
+      {notice && (
+        <div
+          role="status"
+          className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-hivis-500/40 bg-hivis-500/10 px-3 py-2 text-sm text-ink"
+        >
+          <span>{notice}</span>
+          <button
+            type="button"
+            onClick={() => setNotice(undefined)}
+            className="shrink-0 text-xs font-semibold text-ink-muted hover:text-ink"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {mode === 'add' && (
         <div className="mb-4 rounded-xl border border-brand-200 bg-brand-50/40 p-4">
           <FindingForm
@@ -199,8 +225,9 @@ export function AuditFindingsPanel({
             submitLabel="Add finding"
             endpoint={`/api/platform/audits/${auditId}/findings`}
             method="POST"
-            onDone={() => {
+            onDone={(warning) => {
               setMode(null);
+              setNotice(warning);
               router.refresh();
             }}
             onCancel={() => setMode(null)}
@@ -253,8 +280,9 @@ export function AuditFindingsPanel({
                     submitLabel="Save finding"
                     endpoint={`/api/platform/audit-findings/${f.id}`}
                     method="PATCH"
-                    onDone={() => {
+                    onDone={(warning) => {
                       setMode(null);
+                      setNotice(warning);
                       router.refresh();
                     }}
                     onCancel={() => setMode(null)}
@@ -506,13 +534,20 @@ function FindingForm({
   submitLabel: string;
   endpoint: string;
   method: 'POST' | 'PATCH';
-  onDone: () => void;
+  /** `warning` is set when the finding saved but a photo did not attach. */
+  onDone: (warning?: string) => void;
   onCancel: () => void;
 }) {
   const [values, setValues] = useState<FormValues>(initial);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
+  // SC-017 FOLLOW-UP — photos are collected while the finding is being written
+  // and attached on save. Only when CREATING: editing an existing finding has
+  // the evidence gallery right there on the row, which does more (documents,
+  // removal, re-annotation) than a queue could.
+  const creating = method === 'POST';
+  const [photos, setPhotos] = useState<PendingPhoto[]>([]);
 
   function set<K extends keyof FormValues>(key: K, value: FormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
@@ -535,7 +570,39 @@ function FindingForm({
           setFormError(data.error ?? 'Something went wrong. Please try again.');
         return;
       }
-      onDone();
+
+      // THE FINDING NOW EXISTS. Everything below is best-effort attachment, and
+      // a failure here must never read as "the finding was not saved" — that
+      // would send someone back to write it again and end up with two.
+      let warning: string | undefined;
+      if (creating && photos.length > 0) {
+        const findingId = data.id as string | undefined;
+        if (!findingId) {
+          warning =
+            'The finding was saved, but its photos could not be attached. Open the finding to add them.';
+        } else {
+          const failures: string[] = [];
+          // Sequential, not parallel: each photo is two uploads and these are
+          // site phones on site connections. Racing eight requests is how the
+          // last one times out.
+          for (const photo of photos) {
+            const out = await uploadAnnotatedPair(
+              `/api/platform/audit-findings/${findingId}/evidence`,
+              photo,
+            );
+            if (!out.ok)
+              failures.push(`${photo.originalFile.name}: ${out.error}`);
+          }
+          if (failures.length > 0) {
+            warning = `The finding was saved. ${failures.length} of ${photos.length} photo${
+              photos.length === 1 ? '' : 's'
+            } could not be attached — open the finding to add ${
+              failures.length === 1 ? 'it' : 'them'
+            }. (${failures.join('; ')})`;
+          }
+        }
+      }
+      onDone(warning);
     } catch {
       setFormError('Network problem. Please try again.');
     } finally {
@@ -623,6 +690,11 @@ function FindingForm({
         error={errors.correctiveAction}
         hint="What needs to be done to resolve this finding."
       />
+      {creating && (
+        <div className="rounded-lg border border-line bg-surface-sunken p-3">
+          <PendingPhotos photos={photos} onChange={setPhotos} disabled={busy} />
+        </div>
+      )}
       <div className="flex gap-2">
         <Button type="submit" variant="brand" size="md" disabled={busy}>
           {busy ? 'Saving…' : submitLabel}

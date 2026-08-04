@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import type { AnnotationMeta } from '@/services/annotations/annotationUpload';
+import { markSuperseded } from '@/services/annotations/supersededEvidence';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { getActionForViewer } from '@/services/actions/actionService';
 import {
@@ -55,6 +56,12 @@ export interface EvidenceView {
   annotated: boolean;
   /** SC-017: on the annotated copy, the id of the original it was made from. */
   originalEvidenceId: string | null;
+  /**
+   * SC-017 FOLLOW-UP: this row is the original of an annotated photo that is
+   * still present, so the annotated copy is the evidence and this is the audit
+   * copy. Derived per result set, never stored — see `supersededEvidence.ts`.
+   */
+  supersededOriginal: boolean;
   id: string;
   fileName: string;
   mimeType: string;
@@ -78,6 +85,9 @@ function toView(e: {
   return {
     annotated: e.annotated,
     originalEvidenceId: e.originalEvidenceId,
+    // Filled in by markSuperseded once the whole result set is known — a single
+    // row cannot answer "is something else pointing at me?".
+    supersededOriginal: false,
     id: e.id,
     fileName: e.fileName,
     mimeType: e.mimeType,
@@ -97,7 +107,9 @@ export async function listActionEvidence(
     where: { actionId },
     orderBy: { createdAt: 'desc' },
   });
-  return rows.map(toView);
+  // Tagged across the action's whole set: superseding is a relationship between
+  // two rows, so it can only be decided once both are in hand.
+  return markSuperseded(rows.map(toView));
 }
 
 export async function addActionEvidence(

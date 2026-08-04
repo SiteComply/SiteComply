@@ -58,12 +58,22 @@ export async function POST(
   }
 
   const buffer = Buffer.from(await file!.arrayBuffer());
-  const result = await addActionEvidence(viewer, params.id, {
-    buffer,
-    fileName: file!.name || 'evidence',
-    mimeType: file!.type,
-    size: file!.size,
-  });
+  // SC-017 FOLLOW-UP — the same omission as the finding route: the import was
+  // here, the call was not, so an annotated photo on an action was stored
+  // unlinked. Fixed in both places together; one of them working and the other
+  // not is how the two galleries would start behaving differently.
+  const annotation = parseAnnotationMeta(form);
+  const result = await addActionEvidence(
+    viewer,
+    params.id,
+    {
+      buffer,
+      fileName: file!.name || 'evidence',
+      mimeType: file!.type,
+      size: file!.size,
+    },
+    annotation,
+  );
   if (!result.ok) {
     return NextResponse.json(
       { ok: false, error: 'Action not found.' },

@@ -11,6 +11,10 @@ import {
   type CloseOutSectionId,
   type PackSectionChoice,
 } from '@/services/closeOut/closeOutSections';
+import {
+  supersededEvidenceIdsForSite,
+  excludeIds,
+} from '@/services/annotations/supersededEvidenceQuery';
 
 /**
  * SC-024 Phase 1 — the project close-out pack.
@@ -87,12 +91,22 @@ async function countSection(
       return prisma.action.count({ where: { jobSiteId: siteId } });
     case 'PHOTOS_EVIDENCE': {
       // Evidence hangs off audit findings and actions, so both are counted.
+      // SC-017 FOLLOW-UP: the original an annotated photo was made from is NOT
+      // counted. It is one piece of evidence, and counting it twice overstated
+      // the pack before anyone opened it.
+      const superseded = await supersededEvidenceIdsForSite(siteId);
       const [findings, actions] = await Promise.all([
         prisma.findingEvidence.count({
-          where: { finding: { audit: { jobSiteId: siteId } } },
+          where: {
+            finding: { audit: { jobSiteId: siteId } },
+            id: excludeIds(superseded.findingEvidenceIds),
+          },
         }),
         prisma.actionEvidence.count({
-          where: { action: { jobSiteId: siteId } },
+          where: {
+            action: { jobSiteId: siteId },
+            id: excludeIds(superseded.actionEvidenceIds),
+          },
         }),
       ]);
       return findings + actions;
@@ -597,15 +611,25 @@ async function renderSection(
     }
 
     case 'PHOTOS_EVIDENCE': {
+      // SC-017 FOLLOW-UP: superseded originals are excluded IN THE QUERY, not
+      // afterwards — the take below caps the result, so filtering later would
+      // let them use up slots and then disappear, silently shrinking the pack.
+      const superseded = await supersededEvidenceIdsForSite(siteId);
       const [findings, actions] = await Promise.all([
         prisma.findingEvidence.findMany({
-          where: { finding: { audit: { jobSiteId: siteId } } },
+          where: {
+            finding: { audit: { jobSiteId: siteId } },
+            id: excludeIds(superseded.findingEvidenceIds),
+          },
           orderBy: { createdAt: 'desc' },
           take: PHOTO_LIMIT,
           select: { id: true, fileName: true, createdAt: true },
         }),
         prisma.actionEvidence.findMany({
-          where: { action: { jobSiteId: siteId } },
+          where: {
+            action: { jobSiteId: siteId },
+            id: excludeIds(superseded.actionEvidenceIds),
+          },
           orderBy: { createdAt: 'desc' },
           take: PHOTO_LIMIT,
           select: { id: true, fileName: true, createdAt: true },

@@ -57,12 +57,24 @@ export async function POST(
   }
 
   const buffer = Buffer.from(await file!.arrayBuffer());
-  const result = await addFindingEvidence(viewer, params.findingId, {
-    buffer,
-    fileName: file!.name || 'evidence',
-    mimeType: file!.type,
-    size: file!.size,
-  });
+  // SC-017 FOLLOW-UP — THIS WAS NEVER WIRED UP. `parseAnnotationMeta` has been
+  // imported here since SC-017 but was never called, and the service's optional
+  // annotation argument was never passed, so every annotated photo on a finding
+  // was stored as a plain file with `annotated = false` and no link back to its
+  // original. That is the whole reported duplication: not two files by design,
+  // but two files the product could not tell were the same photo.
+  const annotation = parseAnnotationMeta(form);
+  const result = await addFindingEvidence(
+    viewer,
+    params.findingId,
+    {
+      buffer,
+      fileName: file!.name || 'evidence',
+      mimeType: file!.type,
+      size: file!.size,
+    },
+    annotation,
+  );
   if (!result.ok) {
     return NextResponse.json(
       { ok: false, error: 'Finding not found.' },

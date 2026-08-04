@@ -16,6 +16,10 @@ import {
   type CompanyBranding,
 } from '@/services/company/companyConfigService';
 import { PHOTO_LIMIT } from '@/services/closeOut/closeOutSections';
+import {
+  supersededEvidenceIdsForSite,
+  excludeIds,
+} from '@/services/annotations/supersededEvidenceQuery';
 
 /**
  * SC-024 Phase 2 — the ZIP archive: the pack plus every original file.
@@ -115,15 +119,26 @@ export async function collectAppendices(
   // Evidence photos, capped at the same limit the printed pack uses so the two
   // never disagree about what was included.
   if (viewerCan(viewer, 'audits', 'view', siteId)) {
+    // SC-017 FOLLOW-UP: the same exclusion the printed pack applies, applied the
+    // same way — in the query, ahead of the cap. The ZIP and the pack must agree
+    // about what was included, and a downloaded archive containing each photo
+    // twice is the version of this bug that leaves the building.
+    const superseded = await supersededEvidenceIdsForSite(siteId);
     const [findings, actions] = await Promise.all([
       prisma.findingEvidence.findMany({
-        where: { finding: { audit: { jobSiteId: siteId } } },
+        where: {
+          finding: { audit: { jobSiteId: siteId } },
+          id: excludeIds(superseded.findingEvidenceIds),
+        },
         orderBy: { createdAt: 'desc' },
         take: PHOTO_LIMIT,
         select: { fileName: true, blobPath: true },
       }),
       prisma.actionEvidence.findMany({
-        where: { action: { jobSiteId: siteId } },
+        where: {
+          action: { jobSiteId: siteId },
+          id: excludeIds(superseded.actionEvidenceIds),
+        },
         orderBy: { createdAt: 'desc' },
         take: PHOTO_LIMIT,
         select: { fileName: true, blobPath: true },
