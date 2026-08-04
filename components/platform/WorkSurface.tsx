@@ -27,6 +27,23 @@ import { TableSurface } from '@/components/platform/TableSurface';
  * Selection lives in the URL (`?item=`), matching `?section=` from Phase 3, so a
  * selected row is linkable, survives a refresh and needs no client state.
  *
+ * UX REFRESH PHASE 10 — THE RAIL IS NOW A CONSEQUENCE OF SELECTION, NOT A FIXED
+ * COLUMN. It used to hold a 22rem column open on every visit, so the default
+ * state of Site → Compliance and Site → Workers was a table squeezed into about
+ * three quarters of the width beside a card containing one sentence and several
+ * hundred pixels of nothing. Master–detail earns its second column when there IS
+ * a detail; before that it is a reservation.
+ *
+ * So: nothing selected → one column, the table takes the whole measure. Something
+ * selected → the rail appears and is WIDER than it was (24rem), with a border
+ * tinted to match the highlighted row, so the pair reads as one connected thing.
+ * `resolveSelected` still refuses to pre-select row 1, which is what makes the
+ * single-column state the honest default rather than a trick to hide the rail.
+ *
+ * The "select a row" line survives as a caption under the table rather than as a
+ * card: losing the column must not lose the affordance, because the row title IS
+ * the selection link and nothing else says so.
+ *
  * Presentation only. This component never evaluates a permission or decides what
  * a row may contain; callers pass already-authorised content.
  */
@@ -42,33 +59,43 @@ export function WorkSurface({
   toolbar?: ReactNode;
   /** Pagination or totals, inside the table surface. */
   footer?: ReactNode;
-  /** Detail for the selected row. Null when nothing is selected. */
+  /** Detail for the selected row. Falsy when nothing is selected. */
   rail?: ReactNode;
   railTitle?: ReactNode;
-  /** Shown in place of the rail when no row is selected. */
+  /** The affordance shown, as a caption, when no row is selected. */
   railEmpty?: ReactNode;
   children: ReactNode;
 }) {
+  // Callers all pass `rail={selected && (...)}`, so this is exactly "is a row
+  // selected" — derived from the same value that produced the rail rather than
+  // from a second flag that could disagree with it.
+  const hasSelection = Boolean(rail);
+
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-[1fr_22rem]">
+    <div
+      className={cn(
+        'grid items-start gap-4',
+        hasSelection && 'lg:grid-cols-[1fr_24rem]',
+      )}
+    >
       <TableSurface toolbar={toolbar} footer={footer} className="min-w-0">
         {children}
       </TableSurface>
 
-      {/* The rail is sticky so it stays with you while the list scrolls — the
-          point of master–detail is not having to lose your place. */}
-      <aside className="lg:sticky lg:top-6">
-        <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
-          {railTitle && (
-            <h2 className="mb-3 text-sm font-bold text-ink">{railTitle}</h2>
-          )}
-          {rail ?? (
-            <p className="py-6 text-center text-sm text-ink-subtle">
-              {railEmpty}
-            </p>
-          )}
-        </section>
-      </aside>
+      {hasSelection ? (
+        // The rail is sticky so it stays with you while the list scrolls — the
+        // point of master–detail is not having to lose your place.
+        <aside className="lg:sticky lg:top-6">
+          <section className="rounded-xl border border-brand-200 bg-surface p-4 shadow-card">
+            {railTitle && (
+              <h2 className="mb-3 text-sm font-bold text-ink">{railTitle}</h2>
+            )}
+            {rail}
+          </section>
+        </aside>
+      ) : (
+        <p className="px-1 text-sm text-ink-subtle">{railEmpty}</p>
+      )}
     </div>
   );
 }

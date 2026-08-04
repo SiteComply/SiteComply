@@ -130,8 +130,11 @@ export default async function PlatformSubmissionsPage({
                   : 'No check-ins to show.'}
             </p>
           ) : (
+            /* UX REFRESH PHASE 10 — see WorkSurface: the rail is a consequence
+               of selection, so only the selected title renders. */
             <WorkSurface
-              railTitle={selected ? 'Check-in' : 'Check-in details'}
+              railTitle="Check-in"
+              railEmpty="Select a check-in to see its details."
               rail={
                 selected && (
                   <>

@@ -197,8 +197,10 @@ export default async function SiteWorkersPage({
     <PlatformShell>
       <SiteDetailHeader viewer={viewer} siteId={params.id} active="workers" />
 
+      {/* UX REFRESH PHASE 10 — see WorkSurface: no selection, no rail, so the
+          "Roster" title never rendered. */}
       <WorkSurface
-        railTitle={selectedWorker ? 'Worker' : 'Roster'}
+        railTitle="Worker"
         railEmpty="Select someone to see their site record."
         rail={
           selectedWorker && (

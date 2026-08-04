@@ -427,6 +427,33 @@ grep -qF "aria-current={item.active ? 'page' : undefined}" components/platform/n
   || { echo "ERROR: the filter strip lost aria-label/aria-current — aborting"; exit 1; }
 echo "      confirmed: one grouping helper, every run labelled, no step boxes, one rule under the tabs."
 
+echo "[5l] Work surface: the rail is a consequence of selection (Phase 10)..."
+# The second column must exist ONLY when there is a detail to put in it. Held
+# open unconditionally it cost every work surface ~24rem to display one sentence.
+grep -qF "hasSelection && 'lg:grid-cols-[1fr_24rem]'" components/platform/WorkSurface.tsx \
+  || { echo "ERROR: the work surface holds its rail column open again — aborting"; exit 1; }
+grep -qF 'const hasSelection = Boolean(rail)' components/platform/WorkSurface.tsx \
+  || { echo "ERROR: the rail is no longer derived from the selection itself — aborting"; exit 1; }
+# LOSING THE COLUMN MUST NOT LOSE THE AFFORDANCE. The row title IS the selection
+# link and nothing else says so, so the empty-state line has to survive as a
+# caption.
+grep -qF '{railEmpty}' components/platform/WorkSurface.tsx \
+  || { echo "ERROR: the 'select a row' affordance is gone — aborting"; exit 1; }
+# PRE-SELECTION WOULD UNDO ALL OF IT: a rail the user never asked for, on every
+# visit, and the full-width default gone with it. It is also the safety property
+# from Phase 5 — never invite action on a record nobody chose.
+grep -qF 'if (!want) return null' components/platform/WorkSurface.tsx \
+  || { echo "ERROR: the work surface may now pre-select a row — aborting"; exit 1; }
+# All three work surfaces must pass a falsy rail when nothing is selected, or the
+# column would be held open by a truthy empty fragment.
+for f in 'app/platform/dashboard/sites/[id]/compliance/page.tsx' \
+         'app/platform/dashboard/sites/[id]/workers/page.tsx' \
+         app/platform/dashboard/submissions/page.tsx; do
+  grep -qE 'rail=\{$' "$f" \
+    || { echo "ERROR: $f no longer passes a conditional rail — aborting"; exit 1; }
+done
+echo "      confirmed: no selection means no rail column, affordance kept, nothing pre-selected."
+
 echo "[6/8] Building..."
 npx prisma generate >/dev/null 2>&1 || { echo "ERROR: prisma generate failed"; exit 1; }
 rm -rf .next

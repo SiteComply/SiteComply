@@ -212,8 +212,12 @@ export default async function SiteCompliancePage({
         </div>
       )}
 
+      {/* UX REFRESH PHASE 10 — the rail only renders when something is selected,
+          so the old ternary's "nothing selected" title ("Outstanding work")
+          could never appear. One title, for the one state that shows it. */}
       <WorkSurface
-        railTitle={selectedWork ? 'Selected item' : 'Outstanding work'}
+        railTitle="Selected item"
+        railEmpty="Select an item to see its details."
         rail={
           selectedWork && (
             <>
