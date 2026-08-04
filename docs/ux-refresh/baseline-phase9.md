@@ -1,7 +1,7 @@
 # Platform UX Refresh — structural baseline
 
 - Baseline tag: `rev1-complete` (`44841c5`)
-- Captured at: commit `034e468` on branch `feature/ux-refresh`
+- Captured at: commit `c6a9f9f` on branch `feature/ux-refresh`
 - Production BUILD_ID at capture: `Oz4SPgNN-L-ZD8yrfQNk7`
 
 Column meanings — **Cards** counts card/panel wrappers on the page itself;

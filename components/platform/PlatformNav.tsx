@@ -112,7 +112,12 @@ export const PLATFORM_NAV: {
   },
   {
     href: '/platform/dashboard/compliance-calendar',
-    label: 'Compliance',
+    // UX REFRESH PHASE 9 — "Calendar", not "Compliance". Phase 9 gave this run
+    // the heading "Compliance", so the entry beneath it read "Compliance ›
+    // Compliance" and said nothing about what it opens. The label names the
+    // thing (the SC-020 Compliance Calendar); the group names the area.
+    // LABEL ONLY — the href, module gate, icon, order and group are untouched.
+    label: 'Calendar',
     icon: 'clipboard',
     // SC-020: scheduling recurring audits, so it sits under the audits module —
     // no RBAC matrix change was needed.

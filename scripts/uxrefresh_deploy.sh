@@ -372,7 +372,17 @@ const labels=new Set([...block.matchAll(/([a-z]+):\s*'/g)].map(m=>m[1]));
 const groups=new Set([...s.matchAll(/group: '([a-z]+)'/g)].map(m=>m[1]));
 for(const g of groups) if(!labels.has(g)){console.error('nav cluster with no label: '+g);process.exit(1);}
 for(const l of labels) if(!groups.has(l)){console.error('nav label with no cluster: '+l);process.exit(1);}
-console.log('      confirmed: '+groups.size+' clusters, all labelled.');
+// AN ENTRY MUST NOT REPEAT ITS OWN GROUP'S NAME. Once Phase 9 put a heading
+// above each run, the calendar entry read 'Compliance > Compliance' and said
+// nothing about what it opens. The group names the area; the item names the
+// thing. Compared on the rendered heading text, not the internal group id.
+const groupText=Object.fromEntries([...block.matchAll(/([a-z]+):\s*'([^']+)'/g)].map(m=>[m[1],m[2]]));
+for(const m of s.matchAll(/label: '([^']+)',[\s\S]{0,400}?group: '([a-z]+)'/g)){
+  if(m[1].toLowerCase()===String(groupText[m[2]]||'').toLowerCase()){
+    console.error('nav entry repeats its group heading: '+groupText[m[2]]+' > '+m[1]);process.exit(1);
+  }
+}
+console.log('      confirmed: '+groups.size+' clusters, all labelled, none repeating its heading.');
 " || exit 1
 
 # Worker Experience: every section carries a group, and the groups stay contiguous
