@@ -9,6 +9,11 @@ import {
 } from '@/services/platformUsers/platformPermissions';
 import type { PlatformRoleValue } from '@/services/platformUsers/platformUserConstants';
 import { PlatformIcon, type PlatformIconName } from './icons';
+import {
+  navGroupRuns,
+  NAV_GROUP_LABEL_CLASS,
+  NAV_GROUP_SPLIT_MD,
+} from './navUi';
 
 /**
  * Left-hand navigation for the Platform dashboard. Vertical on desktop; collapses
@@ -17,17 +22,37 @@ import { PlatformIcon, type PlatformIconName } from './icons';
  *
  * UX REFRESH PHASE 1 — the eleven entries are now clustered by the kind of work
  * they represent (overview / operations / records / administration). Eleven flat
- * items give the eye no structure to land on; four short runs do, and the
- * clusters are expressed purely as SPACING — no group headings, because labels
- * would add the explanatory chrome the brief is asking us to remove.
+ * items give the eye no structure to land on; four short runs do.
  *
- * The grouping is cosmetic and nothing else reads it: items are still filtered
+ * UX REFRESH PHASE 9 — those clusters are now VISIBLE. Phase 1 expressed them as
+ * spacing alone (12px between runs, 4px between items) and left the headings off
+ * on purpose. On the built page that difference does not register: the rail reads
+ * as one uniform list of eleven, which is what the review reported. Each run now
+ * carries a hairline rule, a real gap and a quiet label naming it.
+ *
+ * The grouping is still cosmetic and nothing else reads it: items are filtered
  * exactly as before, one at a time, by effective module permission and the
- * optional role restriction. Order within the nav is unchanged.
+ * optional role restriction, and order within the nav is unchanged. A label only
+ * ever names entries this viewer can already see — a run whose items were all
+ * filtered out renders nothing, heading included, so the rail can never hint at
+ * a section someone lacks.
  */
 
-/** Cosmetic clusters, rendered as spacing between runs. NOT a permission. */
+/** Cosmetic clusters, rendered as a labelled run each. NOT a permission. */
 type NavGroup = 'overview' | 'projects' | 'insight' | 'compliance' | 'admin';
+
+/**
+ * What each cluster is called in the rail. Named for the work, not for the
+ * internal group id — "insight" is a code word, "Reports & records" is what a
+ * site manager is actually looking for.
+ */
+const GROUP_LABEL: Record<NavGroup, string> = {
+  overview: 'Overview',
+  projects: 'Projects',
+  insight: 'Reports & records',
+  compliance: 'Compliance',
+  admin: 'Administration',
+};
 
 export const PLATFORM_NAV: {
   href: string;
@@ -159,51 +184,73 @@ export function PlatformNav({
       )
     : PLATFORM_NAV;
 
+  const runs = navGroupRuns(items, (item) => item.group);
+
   return (
     <nav
       aria-label="Platform sections"
-      className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible"
+      className="flex gap-1 overflow-x-auto md:flex-col md:gap-0 md:overflow-visible"
     >
-      {items.map((item, i) => {
-        const active =
-          item.href === '/platform/dashboard'
-            ? pathname === '/platform/dashboard'
-            : pathname.startsWith(item.href);
-        // First item of a new cluster gets breathing room above it. Expressed as
-        // a margin on the item rather than a separator element, so the grouping
-        // stays purely visual and adds nothing to the accessibility tree.
-        const startsGroup = i > 0 && items[i - 1].group !== item.group;
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={active ? 'page' : undefined}
-            className={cn(
-              'flex items-center gap-3 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-              startsGroup && 'md:mt-3',
-              active
-                ? 'bg-brand-500 text-white shadow-sm shadow-brand-600/20'
-                : 'text-ink-muted hover:bg-brand-50 hover:text-brand-700',
-            )}
-          >
-            <PlatformIcon name={item.icon} className="h-5 w-5 shrink-0" />
-            <span className="flex-1">{item.label}</span>
-            {item.href === NOTIFICATIONS_HREF && notificationCount > 0 && (
-              <span
-                aria-label={`${notificationCount} notifications`}
+      {runs.map((run, ri) => (
+        <div
+          key={run.group ?? ri}
+          // A named group rather than a bare div: the rule and the label are
+          // visual, so the same structure has to be reachable without sight.
+          role="group"
+          aria-label={
+            run.group ? GROUP_LABEL[run.group as NavGroup] : undefined
+          }
+          className={cn('flex gap-1 md:flex-col', ri > 0 && NAV_GROUP_SPLIT_MD)}
+        >
+          {run.group && (
+            // Hidden below `md`, where the rail is a horizontal scroller and a
+            // stack of headings would cost more width than it earns; the rule
+            // between runs carries the grouping there. `aria-hidden` because the
+            // wrapper above already announces the name.
+            <p
+              aria-hidden="true"
+              className={cn(NAV_GROUP_LABEL_CLASS, 'hidden md:block')}
+            >
+              {GROUP_LABEL[run.group as NavGroup]}
+            </p>
+          )}
+          {run.items.map((item) => {
+            const active =
+              item.href === '/platform/dashboard'
+                ? pathname === '/platform/dashboard'
+                : pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-xs font-bold',
+                  'flex items-center gap-3 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                   active
-                    ? 'bg-white text-brand-700'
-                    : 'bg-danger-500 text-white',
+                    ? 'bg-brand-500 text-white shadow-sm shadow-brand-600/20'
+                    : 'text-ink-muted hover:bg-brand-50 hover:text-brand-700',
                 )}
               >
-                {notificationCount > 99 ? '99+' : notificationCount}
-              </span>
-            )}
-          </Link>
-        );
-      })}
+                <PlatformIcon name={item.icon} className="h-5 w-5 shrink-0" />
+                <span className="flex-1">{item.label}</span>
+                {item.href === NOTIFICATIONS_HREF && notificationCount > 0 && (
+                  <span
+                    aria-label={`${notificationCount} notifications`}
+                    className={cn(
+                      'inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-xs font-bold',
+                      active
+                        ? 'bg-white text-brand-700'
+                        : 'bg-danger-500 text-white',
+                    )}
+                  >
+                    {notificationCount > 99 ? '99+' : notificationCount}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      ))}
     </nav>
   );
 }

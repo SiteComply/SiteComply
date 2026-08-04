@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { cn } from '@/lib/cn';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { PageHeader } from '@/components/platform/PageHeader';
+import { SegmentedNav } from '@/components/platform/navUi';
 import {
   permits,
   canCreateSite,
@@ -93,43 +94,24 @@ export default async function PlatformSitesPage({
         </p>
       ) : (
         <>
-          <nav
-            aria-label="Filter sites by status"
-            className="mb-4 inline-flex flex-wrap gap-1 rounded-xl border border-line bg-surface p-1 shadow-card"
-          >
-            {SITE_STATUS_FILTERS.map((f) => {
-              const active = f.value === status;
-              return (
-                <Link
-                  key={f.value}
-                  href={
-                    f.value === 'all'
-                      ? '/platform/dashboard/sites'
-                      : `/platform/dashboard/sites?status=${f.value}`
-                  }
-                  aria-current={active ? 'page' : undefined}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors',
-                    active
-                      ? 'bg-brand-500 text-white shadow-sm'
-                      : 'text-ink-muted hover:bg-surface-sunken',
-                  )}
-                >
-                  {f.label}
-                  <span
-                    className={cn(
-                      'rounded-full px-1.5 py-0.5 text-xs tabular-nums',
-                      active
-                        ? 'bg-white/25 text-white'
-                        : 'bg-surface-sunken text-ink-subtle',
-                    )}
-                  >
-                    {counts[f.value]}
-                  </span>
-                </Link>
-              );
-            })}
-          </nav>
+          {/* UX REFRESH PHASE 9 — this strip was a card sitting directly on top
+              of the table's card, so one list arrived as two stacked panels and
+              the filter competed with the data it filters. It is now the shared
+              recessed control, in the same language as the table toolbar. Same
+              hrefs, same status values, same counts. */}
+          <SegmentedNav
+            label="Filter sites by status"
+            items={SITE_STATUS_FILTERS.map((f) => ({
+              key: f.value,
+              label: f.label,
+              href:
+                f.value === 'all'
+                  ? '/platform/dashboard/sites'
+                  : `/platform/dashboard/sites?status=${f.value}`,
+              active: f.value === status,
+              count: counts[f.value],
+            }))}
+          />
 
           {sites.length === 0 ? (
             <p className="rounded-xl border border-line bg-surface px-4 py-8 text-center text-ink-muted">

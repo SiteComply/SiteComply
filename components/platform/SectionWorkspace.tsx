@@ -1,12 +1,29 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import {
+  navGroupRuns,
+  NAV_GROUP_LABEL_CLASS,
+  NAV_GROUP_SPLIT_LG,
+} from '@/components/platform/navUi';
 
 export interface WorkspaceSection {
   key: string;
   label: string;
   /** One short line shown under the section heading. */
   description?: string;
+  /**
+   * UX REFRESH PHASE 9 — the run this section belongs to, e.g. "Induction &
+   * check-in". Presentation only, and set by the caller: this component never
+   * decides which sections exist, so it never decides what a group contains
+   * either.
+   *
+   * Sections sharing a group MUST be adjacent in the array. Runs are collapsed
+   * from consecutive equal values (see `navGroupRuns`) precisely so that grouping
+   * cannot reorder a navigator behind the caller's back — a group split in two
+   * shows up as two headings rather than being silently rearranged.
+   */
+  group?: string;
 }
 
 /**
@@ -48,36 +65,62 @@ export function SectionWorkspace({
   children: ReactNode;
 }) {
   const current = sections.find((s) => s.key === active) ?? sections[0];
+  const runs = navGroupRuns(sections, (s) => s.group);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[13.5rem_1fr]">
+    // UX REFRESH PHASE 9 — the navigator and the section it controls used to sit
+    // 16px apart with nothing between them, so the list of sections read as the
+    // first column of the content rather than as the thing that selects it. A
+    // hairline down the column edge and a wider gutter separate the two, which is
+    // what lets the eye treat the right-hand side as one surface.
+    <div className="grid gap-4 lg:grid-cols-[13.5rem_1fr] lg:gap-6">
       <nav
         aria-label={navLabel}
-        className="flex gap-1 overflow-x-auto lg:sticky lg:top-6 lg:flex-col lg:self-start lg:overflow-visible"
+        className="flex gap-1 overflow-x-auto lg:sticky lg:top-6 lg:flex-col lg:gap-0 lg:self-start lg:overflow-visible lg:border-r lg:border-line lg:pr-4"
       >
-        {sections.map((s) => {
-          const isActive = s.key === current?.key;
-          return (
-            <Link
-              key={s.key}
-              href={hrefFor(s.key)}
-              aria-current={isActive ? 'page' : undefined}
-              className={cn(
-                'touch-target flex items-center whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors lg:whitespace-normal',
-                isActive
-                  ? 'bg-brand-50 font-semibold text-brand-700'
-                  : 'text-ink-muted hover:bg-surface-sunken hover:text-ink',
-              )}
-            >
-              {s.label}
-            </Link>
-          );
-        })}
+        {runs.map((run, ri) => (
+          <div
+            key={run.group ?? ri}
+            role="group"
+            aria-label={run.group}
+            className={cn(
+              'flex gap-1 lg:flex-col',
+              ri > 0 && NAV_GROUP_SPLIT_LG,
+            )}
+          >
+            {run.group && (
+              <p
+                aria-hidden="true"
+                className={cn(NAV_GROUP_LABEL_CLASS, 'hidden lg:block')}
+              >
+                {run.group}
+              </p>
+            )}
+            {run.items.map((s) => {
+              const isActive = s.key === current?.key;
+              return (
+                <Link
+                  key={s.key}
+                  href={hrefFor(s.key)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={cn(
+                    'touch-target flex items-center whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors lg:whitespace-normal',
+                    isActive
+                      ? 'bg-brand-50 font-semibold text-brand-700'
+                      : 'text-ink-muted hover:bg-surface-sunken hover:text-ink',
+                  )}
+                >
+                  {s.label}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
       <div className="min-w-0">
         {current && (
-          <div className="mb-3 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
             <div className="min-w-0">
               <h2 className="text-base font-bold text-ink">{current.label}</h2>
               {current.description && (

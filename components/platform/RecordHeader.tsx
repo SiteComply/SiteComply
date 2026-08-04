@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { cn } from '@/lib/cn';
 import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
 
 /**
@@ -42,7 +43,12 @@ export function RecordHeader({
   children?: ReactNode;
 }) {
   return (
-    <div className="mb-6 border-b border-line pb-4">
+    // UX REFRESH PHASE 9 — a header with a tab bar was drawing TWO horizontal
+    // rules 16px apart: the tab strip's own underline, then this block's. Two
+    // parallel lines that close together read as a mistake and squeeze the tabs
+    // between them. When there is a tab bar it IS the boundary, so the header
+    // drops its rule and lets the tabs close the block.
+    <div className={cn('mb-6', children ? '' : 'border-b border-line pb-4')}>
       {breadcrumbs && <Breadcrumbs items={breadcrumbs} />}
       {backHref && (
         <Link

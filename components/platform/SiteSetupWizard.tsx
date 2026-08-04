@@ -12,6 +12,42 @@ import {
   type SetupFlag,
   type SetupStep,
 } from '@/services/sites/siteSetupConstants';
+import {
+  navGroupRuns,
+  NAV_GROUP_LABEL_CLASS,
+} from '@/components/platform/navUi';
+
+/**
+ * UX REFRESH PHASE 9 — presentational runs for the step list, keyed on step.
+ *
+ * Deliberately HERE and not in `siteSetupConstants`: that module is the shared
+ * contract between the wizard UI, the completeness maths and the server-side
+ * save, and how a navigator draws itself has no business in it. Keeping the map
+ * local also keeps this refresh code-only in the frozen sense — the constants
+ * file is untouched.
+ *
+ * A step missing from this map joins the run above it (see `navGroupRuns`), so
+ * adding a step upstream cannot produce an orphan or an unlabelled gap.
+ */
+const STEP_GROUP: Record<string, string | undefined> = {
+  project: 'Project & CDM',
+  client: 'Project & CDM',
+  'duty-holders': 'Project & CDM',
+  f10: 'Project & CDM',
+  people: 'People & emergency',
+  emergency: 'People & emergency',
+  welfare: 'Site conditions',
+  rules: 'Site conditions',
+  hazards: 'Site conditions',
+  'high-risk': 'Site conditions',
+  'temporary-works': 'Site conditions',
+  access: 'Access & environment',
+  traffic: 'Access & environment',
+  utilities: 'Access & environment',
+  environment: 'Access & environment',
+  drawings: 'Documents & services',
+  services: 'Documents & services',
+};
 
 /**
  * SC-019 Phase 1 — the project setup wizard.
@@ -351,42 +387,81 @@ export function SiteSetupWizard({
       )}
 
       <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
-        {/* Step list */}
-        <nav aria-label="Setup sections" className="space-y-1">
-          {visible.map((step) => {
-            const isDone = done.includes(step.key);
-            const isActive = step.key === active.key;
-            const relevant = applicable.includes(step.key);
-            return (
-              <button
-                key={step.key}
-                type="button"
-                onClick={() => setActiveKey(step.key)}
-                className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition ${
-                  isActive
-                    ? 'border-brand-500 bg-brand-50 font-semibold text-brand-700'
-                    : 'border-line bg-surface text-ink-muted hover:bg-surface-sunken'
-                }`}
+        {/* Step list.
+
+            UX REFRESH PHASE 9 — seventeen steps rendered as seventeen bordered
+            boxes, one under the next, every one the same size and weight: a wall
+            of identical cards, and the single most crowded navigator in the
+            product. Two changes, both presentation.
+
+            First, the boxes are gone. A step is a nav item, so it now uses the
+            same language as every other navigator — no border, no surface of its
+            own, a tint when it is the one you are on. Seventeen outlines were
+            drawing seventeen boxes around nothing.
+
+            Second, the steps are grouped into five labelled runs. The order is
+            SETUP_STEPS' order, untouched: each run is already contiguous there,
+            so this names what is on screen without moving anything. The
+            completion tick, the "n/a" marker and which step is selected all work
+            exactly as before. */}
+        <nav aria-label="Setup sections">
+          {navGroupRuns(visible, (step) => STEP_GROUP[step.key]).map(
+            (run, ri) => (
+              <div
+                key={run.group ?? ri}
+                role="group"
+                aria-label={run.group}
+                className={
+                  ri > 0 ? 'mt-4 border-t border-line pt-4' : undefined
+                }
               >
-                <span
-                  aria-hidden
-                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-                    isDone
-                      ? 'bg-safe-500 text-white'
-                      : 'bg-surface-sunken text-ink-subtle ring-1 ring-line'
-                  }`}
-                >
-                  {isDone ? '✓' : ''}
-                </span>
-                <span className="min-w-0 flex-1 truncate">{step.title}</span>
-                {!relevant && (
-                  <span className="shrink-0 text-[10px] uppercase text-ink-subtle">
-                    n/a
-                  </span>
+                {run.group && (
+                  <p aria-hidden className={NAV_GROUP_LABEL_CLASS}>
+                    {run.group}
+                  </p>
                 )}
-              </button>
-            );
-          })}
+                <div className="space-y-1">
+                  {run.items.map((step) => {
+                    const isDone = done.includes(step.key);
+                    const isActive = step.key === active.key;
+                    const relevant = applicable.includes(step.key);
+                    return (
+                      <button
+                        key={step.key}
+                        type="button"
+                        onClick={() => setActiveKey(step.key)}
+                        aria-current={isActive ? 'step' : undefined}
+                        className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                          isActive
+                            ? 'bg-brand-50 font-semibold text-brand-700'
+                            : 'text-ink-muted hover:bg-surface-sunken hover:text-ink'
+                        }`}
+                      >
+                        <span
+                          aria-hidden
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                            isDone
+                              ? 'bg-safe-500 text-white'
+                              : 'bg-surface-sunken text-ink-subtle ring-1 ring-line'
+                          }`}
+                        >
+                          {isDone ? '✓' : ''}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">
+                          {step.title}
+                        </span>
+                        {!relevant && (
+                          <span className="shrink-0 text-[10px] uppercase text-ink-subtle">
+                            n/a
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ),
+          )}
         </nav>
 
         {/* Active step */}

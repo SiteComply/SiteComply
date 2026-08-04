@@ -41,6 +41,24 @@ import { getSiteInformationForViewer } from '@/services/sites/siteInformationSer
 export const dynamic = 'force-dynamic';
 
 /**
+ * UX REFRESH PHASE 9 — the eight sections read as one undifferentiated list, so
+ * finding "Induction validity" meant reading all eight labels every time. They
+ * are grouped by the moment in a worker's day they govern: what the worker is
+ * shown, what they must complete to get on site, and what they need when
+ * something goes wrong.
+ *
+ * ORDER IS UNCHANGED — these three runs are already contiguous in the array
+ * below, so grouping renames nothing and moves nothing. Each group is also
+ * gate-aligned by accident of that order, which matters: a viewer who loses
+ * Daily Bulletins keeps a shorter first run, never an empty heading.
+ */
+const SECTION_GROUP = {
+  seen: 'What workers see',
+  induction: 'Induction & check-in',
+  emergency: 'Emergency & contacts',
+} as const;
+
+/**
  * Platform → Site Details — Worker Experience tab: everything that shapes what a
  * worker sees on site — Daily Bulletins (SC-002), Worker Dashboard settings
  * (SC-003), Knowledge Checks (SC-005), Induction Validity (SC-006), Site Contacts
@@ -137,42 +155,50 @@ export default async function SiteExperiencePage({
       key: 'bulletins',
       label: 'Daily Bulletins',
       description: 'Notices and safety alerts shown to workers on this site.',
+      group: SECTION_GROUP.seen,
     },
     panelVisibility && {
       key: 'dashboard',
       label: 'Worker dashboard',
       description: 'What a worker sees after checking in to this site.',
+      group: SECTION_GROUP.seen,
     },
     siteInfo && {
       key: 'site-information',
       label: 'Site information',
       description: 'The worker-facing Site information page.',
+      group: SECTION_GROUP.seen,
     },
     kcConfig &&
       kcPreview && {
         key: 'knowledge-check',
         label: 'Knowledge check',
         description: 'The short quiz at the end of this site’s induction.',
+        group: SECTION_GROUP.induction,
       },
     inductionValidity && {
       key: 'induction-validity',
       label: 'Induction validity',
       description: 'How long a completed induction stays valid.',
+      group: SECTION_GROUP.induction,
     },
     gpsConfig && {
       key: 'check-in-location',
       label: 'Check-in location',
       description: 'Where a worker must be to check in.',
+      group: SECTION_GROUP.induction,
     },
     {
       key: 'contacts',
       label: 'Site contacts',
       description: 'Named people and numbers a worker may need to call.',
+      group: SECTION_GROUP.emergency,
     },
     {
       key: 'emergency',
       label: 'Emergency information',
       description: 'Shown to every worker on this site.',
+      group: SECTION_GROUP.emergency,
     },
   ].filter(Boolean) as WorkspaceSection[];
 

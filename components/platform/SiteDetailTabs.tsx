@@ -46,9 +46,15 @@ export function SiteDetailTabs({
   const base = `/platform/dashboard/sites/${siteId}`;
 
   return (
+    // UX REFRESH PHASE 9 — the strip sat 16px under the title with the record
+    // header's own rule immediately below it, so six tabs were pinched between
+    // two lines. The header no longer draws its rule when it carries tabs (see
+    // RecordHeader), and the strip now has room above it and a taller hit area,
+    // so the tabs read as the boundary of the header rather than as content
+    // trapped inside it.
     <nav
       aria-label="Site sections"
-      className="mt-4 flex gap-1 overflow-x-auto border-b border-line"
+      className="mt-5 flex gap-1 overflow-x-auto border-b border-line"
     >
       {tabs.map((tab) => {
         const href = `${base}${SEGMENT[tab.key]}`;
@@ -60,7 +66,7 @@ export function SiteDetailTabs({
             href={href}
             aria-current={isActive ? 'page' : undefined}
             className={cn(
-              '-mb-px whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors',
+              '-mb-px whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition-colors',
               isActive
                 ? 'border-brand-500 text-brand-700'
                 : 'border-transparent text-ink-muted hover:border-line hover:text-ink',

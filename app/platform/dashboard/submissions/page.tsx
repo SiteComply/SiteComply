@@ -3,6 +3,7 @@ import { cn } from '@/lib/cn';
 import { formatDateTimeUK, formatHoursMinutes } from '@/lib/datetime';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { PageHeader } from '@/components/platform/PageHeader';
+import { SegmentedNav } from '@/components/platform/navUi';
 import {
   WorkSurface,
   RailDetail,
@@ -93,43 +94,23 @@ export default async function PlatformSubmissionsPage({
         </p>
       ) : (
         <>
-          <nav
-            aria-label="Filter check-ins by status"
-            className="mb-4 inline-flex flex-wrap gap-1 rounded-xl border border-line bg-surface p-1 shadow-card"
-          >
-            {CHECKIN_STATUS_FILTERS.map((f) => {
-              const active = f.value === status;
-              return (
-                <Link
-                  key={f.value}
-                  href={
-                    f.value === 'all'
-                      ? '/platform/dashboard/submissions'
-                      : `/platform/dashboard/submissions?status=${f.value}`
-                  }
-                  aria-current={active ? 'page' : undefined}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors',
-                    active
-                      ? 'bg-brand-500 text-white shadow-sm'
-                      : 'text-ink-muted hover:bg-surface-sunken',
-                  )}
-                >
-                  {f.label}
-                  <span
-                    className={cn(
-                      'rounded-full px-1.5 py-0.5 text-xs tabular-nums',
-                      active
-                        ? 'bg-white/25 text-white'
-                        : 'bg-surface-sunken text-ink-subtle',
-                    )}
-                  >
-                    {countByFilter[f.value]}
-                  </span>
-                </Link>
-              );
-            })}
-          </nav>
+          {/* UX REFRESH PHASE 9 — the same recessed control the Sites register
+              uses, from one definition. Both had independently grown the same
+              markup as a card stacked above the table. Hrefs, statuses and counts
+              are unchanged. */}
+          <SegmentedNav
+            label="Filter check-ins by status"
+            items={CHECKIN_STATUS_FILTERS.map((f) => ({
+              key: f.value,
+              label: f.label,
+              href:
+                f.value === 'all'
+                  ? '/platform/dashboard/submissions'
+                  : `/platform/dashboard/submissions?status=${f.value}`,
+              active: f.value === status,
+              count: countByFilter[f.value],
+            }))}
+          />
 
           {/* UX REFRESH PHASE 5 — this was the last register still rendering one
               bordered card per row: literally card, card, card. It is now a work

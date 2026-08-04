@@ -1,0 +1,47 @@
+UX Refresh Phase 9 — navigation grouping checks
+Run: npx tsx scripts/uxrefresh_nav_check.ts
+
+== navGroupRuns behaviour ==
+  ok   consecutive equal groups collapse into one run
+  ok   run order follows input order
+  ok   a split group yields TWO runs, never a silent reorder
+  ok   an ungrouped item joins the run above it
+  ok   an empty navigator renders no runs and no headings
+
+== the application rail, per role ==
+  ok   DIRECTOR: every run has at least one visible item — 5 run(s)
+  ok   DIRECTOR: no group appears twice (runs stay contiguous after filtering) — overview | projects | insight | compliance | admin
+  ok   DIRECTOR: labelled items === visible items — 11 item(s)
+  ok   PROJECT_MANAGER: every run has at least one visible item — 5 run(s)
+  ok   PROJECT_MANAGER: no group appears twice (runs stay contiguous after filtering) — overview | projects | insight | compliance | admin
+  ok   PROJECT_MANAGER: labelled items === visible items — 11 item(s)
+  ok   CLIENT: every run has at least one visible item — 4 run(s)
+  ok   CLIENT: no group appears twice (runs stay contiguous after filtering) — overview | projects | insight | compliance
+  ok   CLIENT: labelled items === visible items — 10 item(s)
+  ok   AUDITOR: every run has at least one visible item — 4 run(s)
+  ok   AUDITOR: no group appears twice (runs stay contiguous after filtering) — overview | projects | insight | compliance
+  ok   AUDITOR: labelled items === visible items — 10 item(s)
+  ok   ENGINEER: every run has at least one visible item — 4 run(s)
+  ok   ENGINEER: no group appears twice (runs stay contiguous after filtering) — overview | projects | insight | compliance
+  ok   ENGINEER: labelled items === visible items — 10 item(s)
+  ok   HS_CONSULTANT: every run has at least one visible item — 4 run(s)
+  ok   HS_CONSULTANT: no group appears twice (runs stay contiguous after filtering) — overview | projects | insight | compliance
+  ok   HS_CONSULTANT: labelled items === visible items — 10 item(s)
+  ok   PRINCIPAL_CONTRACTOR: every run has at least one visible item — 4 run(s)
+  ok   PRINCIPAL_CONTRACTOR: no group appears twice (runs stay contiguous after filtering) — overview | projects | insight | compliance
+  ok   PRINCIPAL_CONTRACTOR: labelled items === visible items — 10 item(s)
+  ok   SITE_MANAGER: every run has at least one visible item — 4 run(s)
+  ok   SITE_MANAGER: no group appears twice (runs stay contiguous after filtering) — overview | projects | insight | compliance
+  ok   SITE_MANAGER: labelled items === visible items — 10 item(s)
+
+== Worker Experience sections, across every permission combination ==
+  ok   all 64 visibility combinations keep each group contiguous — 0 bad
+  ok   no combination produces a heading with nothing under it
+
+== Project setup wizard steps ==
+  ok   every setup step has a group — all 17
+  ok   groups are contiguous in SETUP_STEPS order — grouping moves nothing — Project & CDM | People & emergency | Site conditions | Access & environment | Documents & services
+  ok   every step still appears exactly once — 17 steps in 5 runs
+  ok   rendered order is identical to SETUP_STEPS order
+
+35/35 checks passed.

@@ -1,7 +1,6 @@
-import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { cn } from '@/lib/cn';
 import { PageHeader } from '@/components/platform/PageHeader';
+import { SectionWorkspace } from '@/components/platform/SectionWorkspace';
 
 /**
  * Settings as ONE workspace rather than a chooser and two destinations.
@@ -20,6 +19,15 @@ import { PageHeader } from '@/components/platform/PageHeader';
  *
  * Presentation only: which areas appear is decided by the caller, and every page
  * behind them keeps the gates it already had.
+ *
+ * UX REFRESH PHASE 9 — this navigator was a second, hand-rolled copy of the one
+ * in `SectionWorkspace`: same widths, same classes, same active treatment, typed
+ * out twice. It now renders THROUGH that component, so Phase 9's dividers and
+ * spacing reached Settings for free and the two can no longer drift apart — the
+ * same reason `Section` delegates to `Panel` and `AuditScoringConfig`'s own card
+ * does too. Areas keep their absolute hrefs (the URLs are load-bearing: SC-021
+ * Phase 2's historical redirects still resolve to them), which is why `hrefFor`
+ * looks an area up rather than building a `?section=` query.
  */
 export interface SettingsArea {
   key: string;
@@ -55,6 +63,7 @@ export function SettingsWorkspace({
   children: ReactNode;
 }) {
   const current = areas.find((a) => a.key === active) ?? areas[0];
+  const byKey = new Map(areas.map((a) => [a.key, a.href]));
 
   return (
     <>
@@ -63,43 +72,20 @@ export function SettingsWorkspace({
         description="Organisation-wide configuration that applies across every site."
       />
 
-      <div className="grid gap-4 lg:grid-cols-[13.5rem_1fr]">
-        <nav
-          aria-label="Settings areas"
-          className="flex gap-1 overflow-x-auto lg:sticky lg:top-6 lg:flex-col lg:self-start lg:overflow-visible"
-        >
-          {areas.map((a) => {
-            const isActive = a.key === current?.key;
-            return (
-              <Link
-                key={a.key}
-                href={a.href}
-                aria-current={isActive ? 'page' : undefined}
-                className={cn(
-                  'touch-target flex items-center whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors lg:whitespace-normal',
-                  isActive
-                    ? 'bg-brand-50 font-semibold text-brand-700'
-                    : 'text-ink-muted hover:bg-surface-sunken hover:text-ink',
-                )}
-              >
-                {a.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="min-w-0">
-          {current && (
-            <div className="mb-3">
-              <h2 className="text-base font-bold text-ink">{current.label}</h2>
-              <p className="mt-0.5 text-sm text-ink-muted">
-                {current.description}
-              </p>
-            </div>
-          )}
-          {children}
-        </div>
-      </div>
+      <SectionWorkspace
+        sections={areas.map((a) => ({
+          key: a.key,
+          label: a.label,
+          description: a.description,
+        }))}
+        active={current?.key ?? ''}
+        // Each area owns its route, so the navigator links to it directly rather
+        // than to a query on this one.
+        hrefFor={(key) => byKey.get(key) ?? areas[0]?.href ?? '#'}
+        navLabel="Settings areas"
+      >
+        {children}
+      </SectionWorkspace>
     </>
   );
 }

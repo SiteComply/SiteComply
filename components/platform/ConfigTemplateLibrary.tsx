@@ -274,11 +274,15 @@ export function ConfigTemplateLibrary({
       ) : null}
 
       <Panel>
+        {/* UX REFRESH PHASE 9 — the Settings workspace already names the area
+            immediately above this panel, so the heading here repeated
+            "Configuration templates" twice in a row, five lines apart, with two
+            descriptions of the same thing. The same defect Phase 4 fixed on Site
+            Details. The area heading stays (it names the whole area, including
+            Company requirements below); the panel keeps its guidance, which says
+            more than the area line can. */}
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-bold text-ink">
-              Configuration templates
-            </h2>
             <p className="text-sm text-ink-muted">
               Reusable sets of permits and inspections for a project type, a
               client or an industry. Build one here, or capture one from a site

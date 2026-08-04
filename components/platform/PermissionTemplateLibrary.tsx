@@ -162,11 +162,10 @@ export function PermissionTemplateLibrary({
       ) : null}
 
       <Panel>
+        {/* UX REFRESH PHASE 9 — see ConfigTemplateLibrary: the workspace names
+            the area directly above, so this repeated the same heading. */}
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-bold text-ink">
-              Permission templates
-            </h2>
             <p className="text-sm text-ink-muted">
               Reusable restrictions for a type of contractor, applied to someone
               on a project from that site’s Access tab.

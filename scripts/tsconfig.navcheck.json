@@ -1,0 +1,9 @@
+{
+  "//": "UX Refresh Phase 9 — tsconfig for scripts/uxrefresh_nav_check.ts only. The root tsconfig sets \"jsx\": \"preserve\" because Next does its own transform; running a .tsx module directly under tsx therefore fails with \"React is not defined\" as soon as the check imports PlatformNav (which pulls in icons.tsx). This overrides the JSX runtime for that one script and changes nothing about how the app is built.",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "baseUrl": "..",
+    "paths": { "@/*": ["./*"] }
+  }
+}

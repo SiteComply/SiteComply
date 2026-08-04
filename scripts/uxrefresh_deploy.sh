@@ -343,6 +343,80 @@ grep -q 'sm:shrink-0' components/platform/RecordHeader.tsx \
   || { echo "ERROR: header action rows would force horizontal page scroll on phones — aborting"; exit 1; }
 echo "      confirmed: one Settings workspace, gates moved intact, redirects kept, headers wrap on phones."
 
+echo "[5k] Navigation grouping (Phase 9)..."
+# ONE definition of a grouped navigator. If a screen grows its own again, the
+# labels and rules drift apart and the point of the phase is lost.
+grep -q 'export function navGroupRuns' components/platform/navUi.tsx \
+  || { echo "ERROR: the shared nav grouping helper is gone — aborting"; exit 1; }
+for f in components/platform/PlatformNav.tsx \
+         components/platform/SectionWorkspace.tsx \
+         components/platform/SiteSetupWizard.tsx; do
+  grep -q 'navGroupRuns' "$f" \
+    || { echo "ERROR: $f is not grouping through the shared helper — aborting"; exit 1; }
+done
+# Settings must go THROUGH the workspace navigator, not hand-roll a second one —
+# it did, identically, before Phase 9.
+grep -q '<SectionWorkspace' components/platform/SettingsWorkspace.tsx \
+  || { echo "ERROR: Settings has grown its own navigator again — aborting"; exit 1; }
+
+# EVERY RUN MUST BE NAMED. An unlabelled run is a rule with nothing above it, and
+# a label with no matching cluster is a heading that never renders — both mean the
+# rail's grouping has silently half-applied.
+node -e "
+const s=require('fs').readFileSync('components/platform/PlatformNav.tsx','utf8');
+// Scoped to the GROUP_LABEL object, not the whole file: a loose key match would
+// pick up unrelated object literals and pass for the wrong reason.
+const block=(s.match(/const GROUP_LABEL[^{]*\{([\s\S]*?)\n\};/)||[])[1];
+if(!block){console.error('GROUP_LABEL map not found');process.exit(1);}
+const labels=new Set([...block.matchAll(/([a-z]+):\s*'/g)].map(m=>m[1]));
+const groups=new Set([...s.matchAll(/group: '([a-z]+)'/g)].map(m=>m[1]));
+for(const g of groups) if(!labels.has(g)){console.error('nav cluster with no label: '+g);process.exit(1);}
+for(const l of labels) if(!groups.has(l)){console.error('nav label with no cluster: '+l);process.exit(1);}
+console.log('      confirmed: '+groups.size+' clusters, all labelled.');
+" || exit 1
+
+# Worker Experience: every section carries a group, and the groups stay contiguous
+# so a run cannot appear twice. Whole-file scan, not line-based — Prettier wraps
+# these object literals.
+node -e "
+const s=require('fs').readFileSync('app/platform/dashboard/sites/[id]/experience/page.tsx','utf8');
+const keys=[...s.matchAll(/key: '([a-z-]+)',\n\s+label:/g)].map(m=>m[1]);
+const groups=[...s.matchAll(/group: SECTION_GROUP\.([a-z]+)/g)].map(m=>m[1]);
+if(keys.length!==groups.length){console.error('sections without a group: '+keys.length+' sections, '+groups.length+' groups');process.exit(1);}
+const runs=groups.filter((g,i)=>i===0||g!==groups[i-1]);
+if(new Set(runs).size!==runs.length){console.error('Worker Experience groups are NOT contiguous: '+groups.join(','));process.exit(1);}
+console.log('      confirmed: '+keys.length+' sections in '+runs.length+' contiguous groups.');
+" || exit 1
+
+# The setup wizard's seventeen steps must all be grouped, in SETUP_STEPS order —
+# an ungrouped step lands under whatever heading precedes it, which is safe but
+# silently wrong, so it is checked rather than trusted.
+npx tsx --tsconfig scripts/tsconfig.navcheck.json scripts/uxrefresh_nav_check.ts >/dev/null 2>&1 \
+  || { echo "ERROR: navigation grouping checks failed — run: npx tsx --tsconfig scripts/tsconfig.navcheck.json scripts/uxrefresh_nav_check.ts"; exit 1; }
+
+# THE CARD WALL MUST NOT COME BACK. Seventeen steps each in their own bordered box
+# was the most crowded navigator in the product.
+grep -qF 'rounded-lg border px-3 py-2 text-left text-sm' components/platform/SiteSetupWizard.tsx \
+  && { echo "ERROR: the setup wizard's step boxes are back — aborting"; exit 1; }
+
+# A record header carrying a tab bar must not draw its own rule as well: two
+# parallel lines 16px apart is what made the site tabs feel pinched.
+grep -qF "children ? '' : 'border-b border-line pb-4'" components/platform/RecordHeader.tsx \
+  || { echo "ERROR: RecordHeader draws a second rule under its tab bar — aborting"; exit 1; }
+
+# Both registers must use the ONE filter strip, and it must keep the accessibility
+# affordances that moved into it. The structural baseline only scans page files, so
+# it reports those as lost when they are merely relocated — this is where that is
+# disproved on every deploy.
+for f in app/platform/dashboard/sites/page.tsx app/platform/dashboard/submissions/page.tsx; do
+  grep -q '<SegmentedNav' "$f" \
+    || { echo "ERROR: $f is not using the shared filter strip — aborting"; exit 1; }
+done
+grep -qF "aria-current={item.active ? 'page' : undefined}" components/platform/navUi.tsx \
+  && grep -qF 'aria-label={label}' components/platform/navUi.tsx \
+  || { echo "ERROR: the filter strip lost aria-label/aria-current — aborting"; exit 1; }
+echo "      confirmed: one grouping helper, every run labelled, no step boxes, one rule under the tabs."
+
 echo "[6/8] Building..."
 npx prisma generate >/dev/null 2>&1 || { echo "ERROR: prisma generate failed"; exit 1; }
 rm -rf .next
