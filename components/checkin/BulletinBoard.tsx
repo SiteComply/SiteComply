@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
 import { bulletinCategoryLabel } from '@/services/bulletins/bulletinConstants';
 
@@ -14,21 +15,43 @@ export interface WorkerBulletinView {
 
 /**
  * Daily Bulletin board shown to a worker on the check-in confirmation screen
- * (SC-002). Renders each active, not-yet-read bulletin as a card with a "New"
- * badge and an "I've read this" button; acknowledging a bulletin records the read
- * and dismisses the card. Only bulletins the worker hasn't read are passed in.
+ * (SC-002), the Worker Dashboard and the Bulletins page. Renders each active,
+ * not-yet-read bulletin as a card with a "New" badge and an "I've read this"
+ * button; acknowledging a bulletin records the read and dismisses the card. Only
+ * bulletins the worker hasn't read are passed in.
+ *
+ * ACKNOWLEDGING REFRESHES THE SERVER STATE, not just this list. Dismissing the
+ * card locally was only ever half the update: everything else on the page that
+ * describes the same bulletin is server-rendered, so it stayed stale until the
+ * worker reloaded. Measured on /worker/bulletins with two unread bulletins —
+ * after acknowledging one, the card went, but "Already read" stayed empty and the
+ * navigation still counted the bulletin as unread ("Bulletins 2"). The bulletin
+ * had not disappeared so much as fallen out of both lists.
+ *
+ * So a successful acknowledgement now does both: the card goes immediately
+ * (optimistic, so the tap feels instant on a phone with poor signal), and
+ * `router.refresh()` re-renders the server components so the read state, the
+ * "Already read" list and the unread badge all catch up without a reload.
+ *
+ * The refresh re-renders; it does not re-submit. The acknowledgement endpoint is
+ * unchanged and is idempotent, so nothing here can record a second read.
  */
 export function BulletinBoard({
   bulletins,
 }: {
   bulletins: WorkerBulletinView[];
 }) {
-  const [items, setItems] = useState(bulletins);
+  // Acknowledged ids, not a copy of the list. A snapshot taken once from props
+  // would ignore whatever the refresh comes back with, so a bulletin published
+  // while the worker was on the page could never appear — and a refresh now
+  // happens on every acknowledgement.
+  const [acknowledged, setAcknowledged] = useState<string[]>([]);
+  const items = bulletins.filter((b) => !acknowledged.includes(b.id));
 
   if (items.length === 0) return null;
 
   function dismiss(id: string) {
-    setItems((list) => list.filter((b) => b.id !== id));
+    setAcknowledged((ids) => (ids.includes(id) ? ids : [...ids, id]));
   }
 
   return (
@@ -48,6 +71,7 @@ function BulletinCard({
   onRead: () => void;
 }) {
   const toast = useToast();
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const isSafety = bulletin.category === 'SAFETY_ALERT';
 
@@ -62,7 +86,11 @@ function BulletinCard({
         toast.error(data.error ?? 'Could not save. Please try again.');
         return;
       }
+      // Order matters: hide the card first so the tap is acknowledged instantly,
+      // then ask the server for the rest of the page. Only on success — a failed
+      // acknowledgement must leave the card exactly where it was.
       onRead();
+      router.refresh();
     } catch {
       toast.error('Network problem. Check your signal and try again.');
     } finally {
