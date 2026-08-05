@@ -8,6 +8,21 @@ import {
 } from '@/components/platform/ComplianceCalendar';
 import { ScheduleActivityForm } from '@/components/platform/ScheduleActivityForm';
 
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
 /**
  * SC-020 Phase 1 — the client shell holding the calendar header controls from the
  * REV-1 example (Filter / All Sites / Today / prev-next / + Schedule Activity)
@@ -53,6 +68,36 @@ export function ComplianceCalendarShell({
   const [scheduling, setScheduling] = useState(false);
   const [siteFilter, setSiteFilter] = useState(selectedSiteId);
 
+  // `monthStart` is a YYYY-MM-01 local date string, which is also exactly the
+  // shape the page reads back off `?month=`.
+  const year = monthStart.slice(0, 4);
+  const month = monthStart.slice(5, 7);
+
+  /**
+   * Years offered. Centred on today rather than on the viewed month, so the list
+   * does not walk away from the present as you browse — and the viewed year is
+   * always included, so a deep link outside the range still shows its own year
+   * selected instead of silently snapping somewhere else.
+   */
+  const years = (() => {
+    const thisYear = new Date().getFullYear();
+    const range = new Set<string>();
+    for (let y = thisYear - 3; y <= thisYear + 3; y++) range.add(String(y));
+    range.add(year);
+    return [...range].sort();
+  })();
+
+  /**
+   * Navigate to a month. Full navigation rather than client state: the server
+   * component owns the window, and generation runs for it — the same reason the
+   * prev/next arrows are links.
+   */
+  function goTo(m: string, y: string) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('month', `${y}-${m}`);
+    window.location.href = url.toString();
+  }
+
   return (
     <div className="space-y-4">
       {scheduling && (
@@ -92,6 +137,47 @@ export function ComplianceCalendarShell({
               </option>
             ))}
           </select>
+          {/* SC-020 FOLLOW-UP — jump straight to a month.
+              Reaching next March meant clicking › seven times, and each click is
+              a server round trip that regenerates occurrences for the window, so
+              it was slow as well as tedious.
+              Two selects rather than <input type="month">: Firefox has no native
+              month picker and falls back to a plain text box, which would make
+              the control worse for the very people who reported this.
+              The arrows stay. Stepping one month is the commonest move by far
+              and the picker is two interactions where the arrow is one. */}
+          <div className="flex items-center gap-1.5">
+            <label className="sr-only" htmlFor="calendar-month">
+              Month
+            </label>
+            <select
+              id="calendar-month"
+              value={month}
+              onChange={(e) => goTo(e.target.value, year)}
+              className="rounded-lg border border-line bg-surface px-2 py-2 text-sm"
+            >
+              {MONTHS.map((m, i) => (
+                <option key={m} value={String(i + 1).padStart(2, '0')}>
+                  {m}
+                </option>
+              ))}
+            </select>
+            <label className="sr-only" htmlFor="calendar-year">
+              Year
+            </label>
+            <select
+              id="calendar-year"
+              value={year}
+              onChange={(e) => goTo(month, e.target.value)}
+              className="rounded-lg border border-line bg-surface px-2 py-2 text-sm"
+            >
+              {years.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </div>
           <Link
             href={todayHref}
             className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-ink hover:bg-surface-sunken"

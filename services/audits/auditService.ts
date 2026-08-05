@@ -1,6 +1,7 @@
 import {
   AuditStatus,
   FindingCategory,
+  OccurrenceStatus,
   Prisma,
   QuestionScoringRule,
   ScoringMethod,
@@ -567,7 +568,38 @@ export async function deleteAudit(
 ): Promise<boolean> {
   const existing = await getAuditForViewer(viewer, id);
   if (!existing) return false;
-  await prisma.audit.delete({ where: { id } });
+
+  // SC-020 FOLLOW-UP — a compliance activity that was STARTED from this audit
+  // has to go back to being merely scheduled.
+  //
+  // The foreign key is `onDelete: SetNull`, so deleting the audit cleared
+  // `auditId` and left `status` exactly as it was. The occurrence therefore
+  // stayed IN_PROGRESS (or COMPLETED) for ever, with nothing behind it: the
+  // calendar went on showing a deleted inspection as under way or done, and the
+  // completion-rate KPI and the compliance-activities report went on counting it
+  // as work that happened. A ghost on a compliance record is worse than a gap —
+  // it reads as evidence.
+  //
+  // Reset, not delete: the SCHEDULE still says this activity is due on this
+  // date, and `ensureOccurrences` would regenerate the row anyway (it is
+  // idempotent on scheduleId + dueAt). Back to SCHEDULED is the truth — nobody
+  // did it — and it can be started again.
+  //
+  // `escalatedAt` and `escalatedToRole` are deliberately LEFT ALONE. If this
+  // activity went overdue and management was told, that happened, and SC-020
+  // Phase 2 keeps escalations as stored fact precisely so "was management told,
+  // and when" stays answerable. Clearing it would also let the same escalation
+  // fire a second time.
+  //
+  // One transaction, so the audit cannot disappear while an occurrence still
+  // claims to be running it.
+  await prisma.$transaction(async (tx) => {
+    await tx.complianceOccurrence.updateMany({
+      where: { auditId: id },
+      data: { auditId: null, status: OccurrenceStatus.SCHEDULED },
+    });
+    await tx.audit.delete({ where: { id } });
+  });
   return true;
 }
 
