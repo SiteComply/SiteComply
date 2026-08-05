@@ -13,12 +13,20 @@ what was actually verified rather than assumed.
 | **Pushed to origin** | yes (verified via `git ls-remote --tags`) |
 | **Production BUILD_ID when tagged** | `Oz4SPgNN-L-ZD8yrfQNk7` |
 | **Production health when tagged** | `/api/health` → 200 |
-| **Refresh branch** | `feature/ux-refresh` |
+| **Refresh branch** | merged to `main` on 2026-08-05; branch deleted |
 | **Database migrations introduced by the refresh** | **none, by design** |
 
 At the moment of tagging, local `HEAD`, `origin/feature/branded-error-pages` and
 the production source were all the same commit with a clean working tree. The
 tag therefore captures exactly what was live.
+
+**The branches named above no longer exist.** The refresh was merged into `main`
+(fast-forward to `a4957f9`, alongside the SC-002 and SC-017 follow-ups) and the
+merged branches were deleted on 2026-08-05. **This changes nothing about
+rollback:** `uxrefresh_rollback.sh` builds from a clean worktree at the TAG, and
+`rev1-complete` is both pushed to origin and an ancestor of `main`, so the commit
+it names cannot be garbage-collected. Deleting a merged branch never removes a
+commit that a tag or another branch still reaches.
 
 ## Why rollback is complete
 
