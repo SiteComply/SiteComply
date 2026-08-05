@@ -735,9 +735,27 @@ export function AuditScoringConfig({
             hint="Assign each question to a section and choose how it scores"
           >
             {items.length === 0 ? (
-              <p className="text-sm text-ink-subtle">
-                This audit has no checklist items yet.
-              </p>
+              // THE ROOT OF THE EMPTY SCREEN, and it was the one thing the page
+              // did not explain. Checklist items are copied from an audit
+              // template when the audit is created; an audit started from
+              // scratch has none and can never be scored, however carefully the
+              // rest of this screen is filled in. Saying only "no checklist
+              // items yet" leaves someone configuring points and pass marks that
+              // will never apply to anything.
+              <div className="text-sm text-ink-subtle">
+                <p className="font-medium text-ink-muted">
+                  This audit has no questions to score.
+                </p>
+                <p className="mt-2">
+                  Questions come from the audit template an audit is created
+                  from, and are copied in at that point. This audit was started
+                  from scratch, so there are none to weight or mark mandatory.
+                </p>
+                <p className="mt-2">
+                  Everything you set here will be kept, and will apply if this
+                  audit gains questions.
+                </p>
+              </div>
             ) : (
               <ul className="divide-y divide-line">
                 {items.map((item) => (
@@ -848,25 +866,54 @@ export function AuditScoringConfig({
             title="Score Preview"
             hint="This is how the scoring will work for this audit"
           >
-            <div className="rounded-lg border border-safe-500/40 bg-safe-50 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-safe-700">
-                    Passing Score
-                  </p>
-                  <p className="text-3xl font-bold text-safe-700">
-                    {asPercent ? `${passPercent}%` : `${passing} pts`}
-                  </p>
-                  <p className="mt-1 text-xs text-ink-muted">
-                    {passing} out of {totalPossible} points
-                  </p>
-                </div>
-                <span className="inline-flex items-center gap-1 rounded-full bg-safe-500 px-2.5 py-1 text-xs font-semibold text-white">
-                  <PlatformIcon name="check" className="h-3.5 w-3.5" />
-                  Pass
-                </span>
+            {/* NOTHING TO SCORE IS NOT A PASS.
+                This panel used to render green with a "Pass" pill whatever the
+                audit contained — so an audit with no questions showed a
+                confident "80% · Pass". That is a verdict, and there is no
+                verdict to give: the threshold is configuration, not a result,
+                and presenting it as one invites someone to read an empty audit
+                as a passing one.
+                The same numbers are shown either way. Only the framing changes:
+                neutral and labelled as a target until there is something to
+                score against. */}
+            {questionCount === 0 ? (
+              <div className="rounded-lg border border-line bg-surface-sunken p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
+                  Pass mark, once set up
+                </p>
+                <p className="text-3xl font-bold text-ink-muted">
+                  {asPercent ? `${passPercent}%` : `${passing} pts`}
+                </p>
+                <p className="mt-1 text-xs text-ink-subtle">
+                  {passing} out of {totalPossible} points
+                </p>
+                <p className="mt-3 border-t border-line pt-3 text-xs text-ink-muted">
+                  This audit has no questions, so there is nothing to score yet.
+                  The pass mark above is ready and will apply as soon as it has
+                  some.
+                </p>
               </div>
-            </div>
+            ) : (
+              <div className="rounded-lg border border-safe-500/40 bg-safe-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-safe-700">
+                      Passing Score
+                    </p>
+                    <p className="text-3xl font-bold text-safe-700">
+                      {asPercent ? `${passPercent}%` : `${passing} pts`}
+                    </p>
+                    <p className="mt-1 text-xs text-ink-muted">
+                      {passing} out of {totalPossible} points
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-safe-500 px-2.5 py-1 text-xs font-semibold text-white">
+                    <PlatformIcon name="check" className="h-3.5 w-3.5" />
+                    Pass
+                  </span>
+                </div>
+              </div>
+            )}
             <p className="mt-3 text-xs text-ink-subtle">
               {method === 'PASS_FAIL'
                 ? 'Every scorable question must pass for the audit to pass.'
@@ -878,9 +925,22 @@ export function AuditScoringConfig({
 
           <Card title="Score Breakdown">
             {slices.length === 0 ? (
-              <p className="text-sm text-ink-subtle">
-                Add sections to see the breakdown.
-              </p>
+              // An empty state that says what the panel is FOR, not just what
+              // is missing. "Add sections to see the breakdown" tells you the
+              // button to press; it does not tell you why you would want to,
+              // which is the question someone configuring scoring for the first
+              // time is actually asking.
+              <div className="text-sm text-ink-subtle">
+                <p>
+                  Sections divide an audit into parts — access, welfare, plant —
+                  and this shows how much of the total score each part carries.
+                </p>
+                <p className="mt-2">
+                  {questionCount === 0
+                    ? 'Available once this audit has questions to group.'
+                    : 'Every question currently counts towards one overall score.'}
+                </p>
+              </div>
             ) : (
               <ScoreBreakdownDonut
                 slices={slices}
@@ -890,6 +950,17 @@ export function AuditScoringConfig({
           </Card>
 
           <Card title="Scoring Rules">
+            {/* A column of zeros reads as data — as though the audit had been
+                measured and found to contain nothing. One line first says which
+                it is, so the numbers below are read as a starting point rather
+                than a result. The rows themselves are unchanged and become
+                meaningful the moment anything is added. */}
+            {questionCount === 0 && (
+              <p className="mb-3 text-xs text-ink-muted">
+                Nothing configured yet — this summary fills in as questions and
+                sections are added.
+              </p>
+            )}
             <ul className="space-y-2 text-sm">
               <SummaryRow icon="grid" label={`${sections.length} Sections`} />
               <SummaryRow
