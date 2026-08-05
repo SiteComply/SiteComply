@@ -39,6 +39,18 @@ import { formatDateUK } from '@/lib/datetime';
 export const dynamic = 'force-dynamic';
 
 /**
+ * Priority as a dot rather than a second pill in the state cell. Derived from
+ * the same four levels as ACTION_PRIORITY_BADGE, so the register and the detail
+ * screen agree on what "critical" looks like.
+ */
+const PRIORITY_DOT: Record<ActionPriorityValue, string> = {
+  LOW: 'bg-ink-subtle/40',
+  MEDIUM: 'bg-hivis-400',
+  HIGH: 'bg-danger-500',
+  CRITICAL: 'bg-danger-600',
+};
+
+/**
  * Actions register — the central, site-scoped list of corrective actions across
  * the viewer's sites, bucketed into Open / In progress / Overdue / Completed.
  * "Overdue" is derived (open or in-progress with a past due date).
@@ -215,12 +227,16 @@ export default async function PlatformActionsPage({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
+              {/* Six columns of equal weight made every row a flat list of six
+                  facts with no primary. The row already knew better in one
+                  place — Assigned printed the name with the company beneath it —
+                  so that pattern now runs throughout: the action and its site,
+                  the state of it, when it is due, who has it. Same six facts,
+                  four columns, one of them clearly the subject. */}
               <thead>
                 <tr className="border-b border-line text-left text-ink-subtle">
                   <th className="px-5 py-2.5 font-medium">Action</th>
-                  <th className="px-5 py-2.5 font-medium">Site</th>
-                  <th className="px-5 py-2.5 font-medium">Priority</th>
-                  <th className="px-5 py-2.5 font-medium">Status</th>
+                  <th className="px-5 py-2.5 font-medium">State</th>
                   <th className="px-5 py-2.5 font-medium">Due</th>
                   <th className="px-5 py-2.5 font-medium">Assigned</th>
                 </tr>
@@ -238,23 +254,10 @@ export default async function PlatformActionsPage({
                         >
                           {a.title}
                         </Link>
-                        {a.auditFindingId && (
-                          <span className="ml-2 text-xs text-ink-subtle">
-                            · from audit
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3 text-ink">{a.jobSite.name}</td>
-                      <td className="px-5 py-3">
-                        <Badge
-                          className={
-                            ACTION_PRIORITY_BADGE[
-                              a.priority as ActionPriorityValue
-                            ]
-                          }
-                        >
-                          {actionPriorityLabel(a.priority)}
-                        </Badge>
+                        <span className="block text-xs text-ink-subtle">
+                          {a.jobSite.name}
+                          {a.auditFindingId && ' · from audit'}
+                        </span>
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex flex-wrap items-center gap-1.5">
@@ -271,6 +274,16 @@ export default async function PlatformActionsPage({
                             </Badge>
                           )}
                         </div>
+                        {/* Priority keeps its colour but drops the pill: two
+                            filled badges in one cell compete, and the status is
+                            the thing being scanned. Same palette, less weight. */}
+                        <span className="mt-1 flex items-center gap-1.5 text-xs text-ink-subtle">
+                          <span
+                            aria-hidden="true"
+                            className={`inline-block h-2 w-2 rounded-full ${PRIORITY_DOT[a.priority as ActionPriorityValue]}`}
+                          />
+                          {actionPriorityLabel(a.priority)} priority
+                        </span>
                       </td>
                       <td
                         className={`px-5 py-3 ${overdue ? 'font-semibold text-danger-700' : 'text-ink-muted'}`}

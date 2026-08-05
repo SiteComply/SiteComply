@@ -149,12 +149,14 @@ export default async function PlatformPermitsPage({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
+              {/* Same consolidation as the Actions register: the permit and what
+                  it is for, then who asked and where, then its state, then when.
+                  A reference on its own is not a subject — the permit type is
+                  what a reviewer actually recognises, so it sits with it. */}
               <thead>
                 <tr className="border-b border-line text-left text-ink-subtle">
-                  <th className="px-5 py-2.5 font-medium">Reference</th>
-                  <th className="px-5 py-2.5 font-medium">Type</th>
-                  <th className="px-5 py-2.5 font-medium">Worker</th>
-                  <th className="px-5 py-2.5 font-medium">Site</th>
+                  <th className="px-5 py-2.5 font-medium">Permit</th>
+                  <th className="px-5 py-2.5 font-medium">Requested by</th>
                   <th className="px-5 py-2.5 font-medium">Status</th>
                   <th className="px-5 py-2.5 font-medium">Submitted</th>
                 </tr>
@@ -165,14 +167,20 @@ export default async function PlatformPermitsPage({
                     <td className="px-5 py-3">
                       <Link
                         href={`/platform/dashboard/permits/${p.id}`}
-                        className="font-mono font-semibold text-brand-700 hover:underline"
+                        className="font-semibold text-brand-700 hover:underline"
                       >
-                        {p.reference}
+                        {p.permitTypeName}
                       </Link>
+                      <span className="block font-mono text-xs text-ink-subtle">
+                        {p.reference}
+                      </span>
                     </td>
-                    <td className="px-5 py-3 text-ink">{p.permitTypeName}</td>
-                    <td className="px-5 py-3 text-ink">{p.workerName}</td>
-                    <td className="px-5 py-3 text-ink-muted">{p.siteName}</td>
+                    <td className="px-5 py-3">
+                      <span className="text-ink">{p.workerName}</span>
+                      <span className="block text-xs text-ink-subtle">
+                        {p.siteName}
+                      </span>
+                    </td>
                     <td className="px-5 py-3">
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${PERMIT_STATUS_BADGE[p.status]}`}

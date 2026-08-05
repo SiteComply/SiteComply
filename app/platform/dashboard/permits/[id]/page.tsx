@@ -100,6 +100,32 @@ export default async function PlatformPermitDetailPage({
             status={effectiveStatus}
             canApprove={canApprove}
           />
+
+          {/* The history belongs with the decision it records, and this is where
+              the action detail screen already keeps it. In the rail it left the
+              main column empty below the controls on an approved permit while
+              the rail ran on past it. */}
+          <Panel title="Activity">
+            <ol className="space-y-3">
+              {activities.map((ev) => (
+                <li key={ev.id} className="flex gap-3">
+                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-500" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-ink">
+                      {ev.toValue ?? activityLabel(ev.type)}
+                    </p>
+                    {ev.note && (
+                      <p className="text-sm text-ink-muted">{ev.note}</p>
+                    )}
+                    <p className="text-xs text-ink-subtle">
+                      {formatDateTimeUK(ev.createdAt)}
+                      {ev.authorName ? ` · ${ev.authorName}` : ''}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </Panel>
         </div>
 
         <div>
@@ -187,28 +213,6 @@ export default async function PlatformPermitDetailPage({
                 </p>
               </Panel>
             )}
-
-            <Panel title="Activity">
-              <ol className="space-y-3">
-                {activities.map((ev) => (
-                  <li key={ev.id} className="flex gap-3">
-                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-500" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-ink">
-                        {ev.toValue ?? activityLabel(ev.type)}
-                      </p>
-                      {ev.note && (
-                        <p className="text-sm text-ink-muted">{ev.note}</p>
-                      )}
-                      <p className="text-xs text-ink-subtle">
-                        {formatDateTimeUK(ev.createdAt)}
-                        {ev.authorName ? ` · ${ev.authorName}` : ''}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </Panel>
           </div>
         </div>
       </div>

@@ -18,7 +18,10 @@ export function ActionEvidencePanel({
   canManage: boolean;
 }) {
   return (
-    <Panel>
+    // No surface of its own: this now sits INSIDE the action's record panel, and
+    // a panel within a panel would put a border around a group that already has
+    // a heading and a rule above it.
+    <Panel tone="flat" padding="none">
       <EvidenceGallery
         basePath={`/api/platform/actions/${actionId}/evidence`}
         evidence={evidence}

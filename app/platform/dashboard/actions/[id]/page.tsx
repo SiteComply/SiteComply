@@ -123,69 +123,78 @@ export default async function ActionDetailPage({
               the same record; separated by rules inside one surface, they read
               as one thing — which is the Phase 3 lesson about framing for
               framing's sake, applied to a record instead of a settings page. */}
-          {(action.description ||
-            action.completionNote ||
-            action.auditFinding) && (
-            <Panel title="Action detail">
-              {action.description && (
-                <p className="whitespace-pre-line text-sm text-ink">
-                  {action.description}
+          <Panel title="Action detail">
+            {action.description && (
+              <p className="whitespace-pre-line text-sm text-ink">
+                {action.description}
+              </p>
+            )}
+
+            {action.auditFinding && (
+              <div
+                className={
+                  action.description
+                    ? 'mt-4 border-t border-line pt-4'
+                    : undefined
+                }
+              >
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-subtle">
+                  Raised from audit finding
                 </p>
-              )}
+                <p className="text-sm text-ink">
+                  <Link
+                    href={`/platform/dashboard/audits/${action.auditFinding.audit.id}`}
+                    className="font-medium text-brand-700 hover:underline"
+                  >
+                    {action.auditFinding.title}
+                  </Link>{' '}
+                  <span className="text-ink-subtle">
+                    · audit “{action.auditFinding.audit.title}”
+                  </span>
+                </p>
+                {findingEvidence.length > 0 && (
+                  <div className="mt-3">
+                    <EvidenceGallery
+                      basePath={`/api/platform/audit-findings/${action.auditFinding.id}/evidence`}
+                      evidence={findingEvidence}
+                      canManage={false}
+                      label="Finding evidence"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
-              {action.auditFinding && (
-                <div
-                  className={
-                    action.description
-                      ? 'mt-4 border-t border-line pt-4'
-                      : undefined
-                  }
-                >
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-subtle">
-                    Raised from audit finding
-                  </p>
-                  <p className="text-sm text-ink">
-                    <Link
-                      href={`/platform/dashboard/audits/${action.auditFinding.audit.id}`}
-                      className="font-medium text-brand-700 hover:underline"
-                    >
-                      {action.auditFinding.title}
-                    </Link>{' '}
-                    <span className="text-ink-subtle">
-                      · audit “{action.auditFinding.audit.title}”
-                    </span>
-                  </p>
-                  {findingEvidence.length > 0 && (
-                    <div className="mt-3">
-                      <EvidenceGallery
-                        basePath={`/api/platform/audit-findings/${action.auditFinding.id}/evidence`}
-                        evidence={findingEvidence}
-                        canManage={false}
-                        label="Finding evidence"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
+            {action.completionNote && (
+              <div className="mt-4 border-t border-line pt-4">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-subtle">
+                  Completion note
+                </p>
+                <p className="whitespace-pre-line text-sm text-ink">
+                  {action.completionNote}
+                </p>
+              </div>
+            )}
 
-              {action.completionNote && (
-                <div className="mt-4 border-t border-line pt-4">
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-subtle">
-                    Completion note
-                  </p>
-                  <p className="whitespace-pre-line text-sm text-ink">
-                    {action.completionNote}
-                  </p>
-                </div>
-              )}
-            </Panel>
-          )}
-
-          <ActionEvidencePanel
-            actionId={action.id}
-            evidence={evidence}
-            canManage={canEdit}
-          />
+            {/* Evidence is part of the record, not a neighbour of it. It was a
+                panel of its own directly beneath this one, so a photograph of
+                the thing being described sat outside the description. */}
+            <div
+              className={
+                action.description ||
+                action.completionNote ||
+                action.auditFinding
+                  ? 'mt-4 border-t border-line pt-4'
+                  : undefined
+              }
+            >
+              <ActionEvidencePanel
+                actionId={action.id}
+                evidence={evidence}
+                canManage={canEdit}
+              />
+            </div>
+          </Panel>
 
           <ActionTimeline
             actionId={action.id}
