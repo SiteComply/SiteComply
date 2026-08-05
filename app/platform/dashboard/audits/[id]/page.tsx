@@ -104,6 +104,27 @@ export default async function AuditDetailPage({
                 Edit audit
               </Link>
             )}
+            {/* SC-014 — Configure scoring lives HERE, with the audit's other
+                actions, rather than inside the Audit checklist panel where it
+                used to sit.
+                That panel only renders when the audit HAS checklist items, so an
+                audit created from scratch offered no route to the scoring screen
+                at all — the feature was reachable only by typing the URL. The
+                header renders whatever the audit contains, which is what makes
+                this consistently findable.
+                The conditions are unchanged and are exactly the ones the scoring
+                page itself enforces: audits "edit", and not signed off (a
+                signed-off audit is frozen, and the page would redirect back
+                here). Offering a control that redirects is worse than not
+                offering it. */}
+            {canEdit && audit.status !== 'SIGNED_OFF' && (
+              <Link
+                href={`/platform/dashboard/audits/${audit.id}/scoring`}
+                className="rounded-xl border border-brand-500 px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+              >
+                Configure scoring
+              </Link>
+            )}
             {canCreate && (
               <SaveAuditAsTemplateButton
                 auditId={audit.id}
@@ -175,16 +196,9 @@ export default async function AuditDetailPage({
 
           {audit.items.length > 0 && (
             <Section title={`Audit checklist (${audit.items.length})`}>
-              {canEdit && audit.status !== 'SIGNED_OFF' && (
-                <p className="mb-3 text-xs">
-                  <Link
-                    href={`/platform/dashboard/audits/${audit.id}/scoring`}
-                    className="font-medium text-brand-700 hover:underline"
-                  >
-                    Configure scoring →
-                  </Link>
-                </p>
-              )}
+              {/* "Configure scoring" moved to the audit header — see there. It
+                  was unreachable from an audit with no checklist items, because
+                  this whole panel is conditional on having some. */}
               <AuditChecklistPanel
                 auditId={audit.id}
                 scoringEnabled={audit.scoringEnabled}
