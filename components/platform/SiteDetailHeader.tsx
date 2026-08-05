@@ -23,6 +23,25 @@ import { canManageContractorAccess } from '@/services/platformUsers/contractorAc
 import { canGenerateCloseOutPack } from '@/services/closeOut/closeOutService';
 
 /**
+ * The three project-lifecycle workspaces — Project setup, CPP draft, Close-out
+ * pack — share one definition so they cannot drift apart again.
+ *
+ * They had drifted: Project setup carried the brand outline while CPP draft and
+ * Close-out pack were muted grey, which read as "the setup wizard matters and
+ * these two are secondary". They are not secondary. Setting a project up,
+ * drafting its Construction Phase Plan and closing it out are the same kind of
+ * thing at three points in the same life: each opens a workspace assembled from
+ * records the project already holds. Ranking them by colour told the reader
+ * something untrue about the product.
+ *
+ * They stay OUTLINED, not filled: "Edit site" is the primary action on this
+ * header and there can only be one. Archive keeps its own control, because it is
+ * the destructive end of the row and must not look like a place to go and work.
+ */
+const PROJECT_WORKSPACE_ACTION =
+  'touch-target inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-brand-500 px-3 py-2 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50';
+
+/**
  * Shared chrome for every Site Details tab: breadcrumb, title, status, the
  * Director-only Edit / Archive actions, and the tab bar. Loaded once per tab from
  * a light site lookup (scoped to the viewer — out of scope → 404), so each tab
@@ -96,7 +115,7 @@ export async function SiteDetailHeader({
                 "Edit site" stays for the core operational fields. */}
             <Link
               href={`/platform/dashboard/sites/${site.id}/cpp`}
-              className="touch-target inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink-muted transition-colors hover:bg-surface-sunken"
+              className={PROJECT_WORKSPACE_ACTION}
             >
               CPP draft
             </Link>
@@ -106,14 +125,14 @@ export async function SiteDetailHeader({
             {canGenerateCloseOutPack(viewer.role) && (
               <Link
                 href={`/platform/dashboard/sites/${site.id}/close-out`}
-                className="touch-target inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink-muted transition-colors hover:bg-surface-sunken"
+                className={PROJECT_WORKSPACE_ACTION}
               >
                 Close-out pack
               </Link>
             )}
             <Link
               href={`/platform/dashboard/sites/${site.id}/setup`}
-              className="touch-target inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-brand-500 px-3 py-2 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50"
+              className={PROJECT_WORKSPACE_ACTION}
             >
               Project setup
             </Link>
