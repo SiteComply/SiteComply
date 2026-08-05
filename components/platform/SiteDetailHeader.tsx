@@ -111,8 +111,21 @@ export async function SiteDetailHeader({
       actions={
         canEdit && (
           <>
-            {/* SC-019: the project setup wizard is where the CPP data lives.
+            {/* IN PROJECT ORDER: set the project up, draft its Construction
+                Phase Plan, close it out. The three read as a set now that they
+                share a treatment, so the sequence should be the one a project
+                actually follows rather than the order they happened to be built
+                in — a group whose order means something is easier to reach into
+                than one that is merely tidy.
+
+                SC-019: the project setup wizard is where the CPP data lives.
                 "Edit site" stays for the core operational fields. */}
+            <Link
+              href={`/platform/dashboard/sites/${site.id}/setup`}
+              className={PROJECT_WORKSPACE_ACTION}
+            >
+              Project setup
+            </Link>
             <Link
               href={`/platform/dashboard/sites/${site.id}/cpp`}
               className={PROJECT_WORKSPACE_ACTION}
@@ -121,7 +134,8 @@ export async function SiteDetailHeader({
             </Link>
             {/* SC-024 — sits beside the CPP: both are project documents
                 assembled from records already held, and a manager reaching for
-                one is likely to want the other. */}
+                one is likely to want the other. Last of the three because a
+                close-out pack is the end of the project's life. */}
             {canGenerateCloseOutPack(viewer.role) && (
               <Link
                 href={`/platform/dashboard/sites/${site.id}/close-out`}
@@ -130,12 +144,6 @@ export async function SiteDetailHeader({
                 Close-out pack
               </Link>
             )}
-            <Link
-              href={`/platform/dashboard/sites/${site.id}/setup`}
-              className={PROJECT_WORKSPACE_ACTION}
-            >
-              Project setup
-            </Link>
             {/* SC-025 — a completed project is read-only, so neither editing nor
                 the archive/reactivate control is offered. Reactivating here would
                 bypass the Director-only reopen flow, which requires a recorded
