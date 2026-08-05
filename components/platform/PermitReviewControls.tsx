@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
+import { Panel } from '@/components/platform/Panel';
 import { useToast } from '@/components/ui/Toast';
 import { REJECTION_REASON_MAX } from '@/services/permits/permitConstants';
 
@@ -56,12 +57,16 @@ export function PermitReviewControls({
   if (!awaiting && !closable) return null;
 
   return (
-    <div className="space-y-3 rounded-xl border border-line bg-surface p-4 shadow-card">
-      <p className="text-sm font-semibold text-ink">Review</p>
-
+    // Was a hand-rolled copy of Panel's exact classes (rounded-xl / border-line
+    // / bg-surface / shadow-card / p-4) with its own heading weight. It now sits
+    // in the summary rail beside real Panels, where a near-miss would show.
+    <Panel title="Review" bodyClassName="space-y-3">
       {mode === 'approve' ? (
         <div className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
+          {/* One column: the rail is 380px, and `sm:` is a VIEWPORT query — on a
+              desktop it would have split these two datetime inputs side by side
+              inside that rail and squeezed both. */}
+          <div className="grid gap-3">
             <label className="flex flex-col gap-1 text-sm">
               <span className="font-semibold text-ink">Valid from</span>
               <input
@@ -182,6 +187,6 @@ export function PermitReviewControls({
           )}
         </div>
       )}
-    </div>
+    </Panel>
   );
 }

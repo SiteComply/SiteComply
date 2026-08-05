@@ -61,11 +61,13 @@ export default async function PlatformPermitDetailPage({
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Main column = the review task, in the order it is performed: what
-            was asked for, what was declared, then the decision. The "who /
-            where / when" facts moved to the context rail, where the rest of the
-            portal keeps them, so this column is no longer a mix of reference
-            data and the thing the reviewer is here to do. */}
+        {/* Main column = what there is to READ before deciding: what was asked
+            for, what was declared, and what has happened to the request so far.
+            The "who / where / when" facts moved to the context rail, where the
+            rest of the portal keeps them, so this column is no longer a mix of
+            reference data and the thing the reviewer is here to do.
+
+            The decision itself is in the rail, not here — see the note there. */}
         <div className="space-y-6 lg:col-span-2">
           <Panel title="Requested work">
             <dl className="grid gap-3 sm:grid-cols-2">
@@ -94,12 +96,6 @@ export default async function PlatformPermitDetailPage({
               </div>
             )}
           </Panel>
-
-          <PermitReviewControls
-            permitId={permit.id}
-            status={effectiveStatus}
-            canApprove={canApprove}
-          />
 
           {/* The history belongs with the decision it records, and this is where
               the action detail screen already keeps it. In the rail it left the
@@ -136,6 +132,13 @@ export default async function PlatformPermitDetailPage({
                 <Field label="Worker" value={workerName} />
                 <Field label="Company" value={workerCompany} />
                 <Field label="Site" value={siteName} />
+                {/* When it was raised was on the register but nowhere on the
+                    record itself, so "how long has this been sitting with me?"
+                    meant going back a screen to find out. */}
+                <Field
+                  label="Submitted"
+                  value={formatDateTimeUK(permit.submittedAt)}
+                />
                 <Field
                   label="Proposed start"
                   value={
@@ -213,6 +216,23 @@ export default async function PlatformPermitDetailPage({
                 </p>
               </Panel>
             )}
+
+            {/* The decision belongs with the facts it is made against, and this
+                is the pattern the action detail screen already uses: read the
+                state in Summary, then act on it in the same rail. It also fixes
+                a real imbalance — on a permit still awaiting a decision there is
+                no outcome callout, so the rail was one short panel against a
+                full-height main column, and the control the reviewer is here to
+                use scrolled away with the declarations.
+
+                Nothing was invented to fill the space: this panel already
+                existed, it has simply moved, and it still renders only when the
+                permit is actionable and only what this viewer may do. */}
+            <PermitReviewControls
+              permitId={permit.id}
+              status={effectiveStatus}
+              canApprove={canApprove}
+            />
           </div>
         </div>
       </div>
