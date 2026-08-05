@@ -1,4 +1,5 @@
 import { EvidenceGallery } from '@/components/platform/EvidenceGallery';
+import { Panel } from '@/components/platform/Panel';
 import type { EvidenceView } from '@/services/actions/actionEvidenceService';
 
 /**
@@ -17,12 +18,12 @@ export function ActionEvidencePanel({
   canManage: boolean;
 }) {
   return (
-    <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
+    <Panel>
       <EvidenceGallery
         basePath={`/api/platform/actions/${actionId}/evidence`}
         evidence={evidence}
         canManage={canManage}
       />
-    </section>
+    </Panel>
   );
 }

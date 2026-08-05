@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Panel } from '@/components/platform/Panel';
 import { useRouter } from 'next/navigation';
 import { formatDateTimeUK } from '@/lib/datetime';
 import { actionStatusLabel } from '@/services/actions/actionConstants';
@@ -59,11 +60,7 @@ export function ActionTimeline({
   }
 
   return (
-    <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
-      <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-ink-subtle">
-        Activity
-      </h2>
-
+    <Panel title="Activity">
       {activities.length === 0 ? (
         <p className="text-sm text-ink-subtle">No activity yet.</p>
       ) : (
@@ -73,7 +70,9 @@ export function ActionTimeline({
               <Dot type={a.type} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-ink">
-                  <span className="font-semibold">{a.authorName ?? 'Someone'}</span>{' '}
+                  <span className="font-semibold">
+                    {a.authorName ?? 'Someone'}
+                  </span>{' '}
                   {describe(a)}
                 </p>
                 {a.note && (
@@ -92,7 +91,9 @@ export function ActionTimeline({
 
       {canComment && (
         <div className="mt-5 border-t border-line pt-4">
-          <label className="block text-sm font-semibold text-ink">Add an update</label>
+          <label className="block text-sm font-semibold text-ink">
+            Add an update
+          </label>
           <textarea
             rows={2}
             value={body}
@@ -100,7 +101,9 @@ export function ActionTimeline({
             placeholder="Add a comment or progress update…"
             className="mt-1.5 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
           />
-          {error && <p className="mt-1 text-sm font-medium text-danger-600">{error}</p>}
+          {error && (
+            <p className="mt-1 text-sm font-medium text-danger-600">{error}</p>
+          )}
           <div className="mt-2">
             <button
               type="button"
@@ -113,7 +116,7 @@ export function ActionTimeline({
           </div>
         </div>
       )}
-    </section>
+    </Panel>
   );
 }
 

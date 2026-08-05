@@ -210,9 +210,11 @@ export function EvidenceGallery({
         />
       )}
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-ink-subtle">
-          {label}
-        </h3>
+        {/* Same weight as every other panel heading in the portal. This was the
+            one uppercase-muted heading left on the action and finding screens,
+            so it read as a lesser thing sitting inside them rather than as the
+            panel it is. */}
+        <h3 className="text-sm font-bold text-ink">{label}</h3>
         {canManage && (
           <>
             <input

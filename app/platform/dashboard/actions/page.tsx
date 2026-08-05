@@ -5,6 +5,7 @@ import {
   TABLE_TOOLBAR_CLASS,
 } from '@/components/platform/TableSurface';
 import { PageHeader } from '@/components/platform/PageHeader';
+import { SegmentedNav } from '@/components/platform/navUi';
 import { PlatformIcon } from '@/components/platform/icons';
 import {
   requirePlatformViewer,
@@ -120,25 +121,24 @@ export default async function PlatformActionsPage({
 
       {showAiSummary && <AiSummaryPanel targetType="ACTIONS_REGISTER" />}
 
-      {/* Register buckets — clickable summary cards that filter the list. */}
-      <div className="mb-4 grid gap-3 sm:grid-cols-4">
-        {ACTION_BUCKETS.map((b) => {
-          const active = bucket === b.value;
-          const overdue = b.value === 'OVERDUE';
-          return (
-            <Link
-              key={b.value}
-              href={qp({ bucket: active ? '' : b.value })}
-              className={cardClass(active, overdue)}
-            >
-              <span className="text-sm font-medium">{b.label}</span>
-              <span className="mt-1 text-2xl font-bold tabular-nums">
-                {counts[b.value]}
-              </span>
-            </Link>
-          );
-        })}
-      </div>
+      {/* Register buckets. These are FILTERS, not statistics — each one narrows
+          the list below — so they use the same recessed segmented control the
+          Sites and Check-ins registers use, from one definition.
+
+          They were four full-height cards with 2xl figures, stacked above the
+          table's own card: two stacked surfaces for one list, and four boxes
+          competing with the data they filter. The counts still show, the hrefs
+          are unchanged, and clicking an active bucket still clears it. */}
+      <SegmentedNav
+        label="Filter actions by status"
+        items={ACTION_BUCKETS.map((b) => ({
+          key: b.value,
+          label: b.label,
+          href: qp({ bucket: bucket === b.value ? '' : b.value }),
+          active: bucket === b.value,
+          count: counts[b.value],
+        }))}
+      />
 
       {/* Secondary filters (site, priority). */}
       <TableSurface>
@@ -307,24 +307,6 @@ export default async function PlatformActionsPage({
         )}
       </TableSurface>
     </PlatformShell>
-  );
-}
-
-function cardClass(active: boolean, overdue: boolean): string {
-  const base =
-    'flex flex-col rounded-xl border p-4 shadow-card transition-colors ';
-  if (active)
-    return (
-      base +
-      (overdue
-        ? 'border-danger-600 bg-danger-50 text-danger-700'
-        : 'border-brand-500 bg-brand-50 text-brand-700')
-    );
-  return (
-    base +
-    (overdue
-      ? 'border-line bg-surface text-danger-700 hover:border-danger-300'
-      : 'border-line bg-surface text-ink hover:border-brand-200')
   );
 }
 

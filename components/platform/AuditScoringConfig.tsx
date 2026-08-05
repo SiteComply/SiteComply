@@ -294,257 +294,274 @@ export function AuditScoringConfig({
         </p>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid items-start gap-4 lg:grid-cols-3">
         {/* ---------------- Column 1 — configuration ---------------- */}
         <div className="space-y-4">
+          {/* Method, options, bands and question rules were four cards stacked
+              down this column. They are all the same subject — how this audit
+              scores, decided before a single question is touched — so they are
+              now one panel with labelled groups. Same controls, same order,
+              three fewer borders competing with the work in column two. */}
           <Card
-            title="Scoring Method"
-            hint="Choose how you want to score this audit"
+            title="Scoring Setup"
+            hint="How this audit scores, before any question is touched"
           >
-            <div className="grid grid-cols-3 gap-2">
-              {SCORING_METHODS.map((m) => {
-                const active = method === m.value;
-                return (
-                  <button
-                    key={m.value}
-                    type="button"
-                    onClick={() => setMethod(m.value)}
-                    aria-pressed={active}
-                    className={`flex h-full flex-col items-center gap-2 rounded-lg border p-3 text-center transition ${
-                      active
-                        ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500'
-                        : 'border-line bg-surface hover:bg-surface-sunken'
-                    }`}
-                  >
-                    <span
-                      className={`flex h-4 w-4 items-center justify-center rounded-full border ${
+            <Group
+              label="Scoring method"
+              hint="Choose how you want to score this audit"
+              first
+            >
+              <div className="grid grid-cols-3 gap-2">
+                {SCORING_METHODS.map((m) => {
+                  const active = method === m.value;
+                  return (
+                    <button
+                      key={m.value}
+                      type="button"
+                      onClick={() => setMethod(m.value)}
+                      aria-pressed={active}
+                      className={`flex h-full flex-col items-center gap-2 rounded-lg border p-3 text-center transition ${
                         active
-                          ? 'border-brand-600 bg-brand-600'
-                          : 'border-ink-subtle'
+                          ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500'
+                          : 'border-line bg-surface hover:bg-surface-sunken'
                       }`}
                     >
-                      {active && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-white" />
-                      )}
-                    </span>
-                    <PlatformIcon
-                      name={
-                        m.icon === 'percent'
-                          ? 'percent'
-                          : m.icon === 'shield'
-                            ? 'shield'
-                            : 'sliders'
-                      }
-                      className={`h-5 w-5 ${active ? 'text-brand-700' : 'text-ink-subtle'}`}
-                    />
-                    <span className="text-xs font-semibold text-ink">
-                      {m.label}
-                    </span>
-                    <span className="text-[11px] leading-tight text-ink-subtle">
-                      {m.description}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </Card>
-
-          <Card title="Scoring Options">
-            <Field
-              label="Total Possible Score"
-              hint="Set the maximum score available for this audit"
-              error={issues.totalPossibleScore}
-            >
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  value={totalPossible}
-                  onChange={(e) =>
-                    setTotalPossible(Number(e.target.value) || 0)
-                  }
-                  className="w-24 rounded-lg border border-line px-3 py-2 text-sm text-ink"
-                />
-                <span className="text-sm text-ink-subtle">pts</span>
-              </div>
-            </Field>
-
-            <Field
-              label="Passing Score"
-              hint="Minimum score required to pass"
-              error={issues.passingScore}
-            >
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={0}
-                  value={passing}
-                  onChange={(e) => setPassing(Number(e.target.value) || 0)}
-                  className="w-24 rounded-lg border border-line px-3 py-2 text-sm text-ink"
-                />
-                <span className="text-sm text-ink-subtle">
-                  pts ({passPercent}%)
-                </span>
-              </div>
-            </Field>
-
-            <Toggle
-              checked={asPercent}
-              onChange={setAsPercent}
-              label="Show score as percentage"
-              hint="Display the final score as a percentage"
-            />
-            <Toggle
-              checked={rounded}
-              onChange={setRounded}
-              label="Round scores"
-              hint="Round scores to the nearest whole number"
-            />
-            <Toggle
-              checked={enabled}
-              onChange={setEnabled}
-              label="Enable scoring for this audit"
-              hint="Off by default — the audit keeps its manual score until enabled"
-            />
-          </Card>
-
-          {method === 'CUSTOM' && (
-            <Card
-              title="Score Bands"
-              hint="Name the ranges this audit's score maps onto"
-            >
-              <div className="space-y-2">
-                {bands.map((band, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <span
-                      aria-hidden="true"
-                      className="h-2.5 w-2.5 shrink-0 rounded-sm"
-                      style={{ backgroundColor: chartColour(idx) }}
-                    />
-                    <input
-                      value={band.label}
-                      onChange={(e) =>
-                        setBands(
-                          bands.map((b, i) =>
-                            i === idx ? { ...b, label: e.target.value } : b,
-                          ),
-                        )
-                      }
-                      placeholder="Band name"
-                      className="min-w-0 flex-1 rounded-lg border border-line px-2 py-1.5 text-sm"
-                    />
-                    <input
-                      type="number"
-                      value={band.minScore}
-                      onChange={(e) =>
-                        setBands(
-                          bands.map((b, i) =>
-                            i === idx
-                              ? { ...b, minScore: Number(e.target.value) || 0 }
-                              : b,
-                          ),
-                        )
-                      }
-                      className="w-16 rounded-lg border border-line px-2 py-1.5 text-sm"
-                      aria-label="Minimum score"
-                    />
-                    <input
-                      type="number"
-                      value={band.maxScore}
-                      onChange={(e) =>
-                        setBands(
-                          bands.map((b, i) =>
-                            i === idx
-                              ? { ...b, maxScore: Number(e.target.value) || 0 }
-                              : b,
-                          ),
-                        )
-                      }
-                      className="w-16 rounded-lg border border-line px-2 py-1.5 text-sm"
-                      aria-label="Maximum score"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setBands(bands.filter((_, i) => i !== idx))
-                      }
-                      className="text-sm text-ink-subtle hover:text-danger-600"
-                      aria-label={`Remove band ${band.label || idx + 1}`}
-                    >
-                      ×
+                      <span
+                        className={`flex h-4 w-4 items-center justify-center rounded-full border ${
+                          active
+                            ? 'border-brand-600 bg-brand-600'
+                            : 'border-ink-subtle'
+                        }`}
+                      >
+                        {active && (
+                          <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                        )}
+                      </span>
+                      <PlatformIcon
+                        name={
+                          m.icon === 'percent'
+                            ? 'percent'
+                            : m.icon === 'shield'
+                              ? 'shield'
+                              : 'sliders'
+                        }
+                        className={`h-5 w-5 ${active ? 'text-brand-700' : 'text-ink-subtle'}`}
+                      />
+                      <span className="text-xs font-semibold text-ink">
+                        {m.label}
+                      </span>
+                      <span className="text-[11px] leading-tight text-ink-subtle">
+                        {m.description}
+                      </span>
                     </button>
+                  );
+                })}
+              </div>
+            </Group>
+
+            <Group label="Scoring options">
+              <Field
+                label="Total Possible Score"
+                hint="Set the maximum score available for this audit"
+                error={issues.totalPossibleScore}
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    value={totalPossible}
+                    onChange={(e) =>
+                      setTotalPossible(Number(e.target.value) || 0)
+                    }
+                    className="w-24 rounded-lg border border-line px-3 py-2 text-sm text-ink"
+                  />
+                  <span className="text-sm text-ink-subtle">pts</span>
+                </div>
+              </Field>
+
+              <Field
+                label="Passing Score"
+                hint="Minimum score required to pass"
+                error={issues.passingScore}
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    value={passing}
+                    onChange={(e) => setPassing(Number(e.target.value) || 0)}
+                    className="w-24 rounded-lg border border-line px-3 py-2 text-sm text-ink"
+                  />
+                  <span className="text-sm text-ink-subtle">
+                    pts ({passPercent}%)
+                  </span>
+                </div>
+              </Field>
+
+              <Toggle
+                checked={asPercent}
+                onChange={setAsPercent}
+                label="Show score as percentage"
+                hint="Display the final score as a percentage"
+              />
+              <Toggle
+                checked={rounded}
+                onChange={setRounded}
+                label="Round scores"
+                hint="Round scores to the nearest whole number"
+              />
+              <Toggle
+                checked={enabled}
+                onChange={setEnabled}
+                label="Enable scoring for this audit"
+                hint="Off by default — the audit keeps its manual score until enabled"
+              />
+            </Group>
+
+            {method === 'CUSTOM' && (
+              <Group
+                label="Score bands"
+                hint="Name the ranges this audit's score maps onto"
+              >
+                <div className="space-y-2">
+                  {bands.map((band, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <span
+                        aria-hidden="true"
+                        className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                        style={{ backgroundColor: chartColour(idx) }}
+                      />
+                      <input
+                        value={band.label}
+                        onChange={(e) =>
+                          setBands(
+                            bands.map((b, i) =>
+                              i === idx ? { ...b, label: e.target.value } : b,
+                            ),
+                          )
+                        }
+                        placeholder="Band name"
+                        className="min-w-0 flex-1 rounded-lg border border-line px-2 py-1.5 text-sm"
+                      />
+                      <input
+                        type="number"
+                        value={band.minScore}
+                        onChange={(e) =>
+                          setBands(
+                            bands.map((b, i) =>
+                              i === idx
+                                ? {
+                                    ...b,
+                                    minScore: Number(e.target.value) || 0,
+                                  }
+                                : b,
+                            ),
+                          )
+                        }
+                        className="w-16 rounded-lg border border-line px-2 py-1.5 text-sm"
+                        aria-label="Minimum score"
+                      />
+                      <input
+                        type="number"
+                        value={band.maxScore}
+                        onChange={(e) =>
+                          setBands(
+                            bands.map((b, i) =>
+                              i === idx
+                                ? {
+                                    ...b,
+                                    maxScore: Number(e.target.value) || 0,
+                                  }
+                                : b,
+                            ),
+                          )
+                        }
+                        className="w-16 rounded-lg border border-line px-2 py-1.5 text-sm"
+                        aria-label="Maximum score"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setBands(bands.filter((_, i) => i !== idx))
+                        }
+                        className="text-sm text-ink-subtle hover:text-danger-600"
+                        aria-label={`Remove band ${band.label || idx + 1}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setBands([
+                        ...bands,
+                        { label: '', minScore: 0, maxScore: 100 },
+                      ])
+                    }
+                    className="text-sm font-medium text-brand-700 hover:underline"
+                  >
+                    + Add band
+                  </button>
+                </div>
+              </Group>
+            )}
+
+            <Group
+              label="Question scoring rules"
+              hint="Choose how individual questions are scored"
+            >
+              <div className="grid grid-cols-2 gap-2">
+                {QUESTION_RULES.map((rule) => (
+                  <div
+                    key={rule.value}
+                    className="rounded-lg border border-line bg-surface p-3"
+                  >
+                    <div className="flex items-center gap-2">
+                      <PlatformIcon
+                        name={
+                          rule.icon === 'weight'
+                            ? 'weight'
+                            : rule.icon === 'check'
+                              ? 'check'
+                              : rule.icon === 'alert'
+                                ? 'alert'
+                                : 'info'
+                        }
+                        className={`h-4 w-4 ${
+                          rule.value === 'MANDATORY'
+                            ? 'text-hivis-600'
+                            : rule.value === 'PASS_FAIL'
+                              ? 'text-safe-600'
+                              : rule.value === 'INFO_ONLY'
+                                ? 'text-brand-600'
+                                : 'text-ink-muted'
+                        }`}
+                      />
+                      <span className="text-xs font-semibold text-ink">
+                        {rule.label}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-tight text-ink-subtle">
+                      {rule.description}
+                    </p>
+                    <p className="mt-1 text-[11px] font-medium text-ink-muted">
+                      {rule.value === 'MANDATORY'
+                        ? `${mandatoryCount} in this audit`
+                        : `${items.filter((i) => i.scoringRule === rule.value).length} in this audit`}
+                    </p>
                   </div>
                 ))}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setBands([
-                      ...bands,
-                      { label: '', minScore: 0, maxScore: 100 },
-                    ])
-                  }
-                  className="text-sm font-medium text-brand-700 hover:underline"
-                >
-                  + Add band
-                </button>
               </div>
-            </Card>
-          )}
-
-          <Card
-            title="Question Scoring Rules"
-            hint="Choose how individual questions are scored"
-          >
-            <div className="grid grid-cols-2 gap-2">
-              {QUESTION_RULES.map((rule) => (
-                <div
-                  key={rule.value}
-                  className="rounded-lg border border-line bg-surface p-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <PlatformIcon
-                      name={
-                        rule.icon === 'weight'
-                          ? 'weight'
-                          : rule.icon === 'check'
-                            ? 'check'
-                            : rule.icon === 'alert'
-                              ? 'alert'
-                              : 'info'
-                      }
-                      className={`h-4 w-4 ${
-                        rule.value === 'MANDATORY'
-                          ? 'text-hivis-600'
-                          : rule.value === 'PASS_FAIL'
-                            ? 'text-safe-600'
-                            : rule.value === 'INFO_ONLY'
-                              ? 'text-brand-600'
-                              : 'text-ink-muted'
-                      }`}
-                    />
-                    <span className="text-xs font-semibold text-ink">
-                      {rule.label}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-[11px] leading-tight text-ink-subtle">
-                    {rule.description}
-                  </p>
-                  <p className="mt-1 text-[11px] font-medium text-ink-muted">
-                    {rule.value === 'MANDATORY'
-                      ? `${mandatoryCount} in this audit`
-                      : `${items.filter((i) => i.scoringRule === rule.value).length} in this audit`}
-                  </p>
-                </div>
-              ))}
-            </div>
-            <p className="mt-3 flex items-start gap-2 rounded-lg bg-surface-sunken p-3 text-xs text-ink-muted">
-              <PlatformIcon
-                name="info"
-                className="mt-0.5 h-4 w-4 shrink-0 text-brand-600"
-              />
-              Set the rule for each question below — mandatory questions must be
-              passed for the audit to pass, whatever the overall score.
-            </p>
+              <p className="mt-3 flex items-start gap-2 rounded-lg bg-surface-sunken p-3 text-xs text-ink-muted">
+                <PlatformIcon
+                  name="info"
+                  className="mt-0.5 h-4 w-4 shrink-0 text-brand-600"
+                />
+                Set the rule for each question below — mandatory questions must
+                be passed for the audit to pass, whatever the overall score.
+              </p>
+            </Group>
           </Card>
         </div>
 
@@ -860,8 +877,12 @@ export function AuditScoringConfig({
           </Card>
         </div>
 
-        {/* ---------------- Column 3 — live feedback ---------------- */}
-        <div className="space-y-4">
+        {/* ---------------- Column 3 — live feedback ----------------
+            One contextual summary rather than three separate readouts, and it
+            sticks to the top of the viewport: the point of this column is to
+            answer "what does what I just changed add up to?", which is no use
+            once you have scrolled past it into the questions list. */}
+        <div className="space-y-4 lg:sticky lg:top-6">
           <Card
             title="Score Preview"
             hint="This is how the scoring will work for this audit"
@@ -921,74 +942,75 @@ export function AuditScoringConfig({
                   ? 'Scores map onto the named bands you define.'
                   : 'Scores are calculated automatically as the audit is completed.'}
             </p>
-          </Card>
 
-          <Card title="Score Breakdown">
-            {slices.length === 0 ? (
-              // An empty state that says what the panel is FOR, not just what
-              // is missing. "Add sections to see the breakdown" tells you the
-              // button to press; it does not tell you why you would want to,
-              // which is the question someone configuring scoring for the first
-              // time is actually asking.
-              <div className="text-sm text-ink-subtle">
-                <p>
-                  Sections divide an audit into parts — access, welfare, plant —
-                  and this shows how much of the total score each part carries.
-                </p>
-                <p className="mt-2">
-                  {questionCount === 0
-                    ? 'Available once this audit has questions to group.'
-                    : 'Every question currently counts towards one overall score.'}
-                </p>
-              </div>
-            ) : (
-              <ScoreBreakdownDonut
-                slices={slices}
-                totalPoints={totalPossible}
-              />
-            )}
-          </Card>
+            <Group label="Score breakdown">
+              {slices.length === 0 ? (
+                // An empty state that says what the panel is FOR, not just what
+                // is missing. "Add sections to see the breakdown" tells you the
+                // button to press; it does not tell you why you would want to,
+                // which is the question someone configuring scoring for the first
+                // time is actually asking.
+                <div className="text-sm text-ink-subtle">
+                  <p>
+                    Sections divide an audit into parts — access, welfare, plant
+                    — and this shows how much of the total score each part
+                    carries.
+                  </p>
+                  <p className="mt-2">
+                    {questionCount === 0
+                      ? 'Available once this audit has questions to group.'
+                      : 'Every question currently counts towards one overall score.'}
+                  </p>
+                </div>
+              ) : (
+                <ScoreBreakdownDonut
+                  slices={slices}
+                  totalPoints={totalPossible}
+                />
+              )}
+            </Group>
 
-          <Card title="Scoring Rules">
-            {/* A column of zeros reads as data — as though the audit had been
+            <Group label="Scoring rules">
+              {/* A column of zeros reads as data — as though the audit had been
                 measured and found to contain nothing. One line first says which
                 it is, so the numbers below are read as a starting point rather
                 than a result. The rows themselves are unchanged and become
                 meaningful the moment anything is added. */}
-            {questionCount === 0 && (
-              <p className="mb-3 text-xs text-ink-muted">
-                Nothing configured yet — this summary fills in as questions and
-                sections are added.
+              {questionCount === 0 && (
+                <p className="mb-3 text-xs text-ink-muted">
+                  Nothing configured yet — this summary fills in as questions
+                  and sections are added.
+                </p>
+              )}
+              <ul className="space-y-2 text-sm">
+                <SummaryRow icon="grid" label={`${sections.length} Sections`} />
+                <SummaryRow
+                  icon="clipboard"
+                  label={`${questionCount} Questions`}
+                />
+                <SummaryRow
+                  icon="weight"
+                  label={`${weightedCount} Weighted Questions`}
+                />
+                <SummaryRow
+                  icon="alert"
+                  label={`${mandatoryCount} Mandatory Questions`}
+                  tone="text-hivis-600"
+                />
+                <SummaryRow
+                  icon="percent"
+                  label={`Passing Score: ${passPercent}%`}
+                />
+              </ul>
+              <p className="mt-3 flex items-start gap-2 rounded-lg bg-brand-50 p-3 text-xs text-ink-muted">
+                <PlatformIcon
+                  name="info"
+                  className="mt-0.5 h-4 w-4 shrink-0 text-brand-600"
+                />
+                Scores are calculated automatically in real time as audits are
+                completed.
               </p>
-            )}
-            <ul className="space-y-2 text-sm">
-              <SummaryRow icon="grid" label={`${sections.length} Sections`} />
-              <SummaryRow
-                icon="clipboard"
-                label={`${questionCount} Questions`}
-              />
-              <SummaryRow
-                icon="weight"
-                label={`${weightedCount} Weighted Questions`}
-              />
-              <SummaryRow
-                icon="alert"
-                label={`${mandatoryCount} Mandatory Questions`}
-                tone="text-hivis-600"
-              />
-              <SummaryRow
-                icon="percent"
-                label={`Passing Score: ${passPercent}%`}
-              />
-            </ul>
-            <p className="mt-3 flex items-start gap-2 rounded-lg bg-brand-50 p-3 text-xs text-ink-muted">
-              <PlatformIcon
-                name="info"
-                className="mt-0.5 h-4 w-4 shrink-0 text-brand-600"
-              />
-              Scores are calculated automatically in real time as audits are
-              completed.
-            </p>
+            </Group>
           </Card>
         </div>
       </div>
@@ -1020,6 +1042,34 @@ function Card({
     <Panel title={title} hint={hint}>
       {children}
     </Panel>
+  );
+}
+
+/**
+ * A labelled region INSIDE a panel. Both side columns were stacks of cards
+ * where every card was a facet of one subject; a rule and a label separate them
+ * just as clearly as a border does, without adding another box to the count.
+ */
+function Group({
+  label,
+  hint,
+  first,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  /** First group in a panel — no leading rule, the panel heading already sits above it. */
+  first?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={first ? undefined : 'mt-4 border-t border-line pt-4'}>
+      <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">
+        {label}
+      </p>
+      {hint && <p className="mt-0.5 text-[11px] text-ink-subtle">{hint}</p>}
+      <div className="mt-2">{children}</div>
+    </div>
   );
 }
 

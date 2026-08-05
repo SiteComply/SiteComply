@@ -1,7 +1,7 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { RecordHeader } from '@/components/platform/RecordHeader';
+import { Panel } from '@/components/platform/Panel';
 import { PermitReviewControls } from '@/components/platform/PermitReviewControls';
 import {
   requirePlatformViewer,
@@ -61,19 +61,53 @@ export default async function PlatformPermitDetailPage({
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
+        {/* Main column = the review task, in the order it is performed: what
+            was asked for, what was declared, then the decision. The "who /
+            where / when" facts moved to the context rail, where the rest of the
+            portal keeps them, so this column is no longer a mix of reference
+            data and the thing the reviewer is here to do. */}
         <div className="space-y-6 lg:col-span-2">
-          <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-subtle">
-              Request
-            </h2>
+          <Panel title="Requested work">
             <dl className="grid gap-3 sm:grid-cols-2">
-              <Field
-                label="Worker"
-                value={`${workerName} · ${workerCompany}`}
-              />
-              <Field label="Site" value={siteName} />
               <Field label="Work activity" value={permit.workActivity} wide />
               <Field label="Work location" value={permit.workLocation ?? '—'} />
+            </dl>
+
+            {answers.length > 0 && (
+              <div className="mt-4 border-t border-line pt-4">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-subtle">
+                  Safety questions
+                </p>
+                <dl className="divide-y divide-line">
+                  {answers.map((a) => (
+                    <div
+                      key={a.questionId}
+                      className="flex justify-between gap-4 py-2.5"
+                    >
+                      <dt className="text-sm text-ink">{a.label}</dt>
+                      <dd className="shrink-0 text-sm font-semibold text-ink">
+                        {formatAnswer(a)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
+          </Panel>
+
+          <PermitReviewControls
+            permitId={permit.id}
+            status={effectiveStatus}
+            canApprove={canApprove}
+          />
+        </div>
+
+        <div className="space-y-6">
+          <Panel title="Summary">
+            <dl className="space-y-3">
+              <Field label="Worker" value={workerName} />
+              <Field label="Company" value={workerCompany} />
+              <Field label="Site" value={siteName} />
               <Field
                 label="Proposed start"
                 value={
@@ -91,42 +125,18 @@ export default async function PlatformPermitDetailPage({
                 }
               />
             </dl>
-          </section>
+          </Panel>
 
-          {answers.length > 0 && (
-            <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-subtle">
-                Safety questions
-              </h2>
-              <dl className="divide-y divide-line">
-                {answers.map((a) => (
-                  <div
-                    key={a.questionId}
-                    className="flex justify-between gap-4 py-2.5"
-                  >
-                    <dt className="text-sm text-ink">{a.label}</dt>
-                    <dd className="shrink-0 text-sm font-semibold text-ink">
-                      {formatAnswer(a)}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
-          )}
-
-          <PermitReviewControls
-            permitId={permit.id}
-            status={effectiveStatus}
-            canApprove={canApprove}
-          />
-        </div>
-
-        <div className="space-y-6">
+          {/* The outcome callouts keep their own tint: on a permit, approved vs
+              rejected is the single most important thing on the screen, and the
+              colour is carrying that — so these stay distinct surfaces rather
+              than being folded into Summary. Same colours as before. */}
           {(permit.status === 'APPROVED' || permit.validUntil) && (
-            <section className="rounded-xl border border-safe-500/40 bg-safe-50 p-5 shadow-card">
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-safe-700">
-                Approval
-              </h2>
+            <Panel
+              tone="flat"
+              title={<span className="text-safe-700">Approval</span>}
+              className="border border-safe-500/40 bg-safe-50 shadow-card"
+            >
               <dl className="space-y-2">
                 <Field
                   label="Approved by"
@@ -155,14 +165,15 @@ export default async function PlatformPermitDetailPage({
                   }
                 />
               </dl>
-            </section>
+            </Panel>
           )}
 
           {permit.rejectionReason && (
-            <section className="rounded-xl border border-danger-500/40 bg-danger-50 p-5 shadow-card">
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-danger-600">
-                Rejected
-              </h2>
+            <Panel
+              tone="flat"
+              title={<span className="text-danger-600">Rejected</span>}
+              className="border border-danger-500/40 bg-danger-50 shadow-card"
+            >
               <p className="text-sm text-ink">{permit.rejectionReason}</p>
               <p className="mt-2 text-xs text-ink-subtle">
                 {permit.rejectedByName}
@@ -170,13 +181,10 @@ export default async function PlatformPermitDetailPage({
                   ? ` · ${formatDateTimeUK(permit.rejectedAt)}`
                   : ''}
               </p>
-            </section>
+            </Panel>
           )}
 
-          <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-subtle">
-              Activity
-            </h2>
+          <Panel title="Activity">
             <ol className="space-y-3">
               {activities.map((ev) => (
                 <li key={ev.id} className="flex gap-3">
@@ -196,7 +204,7 @@ export default async function PlatformPermitDetailPage({
                 </li>
               ))}
             </ol>
-          </section>
+          </Panel>
         </div>
       </div>
     </PlatformShell>

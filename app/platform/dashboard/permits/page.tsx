@@ -5,6 +5,7 @@ import {
   TABLE_TOOLBAR_CLASS,
 } from '@/components/platform/TableSurface';
 import { PageHeader } from '@/components/platform/PageHeader';
+import { SegmentedNav } from '@/components/platform/navUi';
 import {
   requirePlatformViewer,
   describeScope,
@@ -54,6 +55,15 @@ export default async function PlatformPermitsPage({
     take: pg.take,
   });
 
+  const qp = (patch: Record<string, string>) => {
+    const sp = new URLSearchParams();
+    // Changing status resets to page 1 (page is intentionally not carried here).
+    const merged = { status, site, q, ...patch };
+    for (const [k, v] of Object.entries(merged)) if (v) sp.set(k, v);
+    const s = sp.toString();
+    return `/platform/dashboard/permits${s ? `?${s}` : ''}`;
+  };
+
   return (
     <PlatformShell>
       <PageHeader
@@ -66,9 +76,24 @@ export default async function PlatformPermitsPage({
         }
       />
 
-      {/* Filters — a no-JS GET form (Apply to submit). */}
+      {/* Status is the axis a reviewer actually works along — "what is waiting
+          on me" — so it gets the same recessed segmented strip the Actions and
+          Sites registers use, rather than being one option inside a dropdown.
+          Same filter, same query string, one fewer place to look. */}
+      <SegmentedNav
+        label="Filter permits by status"
+        items={PERMIT_STATUSES.map((s) => ({
+          key: s.value,
+          label: s.label,
+          href: qp({ status: status === s.value ? '' : s.value }),
+          active: status === s.value,
+        }))}
+      />
+
+      {/* Remaining filters — a no-JS GET form (Apply to submit). */}
       <TableSurface>
         <form method="get" className={TABLE_TOOLBAR_CLASS}>
+          {status && <input type="hidden" name="status" value={status} />}
           <label className="flex flex-col gap-1 text-sm">
             <span className="font-semibold text-ink">Search</span>
             <input
@@ -78,22 +103,6 @@ export default async function PlatformPermitsPage({
               placeholder="Reference, type or worker…"
               className="w-56 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
             />
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-semibold text-ink">Status</span>
-            <select
-              name="status"
-              defaultValue={status}
-              className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
-            >
-              <option value="">All statuses</option>
-              {PERMIT_STATUSES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
           </label>
 
           <label className="flex flex-col gap-1 text-sm">
