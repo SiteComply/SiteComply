@@ -102,113 +102,128 @@ export default async function PlatformPermitDetailPage({
           />
         </div>
 
-        <div className="space-y-6">
-          <Panel title="Summary">
-            <dl className="space-y-3">
-              <Field label="Worker" value={workerName} />
-              <Field label="Company" value={workerCompany} />
-              <Field label="Site" value={siteName} />
-              <Field
-                label="Proposed start"
-                value={
-                  permit.proposedStart
-                    ? formatDateTimeUK(permit.proposedStart)
-                    : '—'
-                }
-              />
-              <Field
-                label="Proposed finish"
-                value={
-                  permit.proposedFinish
-                    ? formatDateTimeUK(permit.proposedFinish)
-                    : '—'
-                }
-              />
-            </dl>
-          </Panel>
-
-          {/* The outcome callouts keep their own tint: on a permit, approved vs
-              rejected is the single most important thing on the screen, and the
-              colour is carrying that — so these stay distinct surfaces rather
-              than being folded into Summary. Same colours as before. */}
-          {(permit.status === 'APPROVED' || permit.validUntil) && (
-            <Panel
-              tone="flat"
-              title={<span className="text-safe-700">Approval</span>}
-              className="border border-safe-500/40 bg-safe-50 shadow-card"
-            >
-              <dl className="space-y-2">
+        <div>
+          {/* Sticky on the inner div — see the note on the action detail rail. */}
+          <div className="space-y-6 lg:sticky lg:top-6">
+            <Panel title="Summary">
+              <dl className="space-y-3">
+                <Field label="Worker" value={workerName} />
+                <Field label="Company" value={workerCompany} />
+                <Field label="Site" value={siteName} />
                 <Field
-                  label="Approved by"
-                  value={permit.approvedByName ?? '—'}
-                />
-                <Field
-                  label="Approved on"
+                  label="Proposed start"
                   value={
-                    permit.approvedAt
-                      ? formatDateTimeUK(permit.approvedAt)
+                    permit.proposedStart
+                      ? formatDateTimeUK(permit.proposedStart)
                       : '—'
                   }
                 />
                 <Field
-                  label="Valid from"
+                  label="Proposed finish"
                   value={
-                    permit.validFrom ? formatDateTimeUK(permit.validFrom) : '—'
-                  }
-                />
-                <Field
-                  label="Valid until"
-                  value={
-                    permit.validUntil
-                      ? formatDateTimeUK(permit.validUntil)
+                    permit.proposedFinish
+                      ? formatDateTimeUK(permit.proposedFinish)
                       : '—'
                   }
                 />
               </dl>
             </Panel>
-          )}
 
-          {permit.rejectionReason && (
-            <Panel
-              tone="flat"
-              title={<span className="text-danger-600">Rejected</span>}
-              className="border border-danger-500/40 bg-danger-50 shadow-card"
-            >
-              <p className="text-sm text-ink">{permit.rejectionReason}</p>
-              <p className="mt-2 text-xs text-ink-subtle">
-                {permit.rejectedByName}
-                {permit.rejectedAt
-                  ? ` · ${formatDateTimeUK(permit.rejectedAt)}`
-                  : ''}
-              </p>
+            {/* The outcome callouts keep their own tint: on a permit, approved vs
+              rejected is the single most important thing on the screen, and the
+              colour is carrying that — so these stay distinct surfaces rather
+              than being folded into Summary. Same colours as before. */}
+            {(permit.status === 'APPROVED' || permit.validUntil) && (
+              <Panel
+                tone="flat"
+                title={<span className="text-safe-700">Approval</span>}
+                className="border border-safe-500/40 bg-safe-50 shadow-card"
+              >
+                <dl className="space-y-2">
+                  <Field
+                    label="Approved by"
+                    value={permit.approvedByName ?? '—'}
+                  />
+                  <Field
+                    label="Approved on"
+                    value={
+                      permit.approvedAt
+                        ? formatDateTimeUK(permit.approvedAt)
+                        : '—'
+                    }
+                  />
+                  <Field
+                    label="Valid from"
+                    value={
+                      permit.validFrom
+                        ? formatDateTimeUK(permit.validFrom)
+                        : '—'
+                    }
+                  />
+                  <Field
+                    label="Valid until"
+                    value={
+                      permit.validUntil
+                        ? formatDateTimeUK(permit.validUntil)
+                        : '—'
+                    }
+                  />
+                </dl>
+              </Panel>
+            )}
+
+            {permit.rejectionReason && (
+              <Panel
+                tone="flat"
+                title={<span className="text-danger-600">Rejected</span>}
+                className="border border-danger-500/40 bg-danger-50 shadow-card"
+              >
+                <p className="text-sm text-ink">{permit.rejectionReason}</p>
+                <p className="mt-2 text-xs text-ink-subtle">
+                  {permit.rejectedByName}
+                  {permit.rejectedAt
+                    ? ` · ${formatDateTimeUK(permit.rejectedAt)}`
+                    : ''}
+                </p>
+              </Panel>
+            )}
+
+            <Panel title="Activity">
+              <ol className="space-y-3">
+                {activities.map((ev) => (
+                  <li key={ev.id} className="flex gap-3">
+                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-500" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-ink">
+                        {ev.toValue ?? activityLabel(ev.type)}
+                      </p>
+                      {ev.note && (
+                        <p className="text-sm text-ink-muted">{ev.note}</p>
+                      )}
+                      <p className="text-xs text-ink-subtle">
+                        {formatDateTimeUK(ev.createdAt)}
+                        {ev.authorName ? ` · ${ev.authorName}` : ''}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
             </Panel>
-          )}
-
-          <Panel title="Activity">
-            <ol className="space-y-3">
-              {activities.map((ev) => (
-                <li key={ev.id} className="flex gap-3">
-                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-500" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-ink">
-                      {ev.toValue ?? ev.type}
-                    </p>
-                    {ev.note && (
-                      <p className="text-sm text-ink-muted">{ev.note}</p>
-                    )}
-                    <p className="text-xs text-ink-subtle">
-                      {formatDateTimeUK(ev.createdAt)}
-                      {ev.authorName ? ` · ${ev.authorName}` : ''}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </Panel>
+          </div>
         </div>
       </div>
     </PlatformShell>
   );
+}
+
+/**
+ * Events that move the permit carry a status label in `toValue`; a comment does
+ * not, so the raw enum was being printed and every comment in the history read
+ * as a shouted "COMMENT". Display-only fallback — the stored type is untouched.
+ */
+function activityLabel(type: string): string {
+  const first = type.charAt(0) + type.slice(1).toLowerCase();
+  return first.replace(/_/g, ' ');
 }
 
 function Field({

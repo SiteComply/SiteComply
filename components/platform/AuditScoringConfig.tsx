@@ -294,7 +294,7 @@ export function AuditScoringConfig({
         </p>
       )}
 
-      <div className="grid items-start gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         {/* ---------------- Column 1 — configuration ---------------- */}
         <div className="space-y-4">
           {/* Method, options, bands and question rules were four cards stacked
@@ -506,62 +506,6 @@ export function AuditScoringConfig({
                 </div>
               </Group>
             )}
-
-            <Group
-              label="Question scoring rules"
-              hint="Choose how individual questions are scored"
-            >
-              <div className="grid grid-cols-2 gap-2">
-                {QUESTION_RULES.map((rule) => (
-                  <div
-                    key={rule.value}
-                    className="rounded-lg border border-line bg-surface p-3"
-                  >
-                    <div className="flex items-center gap-2">
-                      <PlatformIcon
-                        name={
-                          rule.icon === 'weight'
-                            ? 'weight'
-                            : rule.icon === 'check'
-                              ? 'check'
-                              : rule.icon === 'alert'
-                                ? 'alert'
-                                : 'info'
-                        }
-                        className={`h-4 w-4 ${
-                          rule.value === 'MANDATORY'
-                            ? 'text-hivis-600'
-                            : rule.value === 'PASS_FAIL'
-                              ? 'text-safe-600'
-                              : rule.value === 'INFO_ONLY'
-                                ? 'text-brand-600'
-                                : 'text-ink-muted'
-                        }`}
-                      />
-                      <span className="text-xs font-semibold text-ink">
-                        {rule.label}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-[11px] leading-tight text-ink-subtle">
-                      {rule.description}
-                    </p>
-                    <p className="mt-1 text-[11px] font-medium text-ink-muted">
-                      {rule.value === 'MANDATORY'
-                        ? `${mandatoryCount} in this audit`
-                        : `${items.filter((i) => i.scoringRule === rule.value).length} in this audit`}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-3 flex items-start gap-2 rounded-lg bg-surface-sunken p-3 text-xs text-ink-muted">
-                <PlatformIcon
-                  name="info"
-                  className="mt-0.5 h-4 w-4 shrink-0 text-brand-600"
-                />
-                Set the rule for each question below — mandatory questions must
-                be passed for the audit to pass, whatever the overall score.
-              </p>
-            </Group>
           </Card>
         </div>
 
@@ -746,7 +690,225 @@ export function AuditScoringConfig({
               )}
             </div>
           </Card>
+        </div>
 
+        {/* ---------------- Column 3 — live feedback ----------------
+            One contextual summary rather than three separate readouts, and it
+            sticks to the top of the viewport: the point of this column is to
+            answer "what does what I just changed add up to?", which is no use
+            once you have scrolled past it into the questions list.
+
+            The grid item spans both rows and is left to stretch; the sticky
+            element is the div INSIDE it. A sticky box only travels within its
+            own containing block, so a sticky grid item sized to its own content
+            has nowhere to go and silently does nothing. */}
+        <div className="lg:col-start-3 lg:row-span-3 lg:row-start-1">
+          <div className="space-y-4 lg:sticky lg:top-6">
+            <Card
+              title="Score Preview"
+              hint="This is how the scoring will work for this audit"
+            >
+              {/* NOTHING TO SCORE IS NOT A PASS.
+                This panel used to render green with a "Pass" pill whatever the
+                audit contained — so an audit with no questions showed a
+                confident "80% · Pass". That is a verdict, and there is no
+                verdict to give: the threshold is configuration, not a result,
+                and presenting it as one invites someone to read an empty audit
+                as a passing one.
+                The same numbers are shown either way. Only the framing changes:
+                neutral and labelled as a target until there is something to
+                score against. */}
+              {questionCount === 0 ? (
+                <div className="rounded-lg border border-line bg-surface-sunken p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
+                    Pass mark, once set up
+                  </p>
+                  <p className="text-3xl font-bold text-ink-muted">
+                    {asPercent ? `${passPercent}%` : `${passing} pts`}
+                  </p>
+                  <p className="mt-1 text-xs text-ink-subtle">
+                    {passing} out of {totalPossible} points
+                  </p>
+                  <p className="mt-3 border-t border-line pt-3 text-xs text-ink-muted">
+                    This audit has no questions, so there is nothing to score
+                    yet. The pass mark above is ready and will apply as soon as
+                    it has some.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-safe-500/40 bg-safe-50 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-safe-700">
+                        Passing Score
+                      </p>
+                      <p className="text-3xl font-bold text-safe-700">
+                        {asPercent ? `${passPercent}%` : `${passing} pts`}
+                      </p>
+                      <p className="mt-1 text-xs text-ink-muted">
+                        {passing} out of {totalPossible} points
+                      </p>
+                    </div>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-safe-500 px-2.5 py-1 text-xs font-semibold text-white">
+                      <PlatformIcon name="check" className="h-3.5 w-3.5" />
+                      Pass
+                    </span>
+                  </div>
+                </div>
+              )}
+              <p className="mt-3 text-xs text-ink-subtle">
+                {method === 'PASS_FAIL'
+                  ? 'Every scorable question must pass for the audit to pass.'
+                  : method === 'CUSTOM'
+                    ? 'Scores map onto the named bands you define.'
+                    : 'Scores are calculated automatically as the audit is completed.'}
+              </p>
+
+              <Group label="Score breakdown">
+                {slices.length === 0 ? (
+                  // An empty state that says what the panel is FOR, not just what
+                  // is missing. "Add sections to see the breakdown" tells you the
+                  // button to press; it does not tell you why you would want to,
+                  // which is the question someone configuring scoring for the first
+                  // time is actually asking.
+                  <div className="text-sm text-ink-subtle">
+                    <p>
+                      Sections divide an audit into parts — access, welfare,
+                      plant — and this shows how much of the total score each
+                      part carries.
+                    </p>
+                    <p className="mt-2">
+                      {questionCount === 0
+                        ? 'Available once this audit has questions to group.'
+                        : 'Every question currently counts towards one overall score.'}
+                    </p>
+                  </div>
+                ) : (
+                  <ScoreBreakdownDonut
+                    slices={slices}
+                    totalPoints={totalPossible}
+                  />
+                )}
+              </Group>
+
+              <Group label="Scoring rules">
+                {/* A column of zeros reads as data — as though the audit had been
+                measured and found to contain nothing. One line first says which
+                it is, so the numbers below are read as a starting point rather
+                than a result. The rows themselves are unchanged and become
+                meaningful the moment anything is added. */}
+                {questionCount === 0 && (
+                  <p className="mb-3 text-xs text-ink-muted">
+                    Nothing configured yet — this summary fills in as questions
+                    and sections are added.
+                  </p>
+                )}
+                <ul className="space-y-2 text-sm">
+                  <SummaryRow
+                    icon="grid"
+                    label={`${sections.length} Sections`}
+                  />
+                  <SummaryRow
+                    icon="clipboard"
+                    label={`${questionCount} Questions`}
+                  />
+                  <SummaryRow
+                    icon="weight"
+                    label={`${weightedCount} Weighted Questions`}
+                  />
+                  <SummaryRow
+                    icon="alert"
+                    label={`${mandatoryCount} Mandatory Questions`}
+                    tone="text-hivis-600"
+                  />
+                  <SummaryRow
+                    icon="percent"
+                    label={`Passing Score: ${passPercent}%`}
+                  />
+                </ul>
+                <p className="mt-3 flex items-start gap-2 rounded-lg bg-brand-50 p-3 text-xs text-ink-muted">
+                  <PlatformIcon
+                    name="info"
+                    className="mt-0.5 h-4 w-4 shrink-0 text-brand-600"
+                  />
+                  Scores are calculated automatically in real time as audits are
+                  completed.
+                </p>
+              </Group>
+            </Card>
+          </div>
+        </div>
+
+        {/* Question scoring rules is a legend for the whole audit, not a step in
+            the left-hand column — and the SC-014 benchmark places it exactly
+            here, as a wide band under the two working columns with its four
+            tiles in one row. In a third-width column those tiles stacked 2×2
+            and read as four more widgets. */}
+        <div className="lg:col-span-2 lg:col-start-1 lg:row-start-2">
+          <Card
+            title="Question Scoring Rules"
+            hint="Choose how individual questions are scored"
+          >
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {QUESTION_RULES.map((rule) => (
+                <div
+                  key={rule.value}
+                  className="rounded-lg border border-line bg-surface p-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <PlatformIcon
+                      name={
+                        rule.icon === 'weight'
+                          ? 'weight'
+                          : rule.icon === 'check'
+                            ? 'check'
+                            : rule.icon === 'alert'
+                              ? 'alert'
+                              : 'info'
+                      }
+                      className={`h-4 w-4 ${
+                        rule.value === 'MANDATORY'
+                          ? 'text-hivis-600'
+                          : rule.value === 'PASS_FAIL'
+                            ? 'text-safe-600'
+                            : rule.value === 'INFO_ONLY'
+                              ? 'text-brand-600'
+                              : 'text-ink-muted'
+                      }`}
+                    />
+                    <span className="text-xs font-semibold text-ink">
+                      {rule.label}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[11px] leading-tight text-ink-subtle">
+                    {rule.description}
+                  </p>
+                  <p className="mt-1 text-[11px] font-medium text-ink-muted">
+                    {rule.value === 'MANDATORY'
+                      ? `${mandatoryCount} in this audit`
+                      : `${items.filter((i) => i.scoringRule === rule.value).length} in this audit`}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 flex items-start gap-2 rounded-lg bg-surface-sunken p-3 text-xs text-ink-muted">
+              <PlatformIcon
+                name="info"
+                className="mt-0.5 h-4 w-4 shrink-0 text-brand-600"
+              />
+              Set the rule for each question below — mandatory questions must be
+              passed for the audit to pass, whatever the overall score.
+            </p>
+          </Card>
+        </div>
+
+        {/* The questions list is the one long thing on this screen. Left in a
+            third-width column it ran the entire height of the page while the
+            other two columns ended near the top — the layout read as one tall
+            widget with two stubs beside it. Across two columns it gets the
+            width its controls need, and the feedback rail (which spans all
+            three rows) stays alongside it as you work down. */}
+        <div className="lg:col-span-2 lg:col-start-1 lg:row-start-3">
           <Card
             title={`Questions (${questionCount})`}
             hint="Assign each question to a section and choose how it scores"
@@ -776,9 +938,18 @@ export function AuditScoringConfig({
             ) : (
               <ul className="divide-y divide-line">
                 {items.map((item) => (
-                  <li key={item.id} className="py-3">
-                    <p className="text-sm font-medium text-ink">{item.label}</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                  // Question and its controls on ONE line now there is width
+                  // for it: 36 questions each taking two lines was half the
+                  // reason this screen felt endless. Wraps back to two lines
+                  // below lg, where the controls need the room.
+                  <li
+                    key={item.id}
+                    className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2.5"
+                  >
+                    <p className="min-w-[16rem] flex-1 text-sm font-medium text-ink">
+                      {item.label}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
                       <select
                         value={item.sectionId ?? ''}
                         onChange={(e) =>
@@ -874,143 +1045,6 @@ export function AuditScoringConfig({
                 {issues.items}
               </p>
             )}
-          </Card>
-        </div>
-
-        {/* ---------------- Column 3 — live feedback ----------------
-            One contextual summary rather than three separate readouts, and it
-            sticks to the top of the viewport: the point of this column is to
-            answer "what does what I just changed add up to?", which is no use
-            once you have scrolled past it into the questions list. */}
-        <div className="space-y-4 lg:sticky lg:top-6">
-          <Card
-            title="Score Preview"
-            hint="This is how the scoring will work for this audit"
-          >
-            {/* NOTHING TO SCORE IS NOT A PASS.
-                This panel used to render green with a "Pass" pill whatever the
-                audit contained — so an audit with no questions showed a
-                confident "80% · Pass". That is a verdict, and there is no
-                verdict to give: the threshold is configuration, not a result,
-                and presenting it as one invites someone to read an empty audit
-                as a passing one.
-                The same numbers are shown either way. Only the framing changes:
-                neutral and labelled as a target until there is something to
-                score against. */}
-            {questionCount === 0 ? (
-              <div className="rounded-lg border border-line bg-surface-sunken p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
-                  Pass mark, once set up
-                </p>
-                <p className="text-3xl font-bold text-ink-muted">
-                  {asPercent ? `${passPercent}%` : `${passing} pts`}
-                </p>
-                <p className="mt-1 text-xs text-ink-subtle">
-                  {passing} out of {totalPossible} points
-                </p>
-                <p className="mt-3 border-t border-line pt-3 text-xs text-ink-muted">
-                  This audit has no questions, so there is nothing to score yet.
-                  The pass mark above is ready and will apply as soon as it has
-                  some.
-                </p>
-              </div>
-            ) : (
-              <div className="rounded-lg border border-safe-500/40 bg-safe-50 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-safe-700">
-                      Passing Score
-                    </p>
-                    <p className="text-3xl font-bold text-safe-700">
-                      {asPercent ? `${passPercent}%` : `${passing} pts`}
-                    </p>
-                    <p className="mt-1 text-xs text-ink-muted">
-                      {passing} out of {totalPossible} points
-                    </p>
-                  </div>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-safe-500 px-2.5 py-1 text-xs font-semibold text-white">
-                    <PlatformIcon name="check" className="h-3.5 w-3.5" />
-                    Pass
-                  </span>
-                </div>
-              </div>
-            )}
-            <p className="mt-3 text-xs text-ink-subtle">
-              {method === 'PASS_FAIL'
-                ? 'Every scorable question must pass for the audit to pass.'
-                : method === 'CUSTOM'
-                  ? 'Scores map onto the named bands you define.'
-                  : 'Scores are calculated automatically as the audit is completed.'}
-            </p>
-
-            <Group label="Score breakdown">
-              {slices.length === 0 ? (
-                // An empty state that says what the panel is FOR, not just what
-                // is missing. "Add sections to see the breakdown" tells you the
-                // button to press; it does not tell you why you would want to,
-                // which is the question someone configuring scoring for the first
-                // time is actually asking.
-                <div className="text-sm text-ink-subtle">
-                  <p>
-                    Sections divide an audit into parts — access, welfare, plant
-                    — and this shows how much of the total score each part
-                    carries.
-                  </p>
-                  <p className="mt-2">
-                    {questionCount === 0
-                      ? 'Available once this audit has questions to group.'
-                      : 'Every question currently counts towards one overall score.'}
-                  </p>
-                </div>
-              ) : (
-                <ScoreBreakdownDonut
-                  slices={slices}
-                  totalPoints={totalPossible}
-                />
-              )}
-            </Group>
-
-            <Group label="Scoring rules">
-              {/* A column of zeros reads as data — as though the audit had been
-                measured and found to contain nothing. One line first says which
-                it is, so the numbers below are read as a starting point rather
-                than a result. The rows themselves are unchanged and become
-                meaningful the moment anything is added. */}
-              {questionCount === 0 && (
-                <p className="mb-3 text-xs text-ink-muted">
-                  Nothing configured yet — this summary fills in as questions
-                  and sections are added.
-                </p>
-              )}
-              <ul className="space-y-2 text-sm">
-                <SummaryRow icon="grid" label={`${sections.length} Sections`} />
-                <SummaryRow
-                  icon="clipboard"
-                  label={`${questionCount} Questions`}
-                />
-                <SummaryRow
-                  icon="weight"
-                  label={`${weightedCount} Weighted Questions`}
-                />
-                <SummaryRow
-                  icon="alert"
-                  label={`${mandatoryCount} Mandatory Questions`}
-                  tone="text-hivis-600"
-                />
-                <SummaryRow
-                  icon="percent"
-                  label={`Passing Score: ${passPercent}%`}
-                />
-              </ul>
-              <p className="mt-3 flex items-start gap-2 rounded-lg bg-brand-50 p-3 text-xs text-ink-muted">
-                <PlatformIcon
-                  name="info"
-                  className="mt-0.5 h-4 w-4 shrink-0 text-brand-600"
-                />
-                Scores are calculated automatically in real time as audits are
-                completed.
-              </p>
-            </Group>
           </Card>
         </div>
       </div>

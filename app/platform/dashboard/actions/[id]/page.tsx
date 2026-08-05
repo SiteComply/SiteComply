@@ -198,63 +198,74 @@ export default async function ActionDetailPage({
             one, which put the Status fact and the control that changes it in
             different boxes. They are the same subject, so they are now the same
             panel: read the state, then act on it. */}
-        <div className="space-y-6">
-          <Panel title="Summary">
-            <dl className="space-y-3">
-              <Detail
-                label="Priority"
-                value={actionPriorityLabel(action.priority)}
-                badge={
-                  ACTION_PRIORITY_BADGE[action.priority as ActionPriorityValue]
-                }
-              />
-              <Detail label="Status" value={actionStatusLabel(action.status)} />
-              <Detail
-                label="Due date"
-                value={action.dueDate ? formatDateUK(action.dueDate) : '—'}
-              />
-              <Detail
-                label="Assigned to"
-                value={
-                  action.assignedTo
-                    ? action.assignedToCompany
-                      ? `${action.assignedTo} · ${action.assignedToCompany}`
-                      : action.assignedTo
-                    : '—'
-                }
-              />
-              <Detail
-                label="Site"
-                value={`${action.jobSite.name} · ${action.jobSite.jobReference}`}
-              />
-              <Detail
-                label="Created by"
-                value={action.createdByName ?? 'Unknown'}
-              />
-              <Detail
-                label="Created"
-                value={formatDateTimeUK(action.createdAt)}
-              />
-              {action.completedAt && (
+        <div>
+          {/* Sticky on the INNER div, not the grid item: a stretched grid item
+              is as tall as the row, so a sticky rule on it has nowhere to
+              travel and does nothing. The summary and the status control are
+              what you reach for while reading down the activity thread. */}
+          <div className="space-y-6 lg:sticky lg:top-6">
+            <Panel title="Summary">
+              <dl className="space-y-3">
                 <Detail
-                  label="Completed"
-                  value={formatDateTimeUK(action.completedAt)}
+                  label="Priority"
+                  value={actionPriorityLabel(action.priority)}
+                  badge={
+                    ACTION_PRIORITY_BADGE[
+                      action.priority as ActionPriorityValue
+                    ]
+                  }
                 />
-              )}
-            </dl>
+                <Detail
+                  label="Status"
+                  value={actionStatusLabel(action.status)}
+                />
+                <Detail
+                  label="Due date"
+                  value={action.dueDate ? formatDateUK(action.dueDate) : '—'}
+                />
+                <Detail
+                  label="Assigned to"
+                  value={
+                    action.assignedTo
+                      ? action.assignedToCompany
+                        ? `${action.assignedTo} · ${action.assignedToCompany}`
+                        : action.assignedTo
+                      : '—'
+                  }
+                />
+                <Detail
+                  label="Site"
+                  value={`${action.jobSite.name} · ${action.jobSite.jobReference}`}
+                />
+                <Detail
+                  label="Created by"
+                  value={action.createdByName ?? 'Unknown'}
+                />
+                <Detail
+                  label="Created"
+                  value={formatDateTimeUK(action.createdAt)}
+                />
+                {action.completedAt && (
+                  <Detail
+                    label="Completed"
+                    value={formatDateTimeUK(action.completedAt)}
+                  />
+                )}
+              </dl>
 
-            {/* No heading on the divider below: ActionStatusControl prints its
+              {/* No heading on the divider below: ActionStatusControl prints its
                 own "Update status" label, and two of them was exactly the kind
                 of duplication this refactor is meant to remove. */}
-            {canEdit && (
-              <div className="mt-4 border-t border-line pt-4">
-                <ActionStatusControl
-                  actionId={action.id}
-                  status={action.status}
-                />
-              </div>
-            )}
-          </Panel>
+              {canEdit && (
+                <div className="mt-4 border-t border-line pt-4">
+                  <ActionStatusControl
+                    actionId={action.id}
+                    status={action.status}
+                  />
+                </div>
+              )}
+            </Panel>
+          </div>
         </div>
       </div>
     </PlatformShell>
