@@ -72,17 +72,30 @@ export function verifySession<T>(token: string | undefined): T | null {
 
 // --- Worker session helpers -------------------------------------------------
 
+/**
+ * `ttlSeconds` overrides the built-in default so the Director-configured worker
+ * session timeout (Settings → Authentication & Access, via
+ * getAuthRuntimeConfig) is honoured; omitting it preserves the legacy 2h TTL.
+ * Same shape as createPlatformSessionToken, deliberately: this module stays
+ * synchronous and free of database imports, so the caller reads the config and
+ * passes the number in.
+ */
 export function createWorkerSessionToken(input: {
   mobile: string;
   workerId?: string;
+  ttlSeconds?: number;
 }): string {
   const now = Math.floor(Date.now() / 1000);
+  const ttl =
+    input.ttlSeconds && input.ttlSeconds > 0
+      ? input.ttlSeconds
+      : WORKER_TTL_SECONDS;
   const session: WorkerSession = {
     typ: 'worker',
     mobile: input.mobile,
     workerId: input.workerId,
     iat: now,
-    exp: now + WORKER_TTL_SECONDS,
+    exp: now + ttl,
   };
   return signSession(session);
 }
@@ -97,13 +110,19 @@ export function getWorkerSession(): WorkerSession | null {
 }
 
 /** Set the worker session cookie (call from a Route Handler / Server Action). */
-export function setWorkerSessionCookie(token: string): void {
+export function setWorkerSessionCookie(
+  token: string,
+  maxAgeSeconds?: number,
+): void {
   cookies().set(WORKER_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: WORKER_TTL_SECONDS,
+    // The cookie must expire with the token it carries, or the browser keeps
+    // sending a token the server will reject.
+    maxAge:
+      maxAgeSeconds && maxAgeSeconds > 0 ? maxAgeSeconds : WORKER_TTL_SECONDS,
   });
 }
 

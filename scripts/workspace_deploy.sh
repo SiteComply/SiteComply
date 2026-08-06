@@ -78,10 +78,29 @@ echo "[2/8] Asserting the refactor, and the things it must not have touched..."
 # deploy for a documentation commit. Name what must NOT move instead.
 # ---------------------------------------------------------------------------
 FROZEN="services lib prisma middleware.ts package.json package-lock.json next.config.js app/api"
+
+# THE WORKING TREE IS WHAT SHIPS. [5/8] zips the working tree, not HEAD, so a
+# commit-only check is the wrong question: uncommitted edits would be deployed
+# without ever being asserted. This was exactly the case the first time a
+# schema change was made on this branch — the guard passed on a diff that
+# touched prisma/, because the change had not been committed yet.
+DIRTY=$(git status --porcelain)
+if [ -n "$DIRTY" ]; then
+  echo "ERROR: working tree is not clean, and the zip is built from the working"
+  echo "       tree — deploy what is committed, or commit what you are deploying:"
+  echo "$DIRTY" | sed 's/^/         /'
+  exit 1
+fi
+
 FROZEN_TOUCHED=$(git diff --name-only "${BASE_COMMIT}"..HEAD -- $FROZEN)
 if [ -n "$FROZEN_TOUCHED" ]; then
   echo "ERROR: this is no longer a presentation-only deploy — frozen zones changed:"
   echo "$FROZEN_TOUCHED" | sed 's/^/         /'
+  echo
+  echo "       If this is intended, it needs the right deploy for its kind of"
+  echo "       change. A prisma/ change needs its migration applied FIRST — see"
+  echo "       scripts/scNNN_migrate.sh for the pattern. This script is code-only"
+  echo "       and will not run a migration."
   exit 1
 fi
 CHANGED_ROOTS=$(git diff --name-only "${BASE_COMMIT}"..HEAD | sed 's|/.*||' | sort -u | tr '\n' ' ')

@@ -6,6 +6,7 @@ import {
   setWorkerSessionCookie,
 } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
+import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
 import { upsertWorkerProfile } from '@/services/workers/workerService';
 import { isValidCscsCardNumber, normaliseCscsCardNumber } from '@/lib/cscs';
 import { verifyCscsCard } from '@/services/cscs/cscsVerificationService';
@@ -182,8 +183,14 @@ export async function POST(req: NextRequest) {
   }
 
   // Refresh the session so it now carries the workerId.
+  const { workerSessionTtlSeconds } = await getAuthRuntimeConfig();
   setWorkerSessionCookie(
-    createWorkerSessionToken({ mobile: session.mobile, workerId: worker.id }),
+    createWorkerSessionToken({
+      mobile: session.mobile,
+      workerId: worker.id,
+      ttlSeconds: workerSessionTtlSeconds,
+    }),
+    workerSessionTtlSeconds,
   );
 
   return NextResponse.json({

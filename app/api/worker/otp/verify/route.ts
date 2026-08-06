@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyCode } from '@/services/auth/otpService';
 import { normaliseUkMobile } from '@/lib/phone';
+import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
 import {
   createWorkerSessionToken,
   setWorkerSessionCookie,
@@ -56,11 +57,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result, { status: 401 });
   }
 
+  // Worker session lifetime is Director-configurable (Settings → Authentication
+  // & Access). Read at sign-in so a change applies to new sessions immediately.
+  const { workerSessionTtlSeconds } = await getAuthRuntimeConfig();
   const token = createWorkerSessionToken({
     mobile: result.mobile,
     workerId: result.workerId,
+    ttlSeconds: workerSessionTtlSeconds,
   });
-  setWorkerSessionCookie(token);
+  setWorkerSessionCookie(token, workerSessionTtlSeconds);
   // The worker session now carries the identity; the pending-OTP cookie is done.
   clearWorkerOtpMobileCookie();
 

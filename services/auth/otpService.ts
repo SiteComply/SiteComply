@@ -73,8 +73,14 @@ export async function requestCode(
   const now = Date.now();
 
   const authConfig = await getAuthRuntimeConfig();
-  // Admin can disable the SMS OTP channel (Settings → Authentication).
-  if (!authConfig.smsOtpEnabled) {
+  // TWO SEPARATE SWITCHES, deliberately.
+  //   smsOtpEnabled          — the Admin Centre's kill switch for the SMS
+  //                            channel itself (infrastructure).
+  //   workerSmsLoginEnabled  — a Director turning off SMS as a way for WORKERS
+  //                            to sign in to their organisation (policy).
+  // Either being off stops the code being sent, and the worker is told the same
+  // actionable thing rather than a different message per cause.
+  if (!authConfig.smsOtpEnabled || !authConfig.workerSmsLoginEnabled) {
     return {
       ok: false,
       error:
