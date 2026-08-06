@@ -1,4 +1,8 @@
 import { prisma } from '@/lib/prisma';
+import {
+  getSmsDeliveryStatus,
+  type SmsDeliveryStatus,
+} from '@/services/sms/smsConfigService';
 
 /**
  * Runtime authentication configuration store (Admin → Settings → Authentication).
@@ -236,6 +240,16 @@ export interface PlatformAuthSettingsView {
   smsOtpEnabled: boolean;
   workerSmsLoginEnabled: boolean;
   expressCheckInEnabled: boolean;
+  /**
+   * What is ACTUALLY delivering sign-in codes, resolved the same way the send
+   * path resolves it. Reported rather than asserted: this screen used to say
+   * "SMS one-time codes: Available" from the channel flag alone, which stayed
+   * reassuring while production was running the console mock and delivering
+   * nothing. A Director cannot change this here — it is the Admin Centre's —
+   * but they must be able to see it, because every worker-login setting above
+   * is meaningless if no text ever arrives.
+   */
+  smsDelivery: SmsDeliveryStatus;
   /** Access controls. */
   invitedWorkersOnly: boolean;
   requireActiveSiteAssignment: boolean;
@@ -257,8 +271,12 @@ export interface SavePlatformAuthSettingsInput {
 }
 
 export async function getPlatformAuthSettings(): Promise<PlatformAuthSettingsView> {
-  const row = await readRow();
+  const [row, smsDelivery] = await Promise.all([
+    readRow(),
+    getSmsDeliveryStatus(),
+  ]);
   return {
+    smsDelivery,
     sessionTtlSeconds: effective('sessionTtlSeconds', row?.sessionTtlSeconds),
     workerSessionTtlSeconds: effective(
       'workerSessionTtlSeconds',

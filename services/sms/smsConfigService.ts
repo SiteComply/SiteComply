@@ -42,6 +42,65 @@ async function readRow() {
   return prisma.smsConfig.findUnique({ where: { id: CONFIG_ID } });
 }
 
+/**
+ * Which provider id the send path will actually use, and where that decision
+ * came from.
+ *
+ * This MIRRORS resolveSmsProvider() in ./index.ts deliberately — same order,
+ * same production default. Any screen that reports the active provider has to
+ * agree with the code that sends the message, or it is worse than showing
+ * nothing: it is a confident wrong answer about whether texts are reaching
+ * people.
+ */
+function resolveProviderId(
+  storedProvider: string | null | undefined,
+): { providerId: string; source: 'database' | 'environment' | 'default' } {
+  if (storedProvider) return { providerId: storedProvider, source: 'database' };
+  const env = process.env.SMS_PROVIDER?.toLowerCase();
+  if (env) return { providerId: env, source: 'environment' };
+  return {
+    providerId: process.env.NODE_ENV === 'production' ? 'acs' : 'mock',
+    source: 'default',
+  };
+}
+
+export interface SmsDeliveryStatus {
+  providerId: string;
+  /** Human name from the catalogue, or the raw id if it is not a known one. */
+  providerName: string;
+  /** True when nothing is actually delivered — codes never reach a handset. */
+  isMock: boolean;
+  /** False when the provider id is not one this build can construct. */
+  isKnownProvider: boolean;
+  /** The master outbound switch (Admin → Settings → Integrations). */
+  sendingEnabled: boolean;
+  source: 'database' | 'environment' | 'default';
+}
+
+/**
+ * The effective SMS delivery state, WITHOUT touching any secret.
+ *
+ * Reads only the provider id and the master switch, so it is safe to surface
+ * to any portal that is allowed to see the configuration — no connection
+ * string is decrypted to answer "is SMS actually working".
+ */
+export async function getSmsDeliveryStatus(): Promise<SmsDeliveryStatus> {
+  const row = await prisma.smsConfig.findUnique({
+    where: { id: CONFIG_ID },
+    select: { activeProvider: true, sendingEnabled: true },
+  });
+  const { providerId, source } = resolveProviderId(row?.activeProvider);
+  const desc = getSmsProviderDescriptor(providerId);
+  return {
+    providerId,
+    providerName: desc?.name ?? providerId,
+    isMock: providerId === 'mock',
+    isKnownProvider: !!desc,
+    sendingEnabled: row?.sendingEnabled ?? true,
+    source,
+  };
+}
+
 function asSettings(json: unknown): Settings {
   return (json && typeof json === 'object' ? json : {}) as Settings;
 }
@@ -64,7 +123,13 @@ export async function getSmsConfigForAdmin(): Promise<SmsConfigView> {
   }
 
   return {
-    activeProvider: row?.activeProvider ?? process.env.SMS_PROVIDER ?? 'mock',
+    // Resolved the SAME way the send path resolves it. This previously ended
+    // in a literal 'mock', which disagreed with resolveSmsProvider() whenever
+    // SMS_PROVIDER was unset in production — that path defaults to 'acs'. The
+    // screen would have shown "Mock" while real texts were being attempted
+    // through ACS, or the reverse. An integrations screen that misreports the
+    // live provider is how a mock survives unnoticed in production.
+    activeProvider: resolveProviderId(row?.activeProvider).providerId,
     // Defaults ON when no row exists: the ACTIVE PROVIDER decides whether a
     // real message leaves, so an absent config must not read as "suppressed".
     sendingEnabled: row?.sendingEnabled ?? true,
