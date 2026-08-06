@@ -27,6 +27,11 @@
 # be a destructive change to recover from a non-destructive one.
 set -euo pipefail
 export PATH="$HOME/.local/pgsql/usr/lib/postgresql/16/bin:$HOME/.local/bin:$PATH"
+# Postgres is a userland install: psql finds libpq.so.5 only via this path, and
+# without it every psql call fails with a shared-library error that reads like
+# a database problem. The pre-flight below correctly refused to proceed when it
+# happened — it could not read the history, so it did not guess.
+export LD_LIBRARY_PATH="$HOME/.local/pgsql/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}"
 cd /home/cc-dev-1/sitecomply
 
 RG=rgSiteComply

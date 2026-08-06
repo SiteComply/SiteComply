@@ -32,6 +32,9 @@
 # ignores the columns. See docs/AUTH-ACCESS-DEPLOYMENT.md.
 set -uo pipefail
 export PATH="$HOME/.local/pgsql/usr/lib/postgresql/16/bin:$HOME/.local/bin:$PATH"
+# See sc026_migrate.sh — psql is a userland install and needs its lib path, or
+# the ordering guard in [2/9] cannot read the column list and aborts.
+export LD_LIBRARY_PATH="$HOME/.local/pgsql/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}"
 cd /home/cc-dev-1/sitecomply
 
 RG=rgSiteComply
