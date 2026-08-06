@@ -225,11 +225,16 @@ if(/lg:row-start-3/.test(sc))
   fail('the question editor is back in the scoring grid — it belongs in the Configure Questions view');
 if(!/lg:sticky lg:top-6/.test(sc))
   fail('the Score Preview rail is no longer sticky on the inner div');
-// This screen renders its own benchmark-scale card — hairline border, no
-// shadow, ~13px title — rather than the platform Panel. Falling back to Panel
-// puts the shadowed, 25%-larger treatment back and the density goes with it.
-if(sc.indexOf('rounded-lg border border-line bg-surface p-3.5') < 0)
-  fail('the benchmark card treatment is gone — Audit Scoring is back on the platform Panel');
+// ONE SURFACE, NOT CARDS. White cards on a grey page are figure-and-ground:
+// each reads as a separate floating object and five of them read as five
+// widgets however they are spaced. The workspace is a single bordered sheet
+// with hairline rules between its regions, which is what makes it read as one
+// scoring system. If the regions grow their own borders again, the screen goes
+// back to looking like a settings form and this deploy should stop.
+if(sc.indexOf('overflow-hidden rounded-xl border border-line bg-surface') < 0)
+  fail('the single-surface workspace container is gone — Audit Scoring is back to separate cards');
+if(sc.indexOf('divide-y divide-line border-line lg:border-r') < 0)
+  fail('the internal dividing rules are gone — the columns are separate panels again');
 
 // ---------------- Score breakdown donut ----------------
 // THE OVERFLOW DEFECT. As a full-width child beside a shrink-0 donut, with no min-width
