@@ -33,8 +33,8 @@ export function ScoreBreakdownDonut({
   totalPoints,
   // Sized to the SC-014 benchmark's proportion — its donut is roughly a third of
   // the Score Preview column, sitting BESIDE the legend rather than above it.
-  size = 136,
-  thickness = 30,
+  size = 118,
+  thickness = 26,
 }: {
   slices: DonutSlice[];
   totalPoints: number;
@@ -57,7 +57,8 @@ export function ScoreBreakdownDonut({
     // Mid-point of this arc as a fraction of the whole ring, for the on-segment
     // label. The benchmark prints each share ON its band, which is what lets the
     // figure be read without crossing to the legend and back.
-    const midFraction = circumference > 0 ? (offset + length / 2) / circumference : 0;
+    const midFraction =
+      circumference > 0 ? (offset + length / 2) / circumference : 0;
     const angle = midFraction * 2 * Math.PI - Math.PI / 2;
     const arc = {
       slice,
@@ -74,7 +75,7 @@ export function ScoreBreakdownDonut({
   });
 
   return (
-    <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
+    <div className="flex flex-col items-center gap-2.5 sm:flex-row sm:items-center">
       <svg
         viewBox={`0 0 ${size} ${size}`}
         width={size}
@@ -122,7 +123,7 @@ export function ScoreBreakdownDonut({
               dominantBaseline="central"
               aria-hidden="true"
               className="font-semibold"
-              style={{ fontSize: 10, fill: '#fff' }}
+              style={{ fontSize: 9, fill: '#fff' }}
             >
               {Math.round(slice.percent)}%
             </text>
@@ -133,7 +134,7 @@ export function ScoreBreakdownDonut({
           y={centre - 2}
           textAnchor="middle"
           className="fill-ink font-bold"
-          style={{ fontSize: 22 }}
+          style={{ fontSize: 19 }}
         >
           {totalPoints}
         </text>
@@ -154,7 +155,7 @@ export function ScoreBreakdownDonut({
           not shrink it back — so the panel pushed the whole PAGE into horizontal
           scroll on every viewport from 1024px to 1535px. Measured: 135px of
           overflow at 1024, 29px at 1440, gone at 1536. */}
-      <ul className="min-w-0 flex-1 space-y-2 text-xs">
+      <ul className="min-w-0 flex-1 space-y-1 text-[10.5px]">
         {slices.map((slice, index) => (
           <li key={slice.id} className="flex items-center gap-2">
             <span

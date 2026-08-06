@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Panel } from '@/components/platform/Panel';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { PlatformIcon } from '@/components/platform/icons';
@@ -556,7 +555,7 @@ export function AuditScoringConfig({
                         Actions and Permits registers already write their own
                         column headers. The uppercase micro-caps here were the
                         odd one out in the portal. */}
-                      <tr className="border-b border-line text-left text-xs text-ink-subtle">
+                      <tr className="border-b border-line text-left text-[10.5px] text-ink-subtle">
                         <th className="pb-2.5 font-medium">Section</th>
                         <th className="w-20 pb-2.5 text-right font-medium">
                           Weight
@@ -573,24 +572,25 @@ export function AuditScoringConfig({
                           key={section.id}
                           className="group/row border-t border-line"
                         >
-                          <td className="py-3 pr-2">
-                            <div className="flex items-center gap-2">
-                              {/* The benchmark numbers its sections; this screen
-                                also has to tie each row to its donut segment.
-                                Carrying those as two elements — a swatch AND an
-                                ordinal — cost ~28px of a column whose scarcest
-                                resource is width, and the section name paid for
-                                it. One coloured chip does both jobs.
-
-                                Presentation only: the number is the row's
-                                position, which is the order already on screen,
-                                and nothing new is stored. */}
+                          <td className="py-2 pr-2">
+                            <div className="flex items-center gap-1.5">
+                              {/* The benchmark opens each row with a six-dot grip
+                                  and a plain "1." — not a filled colour chip.
+                                  The chip tied the row to its donut segment, but
+                                  the mock-up makes no such link here and the
+                                  legend already names every section, so the tie
+                                  cost more width than it earned. */}
                               <span
                                 aria-hidden="true"
-                                className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[11px] font-bold tabular-nums text-white"
-                                style={{ backgroundColor: chartColour(idx) }}
+                                className="shrink-0 select-none text-[13px] leading-none tracking-[-0.15em] text-ink-subtle/60"
                               >
-                                {idx + 1}
+                                ⠿
+                              </span>
+                              <span
+                                aria-hidden="true"
+                                className="shrink-0 text-[11.5px] font-bold tabular-nums text-ink"
+                              >
+                                {idx + 1}.
                               </span>
                               <div className="min-w-0 flex-1">
                                 <input
@@ -619,25 +619,28 @@ export function AuditScoringConfig({
                                   // takes a real border on hover and on focus. It
                                   // still looks like something you can type in,
                                   // without drawing a box around every row.
-                                  className={`w-full rounded-lg border bg-transparent px-2 py-1 text-sm font-semibold text-ink transition-colors hover:border-line hover:bg-surface focus:border-brand-500 focus:bg-surface focus:outline-none ${
+                                  className={`w-full rounded border bg-transparent px-1 py-0 text-[11.5px] font-bold leading-tight text-ink transition-colors hover:border-line hover:bg-surface focus:border-brand-500 focus:bg-surface focus:outline-none ${
                                     sectionIssues[section.id]
                                       ? 'border-danger-500'
                                       : 'border-transparent'
                                   }`}
                                 />
                                 {sectionIssues[section.id] && (
-                                  <p className="mt-0.5 px-1 text-xs font-medium text-danger-600">
+                                  <p className="px-1 text-[10px] font-medium text-danger-600">
                                     {sectionIssues[section.id]}
                                   </p>
                                 )}
-                                <span className="px-1 text-xs text-ink-subtle">
+                                <span className="px-1 text-[10px] text-ink-subtle">
                                   {itemsInSection(section.id)} questions
                                 </span>
                               </div>
                             </div>
                           </td>
-                          <td className="py-3 text-right">
-                            <div className="flex items-center justify-end gap-1">
+                          <td className="py-2 text-right">
+                            {/* The benchmark puts the number and the % INSIDE one
+                                bordered box. Ours had the % floating outside it,
+                                which read as two things rather than one field. */}
+                            <label className="ml-auto flex w-[62px] items-center rounded border border-line bg-surface pr-1.5 focus-within:border-brand-500">
                               <input
                                 type="number"
                                 min={0}
@@ -656,13 +659,18 @@ export function AuditScoringConfig({
                                     ),
                                   )
                                 }
-                                className="w-16 rounded-lg border border-line px-2 py-1 text-right text-sm"
+                                className="w-full rounded border-0 bg-transparent px-1.5 py-0.5 text-right text-[11.5px] tabular-nums focus:outline-none"
                                 aria-label={`${section.name || 'Section'} weight`}
                               />
-                              <span className="text-ink-subtle">%</span>
-                            </div>
+                              <span
+                                aria-hidden="true"
+                                className="text-[10.5px] text-ink-subtle"
+                              >
+                                %
+                              </span>
+                            </label>
                           </td>
-                          <td className="whitespace-nowrap py-3 text-right font-semibold tabular-nums text-ink">
+                          <td className="whitespace-nowrap py-2 text-right text-[11.5px] font-semibold tabular-nums text-ink">
                             {Math.round(
                               sectionAvailablePoints(
                                 section.weightPercent,
@@ -671,7 +679,7 @@ export function AuditScoringConfig({
                             )}{' '}
                             pts
                           </td>
-                          <td className="py-3 pl-2 text-right">
+                          <td className="py-2 pl-1 text-right">
                             {/* Reorder and remove are row PLUMBING, not the data
                               the table exists to show — three glyphs per row at
                               full contrast competed with the weights. They stay
@@ -715,7 +723,7 @@ export function AuditScoringConfig({
                       by a heavier rule and carrying real weight — it is the one
                       figure that says whether the weighting adds up. */}
                     <tfoot>
-                      <tr className="border-t-2 border-ink/15 text-sm font-bold">
+                      <tr className="border-t border-line text-[11.5px] font-bold">
                         <td className="pt-3 text-ink">Total</td>
                         <td
                           className={`pt-3 text-right tabular-nums ${
@@ -779,10 +787,11 @@ export function AuditScoringConfig({
               the same sparseness in a heavier frame. Page background below a
               finished panel reads as finished; an empty panel reads as missing.
               Sticky so it stays with you when the question editor is expanded. */}
-            <div className="space-y-4 lg:sticky lg:top-6">
+            <div className="lg:sticky lg:top-6 lg:flex lg:h-full lg:flex-col">
               <Card
                 title="Score Preview"
                 hint="This is how the scoring will work for this audit"
+                fill
               >
                 {/* NOTHING TO SCORE IS NOT A PASS.
                 This panel used to render green with a "Pass" pill whatever the
@@ -812,19 +821,19 @@ export function AuditScoringConfig({
                     </p>
                   </div>
                 ) : (
-                  <div className="rounded-lg border border-safe-500/40 bg-safe-50 p-5">
+                  <div className="rounded-lg border border-safe-500/40 bg-safe-50 p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-safe-700">
+                        <p className="text-[11.5px] font-bold text-safe-700">
                           Passing Score
                         </p>
                         {/* The hero figure of the panel, at the benchmark's weight.
                           At text-3xl it sat level with the section headings and
                           read as another row of the summary. */}
-                        <p className="mt-0.5 text-4xl font-bold leading-none tracking-tight text-safe-700">
+                        <p className="mt-0.5 text-[30px] font-bold leading-none tracking-tight text-safe-700">
                           {asPercent ? `${passPercent}%` : `${passing} pts`}
                         </p>
-                        <p className="mt-2 text-xs text-ink-muted">
+                        <p className="mt-1 text-[10.5px] text-ink-muted">
                           {passing} out of {totalPossible} points
                         </p>
                       </div>
@@ -889,7 +898,7 @@ export function AuditScoringConfig({
                       questions and sections are added.
                     </p>
                   )}
-                  <ul className="space-y-2.5 text-sm">
+                  <ul className="space-y-1.5 text-[11.5px]">
                     <SummaryRow
                       icon="grid"
                       label={`${sections.length} Sections`}
@@ -912,7 +921,7 @@ export function AuditScoringConfig({
                       label={`Passing Score: ${passPercent}%`}
                     />
                   </ul>
-                  <p className="mt-3 flex items-start gap-2 rounded-lg bg-brand-50 p-3 text-xs text-ink-muted">
+                  <p className="mt-3 flex items-start gap-2 rounded bg-brand-50 p-2.5 text-[10.5px] leading-snug text-ink-muted">
                     <PlatformIcon
                       name="info"
                       className="mt-0.5 h-4 w-4 shrink-0 text-brand-600"
@@ -981,8 +990,8 @@ export function AuditScoringConfig({
                 card, not a fifth panel below it. The standalone "Questions"
                 card was the clearest signal that this screen was a dashboard
                 with an editor bolted underneath. */}
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-surface-sunken p-3">
-                <p className="flex min-w-0 items-start gap-2 text-xs text-ink-muted">
+              <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3 rounded bg-brand-50/60 px-3 py-2">
+                <p className="flex min-w-0 items-start gap-2 text-[10.5px] leading-snug text-ink-muted">
                   <PlatformIcon
                     name="info"
                     className="mt-0.5 h-4 w-4 shrink-0 text-brand-600"
@@ -994,14 +1003,12 @@ export function AuditScoringConfig({
                 <button
                   type="button"
                   onClick={() => setView('questions')}
-                  className={`inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-semibold ${
-                    issues.items
-                      ? 'border-danger-500 text-danger-600 hover:bg-danger-50'
-                      : 'border-brand-500 text-brand-700 hover:bg-brand-50'
+                  className={`inline-flex shrink-0 items-center gap-1.5 text-[11.5px] font-bold hover:underline ${
+                    issues.items ? 'text-danger-600' : 'text-brand-700'
                   }`}
                 >
                   Configure Questions
-                  <span className="rounded-full bg-brand-50 px-1.5 py-0.5 text-xs tabular-nums text-brand-700">
+                  <span className="rounded-full bg-brand-100 px-1.5 text-[10px] tabular-nums text-brand-700">
                     {questionCount}
                   </span>
                   <span aria-hidden="true">→</span>
@@ -1172,11 +1179,6 @@ export function AuditScoringConfig({
           </Card>
         </div>
       )}
-
-      <p className="text-xs text-ink-subtle">
-        Scoring for{' '}
-        <span className="font-medium text-ink-muted">{auditTitle}</span>
-      </p>
     </div>
   );
 }
@@ -1190,24 +1192,39 @@ export function AuditScoringConfig({
 function Card({
   title,
   hint,
+  fill,
   children,
 }: {
   title: string;
   hint?: string;
+  /** Stretch to the full height of its grid track (the review column). */
+  fill?: boolean;
   children: React.ReactNode;
 }) {
-  // One step up from the shared default: in the benchmark each column heading
-  // clearly out-ranks the labelled groups beneath it, which is what makes three
-  // panels read as one scoring system rather than three cards. At the shared
-  // 14px the heading sat level with its own contents.
+  // BENCHMARK CARD, not the shared Panel.
   //
-  // The size token is written ONLY in the JSX below, never in this comment —
-  // the deploy guard greps for it, and a comment that quotes the thing being
-  // asserted is how a guard comes to pass on prose while the code is gone.
+  // The SC-014 mock-up is drawn in a lighter, denser visual language than the
+  // rest of the portal: a hairline border and NO shadow, ~13px titles, ~11px
+  // hints, tighter padding. Rendered through the shared Panel — shadowed, 16px
+  // title, comfortable padding — the same content needs about a quarter more
+  // room and stops reading as the benchmark. The brief is explicit that the
+  // benchmark is the authority for THIS screen, so this card owns its own
+  // treatment rather than dragging the platform's Panel toward it and moving
+  // fifty-odd other call sites with it.
   return (
-    <Panel title={title} hint={hint} titleSize="md">
-      {children}
-    </Panel>
+    <section
+      className={`rounded-lg border border-line bg-surface p-3.5 ${
+        fill ? 'flex h-full flex-col' : ''
+      }`}
+    >
+      <h2 className="text-[13px] font-bold leading-tight text-ink">{title}</h2>
+      {hint && (
+        <p className="mt-0.5 text-[11px] leading-snug text-ink-subtle">
+          {hint}
+        </p>
+      )}
+      <div className={`mt-2.5 ${fill ? 'flex-1' : ''}`}>{children}</div>
+    </section>
   );
 }
 
@@ -1228,16 +1245,19 @@ function Group({
   first?: boolean;
   children: React.ReactNode;
 }) {
-  // The benchmark writes these as real sub-headings — "Scoring Method", "Score
-  // Breakdown", "Scoring Rules" — in sentence case at reading size, not as
-  // uppercase micro-labels. At 11px uppercase they read as form-field captions,
-  // which flattened each column into an undifferentiated list; at 14px semibold
-  // in ink they sit clearly below the 16px panel title and clearly above the
-  // body, giving the three-tier hierarchy the mock-up has.
+  // Sub-headings at the benchmark's weight — "Score Breakdown", "Scoring Rules"
+  // sit a step under the 13px card title, not level with it and not as uppercase
+  // micro-caps. No rule above them: the mock-up separates its groups with space,
+  // and a line every few rows was part of what made this read as a stack of
+  // widgets.
   return (
-    <div className={first ? undefined : 'mt-3.5 border-t border-line pt-3.5'}>
-      <p className="text-sm font-semibold text-ink">{label}</p>
-      {hint && <p className="mt-0.5 text-xs text-ink-subtle">{hint}</p>}
+    <div className={first ? undefined : 'mt-3.5'}>
+      <p className="text-[12.5px] font-bold leading-tight text-ink">{label}</p>
+      {hint && (
+        <p className="mt-0.5 text-[10.5px] leading-snug text-ink-subtle">
+          {hint}
+        </p>
+      )}
       <div className="mt-2">{children}</div>
     </div>
   );
@@ -1255,12 +1275,16 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mb-2 flex items-start justify-between gap-3">
+    <div className="flex items-start justify-between gap-3 py-1.5">
       <div className="min-w-0">
-        <p className="text-sm font-medium leading-snug text-ink">{label}</p>
-        {hint && <p className="text-xs leading-snug text-ink-subtle">{hint}</p>}
+        <p className="text-[12px] font-semibold leading-snug text-ink">
+          {label}
+        </p>
+        {hint && (
+          <p className="text-[10.5px] leading-snug text-ink-subtle">{hint}</p>
+        )}
         {error && (
-          <p className="text-xs font-medium text-danger-600">{error}</p>
+          <p className="text-[10.5px] font-medium text-danger-600">{error}</p>
         )}
       </div>
       {children}
@@ -1282,8 +1306,12 @@ function Toggle({
   return (
     <div className="flex items-start justify-between gap-3 py-1.5">
       <div className="min-w-0">
-        <p className="text-sm font-medium leading-snug text-ink">{label}</p>
-        {hint && <p className="text-xs leading-snug text-ink-subtle">{hint}</p>}
+        <p className="text-[12px] font-semibold leading-snug text-ink">
+          {label}
+        </p>
+        {hint && (
+          <p className="text-[10.5px] leading-snug text-ink-subtle">{hint}</p>
+        )}
       </div>
       <button
         type="button"

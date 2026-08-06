@@ -223,12 +223,13 @@ if(!/lg:grid-cols-4/.test(sc))
 // the hand-off. row-start-3 reappearing means it has been put back.
 if(/lg:row-start-3/.test(sc))
   fail('the question editor is back in the scoring grid — it belongs in the Configure Questions view');
-if(!/space-y-4 lg:sticky lg:top-6/.test(sc))
+if(!/lg:sticky lg:top-6/.test(sc))
   fail('the Score Preview rail is no longer sticky on the inner div');
-// The panel titles must out-rank the groups inside them, which is the opt-in
-// size on the shared Panel. Without it the three columns flatten again.
-if(!/titleSize=\"md\"/.test(sc))
-  fail('Audit Scoring panels dropped back to the default heading size');
+// This screen renders its own benchmark-scale card — hairline border, no
+// shadow, ~13px title — rather than the platform Panel. Falling back to Panel
+// puts the shadowed, 25%-larger treatment back and the density goes with it.
+if(sc.indexOf('rounded-lg border border-line bg-surface p-3.5') < 0)
+  fail('the benchmark card treatment is gone — Audit Scoring is back on the platform Panel');
 
 // ---------------- Score breakdown donut ----------------
 // THE OVERFLOW DEFECT. As a full-width child beside a shrink-0 donut, with no min-width
