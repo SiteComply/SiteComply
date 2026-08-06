@@ -332,7 +332,7 @@ export function AuditScoringConfig({
                       type="button"
                       onClick={() => setMethod(m.value)}
                       aria-pressed={active}
-                      className={`flex h-full flex-col items-center gap-2 rounded-lg border p-3 text-center transition ${
+                      className={`flex h-full flex-col items-center gap-1.5 rounded-lg border p-2.5 text-center transition ${
                         active
                           ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500'
                           : 'border-line bg-surface hover:bg-surface-sunken'
@@ -752,6 +752,13 @@ export function AuditScoringConfig({
             own containing block, so a sticky grid item sized to its own content
             has nowhere to go and silently does nothing. */}
         <div className="lg:col-start-3 lg:row-span-3 lg:row-start-1">
+          {/* Content-sized, NOT stretched to the full column height. Stretching
+              it was tried: the benchmark's review column is full because its
+              CONTENT fills it, whereas ours has less to say, so a stretched
+              panel just drew a tall white box with air in the bottom third —
+              the same sparseness in a heavier frame. Page background below a
+              finished panel reads as finished; an empty panel reads as missing.
+              Sticky so it stays with you when the question editor is expanded. */}
           <div className="space-y-4 lg:sticky lg:top-6">
             <Card
               title="Score Preview"
@@ -967,11 +974,52 @@ export function AuditScoringConfig({
             widget with two stubs beside it. Across two columns it gets the
             width its controls need, and the feedback rail (which spans all
             three rows) stays alongside it as you work down. */}
+        {/* THE QUESTION EDITOR IS CLOSED BY DEFAULT.
+            Around seventy per cent of this page was this one list — 36 rows of
+            four controls each — so the scoring workspace the benchmark shows as
+            a single screen arrived as the top fifth of a five-screen scroll.
+            The benchmark does not put the editor on this screen at all; it hands
+            off with "Configure Questions →". This keeps the editor exactly where
+            it is and removes nothing: a native <details>, so it opens on click
+            or Enter, is reachable by keyboard and by find-in-page in browsers
+            that search closed content, needs no JavaScript, and every control
+            inside is untouched. Only what you see on load changes. */}
         <div className="lg:col-span-2 lg:col-start-1 lg:row-start-3">
-          <Card
-            title={`Questions (${questionCount})`}
-            hint="Assign each question to a section and choose how it scores"
+          {/* A problem with a question must never be hidden by the collapse:
+              if one exists the section is forced open AND says so on the closed
+              header, so a save can never be blocked by something the screen is
+              concealing. */}
+          <details
+            open={issues.items ? true : undefined}
+            className="group/questions rounded-xl border border-line bg-surface shadow-card"
           >
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4">
+              <span className="min-w-0">
+                <span className="block text-base font-bold text-ink">
+                  Questions ({questionCount})
+                </span>
+                <span className="mt-0.5 block text-xs text-ink-subtle">
+                  {issues.items
+                    ? issues.items
+                    : 'Assign each question to a section and choose how it scores'}
+                </span>
+              </span>
+              <span className="flex shrink-0 items-center gap-1.5 rounded-lg border border-brand-500 px-3 py-1.5 text-sm font-semibold text-brand-700">
+                <span className="group-open/questions:hidden">
+                  Configure questions
+                </span>
+                <span className="hidden group-open/questions:inline">
+                  Hide questions
+                </span>
+                <span
+                  aria-hidden="true"
+                  className="transition-transform group-open/questions:rotate-90"
+                >
+                  ›
+                </span>
+              </span>
+            </summary>
+            <div className="border-t border-line p-4">
             {items.length === 0 ? (
               // THE ROOT OF THE EMPTY SCREEN, and it was the one thing the page
               // did not explain. Checklist items are copied from an audit
@@ -1104,7 +1152,8 @@ export function AuditScoringConfig({
                 {issues.items}
               </p>
             )}
-          </Card>
+            </div>
+          </details>
         </div>
       </div>
 
@@ -1170,10 +1219,10 @@ function Group({
   // in ink they sit clearly below the 16px panel title and clearly above the
   // body, giving the three-tier hierarchy the mock-up has.
   return (
-    <div className={first ? undefined : 'mt-5 border-t border-line pt-5'}>
+    <div className={first ? undefined : 'mt-3.5 border-t border-line pt-3.5'}>
       <p className="text-sm font-semibold text-ink">{label}</p>
       {hint && <p className="mt-0.5 text-xs text-ink-subtle">{hint}</p>}
-      <div className="mt-3">{children}</div>
+      <div className="mt-2">{children}</div>
     </div>
   );
 }
@@ -1190,10 +1239,12 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mb-3 flex items-start justify-between gap-3">
+    <div className="mb-2 flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-ink">{label}</p>
-        {hint && <p className="text-xs text-ink-subtle">{hint}</p>}
+        <p className="text-sm font-medium leading-snug text-ink">{label}</p>
+        {hint && (
+          <p className="text-xs leading-snug text-ink-subtle">{hint}</p>
+        )}
         {error && (
           <p className="text-xs font-medium text-danger-600">{error}</p>
         )}
@@ -1215,10 +1266,12 @@ function Toggle({
   hint?: string;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 py-2">
+    <div className="flex items-start justify-between gap-3 py-1.5">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-ink">{label}</p>
-        {hint && <p className="text-xs text-ink-subtle">{hint}</p>}
+        <p className="text-sm font-medium leading-snug text-ink">{label}</p>
+        {hint && (
+          <p className="text-xs leading-snug text-ink-subtle">{hint}</p>
+        )}
       </div>
       <button
         type="button"
