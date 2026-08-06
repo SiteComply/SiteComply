@@ -29,9 +29,11 @@ export function PermitReviewControls({
   const [validUntil, setValidUntil] = useState('');
   const [reason, setReason] = useState('');
 
+  // Closing moved to the record header (PermitCloseButton), where Audit Detail
+  // keeps its actions. On an approved or expired permit this panel held nothing
+  // else, so it was a bordered box with a heading wrapped around one button.
+  // This panel now exists only while there is a DECISION to make.
   const awaiting = status === 'SUBMITTED' || status === 'UNDER_REVIEW';
-  const closable =
-    status === 'APPROVED' || status === 'UNDER_REVIEW' || status === 'EXPIRED';
 
   async function send(body: Record<string, unknown>, ok: string) {
     setBusy(true);
@@ -54,7 +56,7 @@ export function PermitReviewControls({
     }
   }
 
-  if (!awaiting && !closable) return null;
+  if (!awaiting) return null;
 
   return (
     // Was a hand-rolled copy of Panel's exact classes (rounded-xl / border-line
@@ -175,15 +177,6 @@ export function PermitReviewControls({
             <p className="text-sm text-ink-subtle">
               Your role can review permits but not approve them.
             </p>
-          )}
-          {closable && (
-            <Button
-              variant="secondary"
-              onClick={() => send({ action: 'close' }, 'Permit closed.')}
-              disabled={busy}
-            >
-              Close permit
-            </Button>
           )}
         </div>
       )}

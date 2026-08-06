@@ -3,6 +3,7 @@ import { PlatformShell } from '@/components/platform/PlatformShell';
 import { RecordHeader } from '@/components/platform/RecordHeader';
 import { Panel } from '@/components/platform/Panel';
 import { PermitReviewControls } from '@/components/platform/PermitReviewControls';
+import { PermitCloseButton } from '@/components/platform/PermitCloseButton';
 import {
   requirePlatformViewer,
   assertModuleView,
@@ -40,6 +41,14 @@ export default async function PlatformPermitDetailPage({
     canApprove,
   } = detail;
 
+  /* The same states PermitReviewControls used to reveal "Close permit" on.
+     Kept identical on purpose: this change moves the control, it does not widen
+     or narrow when it appears. */
+  const closable =
+    effectiveStatus === 'APPROVED' ||
+    effectiveStatus === 'UNDER_REVIEW' ||
+    effectiveStatus === 'EXPIRED';
+
   return (
     <PlatformShell>
       <RecordHeader
@@ -58,6 +67,15 @@ export default async function PlatformPermitDetailPage({
           </span>
         }
         subtitle={<span className="font-mono">{permit.reference}</span>}
+        actions={
+          /* Closing sits with the record's actions, as it does on Audit Detail,
+             instead of in a single-purpose "Review" panel at the foot of the
+             summary rail. The CONDITION is unchanged — it is the same
+             `closable` test the button was rendered behind before — and the
+             server still enforces the permits "edit" permission on the request
+             itself, exactly as it did. */
+          closable ? <PermitCloseButton permitId={permit.id} /> : undefined
+        }
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
