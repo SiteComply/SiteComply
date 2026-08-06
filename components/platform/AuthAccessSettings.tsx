@@ -107,11 +107,7 @@ export function AuthAccessSettings({
           disabled={!canEdit}
           onChange={(v) => set('expressCheckInEnabled', v)}
         />
-        <ReadOnlyRow
-          label="SMS one-time codes"
-          value={settings.smsOtpEnabled ? 'Available' : 'Unavailable'}
-          note="The SMS channel itself is managed in the Admin Centre. If it is unavailable, worker SMS login cannot work regardless of the setting above."
-        />
+        <DeliveryRow settings={settings} />
       </Panel>
 
       <Panel
@@ -334,10 +330,13 @@ function ReadOnlyRow({
   label,
   value,
   note,
+  tone = 'neutral',
 }: {
   label: string;
   value: string;
   note: string;
+  /** 'warn' when the value means something is not working as intended. */
+  tone?: 'neutral' | 'warn';
 }) {
   return (
     <div className="flex items-start justify-between gap-4 border-b border-line py-3 last:border-b-0">
@@ -345,9 +344,81 @@ function ReadOnlyRow({
         <p className="text-sm font-medium text-ink">{label}</p>
         <p className="text-xs text-ink-subtle">{note}</p>
       </div>
-      <span className="shrink-0 rounded-lg bg-surface-sunken px-2.5 py-1 text-xs font-semibold text-ink-muted">
+      <span
+        className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold ${
+          tone === 'warn'
+            ? 'bg-hivis-400/25 text-ink ring-1 ring-inset ring-hivis-500'
+            : 'bg-surface-sunken text-ink-muted'
+        }`}
+      >
         {value}
       </span>
     </div>
+  );
+}
+
+/**
+ * What is ACTUALLY delivering sign-in codes.
+ *
+ * This row replaces "SMS one-time codes: Available", which reported the
+ * channel flag and nothing else. That reading stayed reassuring the whole time
+ * production was running the console mock: the flag was on, no text was ever
+ * sent, and the codes were being handed back in the API response instead.
+ *
+ * So the row now answers the question a Director is really asking — will a
+ * worker receive a text — and orders the checks the way the send path fails:
+ * the channel switch, then the master outbound switch, then the provider
+ * itself. The first thing that is wrong is the thing shown, because listing
+ * three green ticks above one red cross is how a red cross gets missed.
+ */
+function DeliveryRow({ settings }: { settings: PlatformAuthSettingsView }) {
+  const { smsDelivery: d } = settings;
+
+  if (!settings.smsOtpEnabled) {
+    return (
+      <ReadOnlyRow
+        label="SMS delivery"
+        value="Switched off"
+        tone="warn"
+        note="One-time codes are turned off in the Admin Centre, so worker SMS login cannot work whatever the setting above says."
+      />
+    );
+  }
+  if (!d.sendingEnabled) {
+    return (
+      <ReadOnlyRow
+        label="SMS delivery"
+        value="Sending paused"
+        tone="warn"
+        note="Outbound SMS is paused in the Admin Centre. Codes are recorded but never sent, so workers cannot sign in."
+      />
+    );
+  }
+  if (d.isMock) {
+    return (
+      <ReadOnlyRow
+        label="SMS delivery"
+        value="Not delivering"
+        tone="warn"
+        note="No real text messages are being sent — the placeholder provider is active, which is intended for development only. Workers cannot receive a sign-in code. A real provider must be configured in the Admin Centre."
+      />
+    );
+  }
+  if (!d.isKnownProvider) {
+    return (
+      <ReadOnlyRow
+        label="SMS delivery"
+        value="Misconfigured"
+        tone="warn"
+        note={`The configured provider "${d.providerId}" is not one this system can use, so no code can be sent. Correct it in the Admin Centre.`}
+      />
+    );
+  }
+  return (
+    <ReadOnlyRow
+      label="SMS delivery"
+      value={d.providerName}
+      note="The provider currently sending sign-in codes. Managed in the Admin Centre — shown here because every worker login setting above depends on it."
+    />
   );
 }
