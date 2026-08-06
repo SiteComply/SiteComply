@@ -201,14 +201,28 @@ const sc=strip('$SCORING');
 // Weightings is the widest, and equal thirds is the thing that stopped this
 // screen reading as a workspace. minmax(0,…) on every track is what keeps a
 // long section name truncating inside its column instead of widening the page.
-if(!/lg:grid-cols-\[minmax\(0,3fr\)_minmax\(0,4fr\)_minmax\(0,3\.4fr\)\]/.test(sc))
+if(!/lg:grid-cols-\[minmax\(0,3fr\)_minmax\(0,4\.3fr\)_minmax\(0,3\.1fr\)\]/.test(sc))
   fail('the Audit Scoring column proportions are gone — equal thirds is what the benchmark pass removed');
+// The benchmark's landing screen ENDS at the hand-off; the per-question editor
+// is a separate workspace. A standalone Questions panel back in the grid is the
+// thing that made this read as a dashboard with an editor bolted underneath.
+// Substring tests, not regex: the escaping needed for parens and quotes inside
+// this shell-quoted node block is where a guard silently becomes unparseable.
+if(sc.indexOf('setView') < 0 || sc.indexOf('Configure Questions') < 0)
+  fail('the Configure Questions hand-off is gone — the question editor is back on the landing screen');
+// Two cards in column one, as the benchmark draws them.
+if(sc.indexOf('title=\"Scoring Method\"') < 0 || sc.indexOf('title=\"Scoring Options\"') < 0)
+  fail('Scoring Method and Scoring Options are no longer separate cards');
 if(!/lg:col-span-2 lg:col-start-1 lg:row-start-2/.test(sc))
   fail('Question Scoring Rules is no longer the wide band on row 2');
 if(!/lg:grid-cols-4/.test(sc))
   fail('the four scoring-rule tiles are no longer one row');
-if(!/lg:col-span-2 lg:col-start-1 lg:row-start-3/.test(sc))
-  fail('the questions list no longer spans two columns on row 3');
+// The question editor must NOT be a row of the scoring grid any more. It was
+// row 3 spanning two columns, which is what made the landing screen a scoring
+// dashboard with an editor bolted underneath; it is now a separate view behind
+// the hand-off. row-start-3 reappearing means it has been put back.
+if(/lg:row-start-3/.test(sc))
+  fail('the question editor is back in the scoring grid — it belongs in the Configure Questions view');
 if(!/space-y-4 lg:sticky lg:top-6/.test(sc))
   fail('the Score Preview rail is no longer sticky on the inner div');
 // The panel titles must out-rank the groups inside them, which is the opt-in
