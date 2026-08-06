@@ -3,6 +3,7 @@ import { getWorkerSession, setActiveWorkerSiteCookie } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { expressCheckIn } from '@/services/induction/inductionValidityService';
 import { parseLocationFix } from '@/services/geo/geoValidationService';
+import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -44,6 +45,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { ok: false, error: 'No site specified.' },
       { status: 400 },
+    );
+  }
+
+  // Express check-in can be switched off organisation-wide (Settings →
+  // Authentication & Access). Refused HERE, at the write, not only by hiding
+  // the button: the endpoint is reachable directly and the setting is a
+  // control, not a decoration. The worker is told what to do instead.
+  const { expressCheckInEnabled } = await getAuthRuntimeConfig();
+  if (!expressCheckInEnabled) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          'Express check-in is turned off for your organisation. Please complete the full check-in.',
+      },
+      { status: 403 },
     );
   }
 

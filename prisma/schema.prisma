@@ -1586,13 +1586,31 @@ model AuthConfig {
   otpMaxAttempts Int? // wrong-code attempts before a challenge locks
 
   // Session settings.
-  sessionTtlSeconds Int? // platform user session lifetime
+  sessionTtlSeconds       Int? // platform user session lifetime
+  workerSessionTtlSeconds Int? // worker session lifetime
 
   // Enabled OTP channels (forward-looking: email OTP not yet implemented).
   smsOtpEnabled   Boolean @default(true)
   emailOtpEnabled Boolean @default(false)
 
+  // Worker access options. Each one has an enforcement point today — nothing
+  // here is a placeholder for a feature that does not exist yet.
+  workerSmsLoginEnabled Boolean @default(true) // worker OTP login channel
+  expressCheckInEnabled Boolean @default(true) // re-use a valid induction to check in
+
+  // Organisation-wide floor under the PER-SITE workerAccessEnforced flag.
+  // A site that enforces already requires an active assignment; these raise the
+  // minimum for sites that do not, so the organisation can set a baseline
+  // without visiting every site.
+  invitedWorkersOnly          Boolean @default(false) // an assignment must exist
+  requireActiveSiteAssignment Boolean @default(false) // ...and it must be active
+
+  // Attribution. Admin Centre operators and platform Directors both reach this
+  // row (Admin owns the infrastructure timings, Directors own organisation
+  // policy), so who changed it last is recorded per portal rather than one
+  // field pretending to cover both.
   updatedByAdminId String?
+  updatedByUserId  String?
   updatedByName    String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

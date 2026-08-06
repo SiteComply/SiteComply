@@ -312,6 +312,27 @@ export function canManageSiteConfigTemplates(role: PlatformRoleValue): boolean {
 }
 
 /**
+ * Authentication & Access (Settings) — who may CHANGE organisation-wide login
+ * and access behaviour.
+ *
+ * Director only, and narrower than the Settings area itself on purpose. These
+ * settings can lock every worker out of every site: "invited workers only" turns
+ * an organisation-wide access floor on in one click, and the session timeouts
+ * decide how long anyone stays signed in. That is the same reasoning that makes
+ * `canSetEnforcement` Director-only for the per-site version of this rule — this
+ * is that switch for the whole organisation, so it cannot be looser.
+ *
+ * VIEWING is governed by the Settings area gate (Director + Project Manager), so
+ * a Project Manager can see what the organisation's posture is and raise it with
+ * a Director, without being able to change it.
+ */
+export const AUTH_SETTINGS_MANAGE_ROLES: PlatformRoleValue[] = ['DIRECTOR'];
+
+export function canManageAuthSettings(role: PlatformRoleValue): boolean {
+  return AUTH_SETTINGS_MANAGE_ROLES.includes(role);
+}
+
+/**
  * Create a brand-new job site from the Platform portal. This is deliberately
  * NARROWER than the `sites` "create" verb in the matrix (which several
  * management roles hold for future within-site management affordances):

@@ -51,6 +51,13 @@ export const SETTINGS_AREAS: SettingsArea[] = [
     description:
       'Reusable access restrictions for contractor types, and company-wide defaults.',
   },
+  {
+    key: 'authentication',
+    label: 'Authentication & access',
+    href: '/platform/dashboard/settings/authentication',
+    description:
+      'How people sign in, how long sessions last, and who may reach a site.',
+  },
 ];
 
 export function SettingsWorkspace({

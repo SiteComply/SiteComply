@@ -25,6 +25,7 @@ import {
   parseAccessDate,
   type WindowState,
 } from '@/services/workerAccess/assignmentWindow';
+import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
 
 /**
  * SC-023 Phase 1 — worker invitation and site assignment.
@@ -77,8 +78,24 @@ export async function canWorkerCheckIn(
   if (!site)
     return { allowed: false, reason: 'That site is no longer available.' };
 
-  // Enforcement off — behave exactly as before SC-023 existed.
-  if (!site.workerAccessEnforced) return { allowed: true, enforced: false };
+  /* ORGANISATION-WIDE FLOOR under the per-site flag.
+   *
+   * Access has always been decided per site, defaulting off. A Director can now
+   * set a minimum for the whole organisation (Settings → Authentication &
+   * Access) instead of visiting every site:
+   *
+   *   invitedWorkersOnly          — an assignment must EXIST, everywhere.
+   *   requireActiveSiteAssignment — ...and it must be active and in-window.
+   *
+   * A site that already enforces is UNCHANGED: `siteEnforced` still applies the
+   * full status, window and requirement checks exactly as before, so switching
+   * these on can only ever narrow access, never widen it. Both default off, so
+   * deploying before anyone saves changes nothing. */
+  const org = await getAuthRuntimeConfig();
+  const siteEnforced = site.workerAccessEnforced;
+  if (!siteEnforced && !org.invitedWorkersOnly) {
+    return { allowed: true, enforced: false };
+  }
 
   const assignment = await prisma.workerSiteAssignment.findUnique({
     where: { workerId_jobSiteId: { workerId, jobSiteId: siteId } },
@@ -92,6 +109,16 @@ export async function canWorkerCheckIn(
         'You have not been invited to this project. Ask your site manager to invite you before checking in.',
     };
   }
+
+  /* The assignment EXISTS. Whether it must also be active is decided by the
+   * site's own enforcement (unchanged) or by the stricter organisation setting.
+   * With only "invited workers only" on, having been invited is the bar — a
+   * worker whose assignment is suspended on a non-enforcing site is not turned
+   * away by a rule nobody switched on. */
+  if (!siteEnforced && !org.requireActiveSiteAssignment) {
+    return { allowed: true, enforced: true };
+  }
+
   switch (assignment.status) {
     case WorkerAssignmentStatus.ACTIVE: {
       // SC-023 Phase 2 — the access window, DERIVED. Checked only for an
