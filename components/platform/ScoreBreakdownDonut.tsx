@@ -31,8 +31,10 @@ export function chartColour(index: number): string {
 export function ScoreBreakdownDonut({
   slices,
   totalPoints,
-  size = 168,
-  thickness = 26,
+  // Sized to the SC-014 benchmark's proportion — its donut is roughly a third of
+  // the Score Preview column, sitting BESIDE the legend rather than above it.
+  size = 136,
+  thickness = 30,
 }: {
   slices: DonutSlice[];
   totalPoints: number;
@@ -52,12 +54,20 @@ export function ScoreBreakdownDonut({
   const arcs = slices.map((slice, index) => {
     const share = Math.max(0, slice.percent) / usable;
     const length = share * circumference;
+    // Mid-point of this arc as a fraction of the whole ring, for the on-segment
+    // label. The benchmark prints each share ON its band, which is what lets the
+    // figure be read without crossing to the legend and back.
+    const midFraction = circumference > 0 ? (offset + length / 2) / circumference : 0;
+    const angle = midFraction * 2 * Math.PI - Math.PI / 2;
     const arc = {
       slice,
       index,
+      share,
       dash: Math.max(0, length - gap),
       rest: circumference - Math.max(0, length - gap),
       offset,
+      labelX: centre + radius * Math.cos(angle),
+      labelY: centre + radius * Math.sin(angle),
     };
     offset += length;
     return arc;
@@ -96,29 +106,57 @@ export function ScoreBreakdownDonut({
             transform={`rotate(-90 ${centre} ${centre})`}
           />
         ))}
+        {/* On-segment shares, as the benchmark draws them. Suppressed below 6%:
+            the band is thinner than the type at that point, so the label would
+            sit half outside its own segment and read as the neighbour's. The
+            legend still carries every share, so nothing is lost by omitting it
+            here — this is decoration on top of the accessible figure, which is
+            why it is aria-hidden. */}
+        {arcs.map(({ slice, share, labelX, labelY }) =>
+          share >= 0.06 ? (
+            <text
+              key={`label-${slice.id}`}
+              x={labelX}
+              y={labelY}
+              textAnchor="middle"
+              dominantBaseline="central"
+              aria-hidden="true"
+              className="font-semibold"
+              style={{ fontSize: 10, fill: '#fff' }}
+            >
+              {Math.round(slice.percent)}%
+            </text>
+          ) : null,
+        )}
         <text
           x={centre}
           y={centre - 2}
           textAnchor="middle"
-          className="fill-ink text-xl font-bold"
+          className="fill-ink font-bold"
           style={{ fontSize: 22 }}
         >
           {totalPoints}
         </text>
         <text
           x={centre}
-          y={centre + 16}
+          y={centre + 15}
           textAnchor="middle"
           className="fill-ink-subtle"
-          style={{ fontSize: 11 }}
+          style={{ fontSize: 10 }}
         >
           Total Points
         </text>
       </svg>
 
-      <ul className="w-full space-y-1.5">
+      {/* `min-w-0` is load-bearing, not tidiness. This sits beside a `shrink-0`
+          donut inside a ~380px rail; as `w-full` it demanded the container's
+          full width ON TOP of the donut and, with no min-width floor, flex could
+          not shrink it back — so the panel pushed the whole PAGE into horizontal
+          scroll on every viewport from 1024px to 1535px. Measured: 135px of
+          overflow at 1024, 29px at 1440, gone at 1536. */}
+      <ul className="min-w-0 flex-1 space-y-2 text-xs">
         {slices.map((slice, index) => (
-          <li key={slice.id} className="flex items-center gap-2 text-sm">
+          <li key={slice.id} className="flex items-center gap-2">
             <span
               aria-hidden="true"
               className="h-2.5 w-2.5 shrink-0 rounded-sm"
@@ -130,7 +168,7 @@ export function ScoreBreakdownDonut({
                 ({Math.round(slice.percent)}%)
               </span>
             </span>
-            <span className="shrink-0 font-medium text-ink">
+            <span className="shrink-0 font-semibold tabular-nums text-ink">
               {slice.points} pts
             </span>
           </li>

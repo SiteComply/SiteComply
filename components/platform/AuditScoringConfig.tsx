@@ -294,7 +294,19 @@ export function AuditScoringConfig({
         </p>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      {/* NOT three equal columns. Measured off the SC-014 benchmark, its columns
+          run roughly 30 / 36 / 31 of the content width — Section Weightings is
+          the WIDEST of the three, and that is what makes it read as the primary
+          workspace rather than the middle of three widgets. Equal thirds gave
+          the column that needs width most (an editable name, a weight, a points
+          total and three controls per row) exactly as much as the one that needs
+          it least, so section names truncated to "Site Access & Se…".
+
+          minmax(0,…) on every track is deliberate: an `fr` track's default
+          minimum is min-content, so a long section name or a wide legend row
+          would otherwise push the track — and the page — wider than the screen
+          instead of truncating inside it. */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,4fr)_minmax(0,3.4fr)]">
         {/* ---------------- Column 1 — configuration ---------------- */}
         <div className="space-y-4">
           {/* Method, options, bands and question rules were four cards stacked
@@ -307,7 +319,7 @@ export function AuditScoringConfig({
             hint="How this audit scores, before any question is touched"
           >
             <Group
-              label="Scoring method"
+              label="Scoring Method"
               hint="Choose how you want to score this audit"
               first
             >
@@ -359,7 +371,7 @@ export function AuditScoringConfig({
               </div>
             </Group>
 
-            <Group label="Scoring options">
+            <Group label="Scoring Options">
               <Field
                 label="Total Possible Score"
                 hint="Set the maximum score available for this audit"
@@ -523,23 +535,50 @@ export function AuditScoringConfig({
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-left text-xs uppercase tracking-wide text-ink-subtle">
-                      <th className="pb-2 font-medium">Section</th>
-                      <th className="pb-2 text-right font-medium">Weight</th>
-                      <th className="pb-2 text-right font-medium">Total</th>
-                      <th className="pb-2" />
+                    {/* Fixed widths on the three trailing columns so weights and
+                        points align in a column down the table, as they do in
+                        the benchmark. Left to `auto` they were re-measured per
+                        row against the longest section name. */}
+                    {/* Sentence case, as the benchmark writes them — and as the
+                        Actions and Permits registers already write their own
+                        column headers. The uppercase micro-caps here were the
+                        odd one out in the portal. */}
+                    <tr className="border-b border-line text-left text-xs text-ink-subtle">
+                      <th className="pb-2.5 font-medium">Section</th>
+                      <th className="w-20 pb-2.5 text-right font-medium">
+                        Weight
+                      </th>
+                      <th className="w-16 pb-2.5 text-right font-medium">
+                        Total
+                      </th>
+                      <th className="w-16 pb-2.5" />
                     </tr>
                   </thead>
                   <tbody>
                     {sections.map((section, idx) => (
-                      <tr key={section.id} className="border-t border-line">
-                        <td className="py-2 pr-2">
+                      <tr
+                        key={section.id}
+                        className="group/row border-t border-line"
+                      >
+                        <td className="py-3 pr-2">
                           <div className="flex items-center gap-2">
+                            {/* The benchmark numbers its sections; this screen
+                                also has to tie each row to its donut segment.
+                                Carrying those as two elements — a swatch AND an
+                                ordinal — cost ~28px of a column whose scarcest
+                                resource is width, and the section name paid for
+                                it. One coloured chip does both jobs.
+
+                                Presentation only: the number is the row's
+                                position, which is the order already on screen,
+                                and nothing new is stored. */}
                             <span
                               aria-hidden="true"
-                              className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                              className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[11px] font-bold tabular-nums text-white"
                               style={{ backgroundColor: chartColour(idx) }}
-                            />
+                            >
+                              {idx + 1}
+                            </span>
                             <div className="min-w-0 flex-1">
                               <input
                                 value={section.name}
@@ -577,7 +616,7 @@ export function AuditScoringConfig({
                             </div>
                           </div>
                         </td>
-                        <td className="py-2 text-right">
+                        <td className="py-3 text-right">
                           <div className="flex items-center justify-end gap-1">
                             <input
                               type="number"
@@ -603,7 +642,7 @@ export function AuditScoringConfig({
                             <span className="text-ink-subtle">%</span>
                           </div>
                         </td>
-                        <td className="py-2 text-right font-medium text-ink">
+                        <td className="whitespace-nowrap py-3 text-right font-semibold tabular-nums text-ink">
                           {Math.round(
                             sectionAvailablePoints(
                               section.weightPercent,
@@ -612,13 +651,20 @@ export function AuditScoringConfig({
                           )}{' '}
                           pts
                         </td>
-                        <td className="py-2 pl-2 text-right">
-                          <div className="flex items-center justify-end gap-0.5">
+                        <td className="py-3 pl-2 text-right">
+                          {/* Reorder and remove are row PLUMBING, not the data
+                              the table exists to show — three glyphs per row at
+                              full contrast competed with the weights. They stay
+                              permanently visible and keyboard-reachable (hiding
+                              them until hover would strand touch users); only
+                              their contrast drops, lifting on hover or when
+                              anything inside takes focus. */}
+                          <div className="flex items-center justify-end gap-0.5 text-ink-subtle/50 transition-colors focus-within:text-ink-subtle group-hover/row:text-ink-subtle">
                             <button
                               type="button"
                               onClick={() => moveSection(idx, -1)}
                               disabled={idx === 0}
-                              className="rounded px-1 text-ink-subtle hover:text-ink disabled:opacity-30"
+                              className="rounded px-1 hover:text-ink disabled:opacity-30"
                               aria-label={`Move ${section.name || 'section'} up`}
                             >
                               ↑
@@ -627,7 +673,7 @@ export function AuditScoringConfig({
                               type="button"
                               onClick={() => moveSection(idx, 1)}
                               disabled={idx === sections.length - 1}
-                              className="rounded px-1 text-ink-subtle hover:text-ink disabled:opacity-30"
+                              className="rounded px-1 hover:text-ink disabled:opacity-30"
                               aria-label={`Move ${section.name || 'section'} down`}
                             >
                               ↓
@@ -635,7 +681,7 @@ export function AuditScoringConfig({
                             <button
                               type="button"
                               onClick={() => removeSection(section.id)}
-                              className="rounded px-1 text-ink-subtle hover:text-danger-600"
+                              className="rounded px-1 hover:text-danger-600"
                               aria-label={`Remove ${section.name || 'section'}`}
                             >
                               ×
@@ -645,17 +691,20 @@ export function AuditScoringConfig({
                       </tr>
                     ))}
                   </tbody>
+                  {/* The benchmark's total is the table's conclusion, set apart
+                      by a heavier rule and carrying real weight — it is the one
+                      figure that says whether the weighting adds up. */}
                   <tfoot>
-                    <tr className="border-t-2 border-line font-semibold">
-                      <td className="py-2 text-ink">Total</td>
+                    <tr className="border-t-2 border-ink/15 text-sm font-bold">
+                      <td className="pt-3 text-ink">Total</td>
                       <td
-                        className={`py-2 text-right ${
+                        className={`pt-3 text-right tabular-nums ${
                           total === 100 ? 'text-safe-700' : 'text-danger-600'
                         }`}
                       >
                         {total}%
                       </td>
-                      <td className="py-2 text-right text-ink">
+                      <td className="whitespace-nowrap pt-3 text-right tabular-nums text-ink">
                         {totalPossible} pts
                       </td>
                       <td />
@@ -720,7 +769,7 @@ export function AuditScoringConfig({
                 score against. */}
               {questionCount === 0 ? (
                 <div className="rounded-lg border border-line bg-surface-sunken p-4">
-                  <p className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
+                  <p className="text-sm font-semibold text-ink-subtle">
                     Pass mark, once set up
                   </p>
                   <p className="text-3xl font-bold text-ink-muted">
@@ -736,16 +785,19 @@ export function AuditScoringConfig({
                   </p>
                 </div>
               ) : (
-                <div className="rounded-lg border border-safe-500/40 bg-safe-50 p-4">
+                <div className="rounded-lg border border-safe-500/40 bg-safe-50 p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-safe-700">
+                      <p className="text-sm font-semibold text-safe-700">
                         Passing Score
                       </p>
-                      <p className="text-3xl font-bold text-safe-700">
+                      {/* The hero figure of the panel, at the benchmark's weight.
+                          At text-3xl it sat level with the section headings and
+                          read as another row of the summary. */}
+                      <p className="mt-0.5 text-4xl font-bold leading-none tracking-tight text-safe-700">
                         {asPercent ? `${passPercent}%` : `${passing} pts`}
                       </p>
-                      <p className="mt-1 text-xs text-ink-muted">
+                      <p className="mt-2 text-xs text-ink-muted">
                         {passing} out of {totalPossible} points
                       </p>
                     </div>
@@ -756,15 +808,22 @@ export function AuditScoringConfig({
                   </div>
                 </div>
               )}
-              <p className="mt-3 text-xs text-ink-subtle">
-                {method === 'PASS_FAIL'
-                  ? 'Every scorable question must pass for the audit to pass.'
-                  : method === 'CUSTOM'
-                    ? 'Scores map onto the named bands you define.'
-                    : 'Scores are calculated automatically as the audit is completed.'}
-              </p>
+              {/* Only the method-SPECIFIC note survives here. On the percentage
+                  method this line read "Scores are calculated automatically as
+                  the audit is completed" while the blue callout at the foot of
+                  the same panel said "Scores are calculated automatically in
+                  real time as audits are completed" — the same sentence twice,
+                  a few hundred pixels apart. The callout is the one the
+                  benchmark draws, so it stays and this defers to it. */}
+              {(method === 'PASS_FAIL' || method === 'CUSTOM') && (
+                <p className="mt-3 text-xs text-ink-subtle">
+                  {method === 'PASS_FAIL'
+                    ? 'Every scorable question must pass for the audit to pass.'
+                    : 'Scores map onto the named bands you define.'}
+                </p>
+              )}
 
-              <Group label="Score breakdown">
+              <Group label="Score Breakdown">
                 {slices.length === 0 ? (
                   // An empty state that says what the panel is FOR, not just what
                   // is missing. "Add sections to see the breakdown" tells you the
@@ -791,7 +850,7 @@ export function AuditScoringConfig({
                 )}
               </Group>
 
-              <Group label="Scoring rules">
+              <Group label="Scoring Rules">
                 {/* A column of zeros reads as data — as though the audit had been
                 measured and found to contain nothing. One line first says which
                 it is, so the numbers below are read as a starting point rather
@@ -803,7 +862,7 @@ export function AuditScoringConfig({
                     and sections are added.
                   </p>
                 )}
-                <ul className="space-y-2 text-sm">
+                <ul className="space-y-2.5 text-sm">
                   <SummaryRow
                     icon="grid"
                     label={`${sections.length} Sections`}
@@ -1072,8 +1131,16 @@ function Card({
   hint?: string;
   children: React.ReactNode;
 }) {
+  // One step up from the shared default: in the benchmark each column heading
+  // clearly out-ranks the labelled groups beneath it, which is what makes three
+  // panels read as one scoring system rather than three cards. At the shared
+  // 14px the heading sat level with its own contents.
+  //
+  // The size token is written ONLY in the JSX below, never in this comment —
+  // the deploy guard greps for it, and a comment that quotes the thing being
+  // asserted is how a guard comes to pass on prose while the code is gone.
   return (
-    <Panel title={title} hint={hint}>
+    <Panel title={title} hint={hint} titleSize="md">
       {children}
     </Panel>
   );
@@ -1096,13 +1163,17 @@ function Group({
   first?: boolean;
   children: React.ReactNode;
 }) {
+  // The benchmark writes these as real sub-headings — "Scoring Method", "Score
+  // Breakdown", "Scoring Rules" — in sentence case at reading size, not as
+  // uppercase micro-labels. At 11px uppercase they read as form-field captions,
+  // which flattened each column into an undifferentiated list; at 14px semibold
+  // in ink they sit clearly below the 16px panel title and clearly above the
+  // body, giving the three-tier hierarchy the mock-up has.
   return (
-    <div className={first ? undefined : 'mt-4 border-t border-line pt-4'}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">
-        {label}
-      </p>
-      {hint && <p className="mt-0.5 text-[11px] text-ink-subtle">{hint}</p>}
-      <div className="mt-2">{children}</div>
+    <div className={first ? undefined : 'mt-5 border-t border-line pt-5'}>
+      <p className="text-sm font-semibold text-ink">{label}</p>
+      {hint && <p className="mt-0.5 text-xs text-ink-subtle">{hint}</p>}
+      <div className="mt-3">{children}</div>
     </div>
   );
 }

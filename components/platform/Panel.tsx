@@ -21,6 +21,12 @@ import { cn } from '@/lib/cn';
  *              white would just add a border for nothing.
  *   flat     — grouping without any frame at all: the heading and spacing do the
  *              work. Use when a screen already has enough boxes.
+ *
+ * `titleSize`:
+ *   sm — the default, and what every existing screen renders. Unchanged.
+ *   md — one step up, for a panel that is a WORKSPACE REGION rather than a card
+ *        in a stack, and therefore needs to out-rank the labelled groups inside
+ *        it. Opt-in precisely so adding it cannot move the other 57 call sites.
  */
 export function Panel({
   title,
@@ -28,6 +34,7 @@ export function Panel({
   actions,
   tone = 'surface',
   padding = 'comfortable',
+  titleSize = 'sm',
   className,
   bodyClassName,
   children,
@@ -40,6 +47,7 @@ export function Panel({
   actions?: ReactNode;
   tone?: 'surface' | 'sunken' | 'flat';
   padding?: 'comfortable' | 'compact' | 'none';
+  titleSize?: 'sm' | 'md';
   className?: string;
   bodyClassName?: string;
   children: ReactNode;
@@ -64,7 +72,16 @@ export function Panel({
             hint ? 'mb-0.5' : 'mb-3',
           )}
         >
-          {title && <h2 className="text-sm font-bold text-ink">{title}</h2>}
+          {title && (
+            <h2
+              className={cn(
+                'font-bold text-ink',
+                titleSize === 'md' ? 'text-base' : 'text-sm',
+              )}
+            >
+              {title}
+            </h2>
+          )}
           {actions && (
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               {actions}

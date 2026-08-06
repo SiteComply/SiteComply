@@ -197,8 +197,12 @@ if(/sm:grid-cols-2/.test(rv))
 
 // ---------------- Audit Scoring ----------------
 const sc=strip('$SCORING');
-if(!/grid gap-4 lg:grid-cols-3/.test(sc))
-  fail('the Audit Scoring benchmark three-column row is gone');
+// NOT grid-cols-3. The benchmark's columns run roughly 30/36/31 — Section
+// Weightings is the widest, and equal thirds is the thing that stopped this
+// screen reading as a workspace. minmax(0,…) on every track is what keeps a
+// long section name truncating inside its column instead of widening the page.
+if(!/lg:grid-cols-\[minmax\(0,3fr\)_minmax\(0,4fr\)_minmax\(0,3\.4fr\)\]/.test(sc))
+  fail('the Audit Scoring column proportions are gone — equal thirds is what the benchmark pass removed');
 if(!/lg:col-span-2 lg:col-start-1 lg:row-start-2/.test(sc))
   fail('Question Scoring Rules is no longer the wide band on row 2');
 if(!/lg:grid-cols-4/.test(sc))
@@ -207,6 +211,21 @@ if(!/lg:col-span-2 lg:col-start-1 lg:row-start-3/.test(sc))
   fail('the questions list no longer spans two columns on row 3');
 if(!/space-y-4 lg:sticky lg:top-6/.test(sc))
   fail('the Score Preview rail is no longer sticky on the inner div');
+// The panel titles must out-rank the groups inside them, which is the opt-in
+// size on the shared Panel. Without it the three columns flatten again.
+if(!/titleSize=\"md\"/.test(sc))
+  fail('Audit Scoring panels dropped back to the default heading size');
+
+// ---------------- Score breakdown donut ----------------
+// THE OVERFLOW DEFECT. As a full-width child beside a shrink-0 donut, with no min-width
+// floor, this legend pushed the whole PAGE into horizontal scroll on every
+// viewport from 1024 to 1535 — 135px of it at 1024. It shipped that way and was
+// missed because the checks either side of that band (390 and >=1536) both pass.
+const dn=strip('components/platform/ScoreBreakdownDonut.tsx');
+if(!/<ul className=\"min-w-0 flex-1/.test(dn))
+  fail('the donut legend lost min-w-0/flex-1 — the page will scroll horizontally again between 1024px and 1535px');
+if(/<ul className=\"w-full/.test(dn))
+  fail('the donut legend is w-full again — that is the exact overflow defect');
 
 console.log('      confirmed: filters still filter and still clear, tables are four');
 console.log('                 columns, evidence sits inside the action record, the');
