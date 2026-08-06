@@ -34,3 +34,30 @@ export function requireEnv(name: string): string {
 
 /** True when running in development; controls dev-only conveniences (e.g. mock SMS). */
 export const isDev = process.env.NODE_ENV !== 'production';
+
+/**
+ * May this runtime hand a one-time passcode back to the caller that requested
+ * it? Only ever true in development and test.
+ *
+ * DELIBERATELY NOT `isDev`. That is `NODE_ENV !== 'production'`, which FAILS
+ * OPEN: an unset, misspelt or renamed NODE_ENV ("prod", "staging", empty)
+ * reads as development and would disclose the code. For a convenience like
+ * verbose logging that is the right trade; for a credential it is a live
+ * authentication bypass, because anyone who knows a mobile number could read
+ * its sign-in code straight out of the API response.
+ *
+ * So this ALLOW-LISTS the two environments where disclosure is intended and
+ * refuses everything else. Getting NODE_ENV wrong now costs a developer some
+ * convenience instead of costing production its worker sign-in.
+ *
+ * Independent of which SMS provider is selected: the mock provider is a
+ * delivery mechanism, not an authorisation to leak codes. A production system
+ * misconfigured onto the mock must still never disclose one.
+ */
+const CODE_DISCLOSURE_ENVIRONMENTS = new Set(['development', 'test']);
+
+export function canDiscloseOtpCode(): boolean {
+  const env = process.env.NODE_ENV;
+  if (typeof env !== 'string') return false;
+  return CODE_DISCLOSURE_ENVIRONMENTS.has(env.trim().toLowerCase());
+}

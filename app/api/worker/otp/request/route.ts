@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requestCode } from '@/services/auth/otpService';
 import { normaliseUkMobile } from '@/lib/phone';
 import { setWorkerOtpMobileCookie } from '@/lib/session';
+import { canDiscloseOtpCode } from '@/lib/config';
 
 // Uses Node crypto + Prisma, so force the Node.js runtime (not Edge).
 export const runtime = 'nodejs';
@@ -36,6 +37,17 @@ export async function POST(req: NextRequest) {
   const normalised = normaliseUkMobile(body.mobile ?? '');
   if (normalised.ok && normalised.e164) {
     setWorkerOtpMobileCookie(normalised.e164);
+  }
+
+  // SECOND LAYER, on purpose. requestCode() already refuses to populate
+  // devCode outside development and test, and that is the real control. This
+  // is the boundary where the value would actually leave the building, so it
+  // is also the last place the guarantee can be made unconditionally — no
+  // future caller, refactor or new provider can widen it upstream without this
+  // still holding. Cheap, and the failure it prevents is a sign-in bypass.
+  if (!canDiscloseOtpCode() && result.devCode !== undefined) {
+    const { devCode: _withheld, ...safe } = result;
+    return NextResponse.json(safe);
   }
 
   return NextResponse.json(result);

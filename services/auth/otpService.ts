@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { normaliseUkMobile, maskUkMobile } from '@/lib/phone';
 import { sendAuditedSms } from '@/services/sms/smsSendService';
 import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
+import { canDiscloseOtpCode } from '@/lib/config';
 
 /**
  * Worker SMS one-time passcode (MFA) service.
@@ -15,7 +16,11 @@ import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
  *  - verify a submitted code in constant time and report whether the worker is
  *    already known (so the next step can pre-fill their details)
  *
- * The API/UI layers never see the raw code (except the dev mock, which logs it).
+ * The API/UI layers never see the raw code in production. In development and
+ * test ONLY, and only when the console mock handled the send, it comes back as
+ * `devCode` so the sign-in flow is exercisable without a handset — gated by
+ * canDiscloseOtpCode(), which allow-lists those environments rather than
+ * excluding production.
  */
 
 const CODE_LENGTH = clampInt(process.env.OTP_LENGTH, 6, 4, 8);
@@ -150,10 +155,19 @@ export async function requestCode(
     maskedMobile: maskUkMobile(mobile),
     expiresInSeconds: ttlSeconds,
     resendInSeconds: RESEND_COOLDOWN_SECONDS,
-    // Only leak the code when explicitly using the console mock (dev/testing).
-    // Taken from the audited send result, so it stays tied to the provider that
-    // actually handled THIS message rather than a second, separate lookup.
-    devCode: sent.provider === 'mock' ? code : undefined,
+    // TWO conditions, and the environment one is the load-bearing half.
+    //
+    // The provider check alone was not a safety property: it asked "was this
+    // delivered by the console mock", and a production system misconfigured
+    // onto the mock answers yes. Production ran exactly that way — the code
+    // came back in this response to anyone who knew a mobile number, which is
+    // a complete worker sign-in bypass, not a stray debug aid.
+    //
+    // canDiscloseOtpCode() allow-lists development and test and refuses
+    // everything else, so no provider selection, missing SmsConfig row or
+    // mangled NODE_ENV can reopen it. See lib/config.ts.
+    devCode:
+      canDiscloseOtpCode() && sent.provider === 'mock' ? code : undefined,
   };
 }
 
