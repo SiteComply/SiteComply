@@ -40,7 +40,7 @@ HEALTH="${BASE}/api/health"
 ZIP=/tmp/sc032_deploy.zip
 
 # The commit currently in production.
-BASE_COMMIT=990c273
+BASE_COMMIT=17185cb
 
 UI=components/platform/AuthAccessSettings.tsx
 SVC=services/auth/authConfigService.ts
@@ -354,8 +354,8 @@ if(ntSvc.indexOf('isKnownNotificationType(key)') < 0)
 
 console.log('      confirmed: the three dead keys stay removed, action_updated is');
 console.log('                 still honoured, both services read the configured');
-console.log('                 lead times, no email/SMS preference is offered, the');
-console.log('                 missing types are named, and it is DIRECTOR-only.');
+console.log('                 lead times, no delivery or roadmap panel is on the');
+console.log('                 configuration screen, and it is DIRECTOR-only.');
 console.log('      confirmed: the held suppression is absent and devCode is');
 console.log('                 unchanged; the delivery row resolves the provider');
 console.log('                 the same way the send path does, decrypts nothing,');
