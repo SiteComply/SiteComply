@@ -212,7 +212,11 @@ SMOKE_FAIL=""
 for path in /platform/dashboard/actions /platform/dashboard/permits /platform/dashboard/audits ; do
   RC=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "${BASE}${path}" || echo 000)
   echo "        ${path} -> HTTP ${RC}"
-  case "$RC" in 5*|000) SMOKE_FAIL=yes ;; esac
+  # 000* not 000: curl prints "000" via -w AND the `|| echo 000` fires, so an
+  # unreachable route reports "000000" — which never matched the bare "000"
+  # pattern. SC-031 printed "routes: all reachable" while every route was
+  # unreachable. A smoke test that cannot fail is not a smoke test.
+  case "$RC" in 5*|000*) SMOKE_FAIL=yes ;; esac
 done
 
 echo
