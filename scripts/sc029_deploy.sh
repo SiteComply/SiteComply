@@ -231,8 +231,21 @@ if(!/pendingCount > 0/.test(am))
   fail('the action bar is no longer conditional on pending changes');
 // Row actions must stay blocked while edits are staged, or a preset silently
 // discards them.
-if(am.indexOf('blockedByDraft') < 0)
-  fail('row actions no longer guard against discarding a pending draft');
+// Presence alone is too weak — a guard can be left in the file and disarmed.
+// Pin the DECLARATION to what it must mean, and require it to still appear in
+// the disabled expressions of the row actions. This does not defend against an
+// arbitrary rewrite; it does catch the guard being removed or retargeted,
+// which is how it would actually regress.
+// ...and pin what `changed` itself is. Setting it to a constant disarms both
+// the per-person marker and the row-action guard while leaving every string
+// this script looks for exactly where it was — verified by trying it.
+if(!/const changed = Object\.keys\(draft\[u\.userId\] \?\? \{\}\)\.length;/.test(am))
+  fail('the per-person staged count is no longer derived from the draft');
+if(!/const blockedByDraft = changed > 0;/.test(am))
+  fail('the pending-draft guard is missing or no longer derived from the staged count');
+const guards=(am.match(/blockedByDraft \|\|/g)||[]).length;
+if(guards < 3)
+  fail('the pending-draft guard reaches only '+guards+' row actions — preset, template, reset and remove must all be blocked');
 // Same endpoint, same action name: this release must not change the contract.
 if(am.indexOf('setModule') < 0) fail('the setModule action is gone from the save path');
 
