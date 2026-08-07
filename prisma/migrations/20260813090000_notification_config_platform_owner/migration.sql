@@ -1,0 +1,12 @@
+-- Notifications workspace — Platform ownership attribution.
+--
+-- ONE additive, nullable column. No default, no backfill, no data written.
+--
+-- The notification TOGGLES and the new reminder thresholds need no migration at
+-- all: NotificationConfig.settings is already a JSON blob, and the thresholds
+-- live in it under a reserved key the catalogue can never collide with. This
+-- column exists only so "last changed by" can say which portal a change came
+-- from, alongside the existing updatedByAdminId.
+--
+-- Safe to apply before the code: the running build never selects it.
+ALTER TABLE "NotificationConfig" ADD COLUMN "updatedByUserId" TEXT;

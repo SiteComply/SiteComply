@@ -2,7 +2,11 @@ import { ActionStatus, ActionActivityType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
-import { isNotificationEnabled } from '@/services/notifications/notificationConfigService';
+import {
+  isNotificationEnabled,
+  getNotificationThresholds,
+  reminderOffsets,
+} from '@/services/notifications/notificationConfigService';
 import { actionPriorityLabel, ACTION_OVERDUE_BADGE } from '@/services/actions/actionConstants';
 import { formatDateUK } from '@/lib/datetime';
 import type { RawNotification } from '@/services/notifications/notificationTypes';
@@ -18,8 +22,14 @@ import type { RawNotification } from '@/services/notifications/notificationTypes
  * Assigned Sites, so only users with access to an action ever see its notifications.
  */
 
+/**
+ * FALLBACK ONLY. The lead time is organisation-configurable (Settings ->
+ * Notifications); these are what applies before anyone has set one, and they
+ * are the values this file used when they were hard-coded. The second offset
+ * is kept as a step so a reminder still repeats closer to the date.
+ */
 export const ACTION_DUE_THRESHOLDS = [7, 3] as const;
-const MAX_DUE_THRESHOLD = Math.max(...ACTION_DUE_THRESHOLDS);
+const DUE_STEPS = [3];
 const ASSIGNED_WINDOW_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const utcDay = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
@@ -52,12 +62,17 @@ export async function deriveActionNotifications(
   ]);
   if (!overdueEnabled && !dueEnabled && !assignedEnabled) return [];
 
+  // Organisation-configurable lead time, widest first. Read here rather than at
+  // module load so a change applies to the next request, not the next restart.
+  const { actionDueDays } = await getNotificationThresholds();
+  const dueThresholds = reminderOffsets(actionDueDays, DUE_STEPS);
+
   const todayMs = utcDay(now);
   const out: RawNotification[] = [];
 
   // --- Overdue + due-soon (share one query on the due window) ---
   if (overdueEnabled || dueEnabled) {
-    const cutoff = new Date(todayMs + MAX_DUE_THRESHOLD * DAY_MS);
+    const cutoff = new Date(todayMs + dueThresholds[0]! * DAY_MS);
     const actions = await prisma.action.findMany({
       where: {
         jobSiteId: { in: viewer.siteIds },
@@ -99,7 +114,7 @@ export async function deriveActionNotifications(
         continue;
       }
       if (!dueEnabled) continue;
-      const crossed = ACTION_DUE_THRESHOLDS.filter((t) => daysUntilDue <= t);
+      const crossed = dueThresholds.filter((t) => daysUntilDue <= t);
       if (crossed.length === 0) continue;
       const threshold = Math.min(...crossed);
       out.push({
