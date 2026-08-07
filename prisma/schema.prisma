@@ -1610,6 +1610,10 @@ model NotificationConfig {
   settings Json   @default("{}")
 
   updatedByAdminId String?
+  /// Set when a Director saved from Platform Settings, which now owns these.
+  /// Sits beside updatedByAdminId so "last changed by" is honest about which
+  /// portal the change came from — same pattern as AuthConfig and CompanyConfig.
+  updatedByUserId  String?
   updatedByName    String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

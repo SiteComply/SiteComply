@@ -1,5 +1,6 @@
 import { NotificationEventType, type Action } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { isNotificationEnabled } from '@/services/notifications/notificationConfigService';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import type { RawNotification } from '@/services/notifications/notificationTypes';
 import { formatDateUK } from '@/lib/datetime';
@@ -207,7 +208,15 @@ export async function deriveAssigneeNotifications(
     take: 50,
   });
 
-  return events.map((e) => {
+  // ACTION_UPDATED rendered in the bell but had no catalogue key, so it was the
+  // one notification an administrator could see and not switch off. It has a
+  // key now, and this is where it is honoured — filtered after the query
+  // because a single events read serves several groups.
+  const updatesOn = await isNotificationEnabled('action_updated');
+
+  return events
+    .filter((e) => updatesOn || GROUP_FOR[e.type] !== 'ACTION_UPDATED')
+    .map((e) => {
     const group = GROUP_FOR[e.type];
     const bits = [e.siteName];
     if (e.priority) bits.push(`${actionPriorityLabel(e.priority)} priority`);
@@ -229,7 +238,7 @@ export async function deriveAssigneeNotifications(
       chip: e.priority ? actionPriorityLabel(e.priority) : null,
       urgency: -e.createdAt.getTime(), // newest first within the group
     };
-  });
+    });
 }
 
 function truncate(text: string, max: number): string {

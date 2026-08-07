@@ -334,6 +334,17 @@ export function canManageSiteConfigTemplates(role: PlatformRoleValue): boolean {
  * platform operator's fallback rather than acting as a second editor: one row,
  * one editing surface.
  */
+/**
+ * Notifications — Director only, Project Manager read-only via the Settings
+ * area gate. Same ownership model as Company Profile: organisation-level
+ * business settings belong to the Platform portal.
+ */
+export const NOTIFICATION_SETTINGS_MANAGE_ROLES: PlatformRoleValue[] = ['DIRECTOR'];
+
+export function canManageNotificationSettings(role: PlatformRoleValue): boolean {
+  return NOTIFICATION_SETTINGS_MANAGE_ROLES.includes(role);
+}
+
 export const COMPANY_PROFILE_MANAGE_ROLES: PlatformRoleValue[] = ['DIRECTOR'];
 
 export function canManageCompanyProfile(role: PlatformRoleValue): boolean {

@@ -59,6 +59,13 @@ export const SETTINGS_AREAS: SettingsArea[] = [
       'Company details, logos and the standard wording used on generated documents.',
   },
   {
+    key: 'notifications',
+    label: 'Notifications',
+    href: '/platform/dashboard/settings/notifications',
+    description:
+      'What SiteComply tells people about, and how far ahead reminders start.',
+  },
+  {
     key: 'authentication',
     label: 'Authentication & access',
     href: '/platform/dashboard/settings/authentication',

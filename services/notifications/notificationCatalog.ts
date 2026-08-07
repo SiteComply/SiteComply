@@ -45,6 +45,15 @@ export interface NotificationTypeDescriptor {
   defaultChannels: Record<NotificationChannelKey, boolean>;
 }
 
+/**
+ * REMOVED, NOT HIDDEN: platform_access_request, audit_reminders and
+ * weekly_summary. All three were catalogue entries with no consumer anywhere in
+ * the tree — switches an administrator could set that changed nothing. A
+ * setting that does not reach an enforcement point is worse than a missing one,
+ * because it tells someone they have configured behaviour they have not.
+ *
+ * Re-add each ONLY alongside the code that reads it.
+ */
 export const NOTIFICATION_TYPES: NotificationTypeDescriptor[] = [
   {
     key: 'permit_awaiting',
@@ -55,26 +64,10 @@ export const NOTIFICATION_TYPES: NotificationTypeDescriptor[] = [
     defaultChannels: { email: false, sms: false },
   },
   {
-    key: 'platform_access_request',
-    label: 'New platform access requests',
-    description:
-      'Someone requests access to the platform and is awaiting an admin decision. Also drives the in-app nav badge.',
-    defaultEnabled: true,
-    defaultChannels: { email: false, sms: false },
-  },
-  {
     key: 'overdue_actions',
     label: 'Overdue actions',
     description:
       'A corrective action has passed its due date without being completed.',
-    defaultEnabled: true,
-    defaultChannels: { email: false, sms: false },
-  },
-  {
-    key: 'audit_reminders',
-    label: 'Audit reminders',
-    description:
-      'Upcoming or outstanding audits that need attention across your sites.',
     defaultEnabled: true,
     defaultChannels: { email: false, sms: false },
   },
@@ -97,7 +90,15 @@ export const NOTIFICATION_TYPES: NotificationTypeDescriptor[] = [
     key: 'action_due_reminders',
     label: 'Action due reminders',
     description:
-      'A corrective action is approaching its due date — reminders at 7 and 3 days.',
+      'A corrective action is approaching its due date. The lead time is set under Reminder timing.',
+    defaultEnabled: true,
+    defaultChannels: { email: false, sms: false },
+  },
+  {
+    key: 'action_updated',
+    label: 'Action updates',
+    description:
+      'An action you can see has changed status or been edited.',
     defaultEnabled: true,
     defaultChannels: { email: false, sms: false },
   },
@@ -140,16 +141,8 @@ export const NOTIFICATION_TYPES: NotificationTypeDescriptor[] = [
     key: 'document_expiry',
     label: 'Document expiry reminders',
     description:
-      'Site documents (certificates, insurance, permits) that are expiring soon — reminders at 30, 14 and 7 days — or have already expired.',
+      'Site documents (certificates, insurance, permits) that are expiring soon, or have already expired. The lead time is set under Reminder timing.',
     defaultEnabled: true,
-    defaultChannels: { email: false, sms: false },
-  },
-  {
-    key: 'weekly_summary',
-    label: 'Weekly summary',
-    description:
-      'A weekly digest of site activity, attendance and compliance across the organisation.',
-    defaultEnabled: false,
     defaultChannels: { email: false, sms: false },
   },
 ];

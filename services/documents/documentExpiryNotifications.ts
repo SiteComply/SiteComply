@@ -1,4 +1,8 @@
 import { prisma } from '@/lib/prisma';
+import {
+  getNotificationThresholds,
+  reminderOffsets,
+} from '@/services/notifications/notificationConfigService';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import {
@@ -24,9 +28,13 @@ import type { RawNotification } from '@/services/notifications/notificationTypes
 
 export const DOCUMENT_EXPIRY_NOTIFICATION_TYPE = 'document_expiry';
 
-/** Reminder thresholds (days before expiry). Central, single source of truth. */
+/**
+ * FALLBACK ONLY. The lead time is organisation-configurable (Settings ->
+ * Notifications); these are what applies before anyone has set one, and they
+ * are the values this file used when they were hard-coded.
+ */
 export const DOCUMENT_EXPIRY_THRESHOLDS = [30, 14, 7] as const;
-const MAX_THRESHOLD = Math.max(...DOCUMENT_EXPIRY_THRESHOLDS);
+const EXPIRY_STEPS = [14, 7];
 const DAY_MS = 24 * 60 * 60 * 1000;
 const utcDay = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 
@@ -66,7 +74,11 @@ export async function deriveDocumentNotifications(
   if (!(await isNotificationEnabled(DOCUMENT_EXPIRY_NOTIFICATION_TYPE))) return [];
 
   const todayMs = utcDay(now);
-  const cutoff = new Date(todayMs + MAX_THRESHOLD * DAY_MS); // today + 30 days
+  // Organisation-configurable lead time, widest first. Read per call so a
+  // change applies to the next request rather than the next restart.
+  const { documentExpiryDays } = await getNotificationThresholds();
+  const expiryThresholds = reminderOffsets(documentExpiryDays, EXPIRY_STEPS);
+  const cutoff = new Date(todayMs + expiryThresholds[0]! * DAY_MS);
 
   const docs = await prisma.document.findMany({
     where: {
@@ -108,7 +120,7 @@ export async function deriveDocumentNotifications(
       });
       continue;
     }
-    const crossed = DOCUMENT_EXPIRY_THRESHOLDS.filter((t) => daysUntilExpiry <= t);
+    const crossed = expiryThresholds.filter((t) => daysUntilExpiry <= t);
     if (crossed.length === 0) continue;
     const threshold = Math.min(...crossed);
     out.push({
