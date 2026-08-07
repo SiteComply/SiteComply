@@ -200,8 +200,11 @@ if(ui.indexOf('Worker SMS Login') < 0) fail('the Worker SMS Login label is missi
 if(ui.indexOf('SMS login for workers') >= 0) fail('the old SMS login label is still present');
 if(ui.indexOf('ManagedElsewhereBadge') < 0)
   fail('the OTP read-only badge is gone — the section reads as controls that failed to load');
-// Save must LEAD the workspace and stay put. sticky is the property that makes
-// "save without scrolling" true on a page this tall, not merely at the top.
+// Save must LEAD the workspace and stay put. sticky is the property that
+// makes saving-without-scrolling true on a page this tall, not merely at the
+// top. NOTE: no double quotes in comments inside this node -e block — an
+// unescaped one closes the shell string and silently truncates the program,
+// which exits 0 having asserted nothing.
 if(!/sticky top-0/.test(ui))
   fail('the Save action is no longer sticky — it would scroll away on this page');
 
