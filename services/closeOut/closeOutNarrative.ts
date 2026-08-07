@@ -126,14 +126,28 @@ export const CLOSE_OUT_SYSTEM_PROMPT = [
 export type CloseOutNarrativeMode = 'sections' | 'summary';
 
 /**
- * DEFAULTS TO THE SHIPPED BEHAVIOUR. An unset, misspelt or unknown value keeps
- * `sections`, so turning the switch on is always a deliberate act and a typo
- * can never silently change what a client receives.
+ * DEFAULTS TO `summary`, the adopted model. `sections` is retained and is
+ * reachable only by setting CLOSE_OUT_NARRATIVE_MODE=sections explicitly, so
+ * the old behaviour is one App Service setting away if this needs reverting
+ * without a redeploy.
+ *
+ * The default flipped when the two were compared on the same project and
+ * model: per-section prose produced ten AI blocks and 348 words that restated
+ * the tables beneath them, including a raw JSON key — (photoCount = 3) — and
+ * section identifiers written as PROJECT_INFORMATION, in a document handed to
+ * a client. The summary produces one block and 166 words, and the pack is 20%
+ * shorter.
+ *
+ * An unset or unrecognised value now yields `summary`. That is deliberate: the
+ * safe default is the one with the smaller claim surface. Ten AI-labelled
+ * paragraphs asserting facts about compliance records are ten chances for a
+ * model to say something that outlives the project.
  */
 export function getCloseOutNarrativeMode(): CloseOutNarrativeMode {
-  return process.env.CLOSE_OUT_NARRATIVE_MODE?.trim().toLowerCase() === 'summary'
-    ? 'summary'
-    : 'sections';
+  return process.env.CLOSE_OUT_NARRATIVE_MODE?.trim().toLowerCase() ===
+    'sections'
+    ? 'sections'
+    : 'summary';
 }
 
 export const CLOSE_OUT_SUMMARY_PROMPT_VERSION = 'cop-v2-summary';
