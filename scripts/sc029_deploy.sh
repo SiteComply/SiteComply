@@ -236,7 +236,8 @@ if(!/pendingCount > 0/.test(am))
 // the disabled expressions of the row actions. This does not defend against an
 // arbitrary rewrite; it does catch the guard being removed or retargeted,
 // which is how it would actually regress.
-// ...and pin what `changed` itself is. Setting it to a constant disarms both
+// ...and pin what the staged count itself is. Setting it to a constant
+// disarms both
 // the per-person marker and the row-action guard while leaving every string
 // this script looks for exactly where it was — verified by trying it.
 if(!/const changed = Object\.keys\(draft\[u\.userId\] \?\? \{\}\)\.length;/.test(am))
