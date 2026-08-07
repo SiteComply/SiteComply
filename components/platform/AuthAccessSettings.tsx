@@ -72,12 +72,44 @@ export function AuthAccessSettings({
 
   return (
     <div className="space-y-4">
-      {!canEdit ? (
+      {/* THE WORKSPACE ACTION BAR.
+          Save used to sit under the last panel, which on this page means below
+          four regions — a Director changing the first toggle had to scroll past
+          everything they had not touched to commit it. It now leads the
+          workspace and STAYS on screen, which is the actual requirement: a
+          header action would scroll away on a page this tall and leave the user
+          exactly where they started.
+          Read-only viewers get the notice in the same slot, so the answer to
+          "can I change this" is in one place for both roles.
+
+          bg-surface-sunken is the PAGE background (PlatformShell), not a
+          decorative choice — a sticky bar without it lets the panels scroll
+          through the text. There is no bg-surface-page token; naming one that
+          does not exist fails silently and only shows up mid-scroll. */}
+      {canEdit ? (
+        <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface-sunken px-1 py-3">
+          <p className="text-xs text-ink-subtle">
+            {settings.updatedByName && settings.updatedAt
+              ? `Last changed by ${settings.updatedByName} on ${new Date(
+                  settings.updatedAt,
+                ).toLocaleDateString('en-GB')}.`
+              : 'Not yet configured — the values shown are the platform defaults.'}
+          </p>
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save settings'}
+          </button>
+        </div>
+      ) : (
         <p className="rounded-lg border border-line bg-surface-sunken px-4 py-2 text-sm text-ink-muted">
           You can see these settings but not change them. Only a Director can
           change how people sign in or who may reach a site.
         </p>
-      ) : null}
+      )}
       {error ? (
         <p className="rounded-lg border border-danger-500/40 bg-danger-50 px-4 py-2 text-sm text-danger-700">
           {error}
@@ -94,7 +126,7 @@ export function AuthAccessSettings({
         hint="How people sign in to this organisation."
       >
         <Toggle
-          label="SMS login for workers"
+          label="Worker SMS Login"
           hint="Workers sign in with a one-time code sent by text. Turning this off stops codes being sent — workers cannot sign in until it is back on."
           checked={form.workerSmsLoginEnabled}
           disabled={!canEdit}
@@ -138,9 +170,17 @@ export function AuthAccessSettings({
         </p>
       </Panel>
 
+      {/* READ-ONLY, AND IT HAS TO LOOK IT.
+          These three rows already rendered as static chips, but so does the
+          SMS delivery row above them, and nothing on the panel said WHY none
+          of them could be changed — a Director could reasonably read it as a
+          section that had failed to load its controls. The badge states the
+          rule once, at the level it applies to, so the rows below need no
+          repeated disclaimer. */}
       <Panel
         title="OTP settings"
-        hint="One-time code behaviour. Managed in the Admin Centre — shown here so you can see what applies."
+        hint="One-time code behaviour. These values apply to this organisation but are not set here."
+        actions={<ManagedElsewhereBadge />}
       >
         <ReadOnlyRow
           label="Code length"
@@ -196,29 +236,23 @@ export function AuthAccessSettings({
         </p>
       </Panel>
 
-      {canEdit ? (
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={save}
-            disabled={saving}
-            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? 'Saving…' : 'Save settings'}
-          </button>
-          {settings.updatedByName && settings.updatedAt ? (
-            <p className="text-xs text-ink-subtle">
-              Last changed by {settings.updatedByName} on{' '}
-              {new Date(settings.updatedAt).toLocaleDateString('en-GB')}.
-            </p>
-          ) : (
-            <p className="text-xs text-ink-subtle">
-              Not yet configured — the values shown are the platform defaults.
-            </p>
-          )}
-        </div>
-      ) : null}
     </div>
+  );
+}
+
+/** Says once, at panel level, that a whole region is set somewhere else. */
+function ManagedElsewhereBadge() {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-surface-sunken px-2.5 py-1 text-[11px] font-semibold text-ink-muted">
+      <svg
+        viewBox="0 0 16 16"
+        aria-hidden="true"
+        className="h-3 w-3 fill-current"
+      >
+        <path d="M8 1a3.5 3.5 0 0 0-3.5 3.5V6H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-.5V4.5A3.5 3.5 0 0 0 8 1Zm2 5H6V4.5a2 2 0 1 1 4 0V6Z" />
+      </svg>
+      Managed in the Admin Centre
+    </span>
   );
 }
 
@@ -237,8 +271,35 @@ function formatDuration(seconds: number): string {
 }
 
 /**
- * A timeout in MINUTES, stored in seconds. Nobody thinks about a session in
- * seconds, and the stored unit is not the user's problem.
+ * The durations offered for a session timeout, in SECONDS.
+ *
+ * A number-of-minutes box asked the wrong question. "480" is not a length of
+ * time anyone reasons about, it needs mental arithmetic to become "8 hours",
+ * and it invited values nobody wants — 7 minutes, 1,000 minutes — that then
+ * had to be clamped server-side. These are the choices that actually get made.
+ */
+const DURATION_CHOICES: { seconds: number; label: string }[] = [
+  { seconds: 1800, label: '30 minutes' },
+  { seconds: 3600, label: '1 hour' },
+  { seconds: 7200, label: '2 hours' },
+  { seconds: 14400, label: '4 hours' },
+  { seconds: 28800, label: '8 hours' },
+  { seconds: 43200, label: '12 hours' },
+  { seconds: 86400, label: '24 hours' },
+];
+
+/**
+ * A timeout, chosen as a duration and stored in seconds exactly as before.
+ *
+ * NOTHING ABOUT THE STORED VALUE CHANGES. The same integer seconds go to the
+ * same field, through the same validation and the same clamp.
+ *
+ * The list is filtered to each field's own range, so the worker timeout cannot
+ * offer a length the server would reject. And a value that is NOT one of these
+ * — set previously through the API, or arriving from an env var — is added to
+ * the list and preselected rather than silently rounded to the nearest option.
+ * Presenting choices must not quietly rewrite a setting the moment somebody
+ * opens the page and saves it.
  */
 function Duration({
   label,
@@ -257,30 +318,36 @@ function Duration({
   disabled: boolean;
   onChange: (seconds: number) => void;
 }) {
+  const options = DURATION_CHOICES.filter(
+    (c) => c.seconds >= min && c.seconds <= max,
+  );
+  const known = options.some((c) => c.seconds === seconds);
+  const all = known
+    ? options
+    : [
+        { seconds, label: `${formatDuration(seconds)} (current)` },
+        ...options,
+      ].sort((a, b) => a.seconds - b.seconds);
+
   return (
     <div className="flex items-start justify-between gap-4 border-b border-line py-3 last:border-b-0">
       <div className="min-w-0">
         <p className="text-sm font-medium text-ink">{label}</p>
         <p className="text-xs text-ink-subtle">{hint}</p>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <input
-          type="number"
-          min={Math.round(min / 60)}
-          max={Math.round(max / 60)}
-          value={Math.round(seconds / 60)}
-          disabled={disabled}
-          onChange={(e) => onChange(Number(e.target.value) * 60)}
-          aria-label={`${label} in minutes`}
-          className="w-24 rounded-lg border border-line bg-surface px-3 py-1.5 text-right text-sm text-ink disabled:opacity-50"
-        />
-        <span className="text-xs text-ink-subtle">
-          minutes
-          <span className="block text-[11px]">
-            {Math.round(min / 60)}–{Math.round(max / 60)}
-          </span>
-        </span>
-      </div>
+      <select
+        value={seconds}
+        disabled={disabled}
+        onChange={(e) => onChange(Number(e.target.value))}
+        aria-label={label}
+        className="shrink-0 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink disabled:opacity-50"
+      >
+        {all.map((c) => (
+          <option key={c.seconds} value={c.seconds}>
+            {c.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
