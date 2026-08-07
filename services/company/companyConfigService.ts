@@ -257,3 +257,318 @@ export async function getCompanyBranding(): Promise<CompanyBranding> {
     hasLogo: !!row?.logoBlobPath,
   };
 }
+
+/* -------------------------------------------------------------------------- */
+/* Platform (Director) surface — the OWNER of company profile & branding       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Settings → Company profile & branding, in the PLATFORM portal.
+ *
+ * ONE ROW, ONE EDITOR. These are organisation-level business settings, so the
+ * Platform portal owns them outright and the Admin Centre keeps a read-only
+ * view as the platform operator's fallback. That is deliberately a different
+ * split from Authentication & Access, where the Admin Centre retains the
+ * infrastructure fields — there is no infrastructure/policy seam in company
+ * branding to split along, and two full editors of one row is exactly the
+ * duplicate source of truth this section exists to remove.
+ *
+ * WHAT THIS IS NOT. It never supplies the CDM duty holders on a project.
+ * CdmDutyHolders records the client, principal designer and principal
+ * contractor APPOINTED TO THAT PROJECT — legal appointments that vary per job.
+ * An organisation-level contact flowing into those fields would be a legal
+ * misstatement, so nothing here is read by that path.
+ */
+export interface PlatformCompanyProfileView {
+  /** Company profile. */
+  companyName: string;
+  registrationNumber: string;
+  vatNumber: string;
+  primaryContactName: string;
+  primaryEmail: string;
+  primaryPhone: string;
+  website: string;
+  addressLine1: string;
+  addressLine2: string;
+  addressTown: string;
+  addressPostcode: string;
+  /** Branding. */
+  tagline: string;
+  primaryColor: string;
+  accentColor: string;
+  hasLogo: boolean;
+  hasPrintLogo: boolean;
+  logoVersion: number | null;
+  printLogoVersion: number | null;
+  /** Document defaults. */
+  disclaimer: string;
+  reportFooter: string;
+  /** Close-out pack branding. */
+  packIncludeCompanyInfo: boolean;
+  packIncludeLogo: boolean;
+  packIncludePrintLogo: boolean;
+  packIncludeStandardDetails: boolean;
+  /** Support contact — shown for context; distinct from the primary contact. */
+  supportEmail: string;
+  supportPhone: string;
+
+  configured: boolean;
+  updatedByName: string | null;
+  updatedAt: string | null;
+}
+
+/** The fields a Director may change. Anything not here is not writable. */
+export interface SavePlatformCompanyProfileInput {
+  companyName?: string;
+  registrationNumber?: string;
+  vatNumber?: string;
+  primaryContactName?: string;
+  primaryEmail?: string;
+  primaryPhone?: string;
+  website?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  addressTown?: string;
+  addressPostcode?: string;
+  tagline?: string;
+  primaryColor?: string;
+  accentColor?: string;
+  disclaimer?: string;
+  reportFooter?: string;
+  packIncludeCompanyInfo?: boolean;
+  packIncludeLogo?: boolean;
+  packIncludePrintLogo?: boolean;
+  packIncludeStandardDetails?: boolean;
+}
+
+const URL_MAX = 200;
+const REG_MAX = 40;
+const ADDRESS_MAX = 120;
+const LONG_TEXT_MAX = 2000;
+
+export async function getPlatformCompanyProfile(): Promise<PlatformCompanyProfileView> {
+  const row = await readRow();
+  const t = (v: string | null | undefined) => v ?? '';
+  return {
+    companyName: row?.companyName ?? COMPANY_DEFAULTS.companyName,
+    registrationNumber: t(row?.registrationNumber),
+    vatNumber: t(row?.vatNumber),
+    primaryContactName: t(row?.primaryContactName),
+    primaryEmail: t(row?.primaryEmail),
+    primaryPhone: t(row?.primaryPhone),
+    website: t(row?.website),
+    addressLine1: t(row?.addressLine1),
+    addressLine2: t(row?.addressLine2),
+    addressTown: t(row?.addressTown),
+    addressPostcode: t(row?.addressPostcode),
+    tagline: t(row?.tagline),
+    primaryColor: row?.primaryColor ?? COMPANY_DEFAULTS.primaryColor,
+    accentColor: row?.accentColor ?? COMPANY_DEFAULTS.accentColor,
+    hasLogo: !!row?.logoBlobPath,
+    hasPrintLogo: !!row?.printLogoBlobPath,
+    logoVersion: row?.logoUpdatedAt ? row.logoUpdatedAt.getTime() : null,
+    printLogoVersion: row?.printLogoUpdatedAt
+      ? row.printLogoUpdatedAt.getTime()
+      : null,
+    disclaimer: t(row?.disclaimer),
+    reportFooter: t(row?.reportFooter),
+    // Default TRUE when no row exists, matching the migration defaults and
+    // what packs render today.
+    packIncludeCompanyInfo: row?.packIncludeCompanyInfo ?? true,
+    packIncludeLogo: row?.packIncludeLogo ?? true,
+    packIncludePrintLogo: row?.packIncludePrintLogo ?? true,
+    packIncludeStandardDetails: row?.packIncludeStandardDetails ?? true,
+    supportEmail: t(row?.supportEmail),
+    supportPhone: t(row?.supportPhone),
+    configured: !!row,
+    updatedByName: row?.updatedByName ?? null,
+    updatedAt: row?.updatedAt ? row.updatedAt.toISOString() : null,
+  };
+}
+
+export async function savePlatformCompanyProfile(
+  input: SavePlatformCompanyProfileInput,
+  user: { userId: string; name: string },
+): Promise<{ ok: true } | { ok: false; errors: Record<string, string> }> {
+  const errors: Record<string, string> = {};
+  const text = (v?: string) => (v ?? '').trim();
+
+  const companyName = text(input.companyName);
+  if (companyName.length > NAME_MAX)
+    errors.companyName = `Keep the name under ${NAME_MAX} characters.`;
+
+  const primaryEmail = text(input.primaryEmail);
+  if (primaryEmail && (primaryEmail.length > EMAIL_MAX || !EMAIL_RE.test(primaryEmail)))
+    errors.primaryEmail = 'Enter a valid email address.';
+
+  const primaryPhone = text(input.primaryPhone);
+  if (primaryPhone && (primaryPhone.length > PHONE_MAX || !PHONE_RE.test(primaryPhone)))
+    errors.primaryPhone = 'Enter a valid phone number.';
+
+  // Accepts a bare domain and stores it as typed. Deliberately not coerced to
+  // https:// — rewriting what someone entered into their own company record is
+  // the kind of helpfulness that later reads as data they did not supply.
+  const website = text(input.website);
+  if (website.length > URL_MAX) errors.website = `Keep the website under ${URL_MAX} characters.`;
+
+  const registrationNumber = text(input.registrationNumber);
+  if (registrationNumber.length > REG_MAX)
+    errors.registrationNumber = `Keep the registration number under ${REG_MAX} characters.`;
+  const vatNumber = text(input.vatNumber);
+  if (vatNumber.length > REG_MAX)
+    errors.vatNumber = `Keep the VAT number under ${REG_MAX} characters.`;
+
+  const primaryContactName = text(input.primaryContactName);
+  if (primaryContactName.length > NAME_MAX)
+    errors.primaryContactName = `Keep the contact name under ${NAME_MAX} characters.`;
+
+  const addr = {
+    addressLine1: text(input.addressLine1),
+    addressLine2: text(input.addressLine2),
+    addressTown: text(input.addressTown),
+    addressPostcode: text(input.addressPostcode),
+  };
+  for (const [k, v] of Object.entries(addr)) {
+    if (v.length > ADDRESS_MAX) errors[k] = `Keep this under ${ADDRESS_MAX} characters.`;
+  }
+
+  const tagline = text(input.tagline);
+  if (tagline.length > TAGLINE_MAX)
+    errors.tagline = `Keep the tagline under ${TAGLINE_MAX} characters.`;
+
+  const disclaimer = text(input.disclaimer);
+  if (disclaimer.length > LONG_TEXT_MAX)
+    errors.disclaimer = `Keep the disclaimer under ${LONG_TEXT_MAX} characters.`;
+  const reportFooter = text(input.reportFooter);
+  if (reportFooter.length > LONG_TEXT_MAX)
+    errors.reportFooter = `Keep the footer under ${LONG_TEXT_MAX} characters.`;
+
+  const primaryColor = normaliseHex(text(input.primaryColor));
+  if (primaryColor === 'invalid') errors.primaryColor = 'Enter a hex colour like #38B54A.';
+  const accentColor = normaliseHex(text(input.accentColor));
+  if (accentColor === 'invalid') errors.accentColor = 'Enter a hex colour like #00AEEF.';
+
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+
+  // NOTE: supportEmail / supportPhone are NOT written here. They already appear
+  // on close-out packs and are a different fact from the primary contact;
+  // silently overwriting them from this screen would change what is printed.
+  const data = {
+    companyName: companyName || null,
+    registrationNumber: registrationNumber || null,
+    vatNumber: vatNumber || null,
+    primaryContactName: primaryContactName || null,
+    primaryEmail: primaryEmail || null,
+    primaryPhone: primaryPhone || null,
+    website: website || null,
+    addressLine1: addr.addressLine1 || null,
+    addressLine2: addr.addressLine2 || null,
+    addressTown: addr.addressTown || null,
+    addressPostcode: addr.addressPostcode || null,
+    tagline: tagline || null,
+    primaryColor: primaryColor as string | null,
+    accentColor: accentColor as string | null,
+    disclaimer: disclaimer || null,
+    reportFooter: reportFooter || null,
+    packIncludeCompanyInfo: input.packIncludeCompanyInfo !== false,
+    packIncludeLogo: input.packIncludeLogo !== false,
+    packIncludePrintLogo: input.packIncludePrintLogo !== false,
+    packIncludeStandardDetails: input.packIncludeStandardDetails !== false,
+    updatedByUserId: user.userId,
+    updatedByName: user.name,
+  };
+
+  await prisma.companyConfig.upsert({
+    where: { id: CONFIG_ID },
+    update: data,
+    create: { id: CONFIG_ID, ...data },
+  });
+  return { ok: true };
+}
+
+/**
+ * Logo upload / removal / serving for EITHER logo, from the Platform portal.
+ *
+ * `kind` selects the column trio rather than duplicating three near-identical
+ * functions — the screen logo and the print logo differ only in which pointer
+ * they write, and two copies of this would drift the moment one gained a
+ * validation rule the other did not.
+ */
+export type CompanyLogoKind = 'screen' | 'print';
+
+const LOGO_COLUMNS = {
+  screen: {
+    path: 'logoBlobPath',
+    type: 'logoContentType',
+    at: 'logoUpdatedAt',
+  },
+  print: {
+    path: 'printLogoBlobPath',
+    type: 'printLogoContentType',
+    at: 'printLogoUpdatedAt',
+  },
+} as const;
+
+export async function setPlatformCompanyLogo(
+  kind: CompanyLogoKind,
+  file: { buffer: Buffer; fileName: string; mimeType: string },
+  user: { userId: string; name: string },
+): Promise<void> {
+  const cols = LOGO_COLUMNS[kind];
+  const row = await readRow();
+  const previous = (row?.[cols.path] as string | null) ?? null;
+  const blobPath = buildLogoBlobPath(file.fileName);
+  await uploadDocumentBlob(blobPath, file.buffer, file.mimeType);
+
+  const data = {
+    [cols.path]: blobPath,
+    [cols.type]: file.mimeType,
+    [cols.at]: new Date(),
+    updatedByUserId: user.userId,
+    updatedByName: user.name,
+  } as Record<string, unknown>;
+
+  await prisma.companyConfig.upsert({
+    where: { id: CONFIG_ID },
+    update: data,
+    create: { id: CONFIG_ID, ...data },
+  });
+
+  if (previous && previous !== blobPath) await deleteDocumentBlob(previous);
+}
+
+export async function clearPlatformCompanyLogo(
+  kind: CompanyLogoKind,
+  user: { userId: string; name: string },
+): Promise<void> {
+  const cols = LOGO_COLUMNS[kind];
+  const row = await readRow();
+  const current = (row?.[cols.path] as string | null) ?? null;
+  if (!current) return;
+  await deleteDocumentBlob(current);
+  await prisma.companyConfig.update({
+    where: { id: CONFIG_ID },
+    data: {
+      [cols.path]: null,
+      [cols.type]: null,
+      [cols.at]: null,
+      updatedByUserId: user.userId,
+      updatedByName: user.name,
+    } as Record<string, unknown>,
+  });
+}
+
+/** Bytes + content type for the print logo's serving route (or null). */
+export async function getCompanyPrintLogo(): Promise<{
+  bytes: Buffer;
+  contentType: string;
+} | null> {
+  const row = await readRow();
+  if (!row?.printLogoBlobPath) return null;
+  const bytes = await downloadDocumentBlob(row.printLogoBlobPath);
+  if (!bytes) return null;
+  return {
+    bytes,
+    contentType: row.printLogoContentType || 'application/octet-stream',
+  };
+}

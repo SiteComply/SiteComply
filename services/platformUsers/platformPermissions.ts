@@ -326,6 +326,20 @@ export function canManageSiteConfigTemplates(role: PlatformRoleValue): boolean {
  * a Project Manager can see what the organisation's posture is and raise it with
  * a Director, without being able to change it.
  */
+/**
+ * Company Profile & Branding — Director only.
+ *
+ * Organisation-level business settings, not infrastructure, so the Platform
+ * portal owns them outright. The Admin Centre keeps a read-only view as the
+ * platform operator's fallback rather than acting as a second editor: one row,
+ * one editing surface.
+ */
+export const COMPANY_PROFILE_MANAGE_ROLES: PlatformRoleValue[] = ['DIRECTOR'];
+
+export function canManageCompanyProfile(role: PlatformRoleValue): boolean {
+  return COMPANY_PROFILE_MANAGE_ROLES.includes(role);
+}
+
 export const AUTH_SETTINGS_MANAGE_ROLES: PlatformRoleValue[] = ['DIRECTOR'];
 
 export function canManageAuthSettings(role: PlatformRoleValue): boolean {

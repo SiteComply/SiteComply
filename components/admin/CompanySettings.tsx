@@ -14,7 +14,7 @@ import { formatDateTimeUK } from '@/lib/datetime';
  */
 export function CompanySettings({
   config,
-  canManage = true,
+  canManage: canManageProp = true,
 }: {
   config: CompanyConfigView;
   canManage?: boolean;
@@ -121,8 +121,25 @@ export function CompanySettings({
 
   const logoSrc = `/api/company/logo?v=${logoVersion}`;
 
+  // READ-ONLY FROM HERE. Company profile and branding moved to Platform
+  // Settings -> Company profile & branding, where a Director owns them; this
+  // stays as the platform operator's fallback view. Forced rather than left to
+  // the caller because the API now refuses these writes with 409 — a form that
+  // still looks editable would only produce an error the user cannot act on.
+  //
+  // Reuses the component's existing `canManage` path, which already gates every
+  // handler and every control, instead of adding a second disabled mechanism.
+  const readOnly = true;
+  const canManage = canManageProp && !readOnly;
+
   return (
     <div className="space-y-6">
+      <p className="rounded-lg border border-line bg-surface-sunken px-4 py-3 text-sm text-ink-muted">
+        <span className="font-semibold text-ink">Read-only.</span> Company
+        profile and branding are managed by a Director in Platform Settings
+        &rarr; Company profile &amp; branding. This view shows what is currently
+        set.
+      </p>
       {/* Company profile */}
       <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
         <h2 className="text-sm font-semibold text-ink">Company profile</h2>
