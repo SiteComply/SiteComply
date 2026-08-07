@@ -15,10 +15,13 @@ export function CloseOutNarrativeControls({
   siteId,
   packId,
   hasNarrative,
+  mode,
 }: {
   siteId: string;
   packId: string;
   hasNarrative: boolean;
+  /** Which narrative the pack will get — decides what this offer promises. */
+  mode: 'sections' | 'summary';
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<'gen' | 'del' | null>(null);
@@ -54,11 +57,16 @@ export function CloseOutNarrativeControls({
               optional
             </span>
           </h2>
+          {/* The offer has to match what arrives. This read "and a short
+              narrative for each section" after the section prose was dropped,
+              which promises the author something the pack will not contain. */}
           <p className="text-sm text-ink-muted">
-            Writes a descriptive executive summary and a short narrative for
-            each section, from the records in this pack. It describes what the
-            records contain — it never assesses, certifies or approves
-            compliance, and everything it writes is labelled.
+            {mode === 'summary'
+              ? 'Writes one executive summary for the whole pack, from the records it contains — the project, the compliance activity captured, which records are present and absent, and the close-out context. The evidence sections stay as records only.'
+              : 'Writes a descriptive executive summary and a short narrative for each section, from the records in this pack.'}{' '}
+            It describes what the records contain — it never assesses,
+            certifies or approves compliance, and everything it writes is
+            labelled.
           </p>
         </div>
         <div className="flex gap-2">

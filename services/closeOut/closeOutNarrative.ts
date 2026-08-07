@@ -91,6 +91,161 @@ export const CLOSE_OUT_SYSTEM_PROMPT = [
   'between March and June" is right. "Permit control was well managed" is a judgement and is forbidden.',
 ].join('\n');
 
+/* -------------------------------------------------------------------------- */
+/* SC-024 REVIEW — narrative mode                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Which narrative a close-out pack carries.
+ *
+ *   sections — the shipped behaviour: an executive summary PLUS one paragraph
+ *              per section.
+ *   summary  — a single project-level executive summary, sections stay purely
+ *              evidence-driven.
+ *
+ * WHY THIS EXISTS. Read against the REV-1 requirement, SC-024 asks the AI to
+ * "automatically compile" and "intelligently organise" the pack. It never asks
+ * for narrative prose — the words summary, narrative and executive do not
+ * appear in it once. What it enumerates is structure: cover page, contents,
+ * numbered sections, appendices.
+ *
+ * Per-section prose sits furthest from that, and production bears it out. A
+ * real generated pack produced the same sentence four times over:
+ *
+ *   "The Worker Records section contained 8 records. No additional summary
+ *    facts were provided in the section header."
+ *
+ * restating a count printed directly above its own table, and leaking the
+ * shape of the prompt context into a document handed to a client. The design
+ * has nothing to add beyond the table, so it repeats it.
+ *
+ * A single project-level summary is the one place synthesis across sections
+ * produces something the tables cannot. Both modes are kept so the two can be
+ * compared on real packs, and so this is revertible by configuration.
+ */
+export type CloseOutNarrativeMode = 'sections' | 'summary';
+
+/**
+ * DEFAULTS TO `summary`, the adopted model. `sections` is retained and is
+ * reachable only by setting CLOSE_OUT_NARRATIVE_MODE=sections explicitly, so
+ * the old behaviour is one App Service setting away if this needs reverting
+ * without a redeploy.
+ *
+ * The default flipped when the two were compared on the same project and
+ * model: per-section prose produced ten AI blocks and 348 words that restated
+ * the tables beneath them, including a raw JSON key — (photoCount = 3) — and
+ * section identifiers written as PROJECT_INFORMATION, in a document handed to
+ * a client. The summary produces one block and 166 words, and the pack is 20%
+ * shorter.
+ *
+ * An unset or unrecognised value now yields `summary`. That is deliberate: the
+ * safe default is the one with the smaller claim surface. Ten AI-labelled
+ * paragraphs asserting facts about compliance records are ten chances for a
+ * model to say something that outlives the project.
+ */
+export function getCloseOutNarrativeMode(): CloseOutNarrativeMode {
+  return process.env.CLOSE_OUT_NARRATIVE_MODE?.trim().toLowerCase() ===
+    'sections'
+    ? 'sections'
+    : 'summary';
+}
+
+export const CLOSE_OUT_SUMMARY_PROMPT_VERSION = 'cop-v2-summary';
+
+/** Summary mode: no per-section prose, so the schema cannot ask for any. */
+export const CLOSE_OUT_SUMMARY_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    headline: { type: 'string' },
+    executiveSummary: { type: 'string' },
+  },
+  required: ['headline', 'executiveSummary'],
+};
+
+/**
+ * Summary mode's system prompt.
+ *
+ * Every prohibition from the sections prompt is carried over verbatim — this
+ * changes what the model writes ABOUT, never what it is allowed to claim. The
+ * additions are the ones that make a summary worth reading instead of a longer
+ * count list: draw across sections, name the period, say what is present and
+ * what is absent.
+ *
+ * COMPLETENESS IS DESCRIBED, NEVER JUDGED. "Records are complete" is a
+ * compliance conclusion; "the pack contains no photographic evidence" is a
+ * fact. The line matters because this document is handed to a client, and
+ * findConclusionLanguage() rejects the former either way.
+ */
+export const CLOSE_OUT_SUMMARY_SYSTEM_PROMPT = [
+  'You are writing the single executive summary for the handover pack of a UK construction project.',
+  'The pack is a RECORD of what was captured in SiteComply during the project. It is given to the',
+  'client and the Principal Contractor. The pack already contains full evidence tables; your summary',
+  'is the only prose in it.',
+  '',
+  'YOUR ROLE IS STRICTLY LIMITED TO DESCRIPTION. You describe what the records show. You do NOT',
+  'evaluate, certify, approve, or conclude anything about compliance, safety or quality.',
+  '',
+  'You MUST NOT:',
+  '- state or imply that the project, site or any party was compliant, non-compliant, safe, unsafe,',
+  '  satisfactory, unsatisfactory, adequate, inadequate, acceptable or in breach of anything;',
+  '- approve, certify, sign off, validate, endorse or clear any record, party or the project;',
+  '- state that a legal, regulatory, CDM or contractual duty or standard was met or not met;',
+  '- give an opinion, rating, verdict, assurance, recommendation, corrective action or next step;',
+  '- assess performance, or characterise anything as good, poor, strong, weak, thorough or lacking;',
+  '- speculate about anything not present in the JSON context, or invent numbers, names or dates;',
+  '- say whether the records are complete, sufficient or adequate — describe what is present and',
+  '  what is absent, and let the reader judge.',
+  '',
+  'You MUST:',
+  '- describe only what the context data shows, in neutral, factual, past-tense prose;',
+  '- use the exact figures given, and say plainly when a count is zero or a section is empty;',
+  '- write in plain British English, for a professional reader;',
+  '- include no personal data: never name an individual worker, and give no phone numbers or addresses.',
+  '',
+  'DO NOT WALK THROUGH THE SECTIONS ONE BY ONE. The tables below already list every record and its',
+  'count. Repeating them as sentences adds length and no information. Write ACROSS the record set.',
+  '',
+  'DO NOT RECITE THE COUNTS AS A LIST. A sentence of the form "the record counts were: one worker',
+  'record, seven permits, three inspections..." is the contents page written out as prose, and every',
+  'one of those figures is already printed above its own table. Cite a figure ONLY where it carries',
+  'meaning in a sentence that says something else as well.',
+  '',
+  'Where fields were not filled in, summarise that in ONE clause — "several project and plan fields',
+  'were not completed" — rather than naming each empty field in turn. Never quote a raw field name,',
+  'section identifier or JSON key: write Project Information, not PROJECT_INFORMATION, and never',
+  'anything of the form photoCount = 3.',
+  '',
+  'Return ONLY JSON matching the required schema:',
+  '- headline: a short neutral description of the project record (about 6-12 words, no trailing full',
+  '  stop). It names what the pack covers. It is NOT a verdict.',
+  '- executiveSummary: 5-8 sentences, as flowing prose in one or two paragraphs. Cover, where the',
+  '  context supports it: what the project was and where; the period the records span; the shape of',
+  '  the compliance activity captured (attendance, permits, inspections and audits, corrective',
+  '  actions) drawn together rather than listed; anything notable in the project information such as',
+  '  CDM notifiability, named duty holders or declared hazards; which record types are present and',
+  '  which are absent; and the close-out context — the pack version, when it was generated, and that',
+  '  it is a point-in-time record of what SiteComply held.',
+  '',
+  'Write about the RECORDS, not about the project performance. "The pack draws together 14 permits',
+  'and 3 audits recorded between March and June" is right. "Permit control was well managed" is a',
+  'judgement and is forbidden.',
+].join('\n');
+
+export function buildCloseOutSummaryUserPrompt(
+  projectLabel: string,
+  context: unknown,
+): string {
+  return [
+    `Write the single executive summary for the close-out pack of ${projectLabel}.`,
+    'Describe only what the records show. Do not evaluate, rate, approve or conclude anything.',
+    'Do not produce per-section paragraphs — the pack already tabulates every section below.',
+    '',
+    'Context (JSON):',
+    JSON.stringify(context),
+  ].join('\n');
+}
+
 export function buildCloseOutUserPrompt(
   projectLabel: string,
   context: unknown,

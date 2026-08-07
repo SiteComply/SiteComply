@@ -22,7 +22,12 @@ import {
   CLOSE_OUT_NARRATIVE_SCHEMA,
   CLOSE_OUT_PROMPT_VERSION,
   CLOSE_OUT_SYSTEM_PROMPT,
+  CLOSE_OUT_SUMMARY_PROMPT_VERSION,
+  CLOSE_OUT_SUMMARY_SCHEMA,
+  CLOSE_OUT_SUMMARY_SYSTEM_PROMPT,
+  buildCloseOutSummaryUserPrompt,
   buildCloseOutUserPrompt,
+  getCloseOutNarrativeMode,
   parseCloseOutNarrative,
   type CloseOutNarrative,
 } from '@/services/closeOut/closeOutNarrative';
@@ -110,9 +115,35 @@ function buildContext(
   };
 }
 
+/**
+ * The prompt identity for the ACTIVE mode.
+ *
+ * Recorded on the pack and mixed into the context hash, so a pack always says
+ * which narrative model produced it and the two can be told apart afterwards —
+ * which is the whole point of running them side by side.
+ */
+function activePrompt() {
+  const mode = getCloseOutNarrativeMode();
+  return mode === 'summary'
+    ? {
+        mode,
+        version: CLOSE_OUT_SUMMARY_PROMPT_VERSION,
+        system: CLOSE_OUT_SUMMARY_SYSTEM_PROMPT,
+        schema: CLOSE_OUT_SUMMARY_SCHEMA,
+        build: buildCloseOutSummaryUserPrompt,
+      }
+    : {
+        mode,
+        version: CLOSE_OUT_PROMPT_VERSION,
+        system: CLOSE_OUT_SYSTEM_PROMPT,
+        schema: CLOSE_OUT_NARRATIVE_SCHEMA,
+        build: buildCloseOutUserPrompt,
+      };
+}
+
 function hashContext(context: unknown): string {
   return createHash('sha256')
-    .update(`${CLOSE_OUT_PROMPT_VERSION}\n${JSON.stringify(context)}`)
+    .update(`${activePrompt().version}\n${JSON.stringify(context)}`)
     .digest('hex');
 }
 
@@ -171,23 +202,27 @@ export async function generateCloseOutNarrative(
     siteIds: [row.jobSiteId],
     contextHash,
     provider: provider.name,
-    promptVersion: CLOSE_OUT_PROMPT_VERSION,
+    promptVersion: activePrompt().version,
   };
 
   try {
+    const prompt = activePrompt();
     const result = await provider.complete({
-      system: CLOSE_OUT_SYSTEM_PROMPT,
-      user: buildCloseOutUserPrompt(
+      system: prompt.system,
+      user: prompt.build(
         `${pack.site.name} (${pack.site.jobReference})`,
         context,
       ),
-      schema: CLOSE_OUT_NARRATIVE_SCHEMA,
+      schema: prompt.schema,
       maxOutputTokens: CLOSE_OUT_MAX_OUTPUT_TOKENS,
     });
 
+    // In summary mode NO section id is allowed, so any per-section prose the
+    // model volunteers anyway is dropped by the existing filter rather than
+    // rendered. The switch decides what reaches the pack, not the model.
     const parsed = parseCloseOutNarrative(
       result.json ?? result.text,
-      pack.sections.map((s) => s.id),
+      prompt.mode === 'summary' ? [] : pack.sections.map((s) => s.id),
     );
 
     if (!parsed.ok) {
@@ -223,7 +258,7 @@ export async function generateCloseOutNarrative(
       where: { id: packId },
       data: {
         aiSummary: JSON.stringify(parsed.narrative),
-        aiPromptVersion: CLOSE_OUT_PROMPT_VERSION,
+        aiPromptVersion: prompt.version,
         aiGeneratedAt: generatedAt,
         aiModel: result.model,
         aiProvider: provider.name,

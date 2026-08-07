@@ -15,6 +15,7 @@ import { formatDateUK, formatDateTimeUK } from '@/lib/datetime';
 import { getCompanyBranding } from '@/services/company/companyConfigService';
 import { collectAppendices } from '@/services/closeOut/closeOutArchive';
 import { CloseOutPackDocument } from '@/components/platform/CloseOutPackDocument';
+import { getCloseOutNarrativeMode } from '@/services/closeOut/closeOutNarrative';
 import { CloseOutNarrativeControls } from '@/components/platform/CloseOutNarrativeControls';
 import { readStoredNarrative } from '@/services/closeOut/closeOutAi';
 import { canUseAiSummaries } from '@/services/ai/aiConfig';
@@ -101,6 +102,7 @@ export default async function CloseOutPackPage({
             siteId={params.id}
             packId={params.packId}
             hasNarrative={!!narrative}
+            mode={getCloseOutNarrativeMode()}
           />
         </div>
       ) : null}
