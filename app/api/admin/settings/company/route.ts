@@ -1,34 +1,30 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAdminRole, ADMIN_WRITE_ROLES } from '@/lib/adminAuth';
-import {
-  saveCompanyConfig,
-  type SaveCompanyConfigInput,
-} from '@/services/company/companyConfigService';
+import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * POST /api/admin/settings/company
- * Save the company profile + branding text fields. Admin-only. Body:
- *   { companyName, supportEmail, supportPhone, primaryColor, accentColor, tagline }
- * The logo is managed separately via /company/logo.
+ * POST /api/admin/settings/company — RETIRED.
+ *
+ * Company profile and branding moved to Platform Settings → Company profile &
+ * branding, where a Director owns them. The Admin Centre keeps a READ-ONLY view
+ * as the platform operator's fallback.
+ *
+ * Two editors of one singleton row is the duplicate source of truth that
+ * section exists to remove: a company name that disagrees with itself across
+ * two screens is worse than one that cannot be edited from here.
+ *
+ * 409, not 403 — the caller is not forbidden, the operation has moved. The
+ * route is kept rather than deleted so an older tab or a bookmarked form gets
+ * this explanation instead of a 404 it cannot interpret.
  */
-export async function POST(req: NextRequest) {
-  const auth = requireAdminRole(ADMIN_WRITE_ROLES);
-  if (!auth.ok) return auth.response;
-  const admin = auth.admin;
-
-  let body: SaveCompanyConfigInput;
-  try {
-    body = (await req.json()) as SaveCompanyConfigInput;
-  } catch {
-    return NextResponse.json({ ok: false, error: 'Invalid request.' }, { status: 400 });
-  }
-
-  const result = await saveCompanyConfig(body, { adminId: admin.adminId, name: admin.name });
-  if (!result.ok) {
-    return NextResponse.json({ ok: false, errors: result.errors }, { status: 400 });
-  }
-  return NextResponse.json({ ok: true });
+export async function POST() {
+  return NextResponse.json(
+    {
+      ok: false,
+      error:
+        'Company profile and branding are now managed in Platform Settings → Company profile & branding. This view is read-only.',
+    },
+    { status: 409 },
+  );
 }

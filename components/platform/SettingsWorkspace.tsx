@@ -52,6 +52,13 @@ export const SETTINGS_AREAS: SettingsArea[] = [
       'Reusable access restrictions for contractor types, and company-wide defaults.',
   },
   {
+    key: 'company',
+    label: 'Company profile & branding',
+    href: '/platform/dashboard/settings/company',
+    description:
+      'Company details, logos and the standard wording used on generated documents.',
+  },
+  {
     key: 'authentication',
     label: 'Authentication & access',
     href: '/platform/dashboard/settings/authentication',

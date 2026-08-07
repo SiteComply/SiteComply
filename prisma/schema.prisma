@@ -1546,7 +1546,51 @@ model CompanyConfig {
   logoContentType String?
   logoUpdatedAt   DateTime?
 
+  /// Company profile — who the organisation IS, as it appears on generated
+  /// documents. Deliberately NOT the same as the CDM duty holders on a
+  /// project: CdmDutyHolders records the client, principal designer and
+  /// principal contractor APPOINTED TO THAT PROJECT, which are legal
+  /// appointments and vary per job. Copying an organisation-level contact into
+  /// those fields would be a legal misstatement, so these never feed them.
+  registrationNumber String?
+  vatNumber          String?
+  primaryContactName String?
+  /// Distinct from supportEmail/supportPhone above. Support contact is who a
+  /// worker calls for help; primary contact is who the company is. They are
+  /// often different, and the support pair already appears on close-out packs.
+  primaryEmail       String?
+  primaryPhone       String?
+  website            String?
+  addressLine1       String?
+  addressLine2       String?
+  addressTown        String?
+  addressPostcode    String?
+
+  /// A second logo for print. A screen logo is often light-on-dark or full
+  /// colour; neither survives a black-and-white document footer. Same blob
+  /// container and pointer-only pattern as the screen logo.
+  printLogoBlobPath    String?
+  printLogoContentType String?
+  printLogoUpdatedAt   DateTime?
+
+  /// Document defaults. The close-out pack's disclaimer was hard-coded in
+  /// CloseOutPackDocument; these let an organisation state its own wording
+  /// without a code change.
+  disclaimer   String? @db.Text
+  reportFooter String? @db.Text
+
+  /// What generated close-out packs include by default. All DEFAULT TRUE, so
+  /// applying this migration reproduces exactly what packs render today.
+  packIncludeCompanyInfo     Boolean @default(true)
+  packIncludeLogo            Boolean @default(true)
+  packIncludePrintLogo       Boolean @default(true)
+  packIncludeStandardDetails Boolean @default(true)
+
   updatedByAdminId String?
+  /// Set when a Director saved from Platform Settings, which now OWNS these
+  /// fields. Sits beside updatedByAdminId so "last changed by" is honest about
+  /// which portal the change came from.
+  updatedByUserId  String?
   updatedByName    String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
