@@ -17,11 +17,15 @@ import type { PlatformNotificationSettingsView } from '@/services/notifications/
  * point. Three that reached none were removed rather than shown as controls
  * that changed nothing.
  *
- * WHAT IS NOT HERE IS STATED, NOT HIDDEN. The requested set included thirteen
- * notifications that do not exist yet — permit approved/rejected/closed, worker
- * induction and access events, and others. Rendering switches for them would
- * tell a Director they had configured behaviour that will never fire, so the
- * workspace names them as not yet available instead.
+ * WHAT IS NOT HERE IS SIMPLY NOT HERE. An earlier revision listed the thirteen
+ * requested notifications that do not exist yet, and named in-app as the only
+ * delivery channel. Both were removed: a configuration screen should contain
+ * things you can act on, and a roadmap rendered as a panel is neither
+ * actionable nor a setting. What cannot be configured does not belong on a
+ * page whose job is configuring.
+ *
+ * The principle is unchanged — only enforced settings appear. This goes one
+ * step further and stops explaining the absences here.
  */
 
 /**
@@ -57,23 +61,6 @@ const GROUPS: { title: string; hint: string; keys: string[] }[] = [
     title: 'Documents',
     hint: 'Certificates and documents with an expiry date.',
     keys: ['document_expiry'],
-  },
-];
-
-/**
- * Named because they were asked for and are NOT available. Listing them is the
- * point: a Director who cannot find "permit approved" should learn that it does
- * not exist yet, rather than assume they have missed it.
- */
-const NOT_YET: { group: string; items: string }[] = [
-  { group: 'Actions', items: 'Completed' },
-  { group: 'Permits', items: 'Approved, Rejected, Closed, Expiring' },
-  { group: 'Audits', items: 'Assigned, Overdue' },
-  { group: 'Compliance activities', items: 'Activity created' },
-  {
-    group: 'Workers',
-    items:
-      'Induction assigned, Induction expiring, Access granted, Access revoked, Site bulletin published',
   },
 ];
 
@@ -250,51 +237,6 @@ export function NotificationSettingsWorkspace({
         </p>
       </Panel>
 
-      <Panel
-        title="Delivery"
-        hint="Where notifications appear."
-      >
-        <div className="flex items-start justify-between gap-4 py-3">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-ink">In-app</p>
-            <p className="text-xs text-ink-subtle">
-              Notifications appear in the bell in the Platform portal. This is
-              currently the only delivery channel.
-            </p>
-          </div>
-          <span className="shrink-0 rounded-lg bg-surface-sunken px-2.5 py-1 text-xs font-semibold text-ink-muted">
-            Always on
-          </span>
-        </div>
-        {/* Email and SMS are NOT offered. The config row can store per-channel
-            preferences and the catalogue declares both, but nothing reads them
-            to deliver anything — so a switch here would be a delivery
-            preference that delivers nothing. */}
-        <p className="border-t border-line pt-3 text-xs text-ink-subtle">
-          Email and SMS delivery are not available yet. They will appear here
-          when the channels are built, rather than as settings that cannot take
-          effect.
-        </p>
-      </Panel>
-
-      <Panel
-        title="Not yet available"
-        hint="Requested notifications that do not exist yet, listed so their absence is visible."
-      >
-        <ul className="space-y-2">
-          {NOT_YET.map((n) => (
-            <li key={n.group} className="text-xs">
-              <span className="font-semibold text-ink">{n.group}:</span>{' '}
-              <span className="text-ink-subtle">{n.items}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 text-xs text-ink-subtle">
-          These have no notification behind them today. They are named here
-          rather than shown as switches, because a control that cannot fire is
-          worse than a gap you can see.
-        </p>
-      </Panel>
     </div>
   );
 }

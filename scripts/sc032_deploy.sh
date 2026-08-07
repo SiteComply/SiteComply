@@ -320,13 +320,18 @@ if(ntDocs.indexOf('getNotificationThresholds()') < 0)
 if(ntSvc.indexOf('THRESHOLD_KEY') < 0)
   fail('the reserved thresholds key is gone');
 
-// ---- in-app only ----
-if(ntUi.indexOf('role=') >= 0 && ntUi.indexOf('sms') >= 0)
-  fail('the workspace offers an SMS delivery preference — nothing reads channels to deliver');
-
-// ---- missing types are named, not toggled ----
-if(ntUi.indexOf('Not yet available') < 0)
-  fail('the workspace no longer names the notifications that do not exist — their absence would be invisible');
+// ---- no unavailable functionality on a configuration screen ----
+// The Delivery and Not-yet-available panels were removed: a roadmap rendered
+// as a panel is not a setting, and a channel nothing delivers on is not a
+// choice. The assertion inverted with them — it used to require the list, it
+// now requires its absence, because re-adding either would put unactionable
+// content back on a page whose job is configuring.
+if(ntUi.indexOf('Not yet available') >= 0)
+  fail('the roadmap panel is back on the configuration screen — it lists things that cannot be configured');
+if(ntUi.indexOf('sms') >= 0 || ntUi.indexOf('SMS') >= 0)
+  fail('the workspace mentions SMS delivery — nothing reads channels to deliver, so it is not a setting');
+if(ntUi.indexOf('Always on') >= 0)
+  fail('the delivery panel is back — in-app is the only channel and is not a choice to present');
 
 // ---- RBAC ----
 const ntDecl=ntPerm.match(/NOTIFICATION_SETTINGS_MANAGE_ROLES[^=\n]*=\s*(\[[^\]]*\])/);
