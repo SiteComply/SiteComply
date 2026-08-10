@@ -156,8 +156,11 @@ if(nav.indexOf('border border-transparent') < 0)
 const tabs=strip('$TABS');
 if(tabs.indexOf('use client') >= 0)
   fail('AdminTabs became a client component — the tab is a URL, not local state');
-if(tabs.indexOf('SegmentedNav') < 0)
-  fail('AdminTabs no longer delegates to SegmentedNav — two hand-maintained copies of one visual language drift the moment either is touched');
+// The IMPORT, not just the name: <SegmentedNav ...> stays in the JSX even if
+// the component has been forked locally, so checking for the bare identifier
+// passes on exactly the change this is meant to catch.
+if(tabs.indexOf('import { SegmentedNav } from @/components/platform/navUi') < 0)
+  fail('AdminTabs no longer imports SegmentedNav — two hand-maintained copies of one visual language drift the moment either is touched');
 if(tabs.indexOf('tone=subtle') < 0) fail('AdminTabs no longer opts into the subtle tone');
 if(tabs.indexOf('size=md') < 0)
   fail('AdminTabs no longer opts into the larger target — the 52px touch target was the point of the previous pass and is deliberately kept');
