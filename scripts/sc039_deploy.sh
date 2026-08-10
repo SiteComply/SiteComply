@@ -153,9 +153,12 @@ if(nav.indexOf('border border-line bg-surface-sunken') < 0)
 
 // The props only ever existed for AdminTabs. If either survives the revert it
 // is dead API on a shared component, and the next caller will reach for it.
-if(nav.indexOf('tone = solid') >= 0 || nav.indexOf('subtle') >= 0)
+// Matched on the PROP, not the word: the reverted file still contains
+// text-ink-subtle, and a bare 'subtle' needle fired on it — the same
+// substring mistake bg-brand-50/bg-brand-500 caused on the previous script.
+if(nav.indexOf('tone = solid') >= 0 || /tone\\?:/.test(nav))
   fail('the tone prop survived the revert — it has no caller left and belongs to a pattern this release abandoned');
-if(nav.indexOf('size = sm') >= 0)
+if(nav.indexOf('size = sm') >= 0 || /size\\?:/.test(nav))
   fail('the size prop survived the revert — it has no caller left');
 
 // ---------- AdminTabs must be an UNDERLINED ROW, not a control ----------
