@@ -47,8 +47,14 @@ const TIMEOUT_MS = 15_000;
  *
  * ISOLATED HERE ON PURPOSE. This object is the entire surface that partner
  * documentation will change; everything downstream is contract-stable.
+ *
+ * EXPORTED so the connection test (smartCheckConnectionTest.ts) probes the
+ * SAME endpoint, auth header and field names that verifyCard() will really use.
+ * A test with its own copy of this could pass while the live path fails — which
+ * is the one outcome that would make the test worse than having none. Exporting
+ * is the only change made to this file; no existing logic is altered.
  */
-const REQUEST_SHAPE = {
+export const REQUEST_SHAPE = {
   /** Appended to the configured base URL. */
   path: '/v1/card/verify',
   method: 'POST' as const,

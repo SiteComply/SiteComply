@@ -34,6 +34,58 @@ export function CscsProviderSettings({
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [testBusy, setTestBusy] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    severity: 'success' | 'warning' | 'error';
+    title: string;
+    detail: string;
+    httpStatus?: number;
+    durationMs: number;
+  } | null>(null);
+
+  /**
+   * Test the credentials as typed, without saving.
+   *
+   * Deliberately does NOT save first. saveCscsConfig() refuses to select Smart
+   * Check without working credentials, so testing has to come before saving or
+   * the admin is stuck at the step this button exists to unblock.
+   */
+  async function testConnection() {
+    if (!canManage) return;
+    setTestBusy(true);
+    setTestResult(null);
+    setMsg(null);
+    try {
+      const res = await fetch('/api/admin/settings/cscs/test', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          smartCheckApiUrl: apiUrl,
+          smartCheckApiKey: apiKey, // blank → the stored key is used
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!data?.result) {
+        setTestResult({
+          severity: 'error',
+          title: 'The test could not be run.',
+          detail: 'Please try again.',
+          durationMs: 0,
+        });
+        return;
+      }
+      setTestResult(data.result);
+    } catch {
+      setTestResult({
+        severity: 'error',
+        title: 'Network problem.',
+        detail: 'The test request did not leave the browser. Please try again.',
+        durationMs: 0,
+      });
+    } finally {
+      setTestBusy(false);
+    }
+  }
 
   async function save() {
     if (!canManage) return;
@@ -71,6 +123,11 @@ export function CscsProviderSettings({
   }
 
   const selected = config.providers.find((p) => p.id === activeProvider);
+
+  // A stored key counts: the field is blank when a key is already held, and
+  // "blank means keep the stored one" is the convention the API honours.
+  const canTest =
+    apiUrl.trim() !== '' && (apiKey.trim() !== '' || config.apiKeySet);
 
   return (
     <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
@@ -196,6 +253,69 @@ export function CscsProviderSettings({
             </label>
           </div>
         </fieldset>
+
+        {/* Test connection.
+            Only for a provider that actually connects to something — the mock
+            never leaves the process, so a test there could only ever report a
+            success that means nothing.
+
+            Placed between the credentials and Save on purpose: that is the
+            order the workflow runs in, because the save path refuses to select
+            Smart Check until the credentials exist. */}
+        {selected?.supportsTest ? (
+          <div className="border-t border-line pt-4">
+            <h3 className="text-sm font-medium text-ink">Test connection</h3>
+            <p className="mt-0.5 text-xs text-ink-subtle">
+              Sends one request to the partner API using the credentials above,
+              including any you have not saved yet. No card is verified, no
+              worker is involved and nothing is recorded against the CSCS
+              report.
+            </p>
+            <button
+              type="button"
+              onClick={testConnection}
+              disabled={testBusy || busy || !canManage || !canTest}
+              className="mt-3 rounded-xl border border-line bg-surface px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-surface-sunken disabled:opacity-60"
+            >
+              {testBusy ? 'Testing…' : 'Test connection'}
+            </button>
+            {!canTest && canManage ? (
+              <span className="mt-2 block text-xs text-ink-subtle">
+                Enter the API URL and key first.
+              </span>
+            ) : null}
+
+            {testResult ? (
+              <div
+                className={`mt-3 rounded-lg px-3 py-2 text-sm ${
+                  testResult.severity === 'success'
+                    ? 'bg-safe-50 text-safe-700'
+                    : testResult.severity === 'warning'
+                      ? 'bg-hivis-400/20 text-ink ring-1 ring-inset ring-hivis-500'
+                      : 'bg-danger-50 text-danger-700'
+                }`}
+                role="status"
+                aria-live="polite"
+              >
+                <p className="font-semibold">
+                  {testResult.severity === 'success'
+                    ? '✓ '
+                    : testResult.severity === 'warning'
+                      ? '! '
+                      : '✗ '}
+                  {testResult.title}
+                </p>
+                <p className="mt-1 text-xs">{testResult.detail}</p>
+                <p className="mt-1 text-xs opacity-70">
+                  {testResult.httpStatus
+                    ? `HTTP ${testResult.httpStatus} · `
+                    : ''}
+                  {testResult.durationMs}ms
+                </p>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {msg ? (
