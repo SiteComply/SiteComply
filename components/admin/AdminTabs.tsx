@@ -1,28 +1,34 @@
-import Link from 'next/link';
-import { cn } from '@/lib/cn';
+import { SegmentedNav } from '@/components/platform/navUi';
 
 /**
- * Horizontal tab strip for an Admin Centre workspace.
+ * Tab strip for an Admin Centre workspace.
  *
- * Deliberately a SERVER component. The Platform portal's SiteDetailTabs is a
- * client component only because it falls back to `usePathname()` when the
- * caller cannot say which tab is active; here the page reads the tab from its
- * own searchParams, so it always knows. Adding a client boundary to render six
- * links would be cost for nothing.
+ * RENDERS THROUGH SegmentedNav rather than styling itself. The first version
+ * was an underlined strip of its own, and it read as three text links with a
+ * rule under one of them — a heading, not a control. SegmentedNav is the
+ * pattern the Platform already uses for exactly this job (filter strips on
+ * Actions, Permits, Sites and Check-ins): a bounded container with the active
+ * item as a solid filled pill, which is unmistakably a selectable thing.
  *
- * TABS ARE ADDRESSES, NOT LOCAL STATE. Each carries a query parameter rather
- * than toggling something in the browser, so a tab can be linked to, bookmarked
- * and reloaded — and a redirect after saving can return the admin to the tab
- * they were on. Local state would lose all three.
+ * Delegating instead of copying its classes is the same reasoning that has
+ * SettingsWorkspace render through SectionWorkspace and Section through Panel —
+ * two hand-maintained copies of one visual language drift the moment either is
+ * touched, and this is the second portal, which is precisely when that starts.
  *
- * Markup matches SiteDetailTabs so the two portals do not drift into two
- * different-looking tab strips.
+ * `size="md"` is used because this is a workspace's PRIMARY navigation rather
+ * than a filter above a list: a bigger target, and enough presence to read as
+ * the thing you steer the page with.
+ *
+ * Still a SERVER component. The page reads the tab from its own searchParams,
+ * so nothing here needs the browser.
+ *
+ * TABS ARE ADDRESSES, NOT LOCAL STATE. Each carries a query parameter, so a tab
+ * can be linked to, bookmarked and reloaded, and an error message elsewhere can
+ * point at the right one. Unchanged by this pass — only the appearance moved.
  */
 export interface AdminTab {
   key: string;
   label: string;
-  /** Short line describing what the tab holds, shown under the heading. */
-  hint?: string;
 }
 
 export function AdminTabs({
@@ -40,28 +46,18 @@ export function AdminTabs({
   label: string;
 }) {
   return (
-    <nav
-      aria-label={label}
-      className="mt-5 flex gap-1 overflow-x-auto border-b border-line"
-    >
-      {tabs.map((tab) => {
-        const isActive = tab.key === active;
-        return (
-          <Link
-            key={tab.key}
-            href={`${basePath}?${param}=${tab.key}`}
-            aria-current={isActive ? 'page' : undefined}
-            className={cn(
-              '-mb-px whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition-colors',
-              isActive
-                ? 'border-brand-500 text-brand-700'
-                : 'border-transparent text-ink-muted hover:border-line hover:text-ink',
-            )}
-          >
-            {tab.label}
-          </Link>
-        );
-      })}
-    </nav>
+    <SegmentedNav
+      label={label}
+      size="md"
+      // mt-4 replaces SegmentedNav's own mb-4: the strip sits under the page
+      // description and above the panels, so the space belongs above it here.
+      className="mt-4 mb-0"
+      items={tabs.map((tab) => ({
+        key: tab.key,
+        label: tab.label,
+        href: `${basePath}?${param}=${tab.key}`,
+        active: tab.key === active,
+      }))}
+    />
   );
 }
