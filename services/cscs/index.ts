@@ -1,5 +1,6 @@
 import { CscsProvider } from './CscsProvider';
 import { MockCscsProvider } from './mockProvider';
+import { getCscsRuntimeConfig } from './cscsConfigService';
 import { SmartCheckCscsProvider } from './smartCheckProvider';
 
 export type {
@@ -34,12 +35,30 @@ export function buildCscsProvider(
   }
 }
 
+/**
+ * Resolve the provider from the RUNTIME CONFIG (DB over env over default).
+ *
+ * Deliberately not cached: the config is a live setting, and a cached provider
+ * would mean an administrator's change took effect on the next restart rather
+ * than the next check. One extra singleton read per verification is a trivial
+ * cost against a network call to a partner API.
+ */
+export async function resolveCscsProvider(): Promise<CscsProvider> {
+  const config = await getCscsRuntimeConfig();
+  return buildCscsProvider(config.providerId, {
+    apiUrl: config.apiUrl ?? '',
+    apiKey: config.apiKey ?? '',
+  });
+}
+
 let cached: CscsProvider | undefined;
 
 /**
- * Resolve the configured CSCS Smart Check provider from the CSCS_PROVIDER env
- * var. Defaults to the deterministic mock so the verification flow works out of
- * the box in development, and until a Smart Check partnership is provisioned.
+ * ENV-ONLY resolution, kept for callers that cannot await (and for tests).
+ *
+ * Prefer resolveCscsProvider(), which honours the runtime config an
+ * administrator can actually change. This one cannot see the database, so it
+ * silently ignores a stored provider choice.
  */
 export function getCscsProvider(): CscsProvider {
   if (cached) return cached;
