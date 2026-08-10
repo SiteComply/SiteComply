@@ -19,6 +19,13 @@ import { SegmentedNav } from '@/components/platform/navUi';
  * than a filter above a list: a bigger target, and enough presence to read as
  * the thing you steer the page with.
  *
+ * `tone="subtle"` because the first pass overcorrected. The saturated fill
+ * inside a bordered, filled container made the strip the loudest thing on the
+ * screen — it stopped competing with the heading and started competing with
+ * the settings themselves. The subtle tone keeps the segmented shape and the
+ * target size and drops the weight: no container, a tinted active pill instead
+ * of a flooded one. The target stays 52px; only the volume changed.
+ *
  * Still a SERVER component. The page reads the tab from its own searchParams,
  * so nothing here needs the browser.
  *
@@ -49,6 +56,7 @@ export function AdminTabs({
     <SegmentedNav
       label={label}
       size="md"
+      tone="subtle"
       // mt-4 replaces SegmentedNav's own mb-4: the strip sits under the page
       // description and above the panels, so the space belongs above it here.
       className="mt-4 mb-0"
