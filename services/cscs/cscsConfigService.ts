@@ -168,7 +168,24 @@ export async function saveCscsConfig(
   const errors: Record<string, string> = {};
   const text = (v?: string) => (v ?? '').trim();
 
-  const activeProvider = text(input.activeProvider) || 'mock';
+  // Read first: an omitted field has to resolve against what is already
+  // stored, both to validate it and to leave it alone.
+  const row = await readRow();
+
+  // ABSENT IS NOT A RESET.
+  //
+  // `text(input.activeProvider) || 'mock'` turned a field the request never
+  // mentioned into 'mock', so a partial save silently switched verification
+  // back to the mock provider; `verificationEnabled !== false` did the same in
+  // the other direction, forcing an explicitly disabled switch back on.
+  //
+  // `activeProvider` is still resolved to an EFFECTIVE value here, because the
+  // credential guard below has to run against the provider that will actually
+  // be in force — including when the request never named one.
+  const providerSupplied = input.activeProvider !== undefined;
+  const activeProvider = providerSupplied
+    ? text(input.activeProvider) || 'mock'
+    : (row?.activeProvider ?? 'mock');
   if (!isKnownCscsProvider(activeProvider)) {
     errors.activeProvider = 'Choose a valid provider.';
   }
@@ -179,7 +196,6 @@ export async function saveCscsConfig(
     errors.smartCheckApiUrl = 'The API URL must start with https://.';
   }
 
-  const row = await readRow();
   const apiKeyRaw = text(input.smartCheckApiKey);
   const keyStored = apiKeyRaw
     ? encryptSecret(apiKeyRaw)
@@ -200,8 +216,10 @@ export async function saveCscsConfig(
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
   const data = {
-    activeProvider,
-    verificationEnabled: input.verificationEnabled !== false,
+    // undefined is OMITTED from the update, so the column keeps its value and
+    // takes its schema default on create.
+    activeProvider: providerSupplied ? activeProvider : undefined,
+    verificationEnabled: input.verificationEnabled,
     smartCheckApiUrl: apiUrl || row?.smartCheckApiUrl || null,
     smartCheckApiKey: keyStored,
     updatedByAdminId: admin.adminId,

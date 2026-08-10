@@ -30,7 +30,13 @@ export async function POST(req: NextRequest) {
   const result = await saveCscsConfig(
     {
       activeProvider: str(body.activeProvider),
-      verificationEnabled: body.verificationEnabled !== false,
+      // Only a real boolean counts. `!== false` turned an ABSENT switch into
+      // `true`, which destroyed the distinction before the service could see
+      // it — so the service alone could never have preserved it.
+      verificationEnabled:
+        typeof body.verificationEnabled === 'boolean'
+          ? body.verificationEnabled
+          : undefined,
       smartCheckApiUrl: str(body.smartCheckApiUrl),
       smartCheckApiKey: str(body.smartCheckApiKey),
     },
