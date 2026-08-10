@@ -154,8 +154,11 @@ if(nav.indexOf('bg-surface text-ink font-bold shadow-sm ring-1 ring-inset ring-l
 // The regression this release exists to prevent. Any brand fill on the active
 // segment puts it back in the same visual class as a primary action, which is
 // what the previous two passes were rejected for.
+// Matched with a trailing digit-guard, NOT indexOf: bg-brand-500 CONTAINS
+// bg-brand-50, so a substring check flags the solid fill that must stay — it
+// did exactly that on the first run of this script.
 for(const swatch of ['bg-brand-50', 'bg-brand-100', 'text-brand-700']){
-  if(nav.indexOf('subtle') >= 0 && nav.indexOf(swatch) >= 0)
+  if(new RegExp(swatch + '(?![0-9])').test(nav))
     fail('the subtle tone has regained a brand swatch (' + swatch + ') — a filled colour reads as a primary action, which is exactly what this release removes');
 }
 if(nav.indexOf('ring-1 ring-inset ring-line/60') < 0)
