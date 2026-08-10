@@ -122,7 +122,21 @@ export function CscsProviderSettings({
     }
   }
 
+  // `selected` follows the DROPDOWN — it describes the option under the cursor,
+  // which is what the description beneath the select should explain.
   const selected = config.providers.find((p) => p.id === activeProvider);
+
+  // `live` follows the SAVED configuration — what is actually verifying cards
+  // right now. config.activeProvider is the resolved runtime provider
+  // (database, then environment, then the platform default).
+  //
+  // These were the same binding, so the banner named whatever was highlighted
+  // in the dropdown while still attributing it to the saved source: picking
+  // Smart Check without saving produced "Currently verifying with CSCS Smart
+  // Check (platform default)" while the mock was still running. The banner
+  // exists to stop a mock surviving unnoticed in production, so it has to
+  // report what runs, never what someone is part-way through choosing.
+  const live = config.providers.find((p) => p.id === config.activeProvider);
 
   // A stored key counts: the field is blank when a key is already held, and
   // "blank means keep the stored one" is the convention the API honours.
@@ -152,7 +166,7 @@ export function CscsProviderSettings({
       <p className="mt-3 rounded-lg border border-line bg-surface-sunken px-3 py-2 text-xs text-ink-muted">
         Currently verifying with{' '}
         <span className="font-semibold text-ink">
-          {selected?.name ?? config.activeProvider}
+          {live?.name ?? config.activeProvider}
         </span>
         {config.source === 'database'
           ? ' (set here).'
