@@ -22,6 +22,9 @@ export const CSCS_PROVIDERS = [
     description:
       'No card is checked against the CSCS service. A deterministic result is derived from the card number so the verification flow is exercisable without a Smart Check partnership.',
     requiresCredentials: false,
+    // Nothing to connect to. Offering a test here would be a button that can
+    // only ever report success about a provider that never leaves the process.
+    supportsTest: false,
   },
   {
     id: 'smartcheck',
@@ -29,6 +32,7 @@ export const CSCS_PROVIDERS = [
     description:
       'Verifies the card against the official CSCS Smart Check service. Requires partner API access.',
     requiresCredentials: true,
+    supportsTest: true,
   },
 ] as const;
 
@@ -122,6 +126,30 @@ export async function getCscsConfigForAdmin(): Promise<CscsConfigView> {
     configured: !!row,
     updatedByName: row?.updatedByName ?? null,
     updatedAt: row?.updatedAt ? row.updatedAt.toISOString() : null,
+  };
+}
+
+/**
+ * Credentials for a connection test, before anything is saved.
+ *
+ * Mirrors resolveTestSettings() in the SMS store, and honours the SAME "blank
+ * means keep the stored value" convention that saveCscsConfig() uses — so an
+ * admin can paste a new URL, leave the stored key alone, and test that exact
+ * combination. This is read-only: it saves nothing and changes no behaviour.
+ *
+ * It exists because saveCscsConfig() refuses to select Smart Check without
+ * credentials. Testing has to work on UNSAVED values or the sequence an admin
+ * needs — enter, prove, then enable — would be impossible.
+ */
+export async function resolveCscsTestCredentials(form: {
+  smartCheckApiUrl?: string;
+  smartCheckApiKey?: string;
+}): Promise<{ apiUrl: string; apiKey: string }> {
+  const runtime = await getCscsRuntimeConfig();
+  const typed = (v?: string) => (v ?? '').trim();
+  return {
+    apiUrl: typed(form.smartCheckApiUrl) || (runtime.apiUrl ?? ''),
+    apiKey: typed(form.smartCheckApiKey) || (runtime.apiKey ?? ''),
   };
 }
 
