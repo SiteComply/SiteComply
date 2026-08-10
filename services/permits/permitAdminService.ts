@@ -49,18 +49,58 @@ function scopeWhere(
       ? [filters.siteId]
       : viewer.siteIds;
   const where: Prisma.PermitWhereInput = { jobSiteId: { in: siteIds } };
+
+  // Collected rather than assigned directly, because two of the clauses below
+  // are themselves an OR and the second would overwrite the first.
+  const and: Prisma.PermitWhereInput[] = [];
+
   if (filters.status && filters.status !== 'all') {
-    where.status = filters.status as PermitStatusValue;
+    // FILTER ON THE STATUS THE USER CAN SEE.
+    //
+    // EXPIRED is DERIVED at render time — effectiveStatus() reads an APPROVED
+    // permit past its validUntil as Expired — but it is almost never stored,
+    // so filtering on the column alone disagreed with the badge in both
+    // directions: "Expired" returned nothing while expired permits sat in the
+    // register, and "Approved" returned those same permits, every one of them
+    // displaying as Expired.
+    //
+    // The two branches below are the same rule effectiveStatus applies,
+    // expressed as a query. Any other status is stored verbatim and needs no
+    // translation.
+    const now = new Date();
+    if (filters.status === 'EXPIRED') {
+      and.push({
+        OR: [
+          // Still matched, because the enum value can be stored directly.
+          { status: 'EXPIRED' },
+          { status: 'APPROVED', validUntil: { lt: now } },
+        ],
+      });
+    } else if (filters.status === 'APPROVED') {
+      // Approved means approved AND still in date. A null validUntil never
+      // expires, so it stays approved.
+      and.push({
+        status: 'APPROVED',
+        OR: [{ validUntil: null }, { validUntil: { gte: now } }],
+      });
+    } else {
+      and.push({ status: filters.status as PermitStatusValue });
+    }
   }
+
   if (filters.search?.trim()) {
     const q = filters.search.trim();
-    where.OR = [
-      { reference: { contains: q, mode: 'insensitive' } },
-      { permitTypeName: { contains: q, mode: 'insensitive' } },
-      { submittedByName: { contains: q, mode: 'insensitive' } },
-      { worker: { fullName: { contains: q, mode: 'insensitive' } } },
-    ];
+    and.push({
+      OR: [
+        { reference: { contains: q, mode: 'insensitive' } },
+        { permitTypeName: { contains: q, mode: 'insensitive' } },
+        { submittedByName: { contains: q, mode: 'insensitive' } },
+        { worker: { fullName: { contains: q, mode: 'insensitive' } } },
+      ],
+    });
   }
+
+  if (and.length > 0) where.AND = and;
   return where;
 }
 
