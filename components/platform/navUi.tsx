@@ -98,6 +98,7 @@ export function SegmentedNav({
   label,
   items,
   className,
+  size = 'sm',
 }: {
   /** Accessible name for the strip, e.g. "Filter sites by status". */
   label: string;
@@ -110,6 +111,14 @@ export function SegmentedNav({
     count?: ReactNode;
   }[];
   className?: string;
+  /**
+   * `sm` — the default, and what every existing strip renders. Unchanged.
+   * `md` — one step up, for a strip that is the PRIMARY navigation of a
+   *        workspace rather than a filter above a list, and therefore needs a
+   *        larger target and more presence. Opt-in precisely so adding it
+   *        cannot move the four existing call sites.
+   */
+  size?: 'sm' | 'md';
 }) {
   return (
     <nav
@@ -125,7 +134,10 @@ export function SegmentedNav({
           href={item.href}
           aria-current={item.active ? 'page' : undefined}
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors',
+            'inline-flex items-center gap-1.5 rounded-lg font-semibold transition-colors',
+            size === 'md'
+              ? 'touch-target px-5 py-2.5 text-sm'
+              : 'px-3 py-1.5 text-sm',
             item.active
               ? 'bg-brand-500 text-white shadow-sm'
               : 'text-ink-muted hover:bg-surface hover:text-ink',
