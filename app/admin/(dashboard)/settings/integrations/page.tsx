@@ -7,6 +7,8 @@ import { getSmsConfigForAdmin } from '@/services/sms/smsConfigService';
 import { AiProviderSettings } from '@/components/admin/AiProviderSettings';
 import { AI_PROVIDERS } from '@/services/ai/aiProviderCatalog';
 import { getAiConfigForAdmin } from '@/services/ai/aiConfigService';
+import { CscsProviderSettings } from '@/components/admin/CscsProviderSettings';
+import { getCscsConfigForAdmin } from '@/services/cscs/cscsConfigService';
 import { getAdminSession } from '@/lib/session';
 import { adminCanManage } from '@/lib/adminAuth';
 import { ReadOnlyBanner } from '@/components/admin/ReadOnlyBanner';
@@ -20,9 +22,10 @@ export const dynamic = 'force-dynamic';
  * (dashboard) layout guard.
  */
 export default async function IntegrationsPage() {
-  const [smsConfig, aiConfig, smsLog, smsUsage] = await Promise.all([
+  const [smsConfig, aiConfig, cscsConfig, smsLog, smsUsage] = await Promise.all([
     getSmsConfigForAdmin(),
     getAiConfigForAdmin(),
+    getCscsConfigForAdmin(),
     listRecentSms(50),
     smsUsageSummary(),
   ]);
@@ -77,6 +80,10 @@ export default async function IntegrationsPage() {
           canManage={canManage}
         />
       </section>
+      <section className="space-y-4">
+        <CscsProviderSettings config={cscsConfig} canManage={canManage} />
+      </section>
+
     </div>
   );
 }

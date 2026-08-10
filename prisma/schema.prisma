@@ -322,6 +322,8 @@ model Worker {
   updatedAt DateTime @updatedAt
 
   submissions            Submission[]
+  /// SC-001 verification attempts for this worker's card.
+  cscsVerifications      CscsVerificationLog[]
   /// SMS audit rows addressed to this worker (cleared on erasure).
   smsMessages            SmsMessageLog[]
   /// SC-023 — this worker's site assignments.
@@ -1594,6 +1596,64 @@ model CompanyConfig {
   updatedByName    String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+/// SC-001 — runtime configuration for CSCS Smart Check verification.
+///
+/// Mirrors SmsConfig: a singleton row holds the active provider and its
+/// credentials, the API key encrypted at rest (lib/secretBox), and the runtime
+/// getter merges DB over env over default. Nothing here is a placeholder — the
+/// values are read by getCscsProvider() on every verification.
+model CscsConfig {
+  id String @id // fixed singleton key ("cscs")
+
+  /// "mock" | "smartcheck". Defaults to mock until a partnership is live.
+  activeProvider String @default("mock")
+  /// Master switch. When false no verification runs and the worker's typed
+  /// details stand — distinct from a provider that is configured but failing.
+  verificationEnabled Boolean @default(true)
+
+  /// Smart Check partner credentials. apiKey is ENCRYPTED at rest and never
+  /// returned to any client.
+  smartCheckApiUrl String?
+  smartCheckApiKey String?
+
+  updatedByAdminId String?
+  updatedByName    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+/// SC-001 — audit trail of every card verification attempt.
+///
+/// Written on EVERY attempt including failures, because "the card was never
+/// checked" and "the check failed" are different facts and a competency record
+/// has to be able to tell them apart months later. The card NUMBER is stored
+/// masked: the audit question is which card was checked and what came back, not
+/// a second copy of the credential.
+model CscsVerificationLog {
+  id String @id @default(cuid())
+
+  worker   Worker? @relation(fields: [workerId], references: [id], onDelete: SetNull)
+  workerId String?
+
+  /// Last four characters only, e.g. "••••8201".
+  cardNumberMasked String
+  scheme           String?
+  provider         String
+  /// VALID | EXPIRED | REVOKED | NOT_FOUND | ERROR | UNVERIFIED
+  status           String
+  verified         Boolean @default(false)
+  /// Failure reason when the check could not complete. Never carries a
+  /// credential or an endpoint.
+  errorReason      String?
+  /// Milliseconds the provider call took, for partner SLA questions.
+  durationMs       Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([workerId, createdAt])
+  @@index([status, createdAt])
 }
 
 /// Singleton runtime configuration for platform notifications (Admin → Settings →

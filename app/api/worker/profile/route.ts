@@ -133,11 +133,16 @@ export async function POST(req: NextRequest) {
   // Verify against CSCS Smart Check when we have a usable card number.
   let verification: CscsVerificationResult | null = null;
   if (cardNumber) {
+    // workerId is passed where known so the audit row links to the worker. On
+    // FIRST profile save the worker does not exist yet, so the row is written
+    // unlinked rather than not written — an attempt that produced a competency
+    // record has to be auditable even when it created the worker.
     verification = await verifyCscsCard({
       cardNumber,
       holderName: fields.fullName,
       cardTypeHint: cscsCardType,
       expiryHint: cscsExpiry,
+      workerId: session.workerId ?? null,
     });
   }
 
