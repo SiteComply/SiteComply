@@ -391,10 +391,26 @@ export async function savePlatformCompanyProfile(
   user: { userId: string; name: string },
 ): Promise<{ ok: true } | { ok: false; errors: Record<string, string> }> {
   const errors: Record<string, string> = {};
-  const text = (v?: string) => (v ?? '').trim();
+
+  // ABSENT IS NOT BLANK.
+  //
+  // `undefined` means the request never mentioned this field and the stored
+  // value must survive. `''` means the user cleared the box and it must be
+  // nulled. The two were previously collapsed — `(v ?? '').trim()` turned an
+  // absent field into an empty string, which was then written as null — so a
+  // request carrying one section erased every field it did not mention, and an
+  // empty request erased the whole profile while reporting success.
+  //
+  // Every value below is therefore `string | undefined`, and `store()` maps
+  // that to what Prisma needs: undefined is OMITTED from the update, so the
+  // column keeps its value (and takes the schema default on create), while a
+  // supplied-but-empty value becomes null.
+  const text = (v?: string) => (v === undefined ? undefined : v.trim());
+  const store = (v: string | undefined) => (v === undefined ? undefined : v || null);
+  const len = (v?: string) => v?.length ?? 0;
 
   const companyName = text(input.companyName);
-  if (companyName.length > NAME_MAX)
+  if (len(companyName) > NAME_MAX)
     errors.companyName = `Keep the name under ${NAME_MAX} characters.`;
 
   const primaryEmail = text(input.primaryEmail);
@@ -409,17 +425,17 @@ export async function savePlatformCompanyProfile(
   // https:// — rewriting what someone entered into their own company record is
   // the kind of helpfulness that later reads as data they did not supply.
   const website = text(input.website);
-  if (website.length > URL_MAX) errors.website = `Keep the website under ${URL_MAX} characters.`;
+  if (len(website) > URL_MAX) errors.website = `Keep the website under ${URL_MAX} characters.`;
 
   const registrationNumber = text(input.registrationNumber);
-  if (registrationNumber.length > REG_MAX)
+  if (len(registrationNumber) > REG_MAX)
     errors.registrationNumber = `Keep the registration number under ${REG_MAX} characters.`;
   const vatNumber = text(input.vatNumber);
-  if (vatNumber.length > REG_MAX)
+  if (len(vatNumber) > REG_MAX)
     errors.vatNumber = `Keep the VAT number under ${REG_MAX} characters.`;
 
   const primaryContactName = text(input.primaryContactName);
-  if (primaryContactName.length > NAME_MAX)
+  if (len(primaryContactName) > NAME_MAX)
     errors.primaryContactName = `Keep the contact name under ${NAME_MAX} characters.`;
 
   const addr = {
@@ -429,23 +445,26 @@ export async function savePlatformCompanyProfile(
     addressPostcode: text(input.addressPostcode),
   };
   for (const [k, v] of Object.entries(addr)) {
-    if (v.length > ADDRESS_MAX) errors[k] = `Keep this under ${ADDRESS_MAX} characters.`;
+    if (len(v) > ADDRESS_MAX) errors[k] = `Keep this under ${ADDRESS_MAX} characters.`;
   }
 
   const tagline = text(input.tagline);
-  if (tagline.length > TAGLINE_MAX)
+  if (len(tagline) > TAGLINE_MAX)
     errors.tagline = `Keep the tagline under ${TAGLINE_MAX} characters.`;
 
   const disclaimer = text(input.disclaimer);
-  if (disclaimer.length > LONG_TEXT_MAX)
+  if (len(disclaimer) > LONG_TEXT_MAX)
     errors.disclaimer = `Keep the disclaimer under ${LONG_TEXT_MAX} characters.`;
   const reportFooter = text(input.reportFooter);
-  if (reportFooter.length > LONG_TEXT_MAX)
+  if (len(reportFooter) > LONG_TEXT_MAX)
     errors.reportFooter = `Keep the footer under ${LONG_TEXT_MAX} characters.`;
 
-  const primaryColor = normaliseHex(text(input.primaryColor));
+  // Guarded at the call site so the shared normaliseHex keeps its contract.
+  const primaryColor =
+    input.primaryColor === undefined ? undefined : normaliseHex(input.primaryColor);
   if (primaryColor === 'invalid') errors.primaryColor = 'Enter a hex colour like #38B54A.';
-  const accentColor = normaliseHex(text(input.accentColor));
+  const accentColor =
+    input.accentColor === undefined ? undefined : normaliseHex(input.accentColor);
   if (accentColor === 'invalid') errors.accentColor = 'Enter a hex colour like #00AEEF.';
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
@@ -454,26 +473,29 @@ export async function savePlatformCompanyProfile(
   // on close-out packs and are a different fact from the primary contact;
   // silently overwriting them from this screen would change what is printed.
   const data = {
-    companyName: companyName || null,
-    registrationNumber: registrationNumber || null,
-    vatNumber: vatNumber || null,
-    primaryContactName: primaryContactName || null,
-    primaryEmail: primaryEmail || null,
-    primaryPhone: primaryPhone || null,
-    website: website || null,
-    addressLine1: addr.addressLine1 || null,
-    addressLine2: addr.addressLine2 || null,
-    addressTown: addr.addressTown || null,
-    addressPostcode: addr.addressPostcode || null,
-    tagline: tagline || null,
-    primaryColor: primaryColor as string | null,
-    accentColor: accentColor as string | null,
-    disclaimer: disclaimer || null,
-    reportFooter: reportFooter || null,
-    packIncludeCompanyInfo: input.packIncludeCompanyInfo !== false,
-    packIncludeLogo: input.packIncludeLogo !== false,
-    packIncludePrintLogo: input.packIncludePrintLogo !== false,
-    packIncludeStandardDetails: input.packIncludeStandardDetails !== false,
+    companyName: store(companyName),
+    registrationNumber: store(registrationNumber),
+    vatNumber: store(vatNumber),
+    primaryContactName: store(primaryContactName),
+    primaryEmail: store(primaryEmail),
+    primaryPhone: store(primaryPhone),
+    website: store(website),
+    addressLine1: store(addr.addressLine1),
+    addressLine2: store(addr.addressLine2),
+    addressTown: store(addr.addressTown),
+    addressPostcode: store(addr.addressPostcode),
+    tagline: store(tagline),
+    primaryColor: primaryColor as string | null | undefined,
+    accentColor: accentColor as string | null | undefined,
+    disclaimer: store(disclaimer),
+    reportFooter: store(reportFooter),
+    // Passed through untouched: absent stays undefined, so an omitted toggle
+    // keeps its stored value instead of being forced back on. `@default(true)`
+    // in the schema still supplies the default on create.
+    packIncludeCompanyInfo: input.packIncludeCompanyInfo,
+    packIncludeLogo: input.packIncludeLogo,
+    packIncludePrintLogo: input.packIncludePrintLogo,
+    packIncludeStandardDetails: input.packIncludeStandardDetails,
     updatedByUserId: user.userId,
     updatedByName: user.name,
   };

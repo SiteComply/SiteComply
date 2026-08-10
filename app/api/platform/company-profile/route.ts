@@ -42,7 +42,12 @@ export async function PATCH(req: NextRequest) {
   }
 
   const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
-  const bool = (v: unknown) => v !== false;
+  // Only a real boolean counts. `v !== false` turned an ABSENT toggle into
+  // `true`, so a request that never mentioned the close-out pack defaults
+  // silently switched all four back on — the same absent-means-blank fault as
+  // the text fields, and it has to be fixed here too or the service never
+  // learns the field was missing.
+  const bool = (v: unknown) => (typeof v === 'boolean' ? v : undefined);
 
   const result = await savePlatformCompanyProfile(
     {
