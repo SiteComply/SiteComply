@@ -128,13 +128,19 @@ export function SegmentedNav({
    *            own recessed container, and the saturated active fill is what
    *            ties the two together.
    *
-   * `subtle` — for a strip that is a workspace's primary navigation. Same
-   *            shape, much less weight: no container fill or border, and an
-   *            active state that tints rather than floods. A control that is
-   *            the loudest thing on the page competes with the content it
-   *            exists to navigate — but flattening it into plain links loses
-   *            the selected state entirely, which is why the active item keeps
-   *            a filled shape and a colour, just a quiet one.
+   * `subtle` — for a strip that is a workspace's primary navigation.
+   *
+   *            CARRIES SELECTION WITHOUT COLOUR. A filled brand swatch, at any
+   *            saturation, reads as a primary action — the eye files it with
+   *            the Save button, not with the navigation. So the active segment
+   *            is signalled three other ways instead: it sits on the raised
+   *            surface while the rest of the strip sits on the page, it is the
+   *            only one with full-strength ink, and it is a weight heavier.
+   *
+   *            Every segment carries a hairline ring, so the strip reads as
+   *            three bounded segments rather than three words — the ring is
+   *            inset and therefore costs no layout, which matters because this
+   *            change must not move anything.
    *
    * Opt-in for the same reason `size` is: adding it must not move a caller
    * that did not ask for it.
@@ -160,20 +166,23 @@ export function SegmentedNav({
           href={item.href}
           aria-current={item.active ? 'page' : undefined}
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-lg font-semibold transition-colors',
+            'inline-flex items-center gap-1.5 rounded-lg transition-colors',
+            // Weight is part of how `subtle` signals selection, so it is set
+            // per state there rather than once for the whole strip.
+            subtle ? '' : 'font-semibold',
             size === 'md'
               ? 'touch-target px-5 py-2.5 text-sm'
               : 'px-3 py-1.5 text-sm',
             item.active
               ? subtle
-                ? // Tint, not flood: brand at its lightest with the brand ink
-                  // on top. Still unmistakably the selected segment, but it no
-                  // longer out-shouts every heading beneath it. No shadow —
-                  // elevation is the other half of what made it dominate.
-                  'bg-brand-50 text-brand-700'
+                ? // Surface, boundary and weight — no colour. The segment is
+                  // raised onto the card surface, ringed a shade darker than
+                  // its neighbours, and carries full-strength ink at the
+                  // heavier weight. Recognisable at a glance; not a button.
+                  'bg-surface text-ink font-bold shadow-sm ring-1 ring-inset ring-line'
                 : 'bg-brand-500 text-white shadow-sm'
               : subtle
-                ? 'text-ink-muted hover:bg-surface-sunken hover:text-ink'
+                ? 'font-medium text-ink-muted ring-1 ring-inset ring-line/60 hover:bg-surface hover:text-ink'
                 : 'text-ink-muted hover:bg-surface hover:text-ink',
           )}
         >
@@ -184,7 +193,7 @@ export function SegmentedNav({
                 'rounded-full px-1.5 py-0.5 text-xs tabular-nums',
                 item.active
                   ? subtle
-                    ? 'bg-brand-100 text-brand-700'
+                    ? 'bg-surface-sunken text-ink'
                     : 'bg-white/25 text-white'
                   : 'bg-surface text-ink-subtle',
               )}

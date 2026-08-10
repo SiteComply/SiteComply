@@ -19,12 +19,16 @@ import { SegmentedNav } from '@/components/platform/navUi';
  * than a filter above a list: a bigger target, and enough presence to read as
  * the thing you steer the page with.
  *
- * `tone="subtle"` because the first pass overcorrected. The saturated fill
- * inside a bordered, filled container made the strip the loudest thing on the
- * screen — it stopped competing with the heading and started competing with
- * the settings themselves. The subtle tone keeps the segmented shape and the
- * target size and drops the weight: no container, a tinted active pill instead
- * of a flooded one. The target stays 52px; only the volume changed.
+ * `tone="subtle"` because a filled brand swatch reads as a primary action
+ * wherever it appears. The first pass flooded the active tab, the second
+ * tinted it, and both landed in the same place: the eye files a coloured pill
+ * with the Save button rather than with the navigation. The subtle tone drops
+ * colour from the selected state altogether and carries it on surface, a
+ * hairline boundary and type weight instead.
+ *
+ * Target size, padding and gaps are all unchanged across every pass — the
+ * 52px target from the first one is deliberately kept, and the boundary is an
+ * inset ring precisely because a border would have moved things.
  *
  * Still a SERVER component. The page reads the tab from its own searchParams,
  * so nothing here needs the browser.
