@@ -47,7 +47,7 @@ HEALTH="${BASE}/api/health"
 ZIP=/tmp/sc040_deploy.zip
 
 # The commit currently in production.
-BASE_COMMIT=e0355e0
+BASE_COMMIT=3351bf8
 
 NAV=components/platform/navUi.tsx
 TABS=components/admin/AdminTabs.tsx
@@ -61,7 +61,7 @@ kudu_buildid() {
     "${SCM}/api/vfs/site/wwwroot/.next/BUILD_ID" 2>/dev/null | tr -d '[:space:]'
 }
 
-echo "== SC-040 — QUIETER ADMIN TAB STRIP =="
+echo "== SC-040 — COMPANY PROFILE PARTIAL-UPDATE FIX (H-2) =="
 echo "on commit: $(git rev-parse --short HEAD) ($(git rev-parse --abbrev-ref HEAD))"
 
 echo "[1/7] Current prod build id:"
