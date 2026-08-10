@@ -1,41 +1,50 @@
-import { SegmentedNav } from '@/components/platform/navUi';
+import Link from 'next/link';
+import { cn } from '@/lib/cn';
 
 /**
  * Tab strip for an Admin Centre workspace.
  *
- * RENDERS THROUGH SegmentedNav rather than styling itself. The first version
- * was an underlined strip of its own, and it read as three text links with a
- * rule under one of them — a heading, not a control. SegmentedNav is the
- * pattern the Platform already uses for exactly this job (filter strips on
- * Actions, Permits, Sites and Check-ins): a bounded container with the active
- * item as a solid filled pill, which is unmistakably a selectable thing.
+ * A TEXT TAB ROW WITH AN ACTIVE INDICATOR — one shared rule running under all
+ * of them, and the selected tab sitting on a thick brand indicator that breaks
+ * that rule. No pill, no segmented container, no per-tab border, no fill.
  *
- * Delegating instead of copying its classes is the same reasoning that has
- * SettingsWorkspace render through SectionWorkspace and Section through Panel —
- * two hand-maintained copies of one visual language drift the moment either is
- * touched, and this is the second portal, which is precisely when that starts.
+ * ── WHY IT IS BACK TO THIS ────────────────────────────────────────────────
  *
- * `size="md"` is used because this is a workspace's PRIMARY navigation rather
- * than a filter above a list: a bigger target, and enough presence to read as
- * the thing you steer the page with.
+ * This strip has been through the alternatives. A flooded pill, a tinted pill
+ * and a neutral surface chip were each rejected for the same reason: anything
+ * with a filled shape reads as a button, and a row of buttons above a settings
+ * page competes with the settings. The original underlined row never had that
+ * problem — its only fault was that it was too quiet to look interactive.
  *
- * `tone="subtle"` because a filled brand swatch reads as a primary action
- * wherever it appears. The first pass flooded the active tab, the second
- * tinted it, and both landed in the same place: the eye files a coloured pill
- * with the Save button rather than with the navigation. The subtle tone drops
- * colour from the selected state altogether and carries it on surface, a
- * hairline boundary and type weight instead.
+ * So this is the original pattern with the discoverability problem fixed
+ * directly, rather than by reaching for a different pattern:
  *
- * Target size, padding and gaps are all unchanged across every pass — the
- * 52px target from the first one is deliberately kept, and the boundary is an
- * inset ring precisely because a border would have moved things.
+ *   INDICATOR   3px rather than 2px, and it is the only saturated thing here,
+ *               so the eye lands on it without anything being filled.
+ *   TYPE        bold at full-strength ink for the active tab against medium
+ *               muted for the rest — two steps apart, not one, because one was
+ *               what made the original read as a list of links.
+ *   HOVER       the indicator ANSWERS. Hovering an inactive tab draws a grey
+ *               indicator in the place the brand one would go, which is the
+ *               single clearest way to say "this is a tab you can select"
+ *               without adding a background.
+ *   SPACING     wider tabs on a taller row, so each one is a target rather
+ *               than a word in a sentence.
+ *
+ * SELF-STYLED, NOT DELEGATED. An earlier pass rendered this through the
+ * Platform's SegmentedNav to avoid two copies of one visual language. That was
+ * the right instinct for a pill and the wrong one here: SegmentedNav IS a
+ * segmented control, and this is deliberately not one. Sharing it again would
+ * mean pushing an underline mode into a component whose whole job is filled
+ * segments — and every Platform filter strip would be one prop away from
+ * changing shape. They are different patterns and now say so.
  *
  * Still a SERVER component. The page reads the tab from its own searchParams,
  * so nothing here needs the browser.
  *
  * TABS ARE ADDRESSES, NOT LOCAL STATE. Each carries a query parameter, so a tab
  * can be linked to, bookmarked and reloaded, and an error message elsewhere can
- * point at the right one. Unchanged by this pass — only the appearance moved.
+ * point at the right one. Unchanged through every pass — only the paint moved.
  */
 export interface AdminTab {
   key: string;
@@ -57,19 +66,32 @@ export function AdminTabs({
   label: string;
 }) {
   return (
-    <SegmentedNav
-      label={label}
-      size="md"
-      tone="subtle"
-      // mt-4 replaces SegmentedNav's own mb-4: the strip sits under the page
-      // description and above the panels, so the space belongs above it here.
-      className="mt-4 mb-0"
-      items={tabs.map((tab) => ({
-        key: tab.key,
-        label: tab.label,
-        href: `${basePath}?${param}=${tab.key}`,
-        active: tab.key === active,
-      }))}
-    />
+    <nav
+      aria-label={label}
+      // The rule is on the ROW, so it runs the full width behind every tab and
+      // the indicator reads as breaking it rather than as a stray underline.
+      className="mt-5 flex gap-1 overflow-x-auto border-b border-line"
+    >
+      {tabs.map((tab) => {
+        const isActive = tab.key === active;
+        return (
+          <Link
+            key={tab.key}
+            href={`${basePath}?${param}=${tab.key}`}
+            aria-current={isActive ? 'page' : undefined}
+            className={cn(
+              // -mb-px lifts the indicator onto the row's rule so the two are
+              // one line, not two stacked ones.
+              '-mb-px whitespace-nowrap border-b-[3px] px-5 py-3.5 text-sm transition-colors',
+              isActive
+                ? 'border-brand-500 font-bold text-ink'
+                : 'border-transparent font-medium text-ink-muted hover:border-ink-subtle hover:text-ink',
+            )}
+          >
+            {tab.label}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }

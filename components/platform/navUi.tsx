@@ -98,8 +98,6 @@ export function SegmentedNav({
   label,
   items,
   className,
-  size = 'sm',
-  tone = 'solid',
 }: {
   /** Accessible name for the strip, e.g. "Filter sites by status". */
   label: string;
@@ -112,51 +110,12 @@ export function SegmentedNav({
     count?: ReactNode;
   }[];
   className?: string;
-  /**
-   * `sm` — the default, and what every existing strip renders. Unchanged.
-   * `md` — one step up, for a strip that is the PRIMARY navigation of a
-   *        workspace rather than a filter above a list, and therefore needs a
-   *        larger target and more presence. Opt-in precisely so adding it
-   *        cannot move the four existing call sites.
-   */
-  size?: 'sm' | 'md';
-  /**
-   * How loudly the strip announces itself.
-   *
-   * `solid`  — the default, and what every existing strip renders. Unchanged.
-   *            A filter sits directly above the list it controls, inside its
-   *            own recessed container, and the saturated active fill is what
-   *            ties the two together.
-   *
-   * `subtle` — for a strip that is a workspace's primary navigation.
-   *
-   *            CARRIES SELECTION WITHOUT COLOUR. A filled brand swatch, at any
-   *            saturation, reads as a primary action — the eye files it with
-   *            the Save button, not with the navigation. So the active segment
-   *            is signalled three other ways instead: it sits on the raised
-   *            surface while the rest of the strip sits on the page, it is the
-   *            only one with full-strength ink, and it is a weight heavier.
-   *
-   *            Every segment carries a hairline ring, so the strip reads as
-   *            three bounded segments rather than three words — the ring is
-   *            inset and therefore costs no layout, which matters because this
-   *            change must not move anything.
-   *
-   * Opt-in for the same reason `size` is: adding it must not move a caller
-   * that did not ask for it.
-   */
-  tone?: 'solid' | 'subtle';
 }) {
-  const subtle = tone === 'subtle';
   return (
     <nav
       aria-label={label}
       className={cn(
-        'mb-4 inline-flex flex-wrap gap-1 rounded-xl p-1',
-        // The container is most of the perceived weight: a bordered, filled box
-        // reads as a panel in its own right. Dropping it leaves the segments
-        // sitting on the page, which is what navigation should do.
-        subtle ? 'border border-transparent' : 'border border-line bg-surface-sunken',
+        'mb-4 inline-flex flex-wrap gap-1 rounded-xl border border-line bg-surface-sunken p-1',
         className,
       )}
     >
@@ -166,24 +125,10 @@ export function SegmentedNav({
           href={item.href}
           aria-current={item.active ? 'page' : undefined}
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-lg transition-colors',
-            // Weight is part of how `subtle` signals selection, so it is set
-            // per state there rather than once for the whole strip.
-            subtle ? '' : 'font-semibold',
-            size === 'md'
-              ? 'touch-target px-5 py-2.5 text-sm'
-              : 'px-3 py-1.5 text-sm',
+            'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors',
             item.active
-              ? subtle
-                ? // Surface, boundary and weight — no colour. The segment is
-                  // raised onto the card surface, ringed a shade darker than
-                  // its neighbours, and carries full-strength ink at the
-                  // heavier weight. Recognisable at a glance; not a button.
-                  'bg-surface text-ink font-bold shadow-sm ring-1 ring-inset ring-line'
-                : 'bg-brand-500 text-white shadow-sm'
-              : subtle
-                ? 'font-medium text-ink-muted ring-1 ring-inset ring-line/60 hover:bg-surface hover:text-ink'
-                : 'text-ink-muted hover:bg-surface hover:text-ink',
+              ? 'bg-brand-500 text-white shadow-sm'
+              : 'text-ink-muted hover:bg-surface hover:text-ink',
           )}
         >
           {item.label}
@@ -192,9 +137,7 @@ export function SegmentedNav({
               className={cn(
                 'rounded-full px-1.5 py-0.5 text-xs tabular-nums',
                 item.active
-                  ? subtle
-                    ? 'bg-surface-sunken text-ink'
-                    : 'bg-white/25 text-white'
+                  ? 'bg-white/25 text-white'
                   : 'bg-surface text-ink-subtle',
               )}
             >
