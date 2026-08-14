@@ -6,21 +6,49 @@ import { prisma } from '@/lib/prisma';
  * the Inductions history shows the times the worker actually inducted + signed.
  */
 
+/**
+ * The knowledge-check result for an induction record.
+ *
+ * TWO DISTINCT FACTS, kept apart on purpose. The check is FORMATIVE: an attempt
+ * only reaches PASSED once every sampled question has been answered correctly
+ * (completeAttempt re-checks that from stored state), so the outcome of any
+ * completed attempt is a pass at the full question count.
+ *
+ * `firstTry*` is a separate quality measure — how many were right without a
+ * second go. It was previously the ONLY thing surfaced, and unlabelled, so a
+ * record that necessarily passed displayed as "33% (1/3)". Both are returned
+ * now, and the caller is expected to lead with the outcome.
+ *
+ * Derived entirely from stored values; nothing here changes what is recorded.
+ */
 export interface KnowledgeCheckResult {
-  correct: number;
+  /** True once every question was answered correctly — the pass gate itself. */
+  passed: boolean;
+  /** Questions in the check. On a pass, this is also the number answered right. */
   total: number;
-  pct: number;
+  /** Right FIRST time. Secondary; never the headline. */
+  firstTryCorrect: number;
+  /** The same figure as a percentage, for the secondary line. */
+  firstTryPct: number;
 }
 
 function kcResult(
-  attempt: { questionCount: number; incorrectFirstTryCount: number } | null,
+  attempt: {
+    status: string;
+    questionCount: number;
+    incorrectFirstTryCount: number;
+  } | null,
 ): KnowledgeCheckResult | null {
   if (!attempt || attempt.questionCount === 0) return null;
-  const correct = attempt.questionCount - attempt.incorrectFirstTryCount;
+  const firstTryCorrect =
+    attempt.questionCount - attempt.incorrectFirstTryCount;
   return {
-    correct,
+    // Read from the attempt's own state rather than assumed from its existence:
+    // an IN_PROGRESS attempt must never render as a pass.
+    passed: attempt.status === 'PASSED',
     total: attempt.questionCount,
-    pct: Math.round((correct / attempt.questionCount) * 100),
+    firstTryCorrect,
+    firstTryPct: Math.round((firstTryCorrect / attempt.questionCount) * 100),
   };
 }
 
@@ -108,7 +136,11 @@ export async function getWorkerInductionRecord(
         },
       },
       knowledgeCheckAttempt: {
-        select: { questionCount: true, incorrectFirstTryCount: true },
+        select: {
+          status: true,
+          questionCount: true,
+          incorrectFirstTryCount: true,
+        },
       },
     },
   });
