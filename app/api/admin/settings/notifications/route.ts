@@ -1,38 +1,34 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAdminRole, ADMIN_WRITE_ROLES } from '@/lib/adminAuth';
-import {
-  saveNotificationConfig,
-  type SaveNotificationConfigInput,
-} from '@/services/notifications/notificationConfigService';
+import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * POST /api/admin/settings/notifications
- * Save the platform notification configuration. Admin-only. Body:
- *   { types: { [typeKey]: { enabled, channels: { email, sms } } } }
- * Unknown types/channels are ignored; all values are coerced to booleans.
+ * POST /api/admin/settings/notifications — RETIRED.
+ *
+ * Notification settings moved to Platform Settings → Notifications, where a
+ * Director owns them. The Admin Centre keeps a READ-ONLY view as the platform
+ * operator's fallback.
+ *
+ * Two editors of one singleton row is the duplicate source of truth that
+ * section exists to remove: this route and the Platform one wrote the same
+ * `notifications` row through different surfaces, so the same setting could be
+ * changed from two places with different permissions and different controls.
+ *
+ * 409, not 403 — the caller is not forbidden, the operation has moved. The
+ * route is kept rather than deleted so an older tab or a bookmarked form gets
+ * this explanation instead of a 404 it cannot interpret.
+ *
+ * Exactly the treatment /api/admin/settings/company received when company
+ * profile and branding moved, and for the same reason.
  */
-export async function POST(req: NextRequest) {
-  const auth = requireAdminRole(ADMIN_WRITE_ROLES);
-  if (!auth.ok) return auth.response;
-  const admin = auth.admin;
-
-  let body: SaveNotificationConfigInput;
-  try {
-    body = (await req.json()) as SaveNotificationConfigInput;
-  } catch {
-    return NextResponse.json({ ok: false, error: 'Invalid request.' }, { status: 400 });
-  }
-
-  const result = await saveNotificationConfig(body, {
-    adminId: admin.adminId,
-    name: admin.name,
-  });
-  if (!result.ok) {
-    return NextResponse.json({ ok: false, error: result.error }, { status: 400 });
-  }
-
-  return NextResponse.json({ ok: true });
+export async function POST() {
+  return NextResponse.json(
+    {
+      ok: false,
+      error:
+        'Notification settings are now managed in Platform Settings → Notifications. This view is read-only.',
+    },
+    { status: 409 },
+  );
 }

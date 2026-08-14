@@ -65,15 +65,6 @@ export interface NotificationConfigView {
   updatedAt: string | null;
 }
 
-export interface SaveNotificationConfigInput {
-  types?: Record<
-    string,
-    {
-      enabled?: boolean;
-      channels?: Partial<Record<NotificationChannelKey, boolean>>;
-    }
-  >;
-}
 
 function buildEffective(stored: Record<string, unknown>): Settings {
   const out: Settings = {};
@@ -92,55 +83,14 @@ export async function getNotificationConfigForAdmin(): Promise<NotificationConfi
   };
 }
 
-export async function saveNotificationConfig(
-  input: SaveNotificationConfigInput,
-  admin: { adminId: string; name: string },
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const incoming = input.types ?? {};
-  const settings: Settings = {};
-
-  // Only persist known types/channels; coerce everything to booleans so a
-  // malformed body can never corrupt the stored shape.
-  for (const t of NOTIFICATION_TYPES) {
-    const provided = incoming[t.key] ?? {};
-    const channels = {} as Record<NotificationChannelKey, boolean>;
-    for (const ch of NOTIFICATION_CHANNELS) {
-      const v = provided.channels?.[ch.key];
-      // Explicit boolean wins; an omitted channel keeps the catalogue default.
-      channels[ch.key] = typeof v === 'boolean' ? v : t.defaultChannels[ch.key];
-    }
-    settings[t.key] = {
-      // Explicit boolean wins; an omitted type keeps the catalogue default.
-      enabled:
-        typeof provided.enabled === 'boolean'
-          ? provided.enabled
-          : t.defaultEnabled,
-      channels,
-    };
-  }
-
-  // Reject a body that references no known types at all (likely malformed).
-  const referencedKnown = Object.keys(incoming).some(isKnownNotificationType);
-  if (Object.keys(incoming).length > 0 && !referencedKnown) {
-    return { ok: false, error: 'No valid notification settings provided.' };
-  }
-
-  await prisma.notificationConfig.upsert({
-    where: { id: CONFIG_ID },
-    update: {
-      settings,
-      updatedByAdminId: admin.adminId,
-      updatedByName: admin.name,
-    },
-    create: {
-      id: CONFIG_ID,
-      settings,
-      updatedByAdminId: admin.adminId,
-      updatedByName: admin.name,
-    },
-  });
-  return { ok: true };
-}
+/**
+ * NOTE — there is exactly ONE writer for this row: savePlatformNotificationSettings
+ * below. An Admin Centre writer (saveNotificationConfig) used to exist too, and
+ * the two disagreed: this one MERGES over the stored object, that one rebuilt
+ * `settings` from the catalogue alone and so dropped the reminder thresholds a
+ * Director had set. Saving from the Admin Centre silently reset them to the
+ * defaults. Keep it that way — one owner, one write path.
+ */
 
 export interface NotificationRuntimeConfig {
   types: Settings;
