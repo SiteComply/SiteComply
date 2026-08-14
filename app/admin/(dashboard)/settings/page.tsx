@@ -23,8 +23,10 @@ const SETTINGS_AREAS = [
   {
     href: '/admin/settings/notifications',
     title: 'Notifications',
-    body: 'Turn platform notifications on or off — access requests, overdue actions, audit and action reminders, weekly summary — and set email / SMS delivery preferences.',
-    cta: 'Manage notifications',
+    // Reworded with the page: it is a read-only view now, and the old text
+    // promised editing plus three switches that no longer exist.
+    body: 'View which platform notifications are active. These are managed by a Director in Platform Settings → Notifications.',
+    cta: 'View notifications',
   },
   {
     href: '/admin/settings/company',
