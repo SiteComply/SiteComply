@@ -158,8 +158,14 @@ if(svc.indexOf('status: true') < 0)
 // ---------- the first-try figure must survive, clearly labelled ----------
 if(page.indexOf('First-time score') < 0)
   fail('the first-time metric is gone — it was to be retained as a labelled secondary statistic');
-if(svc.indexOf('firstTryCorrect') < 0 || svc.indexOf('firstTryPct') < 0)
-  fail('the first-try figures are no longer returned');
+// The VALUE, not just the identifier: the label alone with nothing beside it
+// is a row that says First-time score and shows nothing. Checking the file
+// merely mentions firstTryCorrect passed while the interface field was gone.
+if(page.indexOf('record.knowledgeCheck.firstTryPct') < 0
+   || page.indexOf('record.knowledgeCheck.firstTryCorrect') < 0)
+  fail('the first-time row no longer renders the figure');
+if(svc.indexOf('firstTryCorrect: number;') < 0 || svc.indexOf('firstTryPct: number;') < 0)
+  fail('the first-try figures are no longer part of the result type');
 
 // ---------- scoring and persistence must be UNCHANGED ----------
 if(att.indexOf('const remaining = sampled.filter((id) => !answers[id]?.correct);') < 0)
