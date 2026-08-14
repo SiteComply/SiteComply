@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { getAdminSession } from '@/lib/session';
 import { countPendingAccessRequests } from '@/services/accessRequests/accessRequestService';
-import { isNotificationEnabled } from '@/services/notifications/notificationConfigService';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,12 +23,19 @@ export default async function AdminDashboardLayout({
   const session = getAdminSession();
   if (!session) redirect('/admin/login');
 
-  // The nav badge is the in-app surface of the "new platform access requests"
-  // notification — suppress it when an admin has turned that notification off.
-  const accessRequestNotifications = await isNotificationEnabled('platform_access_request');
-  const pendingAccessRequests = accessRequestNotifications
-    ? await countPendingAccessRequests()
-    : 0;
+  // COUNTED UNCONDITIONALLY.
+  //
+  // This was gated on isNotificationEnabled('platform_access_request'), which
+  // has returned false since that key was removed from the notification
+  // catalogue — isNotificationEnabled returns false for any type it does not
+  // know. The gate was therefore permanently closed and the badge could never
+  // appear, however many requests were waiting.
+  //
+  // The gate is not reinstated against a live key either: this badge is not a
+  // notification. It is the count of work sitting in the queue on the screen
+  // that owns that queue, and an admin silencing a notification is not asking
+  // to be shown a smaller number than the truth.
+  const pendingAccessRequests = await countPendingAccessRequests();
 
   return (
     <AdminShell
