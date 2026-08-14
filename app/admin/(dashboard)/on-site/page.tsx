@@ -48,7 +48,20 @@ export default async function OnSitePage() {
                     : 'bg-surface-sunken text-ink-subtle',
                 )}
               >
-                {site.compliantCount}/{site.workers.length} on site
+                {/* THE COUNT, NOT A RATIO.
+                    This read `compliantCount/workers.length`, which was
+                    designed as "compliant / currently on site" — not assigned
+                    vs on site. But createCheckIn re-validates every answer and
+                    only ever writes status COMPLIANT; nothing in the codebase
+                    writes INCOMPLETE and nothing updates status afterwards, so
+                    the two figures are structurally always equal and the badge
+                    could only ever render n/n. A ratio that cannot vary states
+                    nothing while implying a comparison.
+
+                    Per-worker compliance is still shown by ComplianceBadge on
+                    each row, and the header above still names both totals. If
+                    INCOMPLETE ever gains a writer, revisit this. */}
+                {site.workers.length} on site
               </span>
             </div>
 
