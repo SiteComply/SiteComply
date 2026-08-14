@@ -147,8 +147,11 @@ if(/\{site\.compliantCount\}\/\{site\.workers\.length\}/.test(page))
 
 // ---------- the compliance signal must NOT be lost ----------
 // Dropping the numerator is only defensible while these two remain.
-if(page.indexOf('ComplianceBadge') < 0)
-  fail('the per-worker compliance badge is gone — the page would no longer show compliance at all');
+// The USE, not the definition: `function ComplianceBadge` stays in the file
+// even when the row stops rendering it, and that is exactly the change that
+// would quietly remove compliance from the page.
+if(page.indexOf('<ComplianceBadge status={w.status} />') < 0)
+  fail('the per-worker compliance badge is no longer rendered on each row — the page would show no compliance at all');
 if(page.indexOf('{snapshot.totalCompliant} compliant') < 0)
   fail('the header no longer names the compliant total — with the badge simplified, this is where compliance is stated');
 
