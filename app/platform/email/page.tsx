@@ -46,7 +46,6 @@ export default function PlatformEmailLoginPage() {
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
-  const [devCode, setDevCode] = useState<string | undefined>();
   const [notice, setNotice] = useState<Notice | undefined>();
   const [codeError, setCodeError] = useState<string | undefined>();
   const [requestHref, setRequestHref] = useState<string | undefined>();
@@ -66,7 +65,6 @@ export default function PlatformEmailLoginPage() {
       });
       const data = await res.json();
       if (data.ok) {
-        setDevCode(data.code);
         setCode('');
         setCodeError(undefined);
         setStep('code');
@@ -166,13 +164,6 @@ export default function PlatformEmailLoginPage() {
                 .
               </p>
             </div>
-
-            {devCode && (
-              <p className="rounded-xl border border-hivis-500 bg-hivis-400/20 px-4 py-3 text-sm text-ink">
-                <strong>Dev mode:</strong> your code is{' '}
-                <span className="font-mono font-bold">{devCode}</span>.
-              </p>
-            )}
 
             <form className="space-y-4" onSubmit={continueWithCode}>
               <TextField

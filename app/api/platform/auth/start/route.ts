@@ -14,11 +14,16 @@ export const dynamic = 'force-dynamic';
  *
  * Validates Platform Login against the Platform Users table: only a user that
  * exists AND has status ACTIVE may proceed. Pending and Disabled users are told
- * why. On success the (development) verification code is returned, mirroring the
- * worker OTP dev flow — no real email/SMS is sent, and role/site permissions are
- * NOT enforced here yet.
+ * why.
+ *
+ * This endpoint NO LONGER returns a verification code. The former global
+ * `DEV_CODE = '123456'` — which was returned here and accepted for EVERY active
+ * Platform user — has been removed; it was an unauthenticated bypass. Real
+ * Platform OTP delivery (SMS/email) is not built yet, so today the only account
+ * that can complete sign-in is the one allow-listed by the account-scoped dev
+ * override (see services/auth/platformDevOverride.ts), which supplies its own
+ * code out-of-band and is verified in /verify. No code is disclosed here.
  */
-const DEV_CODE = '123456';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(req: NextRequest) {
@@ -67,6 +72,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // status === ACTIVE — allow the user to continue with the dev code.
-  return NextResponse.json({ ok: true, code: DEV_CODE });
+  // status === ACTIVE — allow the client to advance to the code step. No code
+  // is returned: the allow-listed override account supplies its own code
+  // out-of-band; all other accounts have no working code until real Platform
+  // OTP delivery is built.
+  return NextResponse.json({ ok: true });
 }
