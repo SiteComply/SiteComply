@@ -187,7 +187,7 @@ for(const field of ['directorOnly','personalData','clientAggregateOnly','exportR
 }
 if((reg.match(/directorOnly: true/g)||[]).length !== 1)
   fail('the director-only flag changed — exactly one report is organisation-wide');
-// 11, not 10: the ReportType interface declares `description: string;` too.
+// 11, not 10: the ReportType interface declares a description field too.
 // Counting entries instead — one id per report — is the unambiguous check.
 if((reg.match(/description:/g)||[]).length !== 11)
   fail('a report description was added or removed');
