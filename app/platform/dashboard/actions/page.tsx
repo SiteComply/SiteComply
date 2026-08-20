@@ -13,8 +13,6 @@ import {
   assertModuleView,
 } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
-import { canUseAiSummaries } from '@/services/ai/aiConfig';
-import { AiSummaryPanel } from '@/components/platform/AiSummaryPanel';
 import {
   listActions,
   actionCounts,
@@ -51,9 +49,25 @@ const PRIORITY_DOT: Record<ActionPriorityValue, string> = {
 };
 
 /**
- * Actions register — the central, site-scoped list of corrective actions across
- * the viewer's sites, bucketed into Open / In progress / Overdue / Completed.
- * "Overdue" is derived (open or in-progress with a past due date).
+ * The AI Executive Summary panel was removed from this page.
+ *
+ * This is the corrective-actions REGISTER — a working list you filter, sort and
+ * act on. An AI narrative sitting above it made the first thing on the page a
+ * generated paragraph rather than the work, and the register is not where that
+ * belongs. The summary machinery is untouched and still runs on the surfaces
+ * where a narrative is the point: the audit detail page, and the Compliance,
+ * Scorecard and Organisation Overview reports.
+ *
+ * The ACTIONS_REGISTER target is deliberately left in summaryTargets: four
+ * summaries already exist against it in production, and summary history
+ * resolves each stored row through getSummaryTarget(row.targetType). Deleting
+ * the target would break those records rather than hide them.
+ *
+ * ── THE REGISTER ──────────────────────────────────────────────────────────
+ *
+ * The central, site-scoped list of corrective actions across the viewer's
+ * sites, bucketed into Open / In progress / Overdue / Completed. "Overdue" is
+ * derived (open or in-progress with a past due date).
  */
 export default async function PlatformActionsPage({
   searchParams,
@@ -95,7 +109,6 @@ export default async function PlatformActionsPage({
     now,
   );
   const canCreate = permits(viewer.role, 'actions', 'create');
-  const showAiSummary = await canUseAiSummaries(viewer.role);
 
   const qp = (patch: Record<string, string>) => {
     const sp = new URLSearchParams();
@@ -131,7 +144,6 @@ export default async function PlatformActionsPage({
         }
       />
 
-      {showAiSummary && <AiSummaryPanel targetType="ACTIONS_REGISTER" />}
 
       {/* Register buckets. These are FILTERS, not statistics — each one narrows
           the list below — so they use the same recessed segmented control the
