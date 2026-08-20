@@ -64,7 +64,7 @@ export const CLOSE_OUT_SECTIONS: CloseOutSectionMeta[] = [
   {
     id: 'CONSTRUCTION_PHASE_PLAN',
     label: 'Construction Phase Plan',
-    description: 'The CPP assembled from the project setup (SC-019)',
+    description: 'The Construction Phase Plan assembled from your project setup.',
     module: 'sites',
     icon: 'doc',
     defaultSelected: true,

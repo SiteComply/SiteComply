@@ -11,10 +11,10 @@ export class MockAiProvider implements AiProvider {
 
   async complete(_input: AiCompleteInput): Promise<AiCompleteResult> {
     const json = {
-      headline: 'AI summaries are running in mock mode — no model was called.',
+      headline: 'AI summaries are not enabled for this organisation.',
       keyPoints: [
-        'This placeholder is returned by the mock provider.',
-        'Set AI_PROVIDER=azure-openai with the Azure OpenAI settings to enable real summaries.',
+        'No summary has been generated for this report.',
+        'An administrator can turn on AI summaries in the Admin Centre, under AI provider settings.',
       ],
       risks: [],
       recommendedFocus: [],

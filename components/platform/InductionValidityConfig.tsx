@@ -233,8 +233,8 @@ export function InductionValidityConfig({
             Require a digital signature
           </p>
           <p className="text-xs text-ink-subtle">
-            Workers accept a declaration and sign to complete their induction
-            (SC-011). Off by default.
+            Workers accept a declaration and sign to complete their induction.
+            Off by default.
           </p>
         </div>
         <button

@@ -407,7 +407,10 @@ export function ScheduleActivityForm({
               placeholder="e.g. 3,1"
               onChange={(e) => setReminders(e.target.value)}
             />
-            <p className="text-xs text-ink-subtle">Sent from Phase 2.</p>
+            <p className="text-xs text-ink-subtle">
+              Comma-separated. A reminder is sent on each of these days before the
+              activity is due.
+            </p>
           </div>
 
           <div className="space-y-1.5">

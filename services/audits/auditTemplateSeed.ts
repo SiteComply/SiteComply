@@ -318,7 +318,7 @@ export const AUDIT_TEMPLATE_LIBRARY: SeedTemplate[] = [
   {
     name: 'Toolbox Talk',
     description:
-      'Supervisor-delivered briefing, recorded as a scheduled activity. SC-018 removed the toolbox-talk question from the worker induction precisely because these are delivered separately — this is where they belong.',
+      'A supervisor-delivered safety briefing, recorded as a scheduled compliance activity.',
     items: [
       {
         label: 'Topic covered and relevant to current works',

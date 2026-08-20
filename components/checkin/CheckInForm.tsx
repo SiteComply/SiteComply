@@ -25,7 +25,6 @@ export function CheckInForm() {
   const [mobile, setMobile] = useState('');
   const [code, setCode] = useState('');
   const [maskedMobile, setMaskedMobile] = useState('');
-  const [devCode, setDevCode] = useState<string | undefined>();
   // Errors are kept per field: a mobile-number problem belongs on the phone
   // step, a wrong/expired code on the code step. Sharing one value put phone
   // errors under the code box, which read as "the code was rejected".
@@ -91,7 +90,6 @@ export function CheckInForm() {
         return;
       }
       setMaskedMobile(data.maskedMobile ?? '');
-      setDevCode(data.devCode);
       setResendIn(data.resendInSeconds ?? 30);
       setStep('code');
       setCode('');
@@ -197,13 +195,6 @@ export function CheckInForm() {
               <span className="font-semibold text-ink">{maskedMobile}</span>.
             </p>
           </header>
-
-          {devCode && (
-            <p className="rounded-xl border border-hivis-500 bg-hivis-400/20 px-4 py-3 text-sm text-ink">
-              <strong>Dev mode:</strong> your code is{' '}
-              <span className="font-mono font-bold">{devCode}</span>.
-            </p>
-          )}
 
           <TextField
             ref={codeInputRef}
