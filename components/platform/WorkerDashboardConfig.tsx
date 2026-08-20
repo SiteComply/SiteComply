@@ -84,11 +84,6 @@ export function WorkerDashboardConfig({
                       Always shown
                     </span>
                   )}
-                  {panel.awaitingSourceSystem && (
-                    <span className="rounded-full bg-hivis-400/25 px-2 py-0.5 text-[11px] font-semibold text-ink">
-                      No data yet
-                    </span>
-                  )}
                 </p>
                 <p className="text-xs text-ink-subtle">{panel.description}</p>
               </div>

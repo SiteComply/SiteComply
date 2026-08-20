@@ -66,12 +66,6 @@ const WORKER_NAV: {
     panels: ['SITE_DOCUMENTS'],
   },
   {
-    href: '/worker/messages',
-    label: 'Messages',
-    icon: 'message',
-    panels: ['MESSAGES'],
-  },
-  {
     href: '/worker/emergency',
     label: 'Emergency info',
     icon: 'alert',

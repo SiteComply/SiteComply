@@ -165,10 +165,7 @@ enum ActionStatus {
 /// This enum is the single contract shared by the configuration UI and the
 /// dashboard renderer, and mirrors the SC-003 requirement list verbatim.
 ///
-/// Two panels have no source system yet and are therefore OFF by default:
-/// ACTIVE_PERMITS (a digital permit-to-work register is a later REV-1 item) and
-/// MESSAGES (there is no worker-facing messaging/notification store). Both render
-/// an honest empty state when a manager switches them on.
+/// ACTIVE_PERMITS is OFF by default — a manager opts each site in.
 enum WorkerDashboardPanel {
   SITE_INFORMATION
   DAILY_BULLETIN
@@ -180,7 +177,6 @@ enum WorkerDashboardPanel {
   FIRE_ASSEMBLY_POINT
   SITE_CONTACTS
   OUTSTANDING_ACTIONS
-  MESSAGES
   CHECK_OUT
 }
 

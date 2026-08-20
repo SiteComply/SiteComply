@@ -11,7 +11,10 @@ import { normaliseUkMobile } from '@/lib/phone';
 import { sendAuditedSms } from '@/services/sms/smsSendService';
 import { formatDateUK } from '@/lib/datetime';
 import { getPanelVisibility } from '@/services/workerDashboard/dashboardConfigService';
-import { WORKER_DASHBOARD_PANELS } from '@/services/workerDashboard/dashboardPanels';
+import {
+  WORKER_DASHBOARD_PANELS,
+  WORKER_DASHBOARD_PANEL_VALUES,
+} from '@/services/workerDashboard/dashboardPanels';
 import {
   ACCESS_REQUIREMENTS,
   evaluateRequirements,
@@ -875,7 +878,11 @@ export async function getWorkerPanels(
   const [siteVisibility, overrides] = await Promise.all([
     getPanelVisibility(siteId),
     prisma.workerPanelSetting.findMany({
-      where: { workerId, jobSiteId: siteId },
+      where: {
+        workerId,
+        jobSiteId: siteId,
+        panel: { in: WORKER_DASHBOARD_PANEL_VALUES },
+      },
       select: { panel: true, enabled: true },
     }),
   ]);

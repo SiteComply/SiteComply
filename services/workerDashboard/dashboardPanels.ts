@@ -1,7 +1,7 @@
 /**
  * Worker Dashboard panel catalogue (SC-003) — DATA ONLY.
  *
- * The SC-003 requirement lists twelve things the dashboard should be "capable of
+ * The SC-003 requirement lists the things the dashboard should be "capable of
  * displaying (where applicable)" and asks that the dashboard be "configurable so
  * site managers can control which information is displayed for each site". This
  * module is the single source of truth for that list: the panel keys, their
@@ -24,7 +24,6 @@ export type WorkerDashboardPanelValue =
   | 'FIRE_ASSEMBLY_POINT'
   | 'SITE_CONTACTS'
   | 'OUTSTANDING_ACTIONS'
-  | 'MESSAGES'
   | 'CHECK_OUT';
 
 export interface WorkerDashboardPanelMeta {
@@ -41,21 +40,14 @@ export interface WorkerDashboardPanelMeta {
    * site's fire-register/CDM duty to know who is on site.
    */
   locked?: boolean;
-  /**
-   * True where SiteComply has no source system for the panel yet, so it can only
-   * ever render an empty state. Such panels default to OFF and are labelled in
-   * the configuration UI so a manager isn't misled into thinking data exists.
-   */
-  awaitingSourceSystem?: boolean;
 }
 
 /**
- * The twelve SC-003 panels, in the order they appear on the dashboard.
+ * The Worker Dashboard panels, in the order they appear on the dashboard.
  *
  * Defaults are ON for everything SiteComply can already populate from live site
  * data, so an existing site gets a useful dashboard with no configuration.
- * Active permits and Messages default OFF — a digital permit-to-work register
- * and worker messaging are separate REV-1 items and do not exist yet.
+ * Active permits defaults OFF — a manager opts each site in.
  */
 export const WORKER_DASHBOARD_PANELS: WorkerDashboardPanelMeta[] = [
   {
@@ -122,13 +114,6 @@ export const WORKER_DASHBOARD_PANELS: WorkerDashboardPanelMeta[] = [
     defaultEnabled: true,
   },
   {
-    value: 'MESSAGES',
-    label: 'Messages and notifications',
-    description: 'Direct messages and notifications for the worker.',
-    defaultEnabled: false,
-    awaitingSourceSystem: true,
-  },
-  {
     value: 'CHECK_OUT',
     label: 'Check-out button',
     description:
@@ -143,6 +128,19 @@ export const WORKER_DASHBOARD_PANELS: WorkerDashboardPanelMeta[] = [
  * alongside the Prisma-backed config service) so client components can accept it
  * without pulling a server module into the bundle.
  */
+/**
+ * The panel values this build knows about.
+ *
+ * Used to constrain every read of the stored settings tables. A value that was
+ * retired in code but whose rows still exist in the database would otherwise be
+ * deserialised by Prisma and throw ("Value 'X' not found in enum"), taking down
+ * the worker dashboard. Filtering in the QUERY keeps code and database
+ * deployable in either order — the application-level `isWorkerDashboardPanel`
+ * guards run too late to help, after deserialisation has already failed.
+ */
+export const WORKER_DASHBOARD_PANEL_VALUES: WorkerDashboardPanelValue[] =
+  WORKER_DASHBOARD_PANELS.map((p) => p.value);
+
 export type PanelVisibility = Record<WorkerDashboardPanelValue, boolean>;
 
 const PANEL_META = new Map(WORKER_DASHBOARD_PANELS.map((p) => [p.value, p]));

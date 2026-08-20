@@ -291,21 +291,6 @@ export default async function WorkerDashboardPage() {
             />
           </PanelCard>
         )}
-
-        {panels.MESSAGES && (
-          <PanelCard
-            icon="message"
-            tone="brand"
-            title="Messages"
-            href="/worker/messages"
-            linkLabel="View messages"
-          >
-            <PanelEmpty>
-              Worker messaging isn’t available yet. Site notices are published
-              as Daily Bulletins.
-            </PanelEmpty>
-          </PanelCard>
-        )}
       </div>
 
       <section className="mt-5 rounded-xl border border-brand-200 bg-brand-50 p-4">

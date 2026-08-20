@@ -3,6 +3,7 @@ import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import {
   WORKER_DASHBOARD_PANELS,
+  WORKER_DASHBOARD_PANEL_VALUES,
   defaultPanelVisibility,
   isPanelLocked,
   isWorkerDashboardPanel,
@@ -37,7 +38,7 @@ export async function getPanelVisibility(
   const visibility = defaultPanelVisibility();
 
   const rows = await prisma.siteDashboardSetting.findMany({
-    where: { jobSiteId: siteId },
+    where: { jobSiteId: siteId, panel: { in: WORKER_DASHBOARD_PANEL_VALUES } },
     select: { panel: true, enabled: true },
   });
   for (const row of rows) {
@@ -52,7 +53,11 @@ export async function getPanelVisibility(
   // the same construction SC-022 uses for platform permissions.
   if (workerId) {
     const workerRows = await prisma.workerPanelSetting.findMany({
-      where: { jobSiteId: siteId, workerId },
+      where: {
+        jobSiteId: siteId,
+        workerId,
+        panel: { in: WORKER_DASHBOARD_PANEL_VALUES },
+      },
       select: { panel: true, enabled: true },
     });
     for (const row of workerRows) {
