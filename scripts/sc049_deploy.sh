@@ -173,8 +173,11 @@ if(page.indexOf('function ReportCatalogue(') < 0)
 // prevent.
 if(/<thead|<tbody|table-cell/.test(page))
   fail('the catalogue is a table again — Scope and Data must stay as supporting metadata, not headed columns');
-if(page.indexOf('text-base font-semibold text-ink') < 0)
-  fail('the report name lost its promoted size — scanning the list was the point of this pass');
+// The LINK's own class string, not just any occurrence: the non-built title
+// span carries the same classes, so a bare search passed while the link itself
+// was demoted to text-sm.
+if(page.indexOf('text-base font-semibold text-ink hover:text-brand-700 hover:underline') < 0)
+  fail('the report name link lost its promoted size — scanning the list was the point of this pass');
 if(page.indexOf('scopeLabel(report, viewer)') < 0 || page.indexOf('dataLabel(report, viewer)') < 0)
   fail('scope or data classification is no longer shown at all — it was to be de-emphasised, not dropped');
 
