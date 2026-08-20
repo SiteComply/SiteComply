@@ -187,8 +187,12 @@ for(const field of ['directorOnly','personalData','clientAggregateOnly','exportR
 }
 if((reg.match(/directorOnly: true/g)||[]).length !== 1)
   fail('the director-only flag changed — exactly one report is organisation-wide');
-if((reg.match(/description:/g)||[]).length !== 10)
+// 11, not 10: the ReportType interface declares `description: string;` too.
+// Counting entries instead — one id per report — is the unambiguous check.
+if((reg.match(/description:/g)||[]).length !== 11)
   fail('a report description was added or removed');
+if((reg.match(/^    id: /gm)||[]).length !== 10)
+  fail('the registry no longer holds exactly 10 reports');
 if(/<thead|<tbody|table-cell/.test(page))
   fail('the catalogue is a table again — Scope and Data must stay as supporting metadata, not headed columns');
 // The LINK's own class string, not just any occurrence: the non-built title
