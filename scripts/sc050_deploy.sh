@@ -174,19 +174,28 @@ if(page.indexOf('function LegacyCardGrid(') < 0 || page.indexOf('function Report
 if(page.indexOf('function ReportCatalogue(') < 0)
   fail('the catalogue layout is gone');
 // ---------- no internal identifiers in user-facing copy ----------
-// Matched on the DESCRIPTION lines only: code comments legitimately cite the
-// tickets they implement and are never rendered.
-for(const line of reg.split(String.fromCharCode(10))){
-  if(/^\s*description:/.test(line) && /SC-?\d{3}/.test(line))
-    fail('a report description still carries an internal identifier: ' + line.trim().slice(0,80));
+// `reg` is already comment-stripped, so ANY hit is live copy rather than a
+// developer note. Scanning only lines beginning description: missed the
+// wrapped ones, where the string sits on the following line.
+{
+  const hit = reg.match(/SC-?\d{3}/);
+  if (hit) fail('an internal identifier is present in report copy: ' + hit[0]);
 }
 // ---------- the access metadata must be untouched ----------
-for(const field of ['directorOnly','personalData','clientAggregateOnly','exportRoles: CSCS_EXPORT_ROLES']){
-  if(reg.indexOf(field) < 0)
-    fail('the registry lost ' + field + ' — a content edit must not touch the fields that decide access');
+if(reg.indexOf('exportRoles: CSCS_EXPORT_ROLES') < 0)
+  fail('the CSCS export restriction is gone — a content edit must not touch export gating');
+// VALUES, not just presence. Checking the field name existed passed while a
+// report's personal-data classification was flipped.
+const counts = {
+  'directorOnly: true': 1,  'directorOnly: false': 9,
+  'personalData: true': 7,  'personalData: false': 3,
+  'clientAggregateOnly: true': 7, 'clientAggregateOnly: false': 3,
+};
+for (const [needle, want] of Object.entries(counts)) {
+  const got = (reg.split(needle).length - 1);
+  if (got !== want)
+    fail('access metadata changed: ' + needle + ' appears ' + got + ' times, expected ' + want);
 }
-if((reg.match(/directorOnly: true/g)||[]).length !== 1)
-  fail('the director-only flag changed — exactly one report is organisation-wide');
 // 11, not 10: the ReportType interface declares a description field too.
 // Counting entries instead — one id per report — is the unambiguous check.
 if((reg.match(/description:/g)||[]).length !== 11)
