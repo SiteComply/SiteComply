@@ -35,8 +35,15 @@ echo "[2/8] SOURCE guards..."
   && ! grep -q "const DEV_CODE" "$VERIFY" \
   && ! grep -q "const DEV_CODE" "$START" \
   && ! grep -q "code: DEV_CODE" "$START" \
-  && echo "      confirmed: personal + test mechanisms present; global DEV_CODE constant removed from both routes." \
-  || { echo "ERROR: source guards failed — aborting"; exit 1; }
+  && echo "      confirmed: overrides present; global DEV_CODE constant removed." \
+  || { echo "ERROR: override source guards failed — aborting"; exit 1; }
+# Real SMS-first OTP wiring must be present.
+grep -q 'export async function verifyChallenge' services/auth/otpService.ts \
+  && grep -q "audience" services/auth/otpService.ts \
+  && grep -q "requestCode(user.mobile, { audience: 'platform' })" "$START" \
+  && grep -q 'verifyChallenge(user.mobile' "$VERIFY" \
+  && echo "      confirmed: platform SMS OTP wired (requestCode audience + verifyChallenge)." \
+  || { echo "ERROR: OTP wiring guards failed — aborting"; exit 1; }
 
 echo "[3/8] Generating Prisma client..."
 npx prisma generate >/dev/null 2>&1 || { echo "ERROR: prisma generate failed"; exit 1; }
