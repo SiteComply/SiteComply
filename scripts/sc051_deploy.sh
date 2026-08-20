@@ -153,9 +153,19 @@ if(page.indexOf('canUseAiSummaries') >= 0)
   fail('the AI gate is back on the Actions register');
 
 // ---------- the register itself must be intact ----------
-for(const need of ['listActions','actionCounts','countActions','ACTION_BUCKETS','PaginationControls','TABLE_TOOLBAR_CLASS']){
-  if(page.indexOf(need) < 0)
-    fail('the Actions register lost '+need+' — only the AI panel was to be removed');
+// USES, not imports. Checking the bare identifier passed while the call and
+// the render had been deleted — the name survived in the import line.
+const uses = {
+  'const actions = await listActions(': 'the action list query',
+  'await actionCounts(': 'the bucket counts',
+  'await countActions(': 'the total count behind pagination',
+  '<PaginationControls': 'the pagination control',
+  'ACTION_BUCKETS.map(': 'the register buckets',
+  'className={TABLE_TOOLBAR_CLASS}': 'the filter toolbar',
+};
+for(const [needle, what] of Object.entries(uses)){
+  if(page.indexOf(needle) < 0)
+    fail('the Actions register lost ' + what + ' — only the AI panel was to be removed');
 }
 if(page.indexOf('permits(viewer.role, actions, create)') < 0)
   fail('the create permission check is gone from the Actions register');
