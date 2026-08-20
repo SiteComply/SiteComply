@@ -157,8 +157,8 @@ if(page.indexOf('canUseAiSummaries') >= 0)
 // the render had been deleted — the name survived in the import line.
 const uses = {
   'const actions = await listActions(': 'the action list query',
-  'await actionCounts(': 'the bucket counts',
-  'await countActions(': 'the total count behind pagination',
+  'actionCounts(viewer, now)': 'the bucket counts',
+  'countActions(viewer, filters, now)': 'the total count behind pagination',
   '<PaginationControls': 'the pagination control',
   'ACTION_BUCKETS.map(': 'the register buckets',
   'className={TABLE_TOOLBAR_CLASS}': 'the filter toolbar',
