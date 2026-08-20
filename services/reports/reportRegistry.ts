@@ -42,7 +42,7 @@ export const REPORT_TYPES: ReportType[] = [
     id: 'attendance',
     title: 'Site Attendance',
     description:
-      'Check-in and check-out log across your sites over a date range.',
+      'Every check-in and check-out across your sites, with time on site.',
     icon: 'clipboard',
     directorOnly: false,
     personalData: true,
@@ -53,7 +53,7 @@ export const REPORT_TYPES: ReportType[] = [
     id: 'compliance-activities',
     title: 'Compliance Activities',
     description:
-      'Scheduled compliance activities (SC-020): upcoming, outstanding, overdue and escalated, with completion rates, per-site scores and a 12-week trend.',
+      'Scheduled checks and inspections: what is due, overdue and completed.',
     icon: 'clipboard',
     directorOnly: false,
     // Occurrence-level rows name the assignee (a platform user or worker), so
@@ -67,7 +67,7 @@ export const REPORT_TYPES: ReportType[] = [
     id: 'permits',
     title: 'Permits to Work',
     description:
-      'Permit requests and their approval history across your sites (SC-009).',
+      'Permits to work requested on your sites, and how each was decided.',
     icon: 'permit',
     directorOnly: false,
     personalData: true,
@@ -78,7 +78,7 @@ export const REPORT_TYPES: ReportType[] = [
     id: 'compliance',
     title: 'Compliance',
     description:
-      'Induction completion and PPE, site-rules, safe-working and GDPR acknowledgement rates.',
+      'Induction completion, and the safety declarations workers accepted.',
     icon: 'shield',
     directorOnly: false,
     personalData: true,
@@ -88,7 +88,7 @@ export const REPORT_TYPES: ReportType[] = [
   {
     id: 'occupancy',
     title: 'On-Site Occupancy',
-    description: 'Live on-site headcount and check-in activity per site.',
+    description: 'Who is on site now, and how busy each site has been.',
     icon: 'hardhat',
     directorOnly: false,
     personalData: true,
@@ -98,7 +98,7 @@ export const REPORT_TYPES: ReportType[] = [
   {
     id: 'workforce',
     title: 'Workforce & Company',
-    description: 'Attendance broken down by company / subcontractor.',
+    description: 'Attendance broken down by company and subcontractor.',
     icon: 'grid',
     directorOnly: false,
     personalData: false,
@@ -108,7 +108,8 @@ export const REPORT_TYPES: ReportType[] = [
   {
     id: 'cscs',
     title: 'CSCS / Competency',
-    description: 'Workers by CSCS card type, with expired cards flagged.',
+    description:
+      'Worker card types and competencies, with expired cards flagged.',
     icon: 'doc',
     directorOnly: false,
     personalData: true,
@@ -119,8 +120,7 @@ export const REPORT_TYPES: ReportType[] = [
   {
     id: 'scorecard',
     title: 'Site Compliance Scorecard',
-    description:
-      'Per-site scorecard: attendance, compliance %, induction completion %, active workers, contractor breakdown, plus upcoming audit & action metrics.',
+    description: 'A compliance scorecard for each site, side by side.',
     icon: 'chart',
     directorOnly: false,
     personalData: false,
@@ -130,8 +130,7 @@ export const REPORT_TYPES: ReportType[] = [
   {
     id: 'org-overview',
     title: 'Organisation Overview',
-    description:
-      'Organisation-wide rollup and per-site comparison across all sites.',
+    description: 'Company-wide totals and trends, with every site compared.',
     icon: 'chart',
     directorOnly: true,
     personalData: false,
@@ -142,7 +141,7 @@ export const REPORT_TYPES: ReportType[] = [
     id: 'knowledge-checks',
     title: 'Knowledge Checks',
     description:
-      'AI knowledge-check results (SC-005): pass rates per site, worker attempts and first-try scores, plus questions workers have flagged.',
+      'How workers scored on their induction questions, and which they flagged.',
     icon: 'shield',
     directorOnly: false,
     personalData: true,
