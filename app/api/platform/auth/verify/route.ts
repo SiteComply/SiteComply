@@ -10,8 +10,7 @@ import {
 } from '@/lib/session';
 import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
 import {
-  checkPlatformDevOverrideCode,
-  isPlatformDevOverrideAccount,
+  verifyPlatformCodeLogin,
   auditPlatformOverride,
 } from '@/services/auth/platformDevOverride';
 
@@ -26,10 +25,10 @@ export const dynamic = 'force-dynamic';
  * verifies the code, then establishes the platform session.
  *
  * The former global `DEV_CODE = '123456'` (accepted for every active Platform
- * user) has been REMOVED. A code is now accepted only for the single account
- * allow-listed by the account-scoped dev override, and only when that override
- * is enabled via env (see services/auth/platformDevOverride.ts). Every other
- * account is rejected here because real Platform OTP delivery is not built yet.
+ * user) has been REMOVED. A code is now accepted only for accounts on an enabled,
+ * env-configured allow-list — the personal developer override or the legacy test
+ * accounts (see services/auth/platformDevOverride.ts). Every other account is
+ * rejected here because real Platform OTP delivery is not built yet.
  */
 
 export async function POST(req: NextRequest) {
@@ -61,30 +60,38 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Account-scoped dev override is the ONLY path that can complete sign-in until
-  // real Platform OTP delivery exists. Anything else is rejected. All attempts
-  // against the allow-listed account are audited; the code is never logged.
+  // Env-gated, allow-listed code login is the ONLY path that can complete sign-in
+  // until real Platform OTP delivery exists. Anything else is rejected. Every
+  // attempt against an allow-listed account is audited; the code is never logged.
   const ip =
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     req.headers.get('x-real-ip') ||
     undefined;
 
-  if (!isPlatformDevOverrideAccount(value)) {
+  const login = verifyPlatformCodeLogin(value, code);
+  if (!login.ok) {
+    // Audit only when the account is on an allow-list (a real code attempt);
+    // unknown accounts hitting the dead normal-flow are not interesting noise.
+    if (login.mechanism) {
+      auditPlatformOverride({
+        email: value,
+        mechanism: login.mechanism,
+        outcome: login.outcome,
+        ip,
+      });
+    }
     return NextResponse.json(
       { ok: false, error: 'That code didn’t work. Please try again.' },
       { status: 400 },
     );
   }
 
-  if (!checkPlatformDevOverrideCode(value, code)) {
-    auditPlatformOverride({ email: value, outcome: 'wrong-code', ip });
-    return NextResponse.json(
-      { ok: false, error: 'That code didn’t work. Please try again.' },
-      { status: 400 },
-    );
-  }
-
-  auditPlatformOverride({ email: value, outcome: 'success', ip });
+  auditPlatformOverride({
+    email: value,
+    mechanism: login.mechanism,
+    outcome: 'success',
+    ip,
+  });
 
   // Honour the admin-configured session timeout (Settings → Authentication).
   const { sessionTtlSeconds } = await getAuthRuntimeConfig();

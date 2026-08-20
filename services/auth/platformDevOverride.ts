@@ -1,77 +1,124 @@
 import { timingSafeEqual } from 'crypto';
 
 /**
- * ⚠ DEVELOPMENT-ONLY, ACCOUNT-SCOPED Platform login override.
+ * ⚠ DEVELOPMENT-ONLY, ACCOUNT-SCOPED Platform login codes.
  *
- * This exists ONLY to give a single named Platform account a fixed sign-in code
- * while real Platform OTP delivery (SMS/email) is not yet built. It replaces the
- * former global `DEV_CODE = '123456'` shortcut, which accepted one fixed code for
- * EVERY active Platform user — an unauthenticated bypass. This override applies
- * to exactly one allow-listed email and no one else.
+ * These exist ONLY because real Platform OTP delivery (SMS/email) is not built
+ * yet. They replace the former GLOBAL `DEV_CODE = '123456'` shortcut, which
+ * accepted one fixed code for EVERY active Platform user — an unauthenticated
+ * bypass. Nothing here is global: each mechanism accepts a code only for its own
+ * explicit allow-list of emails, and only when enabled via env.
  *
- * DISABLED BY DEFAULT. It is inert unless ALL of the following env vars are set:
- *   PLATFORM_DEV_LOGIN_ENABLED = "1"      master switch (any other value ⇒ off)
- *   PLATFORM_DEV_LOGIN_EMAIL   = <email>  the one account it applies to
- *   PLATFORM_DEV_LOGIN_CODE    = <code>   the code that account may use
- * Missing or blank any of these ⇒ the override does not exist (fail closed), and
- * every account — including the allow-listed one — falls through to the normal
- * flow.
+ * Two independent mechanisms, each DISABLED BY DEFAULT and fail-closed:
  *
- * To disable later: unset PLATFORM_DEV_LOGIN_ENABLED (or blank the code) and
- * restart. No code change required.
+ *  1. PERSONAL override — a single named developer account.
+ *       PLATFORM_DEV_LOGIN_ENABLED = "1"
+ *       PLATFORM_DEV_LOGIN_EMAIL   = <one email>
+ *       PLATFORM_DEV_LOGIN_CODE    = <code>
  *
- * The code is NEVER returned to a client and NEVER logged. All use is audited by
- * the verify route via auditPlatformOverride().
+ *  2. LEGACY TEST bypass — the seeded *test* accounts only.
+ *       PLATFORM_TEST_LOGIN_ENABLED = "1"
+ *       PLATFORM_TEST_LOGIN_EMAILS  = <comma-separated emails>
+ *       PLATFORM_TEST_LOGIN_CODE    = <code>   (e.g. the legacy 123456)
+ *
+ * For EITHER mechanism to act, its ENABLED flag must be "1" AND its code AND its
+ * allow-list must all be non-blank. Miss any ⇒ that mechanism does not exist, and
+ * even its listed accounts fall through to the normal flow.
+ *
+ * The legacy 123456 is NOT hard-coded — it is supplied via env and confined to
+ * the test allow-list. Any Platform user not on an enabled allow-list is rejected.
+ *
+ * To disable later: unset the relevant *_ENABLED (or blank its code) and restart.
+ * No code change required.
+ *
+ * Codes are NEVER returned to a client and NEVER logged. Every attempt against an
+ * allow-listed account is audited via auditPlatformOverride().
  */
 
-export interface PlatformDevOverride {
-  /** Lower-cased allow-listed email. */
-  email: string;
-  /** The override code (kept in memory only; never logged or returned). */
+type Mechanism = 'personal' | 'test';
+
+interface LoginRule {
+  mechanism: Mechanism;
+  emails: Set<string>; // lower-cased allow-list
   code: string;
 }
 
-/** The active override, or null when the feature is disabled / misconfigured. */
-export function getPlatformDevOverride(): PlatformDevOverride | null {
-  if (process.env.PLATFORM_DEV_LOGIN_ENABLED !== '1') return null;
-  const email = process.env.PLATFORM_DEV_LOGIN_EMAIL?.trim().toLowerCase();
-  const code = process.env.PLATFORM_DEV_LOGIN_CODE?.trim();
-  if (!email || !code) return null; // fail closed
-  return { email, code };
+function splitEmails(raw: string | undefined): Set<string> {
+  return new Set(
+    (raw ?? '')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean),
+  );
 }
 
-/** True only when the override is active AND this identifier is the allow-listed one. */
-export function isPlatformDevOverrideAccount(identifierEmail: string): boolean {
-  const o = getPlatformDevOverride();
-  return !!o && identifierEmail.trim().toLowerCase() === o.email;
+/** The active login rules, in precedence order. Empty when nothing is enabled. */
+function activeRules(): LoginRule[] {
+  const rules: LoginRule[] = [];
+
+  if (process.env.PLATFORM_DEV_LOGIN_ENABLED === '1') {
+    const email = process.env.PLATFORM_DEV_LOGIN_EMAIL?.trim().toLowerCase();
+    const code = process.env.PLATFORM_DEV_LOGIN_CODE?.trim();
+    if (email && code) {
+      rules.push({ mechanism: 'personal', emails: new Set([email]), code });
+    }
+  }
+
+  if (process.env.PLATFORM_TEST_LOGIN_ENABLED === '1') {
+    const emails = splitEmails(process.env.PLATFORM_TEST_LOGIN_EMAILS);
+    const code = process.env.PLATFORM_TEST_LOGIN_CODE?.trim();
+    if (emails.size > 0 && code) {
+      rules.push({ mechanism: 'test', emails, code });
+    }
+  }
+
+  return rules;
+}
+
+function constantTimeEqual(a: string, b: string): boolean {
+  const ba = Buffer.from(a ?? '', 'utf8');
+  const bb = Buffer.from(b, 'utf8');
+  if (ba.length !== bb.length) return false; // timingSafeEqual needs equal length
+  return timingSafeEqual(ba, bb);
+}
+
+export type OverrideOutcome = 'success' | 'wrong-code' | 'not-allow-listed';
+
+export interface CodeLoginResult {
+  ok: boolean;
+  /** Which mechanism the account belongs to, or null if none. */
+  mechanism: Mechanism | null;
+  outcome: OverrideOutcome;
 }
 
 /**
- * Constant-time verification of a submitted code for the allow-listed account.
- * Returns false unless the override is active, the identifier is the allow-listed
- * one, and the code matches exactly.
+ * The single decision point used by the verify route. Finds the first enabled
+ * mechanism whose allow-list contains this email, then checks the code in
+ * constant time. If the email is on no enabled allow-list, returns
+ * not-allow-listed (the normal flow, which does not exist yet, would take over).
  */
-export function checkPlatformDevOverrideCode(
+export function verifyPlatformCodeLogin(
   identifierEmail: string,
   submittedCode: string,
-): boolean {
-  const o = getPlatformDevOverride();
-  if (!o) return false;
-  if (identifierEmail.trim().toLowerCase() !== o.email) return false;
-  const a = Buffer.from(submittedCode ?? '', 'utf8');
-  const b = Buffer.from(o.code, 'utf8');
-  if (a.length !== b.length) return false; // timingSafeEqual requires equal length
-  return timingSafeEqual(a, b);
+): CodeLoginResult {
+  const email = identifierEmail.trim().toLowerCase();
+  const rule = activeRules().find((r) => r.emails.has(email));
+  if (!rule) return { ok: false, mechanism: null, outcome: 'not-allow-listed' };
+  if (!constantTimeEqual(submittedCode, rule.code)) {
+    return { ok: false, mechanism: rule.mechanism, outcome: 'wrong-code' };
+  }
+  return { ok: true, mechanism: rule.mechanism, outcome: 'success' };
 }
 
 /**
- * Structured audit line for every override-related verify attempt (success AND
- * failure). Captured by the Azure App Service log stream / Log Analytics. The
- * code itself is deliberately absent.
+ * Structured audit line for every code-login attempt against an allow-listed
+ * account (success AND failure). Captured by the Azure App Service log stream /
+ * Log Analytics. The code itself is deliberately absent.
  */
 export function auditPlatformOverride(entry: {
   email: string;
-  outcome: 'success' | 'wrong-code' | 'not-allow-listed';
+  mechanism: Mechanism | null;
+  outcome: OverrideOutcome;
   ip?: string;
 }): void {
   // eslint-disable-next-line no-console
@@ -79,6 +126,7 @@ export function auditPlatformOverride(entry: {
     `[DEV-AUTH-OVERRIDE] ${JSON.stringify({
       ts: new Date().toISOString(),
       email: entry.email,
+      mechanism: entry.mechanism,
       outcome: entry.outcome,
       ip: entry.ip ?? null,
     })}`,
