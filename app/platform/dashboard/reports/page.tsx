@@ -104,86 +104,80 @@ function ReportCatalogue({
     );
   }
 
+  /* A LIBRARY, NOT A TABLE.
+     The first catalogue put scope and data classification in their own
+     columns, under headings, which gave two pieces of supporting metadata the
+     same structural weight as the report itself — three headed columns to
+     scan before reaching the thing you came for. They are now a single quiet
+     line beneath the description, where they answer "is this the right one"
+     without competing with "which one is it".
+
+     Dropping the columns also drops the responsive rule that hid them below
+     lg: an inline meta line wraps on its own, so there is one layout at every
+     width instead of two. */
   return (
     <TableSurface>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-line text-left text-ink-subtle">
-              <th className="px-5 py-2.5 font-medium">Report</th>
-              {/* Secondary columns are deferred below lg. Measured: at 900px
-                  the four columns squeezed the description into a tall wrap and
-                  the catalogue became TALLER than the grid it replaced (1432px
-                  vs 1168px). Report and Open are what a narrow screen needs;
-                  scope and data classification return at lg and above. */}
-              <th className="hidden px-5 py-2.5 font-medium lg:table-cell">
-                Scope
-              </th>
-              <th className="hidden px-5 py-2.5 font-medium lg:table-cell">
-                Data
-              </th>
-              <th className="px-5 py-2.5 text-right font-medium">
-                <span className="sr-only">Open</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {reports.map((report) => {
-              const href = `/platform/dashboard/reports/${report.id}`;
-              return (
-                <tr key={report.id} className="hover:bg-brand-50/30">
-                  <td className="px-5 py-3">
-                    <div className="flex items-start gap-3">
-                      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
-                        <PlatformIcon name={report.icon} />
-                      </span>
-                      <div className="min-w-0">
-                        {report.built ? (
-                          <Link
-                            href={href}
-                            className="font-semibold text-brand-700 hover:underline"
-                          >
-                            {report.title}
-                          </Link>
-                        ) : (
-                          <span className="font-semibold text-ink">
-                            {report.title}
-                          </span>
-                        )}
-                        <span className="block text-xs text-ink-subtle">
-                          {report.description}
-                        </span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="hidden whitespace-nowrap px-5 py-3 text-ink-muted lg:table-cell">
-                    {scopeLabel(report, viewer)}
-                  </td>
-                  <td className="hidden whitespace-nowrap px-5 py-3 lg:table-cell">
-                    <span className="text-xs text-ink-subtle">
-                      {dataLabel(report, viewer)}
+      <ul className="divide-y divide-line">
+        {reports.map((report) => {
+          const href = `/platform/dashboard/reports/${report.id}`;
+          return (
+            <li
+              key={report.id}
+              className="flex items-start gap-4 px-5 py-4 transition-colors hover:bg-brand-50/30"
+            >
+              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                <PlatformIcon name={report.icon} />
+              </span>
+
+              <div className="min-w-0 flex-1">
+                {/* Name and its metadata share a line, the metadata trailing
+                    right and muted. Given its own line beneath the description
+                    it cost a third row per report and made the catalogue taller
+                    than the card grid it replaced — the supporting fact was
+                    quiet but no longer cheap. It wraps under the name only when
+                    the row is too narrow to hold both. */}
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
+                  {report.built ? (
+                    <Link
+                      href={href}
+                      className="text-base font-semibold text-ink hover:text-brand-700 hover:underline"
+                    >
+                      {report.title}
+                    </Link>
+                  ) : (
+                    <span className="text-base font-semibold text-ink">
+                      {report.title}
                     </span>
-                  </td>
-                  <td className="whitespace-nowrap px-5 py-3 text-right">
-                    {report.built ? (
-                      <Link
-                        href={href}
-                        className="touch-target inline-flex items-center rounded-lg border border-line px-3 py-1.5 text-sm font-semibold text-ink hover:bg-surface-sunken"
-                      >
-                        Open
-                      </Link>
-                    ) : (
-                      <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
-                        Coming soon
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                  )}
+                  <span className="text-xs text-ink-subtle">
+                    {scopeLabel(report, viewer)}
+                    <span aria-hidden="true"> · </span>
+                    {dataLabel(report, viewer)}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-sm text-ink-subtle">
+                  {report.description}
+                </p>
+              </div>
+
+              <div className="shrink-0 self-center">
+                {report.built ? (
+                  <Link
+                    href={href}
+                    className="touch-target inline-flex items-center rounded-lg border border-line px-3 py-1.5 text-sm font-semibold text-ink hover:bg-surface-sunken"
+                  >
+                    Open
+                  </Link>
+                ) : (
+                  <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
+                    Coming soon
+                  </span>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </TableSurface>
   );
 }
