@@ -156,8 +156,13 @@ if(/reports\.filter\(/.test(page))
 // ---------- both layouts must exist, default catalogue ----------
 if(flag.indexOf('=== cards') < 0 || flag.indexOf('catalogue') < 0)
   fail('the layout flag no longer offers both layouts');
-if(!/return process\.env\[REPORTS_LAYOUT_ENV\]\?\.trim\(\)\.toLowerCase\(\) === cards/.test(flag))
-  fail('the flag no longer reads REPORTS_LAYOUT, or no longer defaults away from cards');
+if(flag.indexOf('process.env[REPORTS_LAYOUT_ENV]') < 0)
+  fail('the flag no longer reads the REPORTS_LAYOUT env var');
+// BOTH branches, in order: cards only when explicitly asked for, catalogue as
+// the fallback. Checking only that the word cards appears passed when the two
+// branches were swapped and the legacy grid became the default.
+if(flag.indexOf('? cards') < 0 || flag.indexOf(': catalogue;') < 0)
+  fail('the layout default is no longer catalogue — an unset REPORTS_LAYOUT would serve the legacy grid');
 if(page.indexOf('layout === cards ? (') < 0)
   fail('the page no longer branches on the layout flag');
 if(page.indexOf('function LegacyCardGrid(') < 0 || page.indexOf('function ReportCard(') < 0)
@@ -166,8 +171,10 @@ if(page.indexOf('function ReportCatalogue(') < 0)
   fail('the catalogue layout is gone');
 
 // ---------- every report must still be reachable ----------
-if(page.indexOf('/platform/dashboard/reports/\${report.id}') < 0)
-  fail('report rows no longer link to /platform/dashboard/reports/<id>');
+// The CATALOGUE's own href, not just any occurrence: the retained legacy card
+// carries the same URL, so a bare search passed while the rows pointed at #.
+if(page.indexOf('const href = /platform/dashboard/reports/\${report.id};') < 0)
+  fail('catalogue rows no longer link to /platform/dashboard/reports/<id>');
 const ids=(reg.match(/id: [a-z-]+,/g)||[]).length;
 if(ids < 10) fail('the report registry lost entries: found '+ids);
 " || exit 1
