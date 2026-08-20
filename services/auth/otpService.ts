@@ -62,9 +62,14 @@ export interface RequestCodeResult {
   devCode?: string;
 }
 
+/** Which login surface is requesting a code — controls only the enable gate. */
+export type OtpAudience = 'worker' | 'platform';
+
 export async function requestCode(
   rawMobile: string,
+  opts: { audience?: OtpAudience } = {},
 ): Promise<RequestCodeResult> {
+  const audience = opts.audience ?? 'worker';
   const normalised = normaliseUkMobile(rawMobile);
   if (!normalised.ok || !normalised.e164) {
     return { ok: false, error: normalised.error };
@@ -73,14 +78,17 @@ export async function requestCode(
   const now = Date.now();
 
   const authConfig = await getAuthRuntimeConfig();
-  // TWO SEPARATE SWITCHES, deliberately.
+  // Enable gate.
   //   smsOtpEnabled          — the Admin Centre's kill switch for the SMS
-  //                            channel itself (infrastructure).
+  //                            channel itself (infrastructure). Applies to BOTH
+  //                            audiences.
   //   workerSmsLoginEnabled  — a Director turning off SMS as a way for WORKERS
-  //                            to sign in to their organisation (policy).
-  // Either being off stops the code being sent, and the worker is told the same
-  // actionable thing rather than a different message per cause.
-  if (!authConfig.smsOtpEnabled || !authConfig.workerSmsLoginEnabled) {
+  //                            to sign in (policy). Applies to the worker surface
+  //                            ONLY — it must not gate Platform-user sign-in.
+  const gated =
+    !authConfig.smsOtpEnabled ||
+    (audience === 'worker' && !authConfig.workerSmsLoginEnabled);
+  if (gated) {
     return {
       ok: false,
       error:
@@ -168,10 +176,27 @@ export interface VerifyCodeResult {
   attemptsRemaining?: number;
 }
 
-export async function verifyCode(
+/** Identity-agnostic outcome of checking a code against a stored challenge. */
+export interface VerifyChallengeResult {
+  ok: boolean;
+  error?: string;
+  /** Verified mobile in E.164 — present on success. */
+  mobile?: string;
+  /** Remaining attempts before the code is locked, on a wrong code. */
+  attemptsRemaining?: number;
+}
+
+/**
+ * Core OTP verification: validates the code against the outstanding challenge
+ * for a mobile, applying expiry, attempt caps and constant-time comparison, and
+ * consumes the challenge on success. It knows NOTHING about workers or platform
+ * users — callers resolve the identity that owns the verified number. Shared by
+ * the worker and platform login surfaces.
+ */
+export async function verifyChallenge(
   rawMobile: string,
   rawCode: string,
-): Promise<VerifyCodeResult> {
+): Promise<VerifyChallengeResult> {
   const normalised = normaliseUkMobile(rawMobile);
   if (!normalised.ok || !normalised.e164) {
     return { ok: false, error: normalised.error };
@@ -231,10 +256,24 @@ export async function verifyCode(
     data: { consumedAt: new Date() },
   });
 
+  return { ok: true, mobile };
+}
+
+/**
+ * Worker verification: the core check plus a worker lookup, so the caller can
+ * establish a worker session and pre-fill known details. Unchanged behaviour.
+ */
+export async function verifyCode(
+  rawMobile: string,
+  rawCode: string,
+): Promise<VerifyCodeResult> {
+  const result = await verifyChallenge(rawMobile, rawCode);
+  if (!result.ok || !result.mobile) return result;
+
   const worker = await prisma.worker.findUnique({
-    where: { mobile },
+    where: { mobile: result.mobile },
     select: { id: true },
   });
 
-  return { ok: true, mobile, workerId: worker?.id };
+  return { ok: true, mobile: result.mobile, workerId: worker?.id };
 }

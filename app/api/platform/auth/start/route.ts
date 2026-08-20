@@ -4,6 +4,8 @@ import {
   findPlatformUserByEmail,
   findPlatformUserByMobile,
 } from '@/services/platformUsers/platformUserService';
+import { requestCode } from '@/services/auth/otpService';
+import { isPlatformOverrideAccount } from '@/services/auth/platformDevOverride';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,13 +18,14 @@ export const dynamic = 'force-dynamic';
  * exists AND has status ACTIVE may proceed. Pending and Disabled users are told
  * why.
  *
- * This endpoint NO LONGER returns a verification code. The former global
- * `DEV_CODE = '123456'` — which was returned here and accepted for EVERY active
- * Platform user — has been removed; it was an unauthenticated bypass. Real
- * Platform OTP delivery (SMS/email) is not built yet, so today the only account
- * that can complete sign-in is the one allow-listed by the account-scoped dev
- * override (see services/auth/platformDevOverride.ts), which supplies its own
- * code out-of-band and is verified in /verify. No code is disclosed here.
+ * SMS-first real OTP. For an ACTIVE account with a mobile on file, a real code
+ * is sent by SMS (Twilio) via the shared OTP service to that mobile — regardless
+ * of whether they identified by email or mobile. The code is NEVER returned here.
+ *
+ * The scoped dev overrides remain: an override account (personal or test
+ * allow-list) uses its own fixed code out-of-band, so no SMS is sent for it. An
+ * ACTIVE non-override account with no mobile has no SMS channel and is told so.
+ * The global `DEV_CODE = '123456'` bypass remains removed.
  */
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -72,9 +75,40 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // status === ACTIVE — allow the client to advance to the code step. No code
-  // is returned: the allow-listed override account supplies its own code
-  // out-of-band; all other accounts have no working code until real Platform
-  // OTP delivery is built.
-  return NextResponse.json({ ok: true });
+  // status === ACTIVE.
+
+  // Override accounts (personal / test allow-list) use their fixed code
+  // out-of-band — never send them a real SMS. Advance to the code step.
+  if (isPlatformOverrideAccount(user.email)) {
+    return NextResponse.json({ ok: true });
+  }
+
+  // Real path: send an SMS OTP to the account's mobile on file.
+  if (!user.mobile) {
+    return NextResponse.json(
+      {
+        ok: false,
+        reason: 'no_mobile',
+        error:
+          'This account has no mobile number for SMS sign-in. Please contact your administrator.',
+      },
+      { status: 400 },
+    );
+  }
+
+  const sent = await requestCode(user.mobile, { audience: 'platform' });
+  if (!sent.ok) {
+    return NextResponse.json(
+      { ok: false, reason: 'send_failed', error: sent.error, resendInSeconds: sent.resendInSeconds },
+      { status: sent.resendInSeconds ? 429 : 400 },
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    channel: 'sms',
+    maskedMobile: sent.maskedMobile,
+    expiresInSeconds: sent.expiresInSeconds,
+    resendInSeconds: sent.resendInSeconds,
+  });
 }

@@ -36,6 +36,16 @@ function noticeFor(reason: string): Notice {
         tone: 'error',
         text: 'We couldn’t find an active platform account for that mobile number.',
       };
+    case 'no_mobile':
+      return {
+        tone: 'error',
+        text: 'This account has no mobile number for SMS sign-in. Please contact your administrator.',
+      };
+    case 'send_failed':
+      return {
+        tone: 'error',
+        text: 'We couldn’t send your code right now. Please try again in a moment.',
+      };
     default:
       return { tone: 'error', text: 'Please enter a valid UK mobile number.' };
   }

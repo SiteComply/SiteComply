@@ -36,6 +36,16 @@ function noticeFor(reason: string): Notice {
         tone: 'error',
         text: 'We couldn’t find an active platform account for that email.',
       };
+    case 'no_mobile':
+      return {
+        tone: 'error',
+        text: 'This account has no mobile number for SMS sign-in. Please contact your administrator.',
+      };
+    case 'send_failed':
+      return {
+        tone: 'error',
+        text: 'We couldn’t send your code right now. Please try again in a moment.',
+      };
     default:
       return { tone: 'error', text: 'Please enter a valid email address.' };
   }
@@ -49,6 +59,7 @@ export default function PlatformEmailLoginPage() {
   const [notice, setNotice] = useState<Notice | undefined>();
   const [codeError, setCodeError] = useState<string | undefined>();
   const [requestHref, setRequestHref] = useState<string | undefined>();
+  const [sentTo, setSentTo] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const codeInputRef = useRef<HTMLInputElement>(null);
 
@@ -67,6 +78,7 @@ export default function PlatformEmailLoginPage() {
       if (data.ok) {
         setCode('');
         setCodeError(undefined);
+        setSentTo(data.maskedMobile);
         setStep('code');
         setTimeout(() => codeInputRef.current?.focus(), 50);
       } else {
@@ -157,9 +169,9 @@ export default function PlatformEmailLoginPage() {
             <div className="space-y-2 text-center">
               <h1 className="text-2xl font-bold text-ink">Login with Email</h1>
               <p className="text-ink-muted">
-                Enter the 6-digit code we sent to{' '}
+                Enter the 6-digit code we sent by SMS to{' '}
                 <span className="font-semibold text-ink">
-                  {email || 'your email'}
+                  {sentTo || 'your mobile'}
                 </span>
                 .
               </p>

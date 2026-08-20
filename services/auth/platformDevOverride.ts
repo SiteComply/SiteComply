@@ -82,6 +82,17 @@ function constantTimeEqual(a: string, b: string): boolean {
   return timingSafeEqual(ba, bb);
 }
 
+/**
+ * True when this email is on ANY currently-enabled override allow-list (personal
+ * or test). The login routes use this to decide whether an account signs in via
+ * its fixed override code or via the real SMS OTP flow — the two paths are
+ * mutually exclusive, and an override account is never sent a real SMS.
+ */
+export function isPlatformOverrideAccount(identifierEmail: string): boolean {
+  const email = identifierEmail.trim().toLowerCase();
+  return activeRules().some((r) => r.emails.has(email));
+}
+
 export type OverrideOutcome = 'success' | 'wrong-code' | 'not-allow-listed';
 
 export interface CodeLoginResult {

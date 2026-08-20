@@ -11,8 +11,10 @@ import {
 import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
 import {
   verifyPlatformCodeLogin,
+  isPlatformOverrideAccount,
   auditPlatformOverride,
 } from '@/services/auth/platformDevOverride';
+import { verifyChallenge } from '@/services/auth/otpService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,11 +26,12 @@ export const dynamic = 'force-dynamic';
  * Completes Platform Login: re-checks the account exists and is ACTIVE, then
  * verifies the code, then establishes the platform session.
  *
- * The former global `DEV_CODE = '123456'` (accepted for every active Platform
- * user) has been REMOVED. A code is now accepted only for accounts on an enabled,
- * env-configured allow-list — the personal developer override or the legacy test
- * accounts (see services/auth/platformDevOverride.ts). Every other account is
- * rejected here because real Platform OTP delivery is not built yet.
+ * Two mutually-exclusive code paths, keyed off the resolved account's email:
+ *  - Override accounts (personal / test allow-list) use their fixed env code,
+ *    audited (see services/auth/platformDevOverride.ts).
+ *  - Everyone else uses the REAL SMS OTP: the code sent by /start is checked
+ *    against the shared OTP challenge for the account's mobile (verifyChallenge).
+ * The former global `DEV_CODE = '123456'` bypass remains removed.
  */
 
 export async function POST(req: NextRequest) {
@@ -60,38 +63,50 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Env-gated, allow-listed code login is the ONLY path that can complete sign-in
-  // until real Platform OTP delivery exists. Anything else is rejected. Every
-  // attempt against an allow-listed account is audited; the code is never logged.
   const ip =
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     req.headers.get('x-real-ip') ||
     undefined;
 
-  const login = verifyPlatformCodeLogin(value, code);
-  if (!login.ok) {
-    // Audit only when the account is on an allow-list (a real code attempt);
-    // unknown accounts hitting the dead normal-flow are not interesting noise.
-    if (login.mechanism) {
+  if (isPlatformOverrideAccount(user.email)) {
+    // Fixed-code override path (keyed off the resolved account email, so it works
+    // whether they identified by email or mobile). Audited; code never logged.
+    const login = verifyPlatformCodeLogin(user.email, code);
+    if (!login.ok) {
       auditPlatformOverride({
-        email: value,
+        email: user.email,
         mechanism: login.mechanism,
         outcome: login.outcome,
         ip,
       });
+      return NextResponse.json(
+        { ok: false, error: 'That code didn’t work. Please try again.' },
+        { status: 400 },
+      );
     }
-    return NextResponse.json(
-      { ok: false, error: 'That code didn’t work. Please try again.' },
-      { status: 400 },
-    );
+    auditPlatformOverride({
+      email: user.email,
+      mechanism: login.mechanism,
+      outcome: 'success',
+      ip,
+    });
+  } else {
+    // Real SMS OTP path: check the code against the challenge sent to the
+    // account's mobile by /start.
+    if (!user.mobile) {
+      return NextResponse.json(
+        { ok: false, error: 'That code didn’t work. Please try again.' },
+        { status: 400 },
+      );
+    }
+    const otp = await verifyChallenge(user.mobile, code);
+    if (!otp.ok) {
+      return NextResponse.json(
+        { ok: false, error: otp.error ?? 'That code didn’t work. Please try again.' },
+        { status: 400 },
+      );
+    }
   }
-
-  auditPlatformOverride({
-    email: value,
-    mechanism: login.mechanism,
-    outcome: 'success',
-    ip,
-  });
 
   // Honour the admin-configured session timeout (Settings → Authentication).
   const { sessionTtlSeconds } = await getAuthRuntimeConfig();
