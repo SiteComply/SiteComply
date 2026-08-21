@@ -30,8 +30,13 @@ export interface AiConfigView {
   allowedRoles: string[];
   dailyPerUser: number | null;
   monthlyGlobal: number | null;
-  /** Status: whether each provider's required fields are all set. */
+  /**
+   * Status: whether each provider's required fields all resolve at runtime,
+   * counting the environment fallback the provider itself applies.
+   */
   providerConfigured: Record<string, boolean>;
+  /** Where that effective configuration comes from, for display. */
+  providerConfiguredSource: Record<string, AiConfigSource>;
   updatedByName: string | null;
   updatedAt: string | null;
 }
@@ -55,14 +60,64 @@ const asRoles = (json: unknown): string[] =>
     ? (json.filter((r) => typeof r === 'string') as string[])
     : [];
 
-function providerConfigured(providerId: string, settings: Settings): boolean {
+/**
+ * The environment variable each provider field falls back to, mirroring how the
+ * provider resolves configuration at runtime — see AzureOpenAiProvider.complete:
+ *   `this.config?.endpoint || requireEnv('AZURE_OPENAI_ENDPOINT')`
+ *
+ * STATUS DISPLAY ONLY. This map never supplies a value to a provider and never
+ * leaves the server; it exists so the admin screen can report the EFFECTIVE
+ * configuration instead of only the database row. A deployment configured purely
+ * through App Service settings (as production is) previously showed
+ * "Not configured" while generating real summaries.
+ *
+ * Keep in sync with the provider implementations in services/ai/*Provider.ts.
+ */
+const PROVIDER_FIELD_ENV: Record<string, Record<string, string>> = {
+  'azure-openai': {
+    endpoint: 'AZURE_OPENAI_ENDPOINT',
+    apiKey: 'AZURE_OPENAI_KEY',
+    deployment: 'AZURE_OPENAI_DEPLOYMENT',
+    apiVersion: 'AZURE_OPENAI_API_VERSION',
+  },
+};
+
+/** Where a provider's effective configuration comes from. */
+export type AiConfigSource = 'database' | 'environment' | 'mixed' | 'none';
+
+function envValueFor(providerId: string, fieldKey: string): string {
+  const name = PROVIDER_FIELD_ENV[providerId]?.[fieldKey];
+  return name ? (process.env[name] ?? '').trim() : '';
+}
+
+/**
+ * Whether a provider's required fields all resolve, from the database row OR the
+ * environment fallback — the same precedence the provider itself applies.
+ */
+function providerConfiguredStatus(
+  providerId: string,
+  settings: Settings,
+): { configured: boolean; source: AiConfigSource } {
   const desc = getAiProviderDescriptor(providerId);
-  if (!desc) return false;
+  if (!desc) return { configured: false, source: 'none' };
   const stored = settings[providerId] ?? {};
-  return desc.fields.every(
-    (f) =>
-      !f.required || (stored[f.key] && String(stored[f.key]).trim() !== ''),
-  );
+
+  let anyFromDb = false;
+  let anyFromEnv = false;
+  let allRequiredResolve = true;
+
+  for (const f of desc.fields) {
+    const fromDb = String(stored[f.key] ?? '').trim();
+    const fromEnv = fromDb ? '' : envValueFor(providerId, f.key);
+    if (fromDb) anyFromDb = true;
+    else if (fromEnv) anyFromEnv = true;
+    if (f.required && !fromDb && !fromEnv) allRequiredResolve = false;
+  }
+
+  if (!allRequiredResolve) return { configured: false, source: 'none' };
+  if (anyFromDb && anyFromEnv) return { configured: true, source: 'mixed' };
+  if (anyFromEnv) return { configured: true, source: 'environment' };
+  return { configured: true, source: 'database' };
 }
 
 /** Admin-safe view (no secret plaintext ever leaves the server). */
@@ -72,6 +127,7 @@ export async function getAiConfigForAdmin(): Promise<AiConfigView> {
   const values: Settings = {};
   const secretSet: Record<string, Record<string, boolean>> = {};
   const configured: Record<string, boolean> = {};
+  const configuredSource: Record<string, AiConfigSource> = {};
 
   for (const p of AI_PROVIDERS) {
     values[p.id] = {};
@@ -81,7 +137,9 @@ export async function getAiConfigForAdmin(): Promise<AiConfigView> {
       if (f.secret) secretSet[p.id][f.key] = !!stored[f.key];
       else values[p.id][f.key] = stored[f.key] ?? '';
     }
-    configured[p.id] = providerConfigured(p.id, settings);
+    const status = providerConfiguredStatus(p.id, settings);
+    configured[p.id] = status.configured;
+    configuredSource[p.id] = status.source;
   }
 
   const roles = asRoles(row?.allowedRoles);
@@ -94,6 +152,7 @@ export async function getAiConfigForAdmin(): Promise<AiConfigView> {
     dailyPerUser: row?.dailyPerUser ?? null,
     monthlyGlobal: row?.monthlyGlobal ?? null,
     providerConfigured: configured,
+    providerConfiguredSource: configuredSource,
     updatedByName: row?.updatedByName ?? null,
     updatedAt: row?.updatedAt ? row.updatedAt.toISOString() : null,
   };

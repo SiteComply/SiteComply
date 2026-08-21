@@ -57,6 +57,7 @@ export function AiProviderSettings({
 
   const desc = providers.find((p) => p.id === active)!;
   const activeConfigured = config.providerConfigured[active] ?? false;
+  const activeSource = config.providerConfiguredSource?.[active] ?? 'none';
 
   function setField(key: string, val: string) {
     setValues((v) => ({ ...v, [active]: { ...v[active], [key]: val } }));
@@ -179,6 +180,7 @@ export function AiProviderSettings({
           {providers.map((p) => {
             const on = p.id === active;
             const configured = config.providerConfigured[p.id] ?? false;
+            const configuredSource = config.providerConfiguredSource?.[p.id] ?? 'none';
             return (
               <button
                 key={p.id}
@@ -200,7 +202,13 @@ export function AiProviderSettings({
                           : 'bg-surface-sunken text-ink-subtle',
                       )}
                     >
-                      {configured ? 'Configured' : 'Not configured'}
+                      {configured
+                        ? configuredSource === 'environment'
+                          ? 'Configured (environment)'
+                          : configuredSource === 'mixed'
+                            ? 'Configured (mixed)'
+                            : 'Configured'
+                        : 'Not configured'}
                     </span>
                   )}
                 </span>
@@ -214,6 +222,13 @@ export function AiProviderSettings({
       {/* Provider configuration (dynamic from the descriptor) */}
       <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
         <h2 className="text-sm font-semibold text-ink">Configuration — {desc.name}</h2>
+        {(activeSource === 'environment' || activeSource === 'mixed') && (
+          <p className="mt-2 rounded-lg border border-line bg-surface-sunken px-3 py-2 text-xs text-ink-muted">
+            {activeSource === 'environment'
+              ? 'This provider is currently configured by server environment settings, which is why the fields below are blank. It is working — leave them blank to keep using those settings.'
+              : 'Some values below come from server environment settings and are shown blank. Saved values here take precedence over them.'}
+          </p>
+        )}
         {desc.fields.length === 0 ? (
           <p className="mt-2 text-sm text-ink-subtle">
             This provider has no settings to configure.
