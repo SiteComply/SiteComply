@@ -138,21 +138,19 @@ export async function saveAuthConfig(
     input.otpMaxAttempts,
     'Max OTP attempts',
   );
-  const session = parseNumeric(
-    'sessionTtlSeconds',
-    input.sessionTtlSeconds,
-    'Session timeout (seconds)',
-  );
+  // sessionTtlSeconds is deliberately NOT parsed or written here. It is the one
+  // field both portals used to write on this shared singleton row, so a save in
+  // the Admin Centre silently reverted a value a Director had set in Platform
+  // Settings -> Authentication & access, which owns it. Platform is the only
+  // writer now; this screen displays the value read-only.
   if ('error' in ttl) errors.otpTtlSeconds = ttl.error;
   if ('error' in attempts) errors.otpMaxAttempts = attempts.error;
-  if ('error' in session) errors.sessionTtlSeconds = session.error;
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
   const data = {
     otpTtlSeconds: (ttl as { value: number }).value,
     otpMaxAttempts: (attempts as { value: number }).value,
-    sessionTtlSeconds: (session as { value: number }).value,
     smsOtpEnabled: input.smsOtpEnabled !== false,
     emailOtpEnabled: input.emailOtpEnabled === true,
     updatedByAdminId: admin.adminId,

@@ -72,10 +72,10 @@ export function AuthConfigSettings({
   const router = useRouter();
   const L = config.limits;
 
-  // OTP expiry shown in minutes, session timeout in hours; attempts stays raw.
+  // OTP expiry shown in minutes; attempts stays raw. Session timeout is NOT
+  // editable here — Platform Settings owns it (see the Sessions section below).
   const [otpMinutes, setOtpMinutes] = useState(secondsToUnit(config.otpTtlSeconds, MINUTE));
   const [maxAttempts, setMaxAttempts] = useState(String(config.otpMaxAttempts));
-  const [sessionHours, setSessionHours] = useState(secondsToUnit(config.sessionTtlSeconds, HOUR));
   const [smsOtp, setSmsOtp] = useState(config.smsOtpEnabled);
   const [emailOtp, setEmailOtp] = useState(config.emailOtpEnabled);
 
@@ -94,12 +94,10 @@ export function AuthConfigSettings({
     // the messages stay in minutes/hours; the API remains the safety net.
     const otp = parseField(otpMinutes, MINUTE, L.otpTtlSeconds, 'OTP expiry', 'minutes');
     const attempts = parseField(maxAttempts, 1, L.otpMaxAttempts, 'Max verification attempts', 'attempts', true);
-    const session = parseField(sessionHours, HOUR, L.sessionTtlSeconds, 'Session timeout', 'hours');
 
     const nextErrors: Record<string, string> = {};
     if (otp.error) nextErrors.otpTtlSeconds = otp.error;
     if (attempts.error) nextErrors.otpMaxAttempts = attempts.error;
-    if (session.error) nextErrors.sessionTtlSeconds = session.error;
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
       setSaveErr('Fix the highlighted fields.');
@@ -114,7 +112,6 @@ export function AuthConfigSettings({
         body: JSON.stringify({
           otpTtlSeconds: otp.seconds,
           otpMaxAttempts: attempts.seconds,
-          sessionTtlSeconds: session.seconds,
           smsOtpEnabled: smsOtp,
           emailOtpEnabled: emailOtp,
         }),
@@ -171,26 +168,28 @@ export function AuthConfigSettings({
         </div>
       </section>
 
-      {/* Sessions */}
+      {/* Sessions — READ-ONLY. Both portals used to write this one field on the
+          shared AuthConfig row, so saving here reverted a Director's value.
+          Platform Settings owns it; shown here so an operator can still see it. */}
       <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
         <h2 className="text-sm font-semibold text-ink">Sessions</h2>
         <p className="mt-0.5 text-sm text-ink-subtle">
           How long a user stays signed in before they must log in again.
-          Applies to new sign-ins.
         </p>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <NumberField
-            label="Session timeout"
-            unit="hours"
-            value={sessionHours}
-            onChange={setSessionHours}
-            error={errors.sessionTtlSeconds}
-            min={L.sessionTtlSeconds.min / HOUR}
-            max={L.sessionTtlSeconds.max / HOUR}
-            def={L.sessionTtlSeconds.default / HOUR}
-            step={0.25}
-          />
-        </div>
+        <dl className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <dt className="text-sm font-semibold text-ink">Session timeout</dt>
+          <dd className="text-sm text-ink-muted">
+            {secondsToUnit(config.sessionTtlSeconds, HOUR)} hours
+          </dd>
+        </dl>
+        <p className="mt-3 rounded-lg border border-line bg-surface-sunken px-3 py-2 text-xs text-ink-muted">
+          Managed by a Director in{' '}
+          <span className="font-semibold text-ink">
+            Platform Settings → Authentication &amp; access
+          </span>
+          , which also covers worker sessions and site-access rules. Read-only
+          here.
+        </p>
       </section>
 
       {/* Auth methods */}
