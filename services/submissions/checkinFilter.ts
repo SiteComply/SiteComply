@@ -41,3 +41,38 @@ export function checkedOutAtWhere(
   if (filter === 'checked-out') return { checkedOutAt: { not: null } };
   return {};
 }
+
+/**
+ * Parse a raw `?site` value into a site id the viewer may actually see.
+ *
+ * Validated against the viewer's own site list, so an id for a site outside
+ * their scope resolves to null (= All Sites) rather than being passed to the
+ * query. The list query is site-scoped anyway, so this is defence in depth: it
+ * keeps an out-of-scope id from being reflected back in links and counts.
+ * Mirrors how the Compliance Calendar validates its `?site` param.
+ */
+export function parseCheckinSiteFilter(
+  raw: string | undefined,
+  allowedSiteIds: string[],
+): string | null {
+  const v = (raw ?? '').trim();
+  return v && allowedSiteIds.includes(v) ? v : null;
+}
+
+/**
+ * Build the check-ins list href for a given status + site combination, so the
+ * two filters compose: changing the status keeps the chosen site, and vice
+ * versa. Omitting a param entirely (rather than passing an empty value) keeps
+ * the default URL clean and bookmarkable.
+ */
+export function checkinFilterHref(
+  basePath: string,
+  status: CheckinStatusFilter,
+  siteId: string | null,
+): string {
+  const params = new URLSearchParams();
+  if (status !== 'all') params.set('status', status);
+  if (siteId) params.set('site', siteId);
+  const q = params.toString();
+  return q ? `${basePath}?${q}` : basePath;
+}

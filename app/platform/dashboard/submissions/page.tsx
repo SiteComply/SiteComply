@@ -19,8 +19,11 @@ import {
 import {
   CHECKIN_STATUS_FILTERS,
   parseCheckinStatusFilter,
+  parseCheckinSiteFilter,
+  checkinFilterHref,
   type CheckinStatusFilter,
 } from '@/services/submissions/checkinFilter';
+import { SiteFilterSelect } from '@/components/platform/SiteFilterSelect';
 import {
   getCheckinCounts,
   listCheckinsForViewer,
@@ -39,18 +42,29 @@ export const dynamic = 'force-dynamic';
 export default async function PlatformSubmissionsPage({
   searchParams,
 }: {
-  searchParams: { status?: string; item?: string };
+  searchParams: { status?: string; item?: string; site?: string };
 }) {
   const viewer = await requirePlatformViewer();
   assertModuleView(viewer, 'checkins');
 
   const canExport = permits(viewer.role, 'checkins', 'export');
   const status = parseCheckinStatusFilter(searchParams.status);
+  // Validated against the viewer's own sites; anything else → All Sites.
+  const siteId = parseCheckinSiteFilter(searchParams.site, viewer.siteIds);
 
-  const [counts, submissions] = await Promise.all([
-    getCheckinCounts(viewer),
-    listCheckinsForViewer(viewer, status),
+  // `counts` is narrowed by the chosen site so the tab pills describe the list
+  // on screen. `orgTotal` is the UNFILTERED total, and decides only one thing:
+  // whether this organisation has any check-ins at all. Without it, filtering to
+  // a site with no check-ins made counts.all 0, which took the whole page down
+  // the "nothing recorded yet" branch — hiding the filters and leaving no way
+  // back to All Sites except editing the URL. One extra count, and only when a
+  // site filter is actually applied.
+  const [counts, submissions, orgTotal] = await Promise.all([
+    getCheckinCounts(viewer, siteId),
+    listCheckinsForViewer(viewer, status, siteId),
+    siteId ? getCheckinCounts(viewer).then((c) => c.all) : Promise.resolve(null),
   ]);
+  const hasAnyCheckins = (orgTotal ?? counts.all) > 0;
 
   // Selection is resolved against the rows ACTUALLY returned for this viewer
   // and filter, so an id for a check-in outside their scope simply shows the
@@ -88,7 +102,7 @@ export default async function PlatformSubmissionsPage({
         }
       />
 
-      {counts.all === 0 ? (
+      {!hasAnyCheckins ? (
         <p className="rounded-xl border border-line bg-surface px-4 py-8 text-center text-ink-muted">
           No check-ins recorded for your sites yet.
         </p>
@@ -98,19 +112,34 @@ export default async function PlatformSubmissionsPage({
               uses, from one definition. Both had independently grown the same
               markup as a card stacked above the table. Hrefs, statuses and counts
               are unchanged. */}
-          <SegmentedNav
-            label="Filter check-ins by status"
-            items={CHECKIN_STATUS_FILTERS.map((f) => ({
-              key: f.value,
-              label: f.label,
-              href:
-                f.value === 'all'
-                  ? '/platform/dashboard/submissions'
-                  : `/platform/dashboard/submissions?status=${f.value}`,
-              active: f.value === status,
-              count: countByFilter[f.value],
-            }))}
-          />
+          {/* Status strip and site filter on one row: the same filter decision,
+              so they sit together rather than stacking a second control band.
+              The strip keeps its own bottom margin, so the row is aligned on the
+              control tops. Both filters live in the URL and compose — picking a
+              site keeps the status, and vice versa. */}
+          <div className="flex flex-wrap items-start justify-between gap-x-3">
+            <SegmentedNav
+              label="Filter check-ins by status"
+              items={CHECKIN_STATUS_FILTERS.map((f) => ({
+                key: f.value,
+                label: f.label,
+                href: checkinFilterHref(basePath, f.value, siteId),
+                active: f.value === status,
+                count: countByFilter[f.value],
+              }))}
+            />
+            {viewer.sites.length > 1 && (
+              <SiteFilterSelect
+                label="Filter check-ins by site"
+                sites={viewer.sites.map((s) => ({ id: s.id, name: s.name }))}
+                selectedSiteId={siteId}
+                basePath={basePath}
+                preserveParams={{
+                  status: status === 'all' ? undefined : status,
+                }}
+              />
+            )}
+          </div>
 
           {/* UX REFRESH PHASE 5 — this was the last register still rendering one
               bordered card per row: literally card, card, card. It is now a work
@@ -123,11 +152,19 @@ export default async function PlatformSubmissionsPage({
               is still one click away from the rail. */}
           {submissions.length === 0 ? (
             <p className="rounded-xl border border-line bg-surface px-4 py-8 text-center text-ink-muted">
-              {status === 'on-site'
-                ? 'No workers are currently on site.'
-                : status === 'checked-out'
-                  ? 'No checked-out check-ins.'
-                  : 'No check-ins to show.'}
+              {/* Names the site when one is chosen, so an empty table reads as
+                  "this filter has no rows" rather than "there is no data". */}
+              {siteId
+                ? status === 'on-site'
+                  ? 'No workers are currently on site at this site.'
+                  : status === 'checked-out'
+                    ? 'No checked-out check-ins for this site.'
+                    : 'No check-ins for this site.'
+                : status === 'on-site'
+                  ? 'No workers are currently on site.'
+                  : status === 'checked-out'
+                    ? 'No checked-out check-ins.'
+                    : 'No check-ins to show.'}
             </p>
           ) : (
             /* UX REFRESH PHASE 10 — see WorkSurface: the rail is a consequence
@@ -217,8 +254,11 @@ export default async function PlatformSubmissionsPage({
                         >
                           <td className="px-5 py-3">
                             <Link
+                              // Carries BOTH active filters, so selecting a row
+                              // never drops the list you selected it from.
                               href={`${basePath}?${new URLSearchParams({
                                 ...(status === 'all' ? {} : { status }),
+                                ...(siteId ? { site: siteId } : {}),
                                 item: s.id,
                               }).toString()}`}
                               className="font-semibold text-brand-700 hover:underline"

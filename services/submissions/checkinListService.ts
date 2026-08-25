@@ -28,9 +28,15 @@ export interface CheckinListItem {
 /** Live per-category counts, scoped to the viewer's sites. */
 export async function getCheckinCounts(
   viewer: PlatformViewer,
+  siteId?: string | null,
 ): Promise<CheckinCounts> {
   if (viewer.siteIds.length === 0) return { all: 0, onSite: 0, checkedOut: 0 };
-  const where = { jobSiteId: { in: viewer.siteIds } };
+  // A chosen site narrows the counts too, so the tab pills describe the list
+  // actually on screen. Showing org-wide counts above a site-filtered table
+  // would state a number the rows below contradict.
+  const where = {
+    jobSiteId: siteId ? siteId : { in: viewer.siteIds },
+  };
   const [all, onSite] = await Promise.all([
     prisma.submission.count({ where }),
     prisma.submission.count({ where: { ...where, checkedOutAt: null } }),
@@ -42,12 +48,16 @@ export async function getCheckinCounts(
 export async function listCheckinsForViewer(
   viewer: PlatformViewer,
   filter: CheckinStatusFilter,
+  siteId?: string | null,
   take = 25,
 ): Promise<CheckinListItem[]> {
   if (viewer.siteIds.length === 0) return [];
+  // `siteId` is already validated against the viewer's own sites by
+  // parseCheckinSiteFilter, so narrowing to it can only ever be a subset of the
+  // scoped set — it cannot widen access.
   return prisma.submission.findMany({
     where: {
-      jobSiteId: { in: viewer.siteIds },
+      jobSiteId: siteId ? siteId : { in: viewer.siteIds },
       ...checkedOutAtWhere(filter),
     },
     orderBy: { checkedInAt: 'desc' },
