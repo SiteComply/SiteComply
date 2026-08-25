@@ -4,6 +4,7 @@ import { cn } from '@/lib/cn';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { SiteDetailHeader } from '@/components/platform/SiteDetailHeader';
 import { TABLE_TOOLBAR_CLASS } from '@/components/platform/TableSurface';
+import { InviteWorkerDialog } from '@/components/platform/InviteWorkerDialog';
 import {
   WorkSurface,
   RailDetail,
@@ -40,7 +41,7 @@ export default async function SiteWorkersPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams?: { item?: string; invite?: string };
+  searchParams?: { item?: string };
 }) {
   const viewer = await requirePlatformViewer();
   assertModuleView(viewer, 'sites');
@@ -194,18 +195,13 @@ export default async function SiteWorkersPage({
   const selectedWorker = resolveSelected(searchParams?.item, roster);
   const workersPath = `/platform/dashboard/sites/${params.id}/workers`;
 
-  // ONE invite path. The toolbar button is a link that sets ?invite=1, which
-  // opens WorkerAccessManager's invite DIALOG directly. The access disclosure
-  // is deliberately left alone: the invite workflow no longer lives inside it,
-  // so there is nothing to scroll to and nothing to expand. Same URL-parameter
-  // pattern this page already uses for row selection, so the link stays
-  // shareable and the back button still works.
+  // The invite button and its dialog live TOGETHER in InviteWorkerDialog,
+  // rendered in the toolbar below — outside the collapsed <details>. A closed
+  // <details> hides every non-<summary> child, and position:fixed does not
+  // escape a hidden ancestor, so a dialog rendered inside it can never appear.
+  // The click sets state directly: no navigation, no URL parameter, no prop to
+  // synchronise.
   const canInvite = canManageWorkerAccess(viewer.role) && access !== null;
-  const autoOpenInvite = searchParams?.invite === '1' && canInvite;
-  const inviteHref = `${workersPath}?${new URLSearchParams({
-    ...(searchParams?.item ? { item: searchParams.item } : {}),
-    invite: '1',
-  }).toString()}`;
 
   return (
     <PlatformShell>
@@ -233,20 +229,7 @@ export default async function SiteWorkersPage({
               <span className="text-sm font-semibold text-ink">
                 Workers on this project
               </span>
-              {/* Solid green — inviting is a positive primary action — but at
-                  listing dimensions: px-3 py-1.5, rounded-lg, and NO
-                  touch-target. That utility sets min-h/min-w 3.25rem, which was
-                  overriding the padding and holding the button at 52px tall
-                  while stopping it hugging its label; the convention listing
-                  actions (NotificationsList, PendingPhotos, AuditFindingsPanel)
-                  omit it for exactly this reason. Colour carries the emphasis
-                  so the footprint does not have to. */}
-              <Link
-                href={inviteHref}
-                className="inline-flex shrink-0 items-center rounded-lg bg-safe-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm shadow-safe-600/20 hover:bg-safe-600"
-              >
-                Invite Worker
-              </Link>
+              <InviteWorkerDialog siteId={params.id} />
             </div>
           ) : undefined
         }
@@ -437,7 +420,6 @@ export default async function SiteWorkersPage({
               enforced={access.enforced}
               rows={access.rows}
               canManage={canManageWorkerAccess(viewer.role)}
-              autoOpenInvite={autoOpenInvite}
               canSetEnforcement={canSetEnforcement(viewer.role)}
               otherSites={viewer.sites
                 .filter((x) => x.id !== params.id && x.status === 'ACTIVE')

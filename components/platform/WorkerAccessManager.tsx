@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { formatDateTimeUK } from '@/lib/datetime';
 import type { AssignmentRow } from '@/services/workerAccess/workerAssignmentService';
 
@@ -52,15 +52,12 @@ export function WorkerAccessManager({
   canSetEnforcement,
   otherSites = [],
   requirements = [],
-  autoOpenInvite = false,
 }: {
   siteId: string;
   enforced: boolean;
   rows: AssignmentRow[];
   canManage: boolean;
   canSetEnforcement: boolean;
-  /** Open the invite form on mount — set by the Workers-tab toolbar button. */
-  autoOpenInvite?: boolean;
   /** SC-023 Phase 2 — projects this manager can transfer a worker to. */
   otherSites?: { id: string; name: string }[];
   /** SC-023 Phase 3 — competency requirements for this site. */
@@ -75,36 +72,13 @@ export function WorkerAccessManager({
   }[];
 }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // Seeded from the page: the Workers-tab toolbar button links to ?invite=1,
   // which opens the disclosure and this form together. One invite path.
-  // ONE invite path, one implementation: the dialog below presents the SAME
-  // form, the same invite() handler, the same validation and the same
-  // invitation-code result that used to render inline in this section.
-  const [showInvite, setShowInvite] = useState(autoOpenInvite);
-  const inviteNameRef = useRef<HTMLInputElement>(null);
 
-  // WHY AN EFFECT AND NOT JUST useState(autoOpenInvite):
-  //
-  // The toolbar button is a <Link> to the SAME route with ?invite=1, so Next
-  // does a client-side transition. Same route means this component is
-  // RE-RENDERED, never re-mounted — and `useState(initial)` reads its argument
-  // only on mount. The new autoOpenInvite={true} prop therefore arrived and was
-  // silently ignored, leaving showInvite false: the click did nothing at all.
-  // It only ever worked on a full document load, which is exactly what a curl
-  // check exercises and a real click does not.
-  useEffect(() => {
-    if (autoOpenInvite) setShowInvite(true);
-  }, [autoOpenInvite]);
-  const [form, setForm] = useState({ fullName: '', company: '', mobile: '' });
-  const [lastCode, setLastCode] = useState<{
-    name: string;
-    code: string;
-  } | null>(null);
+
   const [editing, setEditing] = useState<string | null>(null);
   const [detail, setDetail] = useState({
     role: '',
@@ -202,57 +176,6 @@ export function WorkerAccessManager({
     }
   }
 
-  async function invite() {
-    if (!form.fullName.trim() || !form.company.trim() || !form.mobile.trim())
-      return;
-    const data = await call(
-      { action: 'invite', ...form },
-      'invite',
-      `Invited ${form.fullName.trim()}.`,
-    );
-    if (data?.invitationCode) {
-      // The dialog STAYS open and switches to its success state, so the
-      // confirmation and the invitation code arrive where the user is looking
-      // rather than behind them on the page.
-      setLastCode({ name: form.fullName.trim(), code: data.invitationCode });
-      setForm({ fullName: '', company: '', mobile: '' });
-    }
-  }
-
-  // useCallback so the Escape effect below can depend on it honestly. Without
-  // that, the listener captures whichever closeInvite existed when the dialog
-  // opened, and a later searchParams change would leave it stale.
-  const closeInvite = useCallback(() => {
-    setShowInvite(false);
-    setLastCode(null);
-    setForm({ fullName: '', company: '', mobile: '' });
-
-    // Drop ?invite=1 on close. Without this the prop stays true, so the effect
-    // above never fires again and the button would open the dialog only once
-    // per page load. Other params (e.g. ?item=) are preserved.
-    if (searchParams.get('invite')) {
-      const next = new URLSearchParams(searchParams.toString());
-      next.delete('invite');
-      const q = next.toString();
-      router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
-    }
-  }, [pathname, router, searchParams]);
-
-  // Focus the first field when the dialog opens, so a manager can type
-  // immediately instead of hunting for the input.
-  useEffect(() => {
-    if (showInvite && !lastCode) inviteNameRef.current?.focus();
-  }, [showInvite, lastCode]);
-
-  // Escape closes, matching every other dismissible surface in the product.
-  useEffect(() => {
-    if (!showInvite) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeInvite();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [showInvite, closeInvite]);
 
   const active = rows.filter((r) => r.status === 'ACTIVE').length;
   const waiting = rows.filter((r) => r.status === 'INVITED').length;
@@ -455,159 +378,6 @@ export function WorkerAccessManager({
         ) : null}
       </div>
 
-      {showInvite ? (
-        /* Presented as a dialog so the invite workflow starts where the user
-           clicked, instead of scrolling them into the access-management
-           section and past the enforcement and requirements controls. Modelled
-           on ScheduleActivityForm, the platform's existing create-action
-           dialog, so the two prominent actions behave the same way. */
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="invite-dialog-title"
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-ink/60 p-3 sm:p-6"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeInvite();
-          }}
-        >
-          <div className="mt-8 w-full max-w-lg rounded-xl bg-surface p-5 shadow-card">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <h2
-                  id="invite-dialog-title"
-                  className="text-base font-bold text-ink"
-                >
-                  Invite a worker
-                </h2>
-                <p className="mt-0.5 text-xs text-ink-subtle">
-                  They receive a text with an invitation code and appear in the
-                  roster once they accept. You will still need to approve them
-                  before they can check in.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeInvite}
-                aria-label="Close"
-                className="shrink-0 rounded-lg px-2 py-1 text-lg leading-none text-ink-subtle hover:bg-surface-sunken"
-              >
-                &times;
-              </button>
-            </div>
-
-            {lastCode ? (
-              /* Success state, in the dialog. The code is the fallback when the
-                 text does not arrive, so it must land in front of the person
-                 who just sent the invitation. */
-              <div className="space-y-4">
-                <div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
-                  <p className="text-sm font-semibold text-brand-700">
-                    Invitation sent to {lastCode.name}
-                  </p>
-                  <p className="mt-1 text-sm text-brand-700">
-                    Invitation code:{' '}
-                    <span className="font-mono text-base font-bold">
-                      {lastCode.code}
-                    </span>
-                  </p>
-                  <p className="mt-1 text-xs text-brand-700">
-                    Read this to the worker if the text message does not
-                    arrive. They still need approving before they can check in.
-                  </p>
-                </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setLastCode(null)}
-                    className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink"
-                  >
-                    Invite another
-                  </button>
-                  <button
-                    type="button"
-                    onClick={closeInvite}
-                    className="rounded-lg bg-safe-500 px-3 py-2 text-sm font-semibold text-white hover:bg-safe-600"
-                  >
-                    Done
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <label
-                    htmlFor="invite-full-name"
-                    className="block text-sm font-semibold text-ink"
-                  >
-                    Full name
-                  </label>
-                  <input
-                    id="invite-full-name"
-                    ref={inviteNameRef}
-                    value={form.fullName}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, fullName: e.target.value }))
-                    }
-                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
-                  />
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <label
-                      htmlFor="invite-company"
-                      className="block text-sm font-semibold text-ink"
-                    >
-                      Company
-                    </label>
-                    <input
-                      id="invite-company"
-                      value={form.company}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, company: e.target.value }))
-                      }
-                      className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label
-                      htmlFor="invite-mobile"
-                      className="block text-sm font-semibold text-ink"
-                    >
-                      Mobile number
-                    </label>
-                    <input
-                      id="invite-mobile"
-                      value={form.mobile}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, mobile: e.target.value }))
-                      }
-                      placeholder="07700 900123"
-                      className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
-                    />
-                  </div>
-                </div>
-                <div className="flex flex-wrap justify-end gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={closeInvite}
-                    className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy === 'invite'}
-                    onClick={invite}
-                    className="rounded-lg bg-safe-500 px-3 py-2 text-sm font-semibold text-white hover:bg-safe-600 disabled:opacity-40"
-                  >
-                    {busy === 'invite' ? 'Sending…' : 'Send Invite'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      ) : null}
 
       {rows.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface px-5 py-10 text-center text-sm text-ink-subtle">
