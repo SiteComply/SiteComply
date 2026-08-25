@@ -52,12 +52,15 @@ export function WorkerAccessManager({
   canSetEnforcement,
   otherSites = [],
   requirements = [],
+  autoOpenInvite = false,
 }: {
   siteId: string;
   enforced: boolean;
   rows: AssignmentRow[];
   canManage: boolean;
   canSetEnforcement: boolean;
+  /** Open the invite form on mount — set by the Workers-tab toolbar button. */
+  autoOpenInvite?: boolean;
   /** SC-023 Phase 2 — projects this manager can transfer a worker to. */
   otherSites?: { id: string; name: string }[];
   /** SC-023 Phase 3 — competency requirements for this site. */
@@ -75,7 +78,9 @@ export function WorkerAccessManager({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [showInvite, setShowInvite] = useState(false);
+  // Seeded from the page: the Workers-tab toolbar button links to ?invite=1,
+  // which opens the disclosure and this form together. One invite path.
+  const [showInvite, setShowInvite] = useState(autoOpenInvite);
   const [form, setForm] = useState({ fullName: '', company: '', mobile: '' });
   const [lastCode, setLastCode] = useState<{
     name: string;
@@ -397,19 +402,15 @@ export function WorkerAccessManager({
         </p>
         {canManage ? (
           <div className="flex flex-wrap gap-2">
+            {/* The invite TRIGGER moved to the Workers-tab toolbar above the
+                roster, where the action belongs. The invite FORM below is
+                unchanged, so there is still exactly one implementation. */}
             <a
               href={`/api/platform/sites/${siteId}/worker-access/export`}
               className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink"
             >
               Export CSV
             </a>
-            <button
-              type="button"
-              onClick={() => setShowInvite((v) => !v)}
-              className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink"
-            >
-              {showInvite ? 'Cancel' : 'Invite a worker'}
-            </button>
           </div>
         ) : null}
       </div>

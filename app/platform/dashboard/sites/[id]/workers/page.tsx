@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { cn } from '@/lib/cn';
+import { Button } from '@/components/ui/Button';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { SiteDetailHeader } from '@/components/platform/SiteDetailHeader';
 import {
@@ -39,7 +40,7 @@ export default async function SiteWorkersPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams?: { item?: string };
+  searchParams?: { item?: string; invite?: string };
 }) {
   const viewer = await requirePlatformViewer();
   assertModuleView(viewer, 'sites');
@@ -193,6 +194,17 @@ export default async function SiteWorkersPage({
   const selectedWorker = resolveSelected(searchParams?.item, roster);
   const workersPath = `/platform/dashboard/sites/${params.id}/workers`;
 
+  // ONE invite path. The toolbar button is a link that sets ?invite=1; the page
+  // then opens the access disclosure AND tells WorkerAccessManager to show its
+  // EXISTING invite form. No second form and no cross-component event — the
+  // same URL-parameter pattern this page already uses for row selection.
+  const canInvite = canManageWorkerAccess(viewer.role) && access !== null;
+  const autoOpenInvite = searchParams?.invite === '1' && canInvite;
+  const inviteHref = `${workersPath}?${new URLSearchParams({
+    ...(searchParams?.item ? { item: searchParams.item } : {}),
+    invite: '1',
+  }).toString()}#manage-access`;
+
   return (
     <PlatformShell>
       <SiteDetailHeader viewer={viewer} siteId={params.id} active="workers" />
@@ -200,6 +212,21 @@ export default async function SiteWorkersPage({
       {/* UX REFRESH PHASE 10 — see WorkSurface: no selection, no rail, so the
           "Roster" title never rendered. */}
       <WorkSurface
+        toolbar={
+          canInvite ? (
+            /* The roster answers "who is on my project"; inviting is the direct
+               continuation of that thought, so the action lives with the list
+               rather than behind the access disclosure below. */
+            <div className="flex w-full flex-wrap items-center justify-between gap-3">
+              <span className="text-sm font-semibold text-ink">
+                Workers on this project
+              </span>
+              <Link href={inviteHref} className="shrink-0">
+                <Button size="md">Invite Worker</Button>
+              </Link>
+            </div>
+          ) : undefined
+        }
         railTitle="Worker"
         railEmpty="Select someone to see their site record."
         rail={
@@ -361,7 +388,11 @@ export default async function SiteWorkersPage({
           list by default; before this it rendered a second list of the same
           workers directly beneath the first. */}
       {access ? (
-        <details className="group mt-4 rounded-xl border border-line bg-surface shadow-card">
+        <details
+          id="manage-access"
+          open={autoOpenInvite || undefined}
+          className="group mt-4 rounded-xl border border-line bg-surface shadow-card"
+        >
           <summary className="touch-target cursor-pointer list-none px-4 py-3 text-sm font-bold text-ink marker:content-none">
             <span className="inline-flex items-center gap-2">
               <span
@@ -387,6 +418,7 @@ export default async function SiteWorkersPage({
               enforced={access.enforced}
               rows={access.rows}
               canManage={canManageWorkerAccess(viewer.role)}
+              autoOpenInvite={autoOpenInvite}
               canSetEnforcement={canSetEnforcement(viewer.role)}
               otherSites={viewer.sites
                 .filter((x) => x.id !== params.id && x.status === 'ACTIVE')
