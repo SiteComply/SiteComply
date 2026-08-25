@@ -5,6 +5,7 @@ import { InductionWizard } from '@/components/checkin/InductionWizard';
 import { getWorkerSession } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { getActiveSiteWithChecklist } from '@/services/sites/siteService';
+import { canWorkerCheckIn } from '@/services/workerAccess/workerAssignmentService';
 import { getInductionSignatureRequired } from '@/services/inductionSignature/signatureService';
 import type { FlowItem } from '@/services/checklists/inductionFlow';
 
@@ -29,6 +30,12 @@ export default async function InductionPage({
 
   const site = await getActiveSiteWithChecklist(params.siteId);
   if (!site) redirect('/check-in/site');
+
+  // Same gate as the landing page, so arriving here by URL cannot walk past it.
+  // Redirect rather than repeat the message: the landing page owns the wording,
+  // so there is one place to change it and one place to read it.
+  const access = await canWorkerCheckIn(worker.id, site.id);
+  if (!access.allowed) redirect(`/check-in/site/${site.id}`);
 
   // Map Prisma items to the wizard's plain shape (nothing server-only crosses).
   const items: FlowItem[] = (site.checklist?.items ?? []).map((i) => ({

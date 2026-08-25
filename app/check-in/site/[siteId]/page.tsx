@@ -8,6 +8,7 @@ import { getWorkerSession } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { getActiveSiteWithChecklist } from '@/services/sites/siteService';
 import { getInductionValidity } from '@/services/induction/inductionValidityService';
+import { canWorkerCheckIn } from '@/services/workerAccess/workerAssignmentService';
 import {
   CscsCompetencyBanner,
   workerCscsCompetency,
@@ -39,6 +40,62 @@ export default async function SiteInductionPage({
 
   const site = await getActiveSiteWithChecklist(params.siteId);
   if (!site) redirect('/check-in/site');
+
+  // ACCESS GATE, AT THE EARLIEST POINT IT CAN RUN.
+  //
+  // This is the first page where the worker AND the site are both known, so it
+  // is the first moment the question "may this person check in here?" can be
+  // answered. It used to be answered only by createCheckIn at submit — after
+  // the declarations, PPE, RAMS and signature were done — so an uninvited
+  // worker completed the whole induction and was refused at the end.
+  //
+  // This ADDS a check, it does not move one: createCheckIn and the express path
+  // both still run their own, so a crafted request is refused exactly as before.
+  // A UI-only gate would be the wrong fix; this is the message arriving earlier.
+  const access = await canWorkerCheckIn(worker.id, site.id);
+
+  if (!access.allowed) {
+    return (
+      <AppShell>
+        <Steps current="Induction" />
+        <header className="mb-4 space-y-1">
+          <h1 className="text-2xl font-bold text-ink">{site.name}</h1>
+          <p className="text-sm text-ink-subtle">
+            Ref {site.jobReference} · {site.town}, {site.postcode}
+          </p>
+        </header>
+
+        <section
+          role="alert"
+          className="mb-4 overflow-hidden rounded-xl border border-danger-500/40 bg-danger-50 shadow-card"
+        >
+          <div className="flex items-start gap-3 p-4">
+            <span
+              aria-hidden="true"
+              className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-danger-600 text-white"
+            >
+              !
+            </span>
+            <div>
+              <h2 className="text-sm font-bold text-danger-700">
+                You cannot check in to this site
+              </h2>
+              {/* The reason the access rules already produce — "not been
+                  invited", "awaiting approval", "suspended", an access window
+                  that has not started or has ended, or an unmet requirement. */}
+              <p className="mt-1 text-sm text-danger-700">{access.reason}</p>
+            </div>
+          </div>
+        </section>
+
+        <Link href="/check-in/site" className="block">
+          <Button size="lg" fullWidth variant="secondary">
+            Choose a different site
+          </Button>
+        </Link>
+      </AppShell>
+    );
+  }
 
   const itemCount = site.checklist?.items.length ?? 0;
   const validity = await getInductionValidity(worker.id, site.id);
