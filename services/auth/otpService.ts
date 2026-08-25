@@ -1,6 +1,11 @@
 import { createHmac, randomInt, timingSafeEqual } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { normaliseUkMobile, maskUkMobile } from '@/lib/phone';
+import {
+  isWorkerTestAccount,
+  workerTestCode,
+  auditWorkerTestLogin,
+} from '@/services/auth/workerTestLogin';
 import { sendAuditedSms } from '@/services/sms/smsSendService';
 import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
 
@@ -130,12 +135,33 @@ export async function requestCode(
     };
   }
 
-  const code = generateNumericCode(CODE_LENGTH);
+  // ⚠ DEV-ONLY, ACCOUNT-SCOPED: plant a fixed code for ONE allow-listed test
+  // mobile instead of a random one, and send no SMS. Everything below is
+  // unchanged — the challenge is created, hashed, expired, rate-limited,
+  // attempt-limited and consumed exactly as for any other worker, and the
+  // verification path is untouched. Off unless WORKER_TEST_LOGIN_* is fully
+  // configured; see services/auth/workerTestLogin.ts.
+  const isTestAccount = isWorkerTestAccount(mobile);
+  const code =
+    (isTestAccount ? workerTestCode() : null) ??
+    generateNumericCode(CODE_LENGTH);
   const expiresAt = new Date(now + ttlSeconds * 1000);
 
   await prisma.otpChallenge.create({
     data: { mobile, codeHash: hashCode(mobile, code), expiresAt },
   });
+
+  if (isTestAccount) {
+    // No SMS: the code is already known to the tester, and this avoids texting
+    // the number at all. Audited so the sign-in is never silent.
+    auditWorkerTestLogin({ mobile, outcome: 'challenge-planted' });
+    return {
+      ok: true,
+      maskedMobile: maskUkMobile(mobile),
+      expiresInSeconds: ttlSeconds,
+      resendInSeconds: RESEND_COOLDOWN_SECONDS,
+    };
+  }
 
   const minutes = Math.round(ttlSeconds / 60);
   // Routed through the audited sender so the attempt is recorded and the master
