@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { formatDateTimeUK } from '@/lib/datetime';
 import type { AssignmentRow } from '@/services/workerAccess/workerAssignmentService';
 
@@ -75,6 +75,8 @@ export function WorkerAccessManager({
   }[];
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -85,6 +87,19 @@ export function WorkerAccessManager({
   // invitation-code result that used to render inline in this section.
   const [showInvite, setShowInvite] = useState(autoOpenInvite);
   const inviteNameRef = useRef<HTMLInputElement>(null);
+
+  // WHY AN EFFECT AND NOT JUST useState(autoOpenInvite):
+  //
+  // The toolbar button is a <Link> to the SAME route with ?invite=1, so Next
+  // does a client-side transition. Same route means this component is
+  // RE-RENDERED, never re-mounted — and `useState(initial)` reads its argument
+  // only on mount. The new autoOpenInvite={true} prop therefore arrived and was
+  // silently ignored, leaving showInvite false: the click did nothing at all.
+  // It only ever worked on a full document load, which is exactly what a curl
+  // check exercises and a real click does not.
+  useEffect(() => {
+    if (autoOpenInvite) setShowInvite(true);
+  }, [autoOpenInvite]);
   const [form, setForm] = useState({ fullName: '', company: '', mobile: '' });
   const [lastCode, setLastCode] = useState<{
     name: string;
@@ -204,11 +219,24 @@ export function WorkerAccessManager({
     }
   }
 
-  function closeInvite() {
+  // useCallback so the Escape effect below can depend on it honestly. Without
+  // that, the listener captures whichever closeInvite existed when the dialog
+  // opened, and a later searchParams change would leave it stale.
+  const closeInvite = useCallback(() => {
     setShowInvite(false);
     setLastCode(null);
     setForm({ fullName: '', company: '', mobile: '' });
-  }
+
+    // Drop ?invite=1 on close. Without this the prop stays true, so the effect
+    // above never fires again and the button would open the dialog only once
+    // per page load. Other params (e.g. ?item=) are preserved.
+    if (searchParams.get('invite')) {
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete('invite');
+      const q = next.toString();
+      router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+    }
+  }, [pathname, router, searchParams]);
 
   // Focus the first field when the dialog opens, so a manager can type
   // immediately instead of hunting for the input.
@@ -224,7 +252,7 @@ export function WorkerAccessManager({
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [showInvite]);
+  }, [showInvite, closeInvite]);
 
   const active = rows.filter((r) => r.status === 'ACTIVE').length;
   const waiting = rows.filter((r) => r.status === 'INVITED').length;
