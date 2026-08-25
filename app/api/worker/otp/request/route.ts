@@ -27,7 +27,14 @@ export async function POST(req: NextRequest) {
   if (!result.ok) {
     // 429 for rate-limit-style failures, 400 for validation.
     const status = result.resendInSeconds ? 429 : 400;
-    return NextResponse.json(result, { status });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: result.error,
+        resendInSeconds: result.resendInSeconds,
+      },
+      { status },
+    );
   }
 
   // Remember (server-side) the exact number this code was sent to, so verify
@@ -38,5 +45,18 @@ export async function POST(req: NextRequest) {
     setWorkerOtpMobileCookie(normalised.e164);
   }
 
-  return NextResponse.json(result);
+  // EXPLICIT CONTRACT — field by field, never `NextResponse.json(result)`.
+  //
+  // This route used to return the service result wholesale. Nothing in it was
+  // secret *given the configured provider*, which made the response shape
+  // depend on provider selection: a config change alone could start putting new
+  // service-internal fields on a public, unauthenticated endpoint. Listing the
+  // fields means adding one to the service can never widen this response.
+  // Mirrors app/api/platform/auth/start/route.ts.
+  return NextResponse.json({
+    ok: true,
+    maskedMobile: result.maskedMobile,
+    expiresInSeconds: result.expiresInSeconds,
+    resendInSeconds: result.resendInSeconds,
+  });
 }

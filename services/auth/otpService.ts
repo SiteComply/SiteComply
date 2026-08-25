@@ -58,9 +58,14 @@ export interface RequestCodeResult {
   expiresInSeconds?: number;
   /** Seconds the worker must wait before requesting another code. */
   resendInSeconds?: number;
-  /** Dev convenience: the code, returned ONLY when the mock provider is active. */
-  devCode?: string;
 }
+
+// NO devCode FIELD. The generated code is never placed on a value that a route
+// could return. It previously rode along whenever the mock provider was active,
+// so the only thing standing between it and an unauthenticated caller was the
+// configured provider. When the mock provider is in use the code is still
+// written to the server log by MockSmsProvider, which is where a developer
+// should read it from.
 
 /** Which login surface is requesting a code — controls only the enable gate. */
 export type OtpAudience = 'worker' | 'platform';
@@ -158,10 +163,6 @@ export async function requestCode(
     maskedMobile: maskUkMobile(mobile),
     expiresInSeconds: ttlSeconds,
     resendInSeconds: RESEND_COOLDOWN_SECONDS,
-    // Only leak the code when explicitly using the console mock (dev/testing).
-    // Taken from the audited send result, so it stays tied to the provider that
-    // actually handled THIS message rather than a second, separate lookup.
-    devCode: sent.provider === 'mock' ? code : undefined,
   };
 }
 
