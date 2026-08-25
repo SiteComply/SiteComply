@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatDateTimeUK } from '@/lib/datetime';
 import type { AssignmentRow } from '@/services/workerAccess/workerAssignmentService';
@@ -80,7 +80,11 @@ export function WorkerAccessManager({
   const [notice, setNotice] = useState<string | null>(null);
   // Seeded from the page: the Workers-tab toolbar button links to ?invite=1,
   // which opens the disclosure and this form together. One invite path.
+  // ONE invite path, one implementation: the dialog below presents the SAME
+  // form, the same invite() handler, the same validation and the same
+  // invitation-code result that used to render inline in this section.
   const [showInvite, setShowInvite] = useState(autoOpenInvite);
+  const inviteNameRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({ fullName: '', company: '', mobile: '' });
   const [lastCode, setLastCode] = useState<{
     name: string;
@@ -192,11 +196,35 @@ export function WorkerAccessManager({
       `Invited ${form.fullName.trim()}.`,
     );
     if (data?.invitationCode) {
+      // The dialog STAYS open and switches to its success state, so the
+      // confirmation and the invitation code arrive where the user is looking
+      // rather than behind them on the page.
       setLastCode({ name: form.fullName.trim(), code: data.invitationCode });
       setForm({ fullName: '', company: '', mobile: '' });
-      setShowInvite(false);
     }
   }
+
+  function closeInvite() {
+    setShowInvite(false);
+    setLastCode(null);
+    setForm({ fullName: '', company: '', mobile: '' });
+  }
+
+  // Focus the first field when the dialog opens, so a manager can type
+  // immediately instead of hunting for the input.
+  useEffect(() => {
+    if (showInvite && !lastCode) inviteNameRef.current?.focus();
+  }, [showInvite, lastCode]);
+
+  // Escape closes, matching every other dismissible surface in the product.
+  useEffect(() => {
+    if (!showInvite) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeInvite();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showInvite]);
 
   const active = rows.filter((r) => r.status === 'ACTIVE').length;
   const waiting = rows.filter((r) => r.status === 'INVITED').length;
@@ -216,22 +244,6 @@ export function WorkerAccessManager({
         <p className="rounded-lg border border-line bg-surface-sunken px-3 py-2 text-sm text-ink-muted">
           {notice}
         </p>
-      ) : null}
-
-      {/* The invitation code is shown prominently after inviting. It is the
-          fallback when SMS does not arrive — which is ALWAYS, while the mock
-          provider is active — so it must not be buried. */}
-      {lastCode ? (
-        <div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
-          <p className="text-sm font-semibold text-brand-700">
-            Invitation code for {lastCode.name}:{' '}
-            <span className="font-mono text-base">{lastCode.code}</span>
-          </p>
-          <p className="mt-0.5 text-xs text-brand-700">
-            Read this to the worker if they do not receive the text message.
-            They still need approving below before they can check in.
-          </p>
-        </div>
       ) : null}
 
       <div
@@ -416,45 +428,156 @@ export function WorkerAccessManager({
       </div>
 
       {showInvite ? (
-        <div className="rounded-xl border border-line bg-surface-sunken p-4">
-          <div className="flex flex-wrap gap-2">
-            <input
-              value={form.fullName}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, fullName: e.target.value }))
-              }
-              placeholder="Full name"
-              className="min-w-40 flex-1 rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink"
-            />
-            <input
-              value={form.company}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, company: e.target.value }))
-              }
-              placeholder="Company"
-              className="min-w-40 flex-1 rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink"
-            />
-            <input
-              value={form.mobile}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, mobile: e.target.value }))
-              }
-              placeholder="07700 900123"
-              className="min-w-40 flex-1 rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink"
-            />
-            <button
-              type="button"
-              disabled={busy === 'invite'}
-              onClick={invite}
-              className="rounded-xl bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-40"
-            >
-              Send invitation
-            </button>
+        /* Presented as a dialog so the invite workflow starts where the user
+           clicked, instead of scrolling them into the access-management
+           section and past the enforcement and requirements controls. Modelled
+           on ScheduleActivityForm, the platform's existing create-action
+           dialog, so the two prominent actions behave the same way. */
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="invite-dialog-title"
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-ink/60 p-3 sm:p-6"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeInvite();
+          }}
+        >
+          <div className="mt-8 w-full max-w-lg rounded-xl bg-surface p-5 shadow-card">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2
+                  id="invite-dialog-title"
+                  className="text-base font-bold text-ink"
+                >
+                  Invite a worker
+                </h2>
+                <p className="mt-0.5 text-xs text-ink-subtle">
+                  They receive a text with an invitation code and appear in the
+                  roster once they accept. You will still need to approve them
+                  before they can check in.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeInvite}
+                aria-label="Close"
+                className="shrink-0 rounded-lg px-2 py-1 text-lg leading-none text-ink-subtle hover:bg-surface-sunken"
+              >
+                &times;
+              </button>
+            </div>
+
+            {lastCode ? (
+              /* Success state, in the dialog. The code is the fallback when the
+                 text does not arrive, so it must land in front of the person
+                 who just sent the invitation. */
+              <div className="space-y-4">
+                <div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
+                  <p className="text-sm font-semibold text-brand-700">
+                    Invitation sent to {lastCode.name}
+                  </p>
+                  <p className="mt-1 text-sm text-brand-700">
+                    Invitation code:{' '}
+                    <span className="font-mono text-base font-bold">
+                      {lastCode.code}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs text-brand-700">
+                    Read this to the worker if the text message does not
+                    arrive. They still need approving before they can check in.
+                  </p>
+                </div>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setLastCode(null)}
+                    className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink"
+                  >
+                    Invite another
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeInvite}
+                    className="rounded-lg bg-safe-500 px-3 py-2 text-sm font-semibold text-white hover:bg-safe-600"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label
+                    htmlFor="invite-full-name"
+                    className="block text-sm font-semibold text-ink"
+                  >
+                    Full name
+                  </label>
+                  <input
+                    id="invite-full-name"
+                    ref={inviteNameRef}
+                    value={form.fullName}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, fullName: e.target.value }))
+                    }
+                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <label
+                      htmlFor="invite-company"
+                      className="block text-sm font-semibold text-ink"
+                    >
+                      Company
+                    </label>
+                    <input
+                      id="invite-company"
+                      value={form.company}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, company: e.target.value }))
+                      }
+                      className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label
+                      htmlFor="invite-mobile"
+                      className="block text-sm font-semibold text-ink"
+                    >
+                      Mobile number
+                    </label>
+                    <input
+                      id="invite-mobile"
+                      value={form.mobile}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, mobile: e.target.value }))
+                      }
+                      placeholder="07700 900123"
+                      className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-wrap justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={closeInvite}
+                    className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy === 'invite'}
+                    onClick={invite}
+                    className="rounded-lg bg-safe-500 px-3 py-2 text-sm font-semibold text-white hover:bg-safe-600 disabled:opacity-40"
+                  >
+                    {busy === 'invite' ? 'Sending…' : 'Send Invite'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-          <p className="mt-2 text-xs text-ink-muted">
-            They receive a text with an invitation code. You will also see the
-            code here to read out if the message does not arrive.
-          </p>
         </div>
       ) : null}
 

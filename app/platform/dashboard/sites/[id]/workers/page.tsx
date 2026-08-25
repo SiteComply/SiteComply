@@ -194,16 +194,18 @@ export default async function SiteWorkersPage({
   const selectedWorker = resolveSelected(searchParams?.item, roster);
   const workersPath = `/platform/dashboard/sites/${params.id}/workers`;
 
-  // ONE invite path. The toolbar button is a link that sets ?invite=1; the page
-  // then opens the access disclosure AND tells WorkerAccessManager to show its
-  // EXISTING invite form. No second form and no cross-component event — the
-  // same URL-parameter pattern this page already uses for row selection.
+  // ONE invite path. The toolbar button is a link that sets ?invite=1, which
+  // opens WorkerAccessManager's invite DIALOG directly. The access disclosure
+  // is deliberately left alone: the invite workflow no longer lives inside it,
+  // so there is nothing to scroll to and nothing to expand. Same URL-parameter
+  // pattern this page already uses for row selection, so the link stays
+  // shareable and the back button still works.
   const canInvite = canManageWorkerAccess(viewer.role) && access !== null;
   const autoOpenInvite = searchParams?.invite === '1' && canInvite;
   const inviteHref = `${workersPath}?${new URLSearchParams({
     ...(searchParams?.item ? { item: searchParams.item } : {}),
     invite: '1',
-  }).toString()}#manage-access`;
+  }).toString()}`;
 
   return (
     <PlatformShell>
@@ -409,11 +411,7 @@ export default async function SiteWorkersPage({
           list by default; before this it rendered a second list of the same
           workers directly beneath the first. */}
       {access ? (
-        <details
-          id="manage-access"
-          open={autoOpenInvite || undefined}
-          className="group mt-4 rounded-xl border border-line bg-surface shadow-card"
-        >
+        <details className="group mt-4 rounded-xl border border-line bg-surface shadow-card">
           <summary className="touch-target cursor-pointer list-none px-4 py-3 text-sm font-bold text-ink marker:content-none">
             <span className="inline-flex items-center gap-2">
               <span
