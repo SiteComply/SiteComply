@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { cn } from '@/lib/cn';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { SiteDetailHeader } from '@/components/platform/SiteDetailHeader';
+import { TABLE_TOOLBAR_CLASS } from '@/components/platform/TableSurface';
 import {
   WorkSurface,
   RailDetail,
@@ -216,19 +217,31 @@ export default async function SiteWorkersPage({
             /* The roster answers "who is on my project"; inviting is the direct
                continuation of that thought, so the action lives with the list
                rather than behind the access disclosure below. */
-            <div className="flex w-full flex-wrap items-center justify-between gap-3">
+            /* TABLE_TOOLBAR_CLASS makes this the table's own control strip —
+               recessed fill, bottom rule, standard padding — so the row is
+               attached to the roster instead of floating above it. items-center
+               overrides the class's items-end (meant for filter forms with
+               labels) so the button is centred on the heading's line. */
+            <div
+              className={cn(
+                TABLE_TOOLBAR_CLASS,
+                'w-full items-center justify-between',
+              )}
+            >
               <span className="text-sm font-semibold text-ink">
                 Workers on this project
               </span>
-              {/* Contextual listing action, not a page-level primary. Uses the
-                  emphasised list-action treatment already used by
-                  NotificationsList, PendingPhotos and AuditFindingsPanel —
-                  brand outline at px-3 py-1.5 — so it reads as "an action on
-                  this list" and sits on the heading's line at the same height.
-                  A solid primary here out-weighed the roster it belongs to. */}
+              {/* Solid green — inviting is a positive primary action — but at
+                  listing dimensions: px-3 py-1.5, rounded-lg, and NO
+                  touch-target. That utility sets min-h/min-w 3.25rem, which was
+                  overriding the padding and holding the button at 52px tall
+                  while stopping it hugging its label; the convention listing
+                  actions (NotificationsList, PendingPhotos, AuditFindingsPanel)
+                  omit it for exactly this reason. Colour carries the emphasis
+                  so the footprint does not have to. */}
               <Link
                 href={inviteHref}
-                className="touch-target inline-flex shrink-0 items-center rounded-lg border border-brand-500 px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+                className="inline-flex shrink-0 items-center rounded-lg bg-safe-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm shadow-safe-600/20 hover:bg-safe-600"
               >
                 Invite Worker
               </Link>
