@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { cn } from '@/lib/cn';
-import { Button } from '@/components/ui/Button';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { SiteDetailHeader } from '@/components/platform/SiteDetailHeader';
 import {
@@ -221,8 +220,17 @@ export default async function SiteWorkersPage({
               <span className="text-sm font-semibold text-ink">
                 Workers on this project
               </span>
-              <Link href={inviteHref} className="shrink-0">
-                <Button size="md">Invite Worker</Button>
+              {/* Contextual listing action, not a page-level primary. Uses the
+                  emphasised list-action treatment already used by
+                  NotificationsList, PendingPhotos and AuditFindingsPanel —
+                  brand outline at px-3 py-1.5 — so it reads as "an action on
+                  this list" and sits on the heading's line at the same height.
+                  A solid primary here out-weighed the roster it belongs to. */}
+              <Link
+                href={inviteHref}
+                className="touch-target inline-flex shrink-0 items-center rounded-lg border border-brand-500 px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+              >
+                Invite Worker
               </Link>
             </div>
           ) : undefined
