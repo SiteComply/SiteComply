@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { DEFAULT_PAGE_SIZE } from '@/lib/pagination';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { checkedOutAtWhere, type CheckinStatusFilter } from './checkinFilter';
 
@@ -44,12 +45,23 @@ export async function getCheckinCounts(
   return { all, onSite, checkedOut: all - onSite };
 }
 
-/** The (most recent `take`) check-ins for the viewer, narrowed by `filter`. */
+/**
+ * One page of check-ins for the viewer, newest first, narrowed by `filter`.
+ *
+ * This used to take a bare `take` defaulting to 25 and no offset, so the page
+ * could only ever show the 25 most recent records — while the status pills above
+ * it reported the true totals. Every check-in older than the 25th was
+ * unreachable. `skip`/`take` come from resolvePage() in lib/pagination.ts, the
+ * same helper Documents, Audits and Actions use.
+ *
+ * Paging cannot widen access: `skip`/`take` only slice a result set that the
+ * `where` clause has already constrained to the viewer's sites.
+ */
 export async function listCheckinsForViewer(
   viewer: PlatformViewer,
   filter: CheckinStatusFilter,
   siteId?: string | null,
-  take = 25,
+  opts: { skip?: number; take?: number } = {},
 ): Promise<CheckinListItem[]> {
   if (viewer.siteIds.length === 0) return [];
   // `siteId` is already validated against the viewer's own sites by
@@ -61,7 +73,8 @@ export async function listCheckinsForViewer(
       ...checkedOutAtWhere(filter),
     },
     orderBy: { checkedInAt: 'desc' },
-    take,
+    skip: opts.skip ?? 0,
+    take: opts.take ?? DEFAULT_PAGE_SIZE,
     select: {
       id: true,
       checkedInAt: true,

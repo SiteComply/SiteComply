@@ -24,6 +24,8 @@ import {
   type CheckinStatusFilter,
 } from '@/services/submissions/checkinFilter';
 import { SiteFilterSelect } from '@/components/platform/SiteFilterSelect';
+import { PaginationControls } from '@/components/platform/PaginationControls';
+import { resolvePage } from '@/lib/pagination';
 import {
   getCheckinCounts,
   listCheckinsForViewer,
@@ -42,7 +44,7 @@ export const dynamic = 'force-dynamic';
 export default async function PlatformSubmissionsPage({
   searchParams,
 }: {
-  searchParams: { status?: string; item?: string; site?: string };
+  searchParams: { status?: string; item?: string; site?: string; page?: string };
 }) {
   const viewer = await requirePlatformViewer();
   assertModuleView(viewer, 'checkins');
@@ -59,23 +61,45 @@ export default async function PlatformSubmissionsPage({
   // the "nothing recorded yet" branch — hiding the filters and leaving no way
   // back to All Sites except editing the URL. One extra count, and only when a
   // site filter is actually applied.
-  const [counts, submissions, orgTotal] = await Promise.all([
+  const [counts, orgTotal] = await Promise.all([
     getCheckinCounts(viewer, siteId),
-    listCheckinsForViewer(viewer, status, siteId),
     siteId ? getCheckinCounts(viewer).then((c) => c.all) : Promise.resolve(null),
   ]);
   const hasAnyCheckins = (orgTotal ?? counts.all) > 0;
-
-  // Selection is resolved against the rows ACTUALLY returned for this viewer
-  // and filter, so an id for a check-in outside their scope simply shows the
-  // empty rail — it never confirms the record exists.
-  const selected = resolveSelected(searchParams.item, submissions);
   const basePath = '/platform/dashboard/submissions';
 
   const countByFilter: Record<CheckinStatusFilter, number> = {
     all: counts.all,
     'on-site': counts.onSite,
     'checked-out': counts.checkedOut,
+  };
+
+  // The row query now runs AFTER the counts rather than beside them, because the
+  // page has to be clamped against a known total before we know which slice to
+  // fetch — the same order Documents, Audits and Actions use. It costs one round
+  // trip and buys the guarantee that `?page=999` can never render an empty table.
+  //
+  // The total is the count for the ACTIVE status filter, so "of N" always agrees
+  // with the highlighted pill above. No extra query: both numbers come from the
+  // getCheckinCounts call already made.
+  const pg = resolvePage(searchParams.page, countByFilter[status]);
+  const submissions = await listCheckinsForViewer(viewer, status, siteId, {
+    skip: pg.skip,
+    take: pg.take,
+  });
+
+  // Selection is resolved against the rows ACTUALLY returned for this viewer
+  // and filter, so an id for a check-in outside their scope simply shows the
+  // empty rail — it never confirms the record exists. It is now also scoped to
+  // the current page, which is the same rule: a row you cannot see is not
+  // selected.
+  const selected = resolveSelected(searchParams.item, submissions);
+
+  // Carried by both the row links and the pagination bar so paging keeps your
+  // filters and selecting a row keeps your place in the list.
+  const carriedParams = {
+    status: status === 'all' ? undefined : status,
+    site: siteId ?? undefined,
   };
 
   return (
@@ -172,6 +196,16 @@ export default async function PlatformSubmissionsPage({
             <WorkSurface
               railTitle="Check-in"
               railEmpty="Select a check-in to see its details."
+              // The shared bar Documents, Audits and Actions already use:
+              // "Showing X–Y of N" plus Previous / Next. `item` is carried so
+              // paging does not silently clear the rail selection.
+              footer={
+                <PaginationControls
+                  basePath={basePath}
+                  params={{ ...carriedParams, item: searchParams.item }}
+                  pg={pg}
+                />
+              }
               rail={
                 selected && (
                   <>
@@ -254,11 +288,15 @@ export default async function PlatformSubmissionsPage({
                         >
                           <td className="px-5 py-3">
                             <Link
-                              // Carries BOTH active filters, so selecting a row
-                              // never drops the list you selected it from.
+                              // Carries both active filters AND the current page,
+                              // so selecting a row never drops the list you
+                              // selected it from — or your place in it.
                               href={`${basePath}?${new URLSearchParams({
                                 ...(status === 'all' ? {} : { status }),
                                 ...(siteId ? { site: siteId } : {}),
+                                ...(pg.page > 1
+                                  ? { page: String(pg.page) }
+                                  : {}),
                                 item: s.id,
                               }).toString()}`}
                               className="font-semibold text-brand-700 hover:underline"
