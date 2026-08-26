@@ -10,6 +10,12 @@ export interface SelectableSite {
   jobReference: string;
   town: string;
   postcode: string;
+  /**
+   * Why the worker cannot currently check in here, when that is already known
+   * from their assignment. Absent means "nothing known to block you" — NOT
+   * "you may check in": requirement checks still run on the site itself.
+   */
+  blockedReason?: string;
 }
 
 const SELECTED_KEY = 'sitecomply.checkin.siteId';
@@ -19,6 +25,12 @@ const SELECTED_KEY = 'sitecomply.checkin.siteId';
  * site name and job reference — one tap takes the worker straight into that
  * site's induction. Search filters by name, job reference or town so big
  * contractors with many sites stay manageable on a phone.
+ *
+ * Sites the worker has no access to are SHOWN, not hidden, and stay tappable.
+ * Hiding them would leave a worker who should have been invited staring at a
+ * list that silently omits their site with nothing to act on; showing the
+ * reason tells them what to ask their site manager for. Tapping through still
+ * reaches the site page, which runs the full check and owns the final word.
  */
 export function SiteSelector({ sites }: { sites: SelectableSite[] }) {
   const router = useRouter();
@@ -70,18 +82,38 @@ export function SiteSelector({ sites }: { sites: SelectableSite[] }) {
               <button
                 type="button"
                 onClick={() => choose(site.id)}
-                className="touch-target flex w-full items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 text-left shadow-card transition-colors hover:border-brand-200 hover:bg-brand-50 active:bg-brand-100"
+                className={
+                  site.blockedReason
+                    ? 'touch-target flex w-full items-start justify-between gap-3 rounded-xl border border-line bg-surface-sunken p-4 text-left shadow-card transition-colors hover:bg-surface'
+                    : 'touch-target flex w-full items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 text-left shadow-card transition-colors hover:border-brand-200 hover:bg-brand-50 active:bg-brand-100'
+                }
               >
                 <span className="min-w-0">
-                  <span className="block truncate text-lg font-semibold text-ink">
-                    {site.name}
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-lg font-semibold text-ink">
+                      {site.name}
+                    </span>
+                    {site.blockedReason && (
+                      <span className="shrink-0 rounded-full bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger-700">
+                        No access
+                      </span>
+                    )}
                   </span>
                   <span className="mt-0.5 block text-sm text-ink-subtle">
                     Ref {site.jobReference} · {site.town}
                   </span>
+                  {site.blockedReason && (
+                    <span className="mt-1.5 block text-sm text-danger-700">
+                      {site.blockedReason}
+                    </span>
+                  )}
                 </span>
                 <span
-                  className="shrink-0 text-2xl text-brand-600"
+                  className={
+                    site.blockedReason
+                      ? 'shrink-0 text-2xl text-ink-subtle'
+                      : 'shrink-0 text-2xl text-brand-600'
+                  }
                   aria-hidden="true"
                 >
                   ›

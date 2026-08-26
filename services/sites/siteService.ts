@@ -20,6 +20,9 @@ export function listActiveSitesForSelection() {
       jobReference: true,
       town: true,
       postcode: true,
+      // Needed to work out, without a per-site round trip, whether this site
+      // enforces worker access at all — see siteAccessHintsForWorker.
+      workerAccessEnforced: true,
     },
   });
 }

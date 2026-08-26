@@ -5,6 +5,7 @@ import { SiteSelector } from '@/components/checkin/SiteSelector';
 import { getWorkerSession } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { listActiveSitesForSelection } from '@/services/sites/siteService';
+import { siteAccessHintsForWorker } from '@/services/workerAccess/workerAssignmentService';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,12 @@ export default async function CheckInSitePage() {
 
   const sites = await listActiveSitesForSelection();
 
+  // One assignment query for the whole list, so a worker can see which sites
+  // they can actually use before choosing one — rather than picking a site and
+  // being turned away on the next screen. Only blocked sites are marked; see
+  // siteAccessHintsForWorker for why "unmarked" is not a promise of access.
+  const blocked = await siteAccessHintsForWorker(worker.id, sites);
+
   return (
     <AppShell>
       <Steps current="Choose site" />
@@ -31,7 +38,12 @@ export default async function CheckInSitePage() {
         </p>
       </header>
 
-      <SiteSelector sites={sites} />
+      <SiteSelector
+        sites={sites.map((s) => ({
+          ...s,
+          blockedReason: blocked.get(s.id),
+        }))}
+      />
     </AppShell>
   );
 }

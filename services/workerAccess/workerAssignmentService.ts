@@ -70,13 +70,99 @@ export type AccessDecision =
  * site gate with an unexplained failure has no way to resolve it; being told
  * "your access is suspended — contact your site manager" is actionable.
  */
+/**
+ * The part of the access decision that needs nothing but the assignment row.
+ *
+ * Extracted so the site-selection list and canWorkerCheckIn cannot drift: the
+ * refusal WORDING lives here once. The list can then mark unavailable sites
+ * from a single bulk assignment query instead of running the full check per
+ * site, and a worker reads the same sentence in the list that they would read
+ * on the site itself.
+ *
+ * `blocked: false` is NOT the same as "may check in" — an ACTIVE, in-window
+ * assignment still has to clear the site's requirements (CSCS and the like),
+ * which needs further queries. That is what `requirementsPending` reports, and
+ * why the list only ever marks a site UNAVAILABLE, never "available": a false
+ * green is worse than no badge.
+ */
+export type AssignmentGate =
+  | { blocked: false; requirementsPending: boolean }
+  | { blocked: true; reason: string };
+
+export function evaluateAssignmentGate(
+  siteEnforced: boolean,
+  org: { invitedWorkersOnly: boolean; requireActiveSiteAssignment: boolean },
+  assignment: {
+    status: WorkerAssignmentStatus;
+    startDate: Date | null;
+    endDate: Date | null;
+  } | null,
+): AssignmentGate {
+  if (!siteEnforced && !org.invitedWorkersOnly) {
+    return { blocked: false, requirementsPending: false };
+  }
+
+  if (!assignment) {
+    return {
+      blocked: true,
+      reason:
+        'You have not been invited to this project. Ask your site manager to invite you before checking in.',
+    };
+  }
+
+  if (!siteEnforced && !org.requireActiveSiteAssignment) {
+    return { blocked: false, requirementsPending: false };
+  }
+
+  switch (assignment.status) {
+    case WorkerAssignmentStatus.ACTIVE: {
+      const state = windowState(assignment.startDate, assignment.endDate);
+      if (state === 'pending') {
+        return {
+          blocked: true,
+          reason: `Your access to this project starts on ${formatDateUK(assignment.startDate!)}. Please speak to your site manager if you need access sooner.`,
+        };
+      }
+      if (state === 'expired') {
+        return {
+          blocked: true,
+          reason: `Your access to this project ended on ${formatDateUK(assignment.endDate!)}. Ask your site manager to extend it.`,
+        };
+      }
+      return { blocked: false, requirementsPending: true };
+    }
+    case WorkerAssignmentStatus.INVITED:
+      return {
+        blocked: true,
+        reason:
+          'Your access to this project is awaiting approval. Your site manager needs to approve it before you can check in.',
+      };
+    case WorkerAssignmentStatus.SUSPENDED:
+      return {
+        blocked: true,
+        reason:
+          'Your access to this project has been suspended. Please speak to your site manager.',
+      };
+    case WorkerAssignmentStatus.REMOVED:
+      return {
+        blocked: true,
+        reason:
+          'You are no longer assigned to this project. Ask your site manager if you should be.',
+      };
+    default:
+      return { blocked: true, reason: 'You cannot check in to this project.' };
+  }
+}
+
 export async function canWorkerCheckIn(
   workerId: string,
   siteId: string,
 ): Promise<AccessDecision> {
   const site = await prisma.jobSite.findUnique({
     where: { id: siteId },
-    select: { workerAccessEnforced: true },
+    // `name` is selected here rather than re-queried inside the requirements
+    // branch, which is one fewer round trip on the path that needs it.
+    select: { workerAccessEnforced: true, name: true },
   });
   if (!site)
     return { allowed: false, reason: 'That site is no longer available.' };
@@ -96,87 +182,34 @@ export async function canWorkerCheckIn(
    * deploying before anyone saves changes nothing. */
   const org = await getAuthRuntimeConfig();
   const siteEnforced = site.workerAccessEnforced;
-  if (!siteEnforced && !org.invitedWorkersOnly) {
-    return { allowed: true, enforced: false };
-  }
 
-  const assignment = await prisma.workerSiteAssignment.findUnique({
-    where: { workerId_jobSiteId: { workerId, jobSiteId: siteId } },
-    select: { status: true, startDate: true, endDate: true },
-  });
+  const assignment =
+    siteEnforced || org.invitedWorkersOnly
+      ? await prisma.workerSiteAssignment.findUnique({
+          where: { workerId_jobSiteId: { workerId, jobSiteId: siteId } },
+          select: { status: true, startDate: true, endDate: true },
+        })
+      : null;
 
-  if (!assignment) {
-    return {
-      allowed: false,
-      reason:
-        'You have not been invited to this project. Ask your site manager to invite you before checking in.',
-    };
-  }
+  // Shared with the site-selection list, so both read from one set of words.
+  const gate = evaluateAssignmentGate(siteEnforced, org, assignment);
+  if (gate.blocked) return { allowed: false, reason: gate.reason };
 
-  /* The assignment EXISTS. Whether it must also be active is decided by the
-   * site's own enforcement (unchanged) or by the stricter organisation setting.
-   * With only "invited workers only" on, having been invited is the bar — a
-   * worker whose assignment is suspended on a non-enforcing site is not turned
-   * away by a rule nobody switched on. */
-  if (!siteEnforced && !org.requireActiveSiteAssignment) {
-    return { allowed: true, enforced: true };
-  }
-
-  switch (assignment.status) {
-    case WorkerAssignmentStatus.ACTIVE: {
-      // SC-023 Phase 2 — the access window, DERIVED. Checked only for an
-      // otherwise-active assignment: a suspended worker should be told they are
-      // suspended, not that their dates have lapsed.
-      const state = windowState(assignment.startDate, assignment.endDate);
-      if (state === 'pending') {
-        return {
-          allowed: false,
-          reason: `Your access to this project starts on ${formatDateUK(assignment.startDate!)}. Please speak to your site manager if you need access sooner.`,
-        };
-      }
-      if (state === 'expired') {
-        return {
-          allowed: false,
-          reason: `Your access to this project ended on ${formatDateUK(assignment.endDate!)}. Ask your site manager to extend it.`,
-        };
-      }
-      // SC-023 Phase 3 — competency and induction requirements, evaluated LAST.
-      // A worker whose assignment is fine but whose card has lapsed should be
-      // told about the card, not sent looking for an approval problem.
-      const unmet = await evaluateRequirements(workerId, siteId);
-      if (unmet.length > 0) {
-        const site = await prisma.jobSite.findUnique({
-          where: { id: siteId },
-          select: { name: true },
-        });
-        return {
-          allowed: false,
-          reason: formatUnmetMessage(site?.name ?? 'this project', unmet),
-        };
-      }
-      return { allowed: true, enforced: true };
+  // SC-023 Phase 3 — competency and induction requirements, evaluated LAST. A
+  // worker whose assignment is fine but whose card has lapsed should be told
+  // about the card, not sent looking for an approval problem. This needs more
+  // queries, which is why the list cannot cheaply pre-empt it.
+  if (gate.requirementsPending) {
+    const unmet = await evaluateRequirements(workerId, siteId);
+    if (unmet.length > 0) {
+      return {
+        allowed: false,
+        reason: formatUnmetMessage(site.name ?? 'this project', unmet),
+      };
     }
-    case WorkerAssignmentStatus.INVITED:
-      return {
-        allowed: false,
-        reason:
-          'Your access to this project is awaiting approval. Your site manager needs to approve it before you can check in.',
-      };
-    case WorkerAssignmentStatus.SUSPENDED:
-      return {
-        allowed: false,
-        reason:
-          'Your access to this project has been suspended. Please speak to your site manager.',
-      };
-    case WorkerAssignmentStatus.REMOVED:
-      return {
-        allowed: false,
-        reason:
-          'You are no longer assigned to this project. Ask your site manager if you should be.',
-      };
-    default:
-      return { allowed: false, reason: 'You cannot check in to this project.' };
   }
+
+  return { allowed: true, enforced: siteEnforced || org.invitedWorkersOnly };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1185,4 +1218,50 @@ export async function setSiteRequirement(
     `${requirementMeta(requirement).label}${enabled ? ` — ${blockedAtEnable} worker(s) did not meet it at the time` : ''}`,
   );
   return { ok: true, blockedAtEnable };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Site-selection hints                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Which of these sites the worker currently cannot check in to, and why.
+ *
+ * For the worker's site-selection list. Costs ONE assignment query for the
+ * whole list rather than a full access check per site, by reusing
+ * evaluateAssignmentGate — so the sentence shown against a site here is the
+ * same sentence they would meet on the site itself.
+ *
+ * ONLY NEGATIVE ANSWERS ARE RETURNED. A site absent from the map is "nothing
+ * known to block you", not "you may check in": an ACTIVE assignment still has
+ * to clear the site's requirements, which needs per-site queries this
+ * deliberately avoids. Those are caught on the site landing page. Marking a
+ * site available and then refusing it would be worse than not marking it.
+ */
+export async function siteAccessHintsForWorker(
+  workerId: string,
+  sites: { id: string; workerAccessEnforced: boolean }[],
+): Promise<Map<string, string>> {
+  const org = await getAuthRuntimeConfig();
+  const relevant = sites.filter(
+    (s) => s.workerAccessEnforced || org.invitedWorkersOnly,
+  );
+  const hints = new Map<string, string>();
+  if (relevant.length === 0) return hints;
+
+  const assignments = await prisma.workerSiteAssignment.findMany({
+    where: { workerId, jobSiteId: { in: relevant.map((s) => s.id) } },
+    select: { jobSiteId: true, status: true, startDate: true, endDate: true },
+  });
+  const bySite = new Map(assignments.map((a) => [a.jobSiteId, a]));
+
+  for (const site of relevant) {
+    const gate = evaluateAssignmentGate(
+      site.workerAccessEnforced,
+      org,
+      bySite.get(site.id) ?? null,
+    );
+    if (gate.blocked) hints.set(site.id, gate.reason);
+  }
+  return hints;
 }
