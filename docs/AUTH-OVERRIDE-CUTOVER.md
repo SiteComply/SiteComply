@@ -6,8 +6,9 @@ when CSCS Smart Check onboarding is complete and the platform moves into full pr
 operation.
 
 **Status: overrides remain ENABLED by decision.** They are in active use while SiteComply
-is under test. Nothing in this document has been executed. Verified against the live App
-Service on 26 August 2026.
+is under test, and §7 has **not** been executed. The one part that *has* been carried out
+is §6 — the unrelated `SMS_PROVIDER=mock` setting was removed on 26 August 2026, which
+does not affect any override. Verified against the live App Service on 26 August 2026.
 
 ---
 
@@ -31,7 +32,7 @@ Related, not an override but part of the same cutover:
 
 | Setting | Value | Note |
 |---|---|---|
-| `SMS_PROVIDER` | `mock` | Currently inert — see §6 |
+| ~~`SMS_PROVIDER`~~ | ~~`mock`~~ | ✅ **REMOVED 26 Aug 2026** — see §6 |
 
 **All three mechanisms are fail-closed.** Each requires its `*_ENABLED` to be exactly
 `"1"` *and* a non-empty allow-list *and* a non-empty code. Miss any one and the mechanism
@@ -151,9 +152,10 @@ requests per hour per mobile.** Six testers sharing one handset would hit that c
       non-override account has completed `/start` → SMS → `/verify` in production. This
       proves the real path end to end before you depend on it.
 - [ ] **The SMS provider is confirmed working.** `resolveSmsProvider()` reads the
-      `SmsConfig` row from Admin → Settings → Integrations first and only falls back to
-      the `SMS_PROVIDER` env var when no row exists. Confirm an active row exists and
-      that it is **not** the mock.
+      `SmsConfig` row from Admin → Settings → Integrations first. Since 26 Aug 2026 there
+      is no env fallback configured at all, so if that row is ever absent the send path
+      raises instead of silently mocking (§6). Confirm an active row exists and that it is
+      **not** the mock. (Confirmed Twilio, 26 Aug 2026.)
 - [ ] **A decision is recorded for the five `@sitecomply.co.uk` test accounts** — delete
       them, or give them real mobiles and keep them as staffed accounts. Leaving them
       ACTIVE with no mobile creates six unusable accounts in the users list.
@@ -161,22 +163,50 @@ requests per hour per mobile.** Six testers sharing one handset would hit that c
 - [ ] **A maintenance window is agreed.** App-setting changes restart the container;
       allow 3–4 minutes during which sign-in is unavailable.
 
-## 6. `SMS_PROVIDER=mock` — remove it in the same pass
+## 6. `SMS_PROVIDER=mock` — ✅ DONE, removed 26 August 2026
 
-Currently inert, because the `SmsConfig` database row takes precedence. But the fallback
-logic is:
+**This half of the cutover is already complete.** It was separable from the overrides
+because provider selection and the override mechanisms never interact, so it did not need
+to wait for CSCS onboarding.
+
+### Why it was removed
+
+It was inert in normal operation — the singleton `SmsConfig` row (Twilio, admin-confirmed)
+short-circuits the decision in both `resolveSmsProvider()` and `resolveProviderId()` before
+either reads the environment. The fallback logic is:
 
 ```
 env SMS_PROVIDER  ??  (NODE_ENV === 'production' ? 'acs' : 'mock')
 ```
 
-If the `SmsConfig` row is ever deleted or deactivated, the presence of this variable makes
-production fall back to the **mock provider** — OTPs stop being delivered, silently, with
-no error. If the variable were simply absent, the same situation would correctly fall back
-to `acs`.
+The risk was in the abnormal case. If the `SmsConfig` row is ever deleted, reset or lost in
+a restore:
 
-**The setting is strictly worse than not having it.** Delete it rather than changing its
-value.
+| | with `SMS_PROVIDER=mock` | with it absent |
+|---|---|---|
+| Provider | `mock` | `acs` |
+| Send result | **reports success**, delivers nothing | **throws** — `requireEnv('ACS_CONNECTION_STRING')` fails |
+| Who notices | nobody, until users cannot sign in | immediately — `send_failed` + logged error |
+| OTP codes | **written in plaintext to the App Service log stream** | never logged |
+
+`MockSmsProvider.send()` writes the full message body — which contains the live code — to
+the server console and returns success. Its doc comment reads *"Never selected in
+production"*; `SMS_PROVIDER=mock` was the only thing making that false.
+
+**The setting was strictly worse than its own absence**, so it was deleted rather than
+re-pointed at `acs` or `twilio` — any value re-creates a second source of truth that
+disagrees with the database the moment an admin changes provider.
+
+### What was verified afterwards
+
+Settings 35 → 34; `SMS_PROVIDER` absent; **no `SMS_*`, `ACS_*` or `TWILIO_*` setting exists
+in App Service at all** (all provider credentials are database-held); site `Running`;
+`/api/health` 200; `/` and `/check-in` 200; both OTP routes alive; all nine override
+settings intact. No code change and no deploy — `main` stayed at `d496469`.
+
+### Note for the remaining cutover
+
+The Step 3 command below **no longer includes `SMS_PROVIDER`**, and §8 must not restore it.
 
 ## 7. Cutover procedure
 
@@ -186,7 +216,7 @@ All commands run from Azure Cloud Shell or an authenticated `az` session.
 
 ```bash
 az webapp config appsettings list -g rgSiteComply -n sitecomply-web \
-  --query "[?contains(name,'TEST_LOGIN') || contains(name,'DEV_LOGIN') || contains(name,'SMS_PROVIDER')]" \
+  --query "[?contains(name,'TEST_LOGIN') || contains(name,'DEV_LOGIN')]" \
   -o json > override-settings-backup.json
 ```
 
@@ -212,8 +242,7 @@ az webapp config appsettings delete -g rgSiteComply -n sitecomply-web --setting-
   PLATFORM_TEST_LOGIN_CODE \
   WORKER_TEST_LOGIN_ENABLED \
   WORKER_TEST_LOGIN_MOBILES \
-  WORKER_TEST_LOGIN_CODE \
-  SMS_PROVIDER
+  WORKER_TEST_LOGIN_CODE
 ```
 
 > Unsetting the three `*_ENABLED` variables alone is sufficient to disable every
@@ -229,7 +258,7 @@ the new one starts. Wait 3–4 minutes, then confirm the new container is actual
 sleep 240
 curl -s https://sitecomply-web.azurewebsites.net/api/health
 az webapp config appsettings list -g rgSiteComply -n sitecomply-web \
-  --query "[?contains(name,'TEST_LOGIN') || contains(name,'DEV_LOGIN') || contains(name,'SMS_PROVIDER')]" -o tsv
+  --query "[?contains(name,'TEST_LOGIN') || contains(name,'DEV_LOGIN')]" -o tsv
 ```
 
 The second command must return **nothing**.
@@ -276,7 +305,7 @@ az webapp config appsettings set -g rgSiteComply -n sitecomply-web --settings \
   WORKER_TEST_LOGIN_CODE=231001
 ```
 
-Do **not** restore `SMS_PROVIDER=mock` — it was never doing anything useful (§6).
+`SMS_PROVIDER` is **not** in this list and must not be re-added — it was removed separately on 26 Aug 2026 (§6).
 
 No deploy, no code change and no database change is involved in either direction. The
 whole cutover is reversible in about four minutes.
@@ -304,7 +333,7 @@ allowed to become the basis of a future gate. See tag
 | `jc@parryst.com` has no mobile on file → total lockout | **High** | §5 pre-condition check; §8 rollback in ~4 min |
 | SMS provider not actually working | **High** | §5 requires a proven real sign-in first |
 | Test accounts left ACTIVE but unusable | Medium | §7 Step 7 |
-| `SmsConfig` row later removed while `SMS_PROVIDER=mock` set | Medium | §6 — delete the variable |
+| ~~`SmsConfig` row later removed while `SMS_PROVIDER=mock` set~~ | ~~Medium~~ | ✅ Resolved 26 Aug 2026 — variable deleted (§6) |
 | Rate limits surprise testers post-cutover | Low | 5/hour per mobile; use separate handsets |
 
 The design decisions that make this safe were made when the overrides were built: they are
