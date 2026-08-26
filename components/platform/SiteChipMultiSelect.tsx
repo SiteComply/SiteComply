@@ -88,7 +88,7 @@ export function SiteChipMultiSelect({
         </span>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {sites.map((s) => (
           <label key={s.id} className="relative inline-flex">
             {/* sr-only, not hidden: it stays focusable and reachable by
@@ -102,11 +102,20 @@ export function SiteChipMultiSelect({
             />
             <span
               className={[
-                // min-h-[44px] rather than the 52px `touch-target`: a comfortable
-                // tap target without the chips looking like buttons.
-                'inline-flex min-h-[44px] cursor-pointer select-none items-center gap-1.5',
-                'rounded-full border border-line-strong bg-surface px-3.5 py-1.5',
-                'text-sm font-semibold text-ink-muted transition-colors',
+                // Sized as a FILTER TAG, not a button. Weight sits between the
+                // status badges (px-2 py-0.5 text-xs) and the SegmentedNav pills
+                // (px-3 py-1.5 text-sm), so the strip reads as part of that
+                // family rather than a row of controls.
+                //
+                // 16px line + 8px padding + 2px border = 26px tall. That clears
+                // the 24x24 CSS px floor in WCAG 2.2 SC 2.5.8 (Target Size,
+                // Minimum, AA) — the smallest defensible size, which is what was
+                // asked for. Reports are run at a desk on the platform side, not
+                // thumbed on scaffolding, so the 44px touch guidance that governs
+                // the worker journey is not the right benchmark here.
+                'inline-flex cursor-pointer select-none items-center gap-1',
+                'rounded-md border border-line-strong bg-surface px-2.5 py-1',
+                'text-xs font-semibold leading-4 text-ink-muted transition-colors',
                 'hover:border-brand-200 hover:text-ink',
                 // Selected state matches SegmentedNav, so the filter reads as the
                 // same family as the Check-ins and Sites status strips.
@@ -119,7 +128,7 @@ export function SiteChipMultiSelect({
                 // because `peer-checked:` compiles to a general-sibling selector
                 // (`.peer:checked ~ …`) and so cannot reach a descendant. A
                 // nested span would simply never change.
-                "before:text-xs before:font-bold before:leading-none before:content-['+']",
+                "before:text-[10px] before:font-bold before:leading-none before:content-['+']",
                 "peer-checked:before:content-['✓']",
               ].join(' ')}
             >
