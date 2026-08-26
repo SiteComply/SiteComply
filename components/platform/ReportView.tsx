@@ -1,13 +1,16 @@
 import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
 import { PageHeader } from '@/components/platform/PageHeader';
 import { Panel } from '@/components/platform/Panel';
+import { SiteChipMultiSelect } from '@/components/platform/SiteChipMultiSelect';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import type { ReportFilters } from '@/services/reports/reportFilters';
 
 /**
  * Shared building blocks for report pages: a header (with scope + optional
  * export), a GET-form filter bar (Date From / Date To + Site multi-select,
- * server-rendered, no client JS), and a KPI card grid.
+ * server-rendered), and a KPI card grid. The site chips add All/None as a
+ * progressive enhancement; the checkboxes and the GET submission still work
+ * with JavaScript unavailable.
  */
 
 export function ReportHeader({
@@ -119,43 +122,18 @@ export function ReportFilterBar({
         </label>
       )}
 
+      {/* Sites are chosen on almost every report run, so they are always
+          visible. This was a <details> that collapsed above six sites, which
+          cost a click on exactly the organisations with the most sites to
+          choose between. The inputs are unchanged — same name="sites", same
+          values, same GET submission — so nothing downstream is affected. */}
       {viewer.sites.length > 1 && (
-        <details
-          className="group mt-3 border-t border-line pt-3"
-          open={viewer.sites.length <= 6}
-        >
-          <summary className="touch-target cursor-pointer list-none text-xs font-semibold uppercase tracking-wide text-ink-subtle marker:content-none">
-            <span className="inline-flex items-center gap-2">
-              <span
-                aria-hidden="true"
-                className="transition-transform group-open:rotate-90"
-              >
-                ›
-              </span>
-              Sites
-              <span className="normal-case tracking-normal text-ink-subtle">
-                ({selected.size} of {viewer.sites.length} selected)
-              </span>
-            </span>
-          </summary>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-            {viewer.sites.map((s) => (
-              <label
-                key={s.id}
-                className="inline-flex items-center gap-2 text-sm text-ink"
-              >
-                <input
-                  type="checkbox"
-                  name="sites"
-                  value={s.id}
-                  defaultChecked={selected.has(s.id)}
-                  className="h-4 w-4 accent-brand-600"
-                />
-                {s.name}
-              </label>
-            ))}
-          </div>
-        </details>
+        <SiteChipMultiSelect
+          sites={viewer.sites.map((s) => ({ id: s.id, name: s.name }))}
+          selectedIds={viewer.sites
+            .filter((s) => selected.has(s.id))
+            .map((s) => s.id)}
+        />
       )}
     </form>
   );
