@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import {
   querySubmissions,
+  countSubmissions,
+  listCap,
   listSitesForFilter,
 } from '@/services/submissions/submissionQueryService';
 import { formatDateTimeUK } from '@/lib/datetime';
@@ -34,10 +36,15 @@ export default async function SubmissionsPage({
     status: searchParams.status || undefined,
   };
 
-  const [sites, rows] = await Promise.all([
+  // `total` is an independent count(), not rows.length. The screen used to
+  // print the length of a capped result set as "N records found", so past the
+  // cap it reported the cap as though it were the total.
+  const [sites, rows, total] = await Promise.all([
     listSitesForFilter(),
     querySubmissions(filters),
+    countSubmissions(filters),
   ]);
+  const truncated = total > rows.length;
 
   const exportQs = new URLSearchParams(
     Object.entries(filters).filter(([, v]) => v) as [string, string][],
@@ -135,7 +142,17 @@ export default async function SubmissionsPage({
       </form>
 
       <p className="text-sm text-ink-subtle">
-        {rows.length} {rows.length === 1 ? 'record' : 'records'} found.
+        {/* The true total always, so this figure never contradicts the data. */}
+        {total.toLocaleString('en-GB')} {total === 1 ? 'record' : 'records'} found.
+        {truncated && (
+          // Only when the list is actually cut short. The same wording the
+          // Reports suite uses, and the export it points at really is complete.
+          <>
+            {' '}
+            Showing the first {listCap().toLocaleString('en-GB')} — export CSV
+            for all.
+          </>
+        )}
       </p>
 
       {rows.length === 0 ? (
