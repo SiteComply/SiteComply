@@ -123,3 +123,25 @@ selection, alongside the existing access hints — would remove a late surprise.
 Deferred as a lower-priority polish item; the access-gate work that shipped in August
 2026 addressed the more disruptive version of the same problem (invitation and
 site-assignment refusals now appear at site selection rather than at submit time).
+
+---
+
+## BL-003 — Retire CSCS mock verification
+
+**Status:** Scheduled — known pre-go-live dependency
+**Raised:** 26 August 2026
+**Reference:** `docs/CSCS-CUTOVER.md`, `scripts/audit_cscs_mock_verifications.sql`
+
+The CSCS integration runs on `MockCscsProvider` in production. It returns `VALID` /
+`verified: true` for any plausible card number, writes a fabricated expiry (verification
+date + 3 years) and invented qualification records to the worker, and tells the worker
+*"Card verified against the CSCS Smart Check service."*
+
+Accepted as a pre-go-live dependency rather than a live defect because SiteComply is not
+yet in customer use. **Phase 1 of the cutover checklist must complete before the first
+customer**, independently of when Smart Check is connected — the mock's output is
+indistinguishable from a real verification in the UI, and `CSCS_VERIFIED` is a live
+site-access requirement that reads the flag it sets.
+
+Full behaviour, identification method and the phased checklist are in
+`docs/CSCS-CUTOVER.md`. No code changes made.
