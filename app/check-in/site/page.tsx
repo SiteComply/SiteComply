@@ -22,11 +22,11 @@ export default async function CheckInSitePage() {
 
   const sites = await listActiveSitesForSelection();
 
-  // One assignment query for the whole list, so a worker can see which sites
-  // they can actually use before choosing one — rather than picking a site and
-  // being turned away on the next screen. Only blocked sites are marked; see
-  // siteAccessHintsForWorker for why "unmarked" is not a promise of access.
-  const blocked = await siteAccessHintsForWorker(worker.id, sites);
+  // A fixed number of queries for the whole list, so a worker can see which
+  // sites they can actually use before choosing one — rather than picking a
+  // site and being turned away on the next screen. Empty when nothing enforces
+  // access, in which case the list renders exactly as it always has.
+  const access = await siteAccessHintsForWorker(worker.id, sites);
 
   return (
     <AppShell>
@@ -39,10 +39,18 @@ export default async function CheckInSitePage() {
       </header>
 
       <SiteSelector
-        sites={sites.map((s) => ({
-          ...s,
-          blockedReason: blocked.get(s.id),
-        }))}
+        sites={sites.map((s) => {
+          const hint = access.get(s.id);
+          return {
+            ...s,
+            // The full sentence is deliberately not passed: the list shows the
+            // short label, and the site page states the reason in full.
+            access:
+              hint?.state === 'blocked'
+                ? { state: 'blocked' as const, short: hint.short }
+                : hint,
+          };
+        })}
       />
     </AppShell>
   );

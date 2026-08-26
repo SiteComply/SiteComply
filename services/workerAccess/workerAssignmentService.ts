@@ -87,7 +87,7 @@ export type AccessDecision =
  */
 export type AssignmentGate =
   | { blocked: false; requirementsPending: boolean }
-  | { blocked: true; reason: string };
+  | { blocked: true; reason: string; short: string };
 
 export function evaluateAssignmentGate(
   siteEnforced: boolean,
@@ -105,6 +105,7 @@ export function evaluateAssignmentGate(
   if (!assignment) {
     return {
       blocked: true,
+      short: 'Not invited',
       reason:
         'You have not been invited to this project. Ask your site manager to invite you before checking in.',
     };
@@ -120,12 +121,14 @@ export function evaluateAssignmentGate(
       if (state === 'pending') {
         return {
           blocked: true,
+          short: `Access starts ${formatDateUK(assignment.startDate!)}`,
           reason: `Your access to this project starts on ${formatDateUK(assignment.startDate!)}. Please speak to your site manager if you need access sooner.`,
         };
       }
       if (state === 'expired') {
         return {
           blocked: true,
+          short: `Access ended ${formatDateUK(assignment.endDate!)}`,
           reason: `Your access to this project ended on ${formatDateUK(assignment.endDate!)}. Ask your site manager to extend it.`,
         };
       }
@@ -134,23 +137,30 @@ export function evaluateAssignmentGate(
     case WorkerAssignmentStatus.INVITED:
       return {
         blocked: true,
+        short: 'Awaiting approval',
         reason:
           'Your access to this project is awaiting approval. Your site manager needs to approve it before you can check in.',
       };
     case WorkerAssignmentStatus.SUSPENDED:
       return {
         blocked: true,
+        short: 'Access suspended',
         reason:
           'Your access to this project has been suspended. Please speak to your site manager.',
       };
     case WorkerAssignmentStatus.REMOVED:
       return {
         blocked: true,
+        short: 'No longer assigned',
         reason:
           'You are no longer assigned to this project. Ask your site manager if you should be.',
       };
     default:
-      return { blocked: true, reason: 'You cannot check in to this project.' };
+      return {
+        blocked: true,
+        short: 'Not available',
+        reason: 'You cannot check in to this project.',
+      };
   }
 }
 
@@ -1225,43 +1235,86 @@ export async function setSiteRequirement(
 /* -------------------------------------------------------------------------- */
 
 /**
- * Which of these sites the worker currently cannot check in to, and why.
+ * Per-site access state for the worker's site-selection list.
  *
- * For the worker's site-selection list. Costs ONE assignment query for the
- * whole list rather than a full access check per site, by reusing
- * evaluateAssignmentGate — so the sentence shown against a site here is the
- * same sentence they would meet on the site itself.
+ * Costs a fixed number of queries for the WHOLE list — one config read, one
+ * bulk assignment query, one bulk requirements query — rather than a full
+ * access check per site, by reusing evaluateAssignmentGate. The label shown
+ * against a site therefore comes from the same function as the sentence they
+ * would meet on the site itself, and the two cannot drift.
  *
- * ONLY NEGATIVE ANSWERS ARE RETURNED. A site absent from the map is "nothing
- * known to block you", not "you may check in": an ACTIVE assignment still has
- * to clear the site's requirements, which needs per-site queries this
- * deliberately avoids. Those are caught on the site landing page. Marking a
- * site available and then refusing it would be worse than not marking it.
+ * THREE STATES, and the distinction between the last two is the honest bit:
+ *
+ *  blocked  — refused by the assignment rules. Short label for the list, full
+ *             sentence for the site page.
+ *  granted  — the assignment check passed AND this site has no access
+ *             requirements configured, so there is nothing further to fail:
+ *             "Access Granted" is a claim we can actually make.
+ *  unknown  — the assignment check passed but the site HAS requirements (a
+ *             verified card, a passed knowledge check). Those need per-worker
+ *             queries this deliberately avoids, so the site is neither blocked
+ *             nor promised, and carries no badge. Promising access and then
+ *             refusing it on arrival would be worse than saying nothing.
  */
+export type SiteAccessHint =
+  | { state: 'blocked'; short: string; full: string }
+  | { state: 'granted' }
+  | { state: 'unknown' };
+
 export async function siteAccessHintsForWorker(
   workerId: string,
   sites: { id: string; workerAccessEnforced: boolean }[],
-): Promise<Map<string, string>> {
+): Promise<Map<string, SiteAccessHint>> {
+  const hints = new Map<string, SiteAccessHint>();
+  if (sites.length === 0) return hints;
+
   const org = await getAuthRuntimeConfig();
-  const relevant = sites.filter(
+  const enforcing = sites.filter(
     (s) => s.workerAccessEnforced || org.invitedWorkersOnly,
   );
-  const hints = new Map<string, string>();
-  if (relevant.length === 0) return hints;
 
-  const assignments = await prisma.workerSiteAssignment.findMany({
-    where: { workerId, jobSiteId: { in: relevant.map((s) => s.id) } },
-    select: { jobSiteId: true, status: true, startDate: true, endDate: true },
-  });
+  // Nothing enforces access, so no site can be distinguished from another.
+  // Badging every site "Access Granted" would be noise carrying no
+  // information, so the list is left exactly as it is today.
+  if (enforcing.length === 0) return hints;
+
+  const ids = enforcing.map((s) => s.id);
+  const [assignments, withRequirements] = await Promise.all([
+    prisma.workerSiteAssignment.findMany({
+      where: { workerId, jobSiteId: { in: ids } },
+      select: { jobSiteId: true, status: true, startDate: true, endDate: true },
+    }),
+    // Which of these sites has ANY requirement switched on. evaluateRequirements
+    // returns immediately for a site with none, so "no rows here" means the
+    // assignment check was the whole check.
+    prisma.siteAccessRequirement.findMany({
+      where: { jobSiteId: { in: ids }, enabled: true },
+      select: { jobSiteId: true },
+      distinct: ['jobSiteId'],
+    }),
+  ]);
+
   const bySite = new Map(assignments.map((a) => [a.jobSiteId, a]));
+  const gated = new Set(withRequirements.map((r) => r.jobSiteId));
 
-  for (const site of relevant) {
+  for (const site of enforcing) {
     const gate = evaluateAssignmentGate(
       site.workerAccessEnforced,
       org,
       bySite.get(site.id) ?? null,
     );
-    if (gate.blocked) hints.set(site.id, gate.reason);
+    if (gate.blocked) {
+      hints.set(site.id, {
+        state: 'blocked',
+        short: gate.short,
+        full: gate.reason,
+      });
+    } else {
+      hints.set(site.id, {
+        state: gated.has(site.id) ? 'unknown' : 'granted',
+      });
+    }
   }
   return hints;
 }
+
