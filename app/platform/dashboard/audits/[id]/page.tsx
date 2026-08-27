@@ -86,7 +86,7 @@ export default async function AuditDetailPage({
         title={audit.title}
         badges={
           <span
-            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+            className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${
               AUDIT_STATUS_BADGE[audit.status as AuditStatusValue]
             }`}
           >

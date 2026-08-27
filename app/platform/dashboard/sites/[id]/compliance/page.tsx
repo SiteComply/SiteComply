@@ -233,7 +233,7 @@ export default async function SiteCompliancePage({
                   value={
                     <span
                       className={cn(
-                        'inline-flex rounded-full px-2 py-0.5 text-xs font-semibold',
+                        'inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold',
                         selectedWork.statusBadge,
                       )}
                     >
@@ -362,7 +362,7 @@ export default async function SiteCompliancePage({
                         <td className="px-5 py-3">
                           <span
                             className={cn(
-                              'inline-flex rounded-full px-2 py-0.5 text-xs font-semibold',
+                              'inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold',
                               row.statusBadge,
                             )}
                           >

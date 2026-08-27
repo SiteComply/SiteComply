@@ -196,7 +196,7 @@ export default async function PlatformAuditsPage({
                     <td className="px-5 py-3 text-ink">{a.jobSite.name}</td>
                     <td className="px-5 py-3">
                       <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${
                           AUDIT_STATUS_BADGE[a.status as AuditStatusValue]
                         }`}
                       >
@@ -209,7 +209,7 @@ export default async function PlatformAuditsPage({
                     <td className="px-5 py-3">
                       {a.scoringEnabled && a.calculatedPassed !== null ? (
                         <span
-                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${
                             a.calculatedPassed
                               ? 'bg-safe-50 text-safe-700'
                               : 'bg-danger-50 text-danger-700'
