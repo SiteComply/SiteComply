@@ -65,11 +65,14 @@ const WORKER_NAV: {
     icon: 'doc',
     panels: ['SITE_DOCUMENTS'],
   },
+  // Actions is the last of the worker's own tasks, so it sits with them rather
+  // than below the reference material. Contacts and Emergency info are things
+  // you look up rather than do, so they close the list.
   {
-    href: '/worker/emergency',
-    label: 'Emergency info',
-    icon: 'alert',
-    panels: ['EMERGENCY_INFORMATION', 'FIRST_AIDER', 'FIRE_ASSEMBLY_POINT'],
+    href: '/worker/actions',
+    label: 'Actions',
+    icon: 'clipboard',
+    panels: ['OUTSTANDING_ACTIONS'],
   },
   {
     href: '/worker/contacts',
@@ -78,10 +81,10 @@ const WORKER_NAV: {
     panels: ['SITE_CONTACTS'],
   },
   {
-    href: '/worker/actions',
-    label: 'Actions',
-    icon: 'clipboard',
-    panels: ['OUTSTANDING_ACTIONS'],
+    href: '/worker/emergency',
+    label: 'Emergency info',
+    icon: 'alert',
+    panels: ['EMERGENCY_INFORMATION', 'FIRST_AIDER', 'FIRE_ASSEMBLY_POINT'],
   },
 ];
 
