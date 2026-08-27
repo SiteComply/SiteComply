@@ -130,17 +130,26 @@ export function DocumentForm({
       // SC-017: upload the annotated copy as its own Document, linked back to the
       // original that was just created. A failure here must NOT lose the original
       // upload, so it only surfaces a message.
+      //
+      // The copy carries the UPLOADER'S OWN title and the original's base name.
+      // It used to be titled "<title> (annotated)" and stored as
+      // "<name>-annotated.jpg", which meant annotation — an internal detail of
+      // how the file was produced — was written into the two fields the whole
+      // platform displays, and then had to be stripped back out at every
+      // display site. Naming it correctly here is what makes it invisible
+      // everywhere else. `.jpg` because the annotated render is always JPEG;
+      // keeping the original's extension would mislabel the bytes.
       if (mode === 'upload' && annotated && id) {
         const base = (file as File).name.replace(/\.[^.]+$/, '') || 'image';
         const fd2 = new FormData();
-        fd2.set('title', `${values.title} (annotated)`);
+        fd2.set('title', values.title);
         fd2.set('description', values.description);
         fd2.set('category', values.category);
         fd2.set('jobSiteId', values.jobSiteId);
         fd2.set('expiresAt', values.expiresAt);
         fd2.set(
           'file',
-          new File([annotated.blob], `${base}-annotated.jpg`, {
+          new File([annotated.blob], `${base}.jpg`, {
             type: 'image/jpeg',
           }),
         );

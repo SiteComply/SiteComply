@@ -1,6 +1,7 @@
 import { DocumentCategory, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { DocumentAnnotationMeta } from '@/services/annotations/annotationUpload';
+import { supersededDocumentIds } from '@/services/documents/supersededDocuments';
 import { viewerSiteIdsFor } from '@/services/platformUsers/effectivePermissions';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import {
@@ -154,10 +155,10 @@ function expiryBoundaries(now = new Date()) {
  * Build the site-scoped where clause shared by listDocuments + countDocuments so
  * the two never drift. Returns null when the viewer has no sites (empty list).
  */
-function documentWhere(
+async function documentWhere(
   viewer: PlatformViewer,
   filters: DocumentListFilters,
-): Prisma.DocumentWhereInput | null {
+): Promise<Prisma.DocumentWhereInput | null> {
   // SC-022: the module's OWN access boundary, not the viewer's whole site list.
   // A contractor narrowed out of documents on one site keeps their other sites,
   // and the exclusion happens in the query rather than being filtered out after
@@ -197,7 +198,24 @@ function documentWhere(
       }
     : undefined;
 
-  return { jobSiteId: { in: siteIds }, category, expiresAt, ...search };
+  // One document, not two. An original that has been annotated is superseded by
+  // its annotated copy and drops out here — in the QUERY, not afterwards. The
+  // register is server-paginated, so filtering the rows after the fact would let
+  // superseded originals consume slots and then vanish, quietly returning short
+  // pages and a total that disagrees with them. Because `countDocuments` and
+  // `listDocuments` both come through this function, the two cannot drift.
+  //
+  // Documents module only — audit and action evidence keep their own rule and
+  // still show original and annotated separately. See `supersededDocuments.ts`.
+  const superseded = await supersededDocumentIds(siteIds);
+
+  return {
+    jobSiteId: { in: siteIds },
+    category,
+    expiresAt,
+    ...search,
+    id: superseded.length > 0 ? { notIn: superseded } : undefined,
+  };
 }
 
 /** Count of documents matching the (scoped) filters — for pagination totals. */
@@ -205,7 +223,7 @@ export async function countDocuments(
   viewer: PlatformViewer,
   filters: DocumentListFilters = {},
 ): Promise<number> {
-  const where = documentWhere(viewer, filters);
+  const where = await documentWhere(viewer, filters);
   if (!where) return 0;
   return prisma.document.count({ where });
 }
@@ -215,7 +233,7 @@ export async function listDocuments(
   viewer: PlatformViewer,
   filters: DocumentListFilters = {},
 ) {
-  const where = documentWhere(viewer, filters);
+  const where = await documentWhere(viewer, filters);
   if (!where) return [];
 
   return prisma.document.findMany({

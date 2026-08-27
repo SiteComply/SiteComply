@@ -211,14 +211,12 @@ export default async function PlatformDocumentsPage({
                       >
                         {d.title}
                       </Link>
-                      <div className="text-xs text-ink-subtle">
-                        {d.fileName}
-                        {d.annotated && (
-                          <span className="ml-2 inline-flex whitespace-nowrap rounded-full bg-brand-600 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-                            Annotated
-                          </span>
-                        )}
-                      </div>
+                      {/* No annotation marker. Whether a document was marked up
+                          is how the file was produced, not a property of the
+                          document anyone here acts on, and the register now
+                          shows one row per document rather than a pair needing
+                          to be told apart. */}
+                      <div className="text-xs text-ink-subtle">{d.fileName}</div>
                     </td>
                     <td className="px-5 py-3 text-ink">
                       {documentCategoryLabel(d.category)}
