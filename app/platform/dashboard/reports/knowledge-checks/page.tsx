@@ -178,12 +178,12 @@ export default async function KnowledgeChecksReportPage({
                     <th className="px-5 py-2 font-medium">Company</th>
                     <th className="px-5 py-2 font-medium">Site</th>
                     <th className="px-5 py-2 font-medium">Completed</th>
-                    {/* Question-attempt analytics have been removed from this
-                        report: it answers who completed the knowledge check,
-                        when, how many questions it covered — not how many they
-                        got wrong on the first attempt. incorrectFirstTryCount is
-                        still recorded and still exported for anyone who needs it
-                        per worker; it is simply not surfaced here. */}
+                    {/* Attempt-level analytics are deliberately absent from this
+                        report and its export. It answers who completed the
+                        knowledge check, when, and how many questions it covered.
+                        The underlying count is still written to storage by the
+                        knowledge-check itself, but the reporting layer no longer
+                        reads it. */}
                     <th className="px-5 py-2 text-right font-medium">
                       Questions
                     </th>

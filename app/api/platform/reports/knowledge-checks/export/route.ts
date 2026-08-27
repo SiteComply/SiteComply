@@ -57,7 +57,6 @@ export async function GET(req: NextRequest) {
       'Site reference',
       'Completed',
       'Questions',
-      'Wrong first try',
       'Time (s)',
     ],
     rows.map((r) => [
@@ -67,7 +66,6 @@ export async function GET(req: NextRequest) {
       r.siteRef,
       r.completedAt ? formatDateTimeUK(r.completedAt) : '',
       String(r.questionCount),
-      String(r.incorrectFirstTry),
       r.durationSeconds != null ? String(r.durationSeconds) : '',
     ]),
   );

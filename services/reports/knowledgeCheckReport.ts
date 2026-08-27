@@ -26,7 +26,6 @@ export interface KnowledgeCheckRow {
   siteName: string;
   siteRef: string;
   questionCount: number;
-  incorrectFirstTry: number;
   durationSeconds: number | null;
 }
 
@@ -44,7 +43,6 @@ export async function getKnowledgeCheckRows(
       id: true,
       completedAt: true,
       questionCount: true,
-      incorrectFirstTryCount: true,
       durationSeconds: true,
       worker: { select: { fullName: true, company: true } },
       jobSite: { select: { name: true, jobReference: true } },
@@ -58,7 +56,6 @@ export async function getKnowledgeCheckRows(
     siteName: r.jobSite.name,
     siteRef: r.jobSite.jobReference,
     questionCount: r.questionCount,
-    incorrectFirstTry: r.incorrectFirstTryCount,
     durationSeconds: r.durationSeconds,
   }));
 }
