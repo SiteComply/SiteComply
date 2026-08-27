@@ -178,11 +178,15 @@ export default async function KnowledgeChecksReportPage({
                     <th className="px-5 py-2 font-medium">Company</th>
                     <th className="px-5 py-2 font-medium">Site</th>
                     <th className="px-5 py-2 font-medium">Completed</th>
+                    {/* "Wrong first try" was removed from this table: the
+                        First-time pass card above already reports that
+                        performance for the period, and the per-worker count
+                        added noise without a management decision attached to
+                        it. The figure is still calculated, still drives that
+                        card, and is still in the CSV export for anyone who
+                        needs it per worker. */}
                     <th className="px-5 py-2 text-right font-medium">
                       Questions
-                    </th>
-                    <th className="px-5 py-2 text-right font-medium">
-                      Wrong first try
                     </th>
                     <th className="px-5 py-2 text-right font-medium">Time</th>
                   </tr>
@@ -204,9 +208,6 @@ export default async function KnowledgeChecksReportPage({
                       </td>
                       <td className="px-5 py-2 text-right tabular-nums text-ink">
                         {r.questionCount}
-                      </td>
-                      <td className="px-5 py-2 text-right tabular-nums text-ink">
-                        {r.incorrectFirstTry}
                       </td>
                       <td className="px-5 py-2 text-right tabular-nums text-ink-subtle">
                         {r.durationSeconds != null
