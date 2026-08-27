@@ -65,7 +65,12 @@ export async function getKnowledgeCheckRows(
 
 export interface KnowledgeCheckSummary {
   passed: number; //           attempts completed at 100%
-  firstTimePass: number; //    passed with no wrong first answers
+  /**
+   * Distinct workers who completed a check in the period. Replaced the
+   * first-time-pass figure: the report answers who completed the check and
+   * when, not how many questions they got wrong on the first attempt.
+   */
+  workersAssessed: number;
   skipped: number; //          check-ins where the check was skipped (no bank)
   flaggedOpen: number; //      open (unresolved) question flags in scope
   bySite: { name: string; passed: number }[];
@@ -77,7 +82,7 @@ export async function getKnowledgeCheckSummary(
 ): Promise<KnowledgeCheckSummary> {
   const empty: KnowledgeCheckSummary = {
     passed: 0,
-    firstTimePass: 0,
+    workersAssessed: 0,
     skipped: 0,
     flaggedOpen: 0,
     bySite: [],
@@ -87,15 +92,15 @@ export async function getKnowledgeCheckSummary(
   const attempts = await prisma.knowledgeCheckAttempt.findMany({
     where: attemptWhere(siteIds, range),
     select: {
-      incorrectFirstTryCount: true,
+      workerId: true,
       jobSite: { select: { name: true } },
     },
   });
 
   const passed = attempts.length;
-  const firstTimePass = attempts.filter(
-    (a) => a.incorrectFirstTryCount === 0,
-  ).length;
+  // Distinct, not row count: a worker who checks in at two sites in the period
+  // completes two checks but is still one person assessed.
+  const workersAssessed = new Set(attempts.map((a) => a.workerId)).size;
   const bySiteMap = new Map<string, number>();
   for (const a of attempts) {
     bySiteMap.set(a.jobSite.name, (bySiteMap.get(a.jobSite.name) ?? 0) + 1);
@@ -119,5 +124,5 @@ export async function getKnowledgeCheckSummary(
     },
   });
 
-  return { passed, firstTimePass, skipped, flaggedOpen, bySite };
+  return { passed, workersAssessed, skipped, flaggedOpen, bySite };
 }

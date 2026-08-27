@@ -73,11 +73,6 @@ export default async function KnowledgeChecksReportPage({
         DISPLAY_LIMIT,
       );
 
-  const firstTimeRate =
-    summary.passed > 0
-      ? Math.round((summary.firstTimePass / summary.passed) * 100)
-      : 0;
-
   return (
     <PlatformShell>
       <ReportHeader
@@ -101,9 +96,14 @@ export default async function KnowledgeChecksReportPage({
         items={[
           { label: 'Checks passed', value: summary.passed },
           {
-            label: 'First-time pass',
-            value: `${firstTimeRate}%`,
-            sub: 'no wrong first answers',
+            // Replaces "First-time pass". A pass rate would not work here:
+            // KnowledgeCheckAttemptStatus is IN_PROGRESS or PASSED — there is no
+            // FAILED state, because a worker retries until they pass — so any
+            // pass rate reads 100% by construction and tells a manager nothing.
+            // "Who completed it" is the question this report exists to answer.
+            label: 'Workers assessed',
+            value: summary.workersAssessed,
+            sub: 'distinct workers',
           },
           {
             label: 'Skipped',
@@ -178,13 +178,12 @@ export default async function KnowledgeChecksReportPage({
                     <th className="px-5 py-2 font-medium">Company</th>
                     <th className="px-5 py-2 font-medium">Site</th>
                     <th className="px-5 py-2 font-medium">Completed</th>
-                    {/* "Wrong first try" was removed from this table: the
-                        First-time pass card above already reports that
-                        performance for the period, and the per-worker count
-                        added noise without a management decision attached to
-                        it. The figure is still calculated, still drives that
-                        card, and is still in the CSV export for anyone who
-                        needs it per worker. */}
+                    {/* Question-attempt analytics have been removed from this
+                        report: it answers who completed the knowledge check,
+                        when, how many questions it covered — not how many they
+                        got wrong on the first attempt. incorrectFirstTryCount is
+                        still recorded and still exported for anyone who needs it
+                        per worker; it is simply not surfaced here. */}
                     <th className="px-5 py-2 text-right font-medium">
                       Questions
                     </th>
