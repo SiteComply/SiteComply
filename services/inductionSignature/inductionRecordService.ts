@@ -26,29 +26,20 @@ export interface KnowledgeCheckResult {
   passed: boolean;
   /** Questions in the check. On a pass, this is also the number answered right. */
   total: number;
-  /** Right FIRST time. Secondary; never the headline. */
-  firstTryCorrect: number;
-  /** The same figure as a percentage, for the secondary line. */
-  firstTryPct: number;
 }
 
 function kcResult(
   attempt: {
     status: string;
     questionCount: number;
-    incorrectFirstTryCount: number;
   } | null,
 ): KnowledgeCheckResult | null {
   if (!attempt || attempt.questionCount === 0) return null;
-  const firstTryCorrect =
-    attempt.questionCount - attempt.incorrectFirstTryCount;
   return {
     // Read from the attempt's own state rather than assumed from its existence:
     // an IN_PROGRESS attempt must never render as a pass.
     passed: attempt.status === 'PASSED',
     total: attempt.questionCount,
-    firstTryCorrect,
-    firstTryPct: Math.round((firstTryCorrect / attempt.questionCount) * 100),
   };
 }
 
@@ -139,7 +130,6 @@ export async function getWorkerInductionRecord(
         select: {
           status: true,
           questionCount: true,
-          incorrectFirstTryCount: true,
         },
       },
     },

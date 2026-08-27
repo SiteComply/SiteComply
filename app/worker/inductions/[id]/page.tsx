@@ -101,12 +101,9 @@ export default async function WorkerInductionRecordPage({
           <Row label="Completed by" value={record.workerName} />
           <Row label="Date" value={formatDateUK(record.completedAt)} />
           <Row label="Time" value={formatTimeUK(record.completedAt)} />
-          {/* THE OUTCOME, NOT THE FIRST-TRY FIGURE.
-              The check cannot complete until every question is answered
-              correctly, so a completed attempt is a pass at the full question
-              count. This row previously showed the first-try score with no
-              label, which read as "33% (1/3)" on a record that by definition
-              passed. */}
+          {/* The outcome, not attempt-level performance. The check cannot
+              complete until every question is answered correctly, so a completed
+              attempt is a pass at the full question count. */}
           <Row
             label="Knowledge check"
             value={
@@ -120,17 +117,6 @@ export default async function WorkerInductionRecordPage({
             }
             good={record.knowledgeCheckPassed}
           />
-          {/* Retained, but clearly secondary and clearly labelled. Shown only
-              when it says something the outcome does not — a first-time pass
-              adds nothing next to "Passed (3/3)". */}
-          {record.knowledgeCheck &&
-          record.knowledgeCheck.firstTryCorrect <
-            record.knowledgeCheck.total ? (
-            <Row
-              label="First-time score"
-              value={`${record.knowledgeCheck.firstTryPct}% (${record.knowledgeCheck.firstTryCorrect}/${record.knowledgeCheck.total})`}
-            />
-          ) : null}
           <Row label="Check-in reference" value={reference} mono />
         </dl>
       </section>
