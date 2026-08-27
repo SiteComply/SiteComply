@@ -10,6 +10,7 @@ import { prisma } from '@/lib/prisma';
 import { isActivityTypeAvailable } from '@/services/siteServices/siteServiceAvailability';
 import { viewerSiteIdsFor } from '@/services/platformUsers/effectivePermissions';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
+import { supersededDocumentIds } from '@/services/documents/supersededDocuments';
 import {
   isAuditStatus,
   SCORE_MIN,
@@ -609,8 +610,17 @@ export async function deleteAudit(
  */
 export async function listReferenceableDocuments(viewer: PlatformViewer) {
   if (viewer.siteIds.length === 0) return [];
+  // The DOCUMENT picker, so it follows the Documents module's rule: an original
+  // that has been annotated is superseded by its copy and is not offered, or the
+  // list shows two entries with the same title and no way to tell them apart.
+  // This does not touch the audit's own photo evidence, which deliberately keeps
+  // original and annotated distinct.
+  const superseded = await supersededDocumentIds(viewer.siteIds);
   return prisma.document.findMany({
-    where: { jobSiteId: { in: viewer.siteIds } },
+    where: {
+      jobSiteId: { in: viewer.siteIds },
+      id: superseded.length > 0 ? { notIn: superseded } : undefined,
+    },
     orderBy: { title: 'asc' },
     select: { id: true, title: true, jobSiteId: true, category: true },
   });
