@@ -135,7 +135,7 @@ export function SegmentedNav({
           {item.count !== undefined && (
             <span
               className={cn(
-                'rounded-full px-1.5 py-0.5 text-xs tabular-nums',
+                'whitespace-nowrap rounded-full px-1.5 py-0.5 text-xs tabular-nums',
                 item.active
                   ? 'bg-white/25 text-white'
                   : 'bg-surface text-ink-subtle',

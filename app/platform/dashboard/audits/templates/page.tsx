@@ -68,12 +68,12 @@ export default async function AuditTemplatesPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-semibold text-ink">{t.name}</p>
                     {t.isSystem && (
-                      <span className="rounded-full border border-line px-2 py-0.5 text-[11px] font-semibold text-ink-subtle">
+                      <span className="whitespace-nowrap rounded-full border border-line px-2 py-0.5 text-[11px] font-semibold text-ink-subtle">
                         Starter
                       </span>
                     )}
                     {!t.active && (
-                      <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-[11px] font-semibold text-ink-subtle">
+                      <span className="whitespace-nowrap rounded-full bg-surface-sunken px-2 py-0.5 text-[11px] font-semibold text-ink-subtle">
                         Inactive
                       </span>
                     )}

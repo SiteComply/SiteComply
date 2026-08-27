@@ -366,7 +366,7 @@ function EvidenceRow({
         {role && (
           <span
             className={cn(
-              'mb-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide',
+              'mb-1 inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide',
               role === 'Annotated'
                 ? 'bg-brand-600 text-white'
                 : 'bg-surface text-ink-muted ring-1 ring-line',

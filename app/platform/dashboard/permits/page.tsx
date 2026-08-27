@@ -183,7 +183,7 @@ export default async function PlatformPermitsPage({
                     </td>
                     <td className="px-5 py-3">
                       <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${PERMIT_STATUS_BADGE[p.status]}`}
+                        className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${PERMIT_STATUS_BADGE[p.status]}`}
                       >
                         {p.statusLabel}
                       </span>

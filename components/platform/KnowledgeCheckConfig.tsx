@@ -308,16 +308,16 @@ export function KnowledgeCheckConfig({
                 )}
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+                  <span className="whitespace-nowrap rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
                     {knowledgeQuestionCategoryLabel(q.category)}
                   </span>
                   {q.flagCount > 0 && (
-                    <span className="rounded-full bg-hivis-400/25 px-2 py-0.5 text-xs font-semibold text-ink">
+                    <span className="whitespace-nowrap rounded-full bg-hivis-400/25 px-2 py-0.5 text-xs font-semibold text-ink">
                       {q.flagCount} flag{q.flagCount === 1 ? '' : 's'}
                     </span>
                   )}
                   {!q.active && (
-                    <span className="rounded-full border border-line px-2 py-0.5 text-xs font-semibold text-ink-subtle">
+                    <span className="whitespace-nowrap rounded-full border border-line px-2 py-0.5 text-xs font-semibold text-ink-subtle">
                       Withdrawn
                     </span>
                   )}
@@ -367,34 +367,34 @@ export function KnowledgeCheckConfig({
 function BankBadge({ preview }: { preview: KcPreview }) {
   if (!preview.status) {
     return (
-      <span className="rounded-full border border-line px-2 py-0.5 text-xs font-semibold text-ink-subtle">
+      <span className="whitespace-nowrap rounded-full border border-line px-2 py-0.5 text-xs font-semibold text-ink-subtle">
         Not generated
       </span>
     );
   }
   if (preview.status === 'READY' && preview.approvedAt) {
     return (
-      <span className="rounded-full bg-safe-50 px-2 py-0.5 text-xs font-semibold text-safe-700">
+      <span className="whitespace-nowrap rounded-full bg-safe-50 px-2 py-0.5 text-xs font-semibold text-safe-700">
         Live · {preview.questionCount} questions
       </span>
     );
   }
   if (preview.status === 'READY') {
     return (
-      <span className="rounded-full bg-hivis-400/25 px-2 py-0.5 text-xs font-semibold text-ink">
+      <span className="whitespace-nowrap rounded-full bg-hivis-400/25 px-2 py-0.5 text-xs font-semibold text-ink">
         Awaiting approval
       </span>
     );
   }
   if (preview.status === 'GENERATING') {
     return (
-      <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+      <span className="whitespace-nowrap rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
         Generating…
       </span>
     );
   }
   return (
-    <span className="rounded-full bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger-700">
+    <span className="whitespace-nowrap rounded-full bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger-700">
       Failed
     </span>
   );

@@ -102,7 +102,7 @@ export function AuditChecklistPanel({
                     <p className="text-sm text-ink">
                       {item.label}
                       {item.mandatory && (
-                        <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-hivis-500/15 px-2 py-0.5 text-[11px] font-semibold text-hivis-600">
+                        <span className="ml-2 inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-hivis-500/15 px-2 py-0.5 text-[11px] font-semibold text-hivis-600">
                           <PlatformIcon name="alert" className="h-3 w-3" />
                           Mandatory
                         </span>
@@ -123,7 +123,7 @@ export function AuditChecklistPanel({
                       </p>
                     )}
                   </div>
-                  <span className="shrink-0 rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-medium text-ink-subtle">
+                  <span className="shrink-0 whitespace-nowrap rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-medium text-ink-subtle">
                     {item.categoryLabel}
                   </span>
                 </div>

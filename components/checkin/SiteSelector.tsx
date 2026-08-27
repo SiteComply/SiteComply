@@ -119,14 +119,14 @@ export function SiteSelector({ sites }: { sites: SelectableSite[] }) {
                       {site.name}
                     </span>
                     {site.access?.state === 'blocked' && (
-                      <span className="shrink-0 rounded-full bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger-700">
+                      <span className="shrink-0 whitespace-nowrap rounded-full bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger-700">
                         No access
                       </span>
                     )}
                     {/* Only claimed where the assignment check WAS the whole
                         check — a site with requirements carries no badge. */}
                     {site.access?.state === 'granted' && (
-                      <span className="shrink-0 rounded-full bg-safe-50 px-2 py-0.5 text-xs font-semibold text-safe-700">
+                      <span className="shrink-0 whitespace-nowrap rounded-full bg-safe-50 px-2 py-0.5 text-xs font-semibold text-safe-700">
                         Access Granted
                       </span>
                     )}

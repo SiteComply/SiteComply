@@ -302,11 +302,11 @@ export default async function ComplianceActivitiesReportPage({
                         </td>
                         <td className="px-5 py-3">
                           {r.escalatedAt ? (
-                            <span className="inline-flex rounded-full bg-danger-600 px-2 py-0.5 text-xs font-semibold text-white">
+                            <span className="inline-flex whitespace-nowrap rounded-full bg-danger-600 px-2 py-0.5 text-xs font-semibold text-white">
                               Escalated
                             </span>
                           ) : r.overdue ? (
-                            <span className="inline-flex rounded-full bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger-700">
+                            <span className="inline-flex whitespace-nowrap rounded-full bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger-700">
                               Overdue
                             </span>
                           ) : (

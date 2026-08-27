@@ -148,7 +148,7 @@ export function SiteBulletins({
               <div className="flex flex-wrap items-center gap-2">
                 <span
                   className={cn(
-                    'rounded-full px-2 py-0.5 text-xs font-semibold',
+                    'whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold',
                     BULLETIN_CATEGORY_BADGE[
                       b.category as BulletinCategoryValue
                     ] ?? 'bg-surface-sunken text-ink-subtle',
@@ -157,7 +157,7 @@ export function SiteBulletins({
                   {bulletinCategoryLabel(b.category)}
                 </span>
                 {!b.active && (
-                  <span className="rounded-full border border-line px-2 py-0.5 text-xs font-semibold text-ink-subtle">
+                  <span className="whitespace-nowrap rounded-full border border-line px-2 py-0.5 text-xs font-semibold text-ink-subtle">
                     Archived
                   </span>
                 )}

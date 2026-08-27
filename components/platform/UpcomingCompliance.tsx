@@ -84,7 +84,7 @@ export function UpcomingCompliance({
                 Assigned to {it.assigneeLabel}
               </span>
               {it.overdue && (
-                <span className="shrink-0 rounded-full bg-danger-50 px-2 py-0.5 text-[11px] font-semibold text-danger-700">
+                <span className="shrink-0 whitespace-nowrap rounded-full bg-danger-50 px-2 py-0.5 text-[11px] font-semibold text-danger-700">
                   Overdue
                 </span>
               )}

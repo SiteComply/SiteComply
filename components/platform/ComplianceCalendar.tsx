@@ -290,13 +290,13 @@ export function ComplianceCalendar({
                     {it.workerNotNotified && ' — not notified'}
                   </span>
                   {it.escalatedAt && (
-                    <span className="rounded-full bg-danger-600 px-2 py-0.5 text-[11px] font-semibold text-white">
+                    <span className="whitespace-nowrap rounded-full bg-danger-600 px-2 py-0.5 text-[11px] font-semibold text-white">
                       Escalated to {it.escalatedToRole ?? 'management'} on{' '}
                       {new Date(it.escalatedAt).toLocaleDateString('en-GB')}
                     </span>
                   )}
                   <span
-                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                    className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                       it.overdue && it.status !== 'COMPLETED'
                         ? 'bg-danger-50 text-danger-700'
                         : 'bg-surface-sunken text-ink-muted'

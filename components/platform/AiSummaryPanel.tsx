@@ -183,7 +183,7 @@ export function AiSummaryPanel({
     <section className="mb-6 rounded-xl border border-brand-200 bg-brand-50/40 p-5 shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-brand-600 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
             AI
           </span>
           <h2 className="text-base font-semibold text-ink">
@@ -464,7 +464,7 @@ function HistoryRow({
               {formatTimeUK(item.createdAt)}
             </span>
             {latest && (
-              <span className="inline-flex items-center rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+              <span className="inline-flex items-center whitespace-nowrap rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
                 Latest
               </span>
             )}

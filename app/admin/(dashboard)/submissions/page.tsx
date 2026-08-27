@@ -183,7 +183,7 @@ export default async function SubmissionsPage({
                 </div>
                 <span
                   className={cn(
-                    'shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold',
+                    'shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold',
                     r.status === 'COMPLIANT'
                       ? 'bg-safe-50 text-safe-700'
                       : 'bg-danger-50 text-danger-700',

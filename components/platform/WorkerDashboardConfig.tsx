@@ -80,7 +80,7 @@ export function WorkerDashboardConfig({
                 <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-ink">
                   {panel.label}
                   {panel.locked && (
-                    <span className="rounded-full border border-line px-2 py-0.5 text-[11px] font-semibold text-ink-subtle">
+                    <span className="whitespace-nowrap rounded-full border border-line px-2 py-0.5 text-[11px] font-semibold text-ink-subtle">
                       Always shown
                     </span>
                   )}

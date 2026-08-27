@@ -205,7 +205,7 @@ function StatusBadge({ status }: { status: PlatformStatusValue }) {
   return (
     <span
       className={cn(
-        'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
+        'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold',
         styles[status],
       )}
     >
@@ -216,7 +216,7 @@ function StatusBadge({ status }: { status: PlatformStatusValue }) {
 
 function RoleBadge({ role }: { role: PlatformRoleValue }) {
   return (
-    <span className="shrink-0 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+    <span className="shrink-0 whitespace-nowrap rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
       {ROLE_LABELS[role]}
     </span>
   );

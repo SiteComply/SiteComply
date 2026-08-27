@@ -78,7 +78,7 @@ export default async function WorkerBulletinsPage() {
               >
                 <span
                   className={cn(
-                    'rounded-full px-2 py-0.5 text-xs font-semibold',
+                    'whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold',
                     BULLETIN_CATEGORY_BADGE[
                       b.category as BulletinCategoryValue
                     ] ?? 'bg-surface-sunken text-ink-subtle',

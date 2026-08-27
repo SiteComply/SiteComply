@@ -46,14 +46,14 @@ export function WorkerDocumentList({
           >
             <div className="flex flex-wrap items-center gap-2">
               {showCategory && (
-                <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+                <span className="whitespace-nowrap rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
                   {documentCategoryLabel(doc.category)}
                 </span>
               )}
               {expiry !== 'NONE' && (
                 <span
                   className={cn(
-                    'rounded-full px-2 py-0.5 text-xs font-semibold',
+                    'whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold',
                     DOCUMENT_EXPIRY_BADGE[expiry],
                   )}
                 >

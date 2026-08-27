@@ -369,7 +369,7 @@ export default async function SiteWorkersPage({
                       <td className="px-5 py-3">
                         <span
                           className={cn(
-                            'inline-flex rounded-full px-2 py-0.5 text-xs font-semibold',
+                            'inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold',
                             ROSTER_STATE_TONE[r.state],
                           )}
                         >

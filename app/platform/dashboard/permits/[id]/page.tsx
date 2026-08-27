@@ -61,7 +61,7 @@ export default async function PlatformPermitDetailPage({
         title={permit.permitTypeName}
         badges={
           <span
-            className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${PERMIT_STATUS_BADGE[effectiveStatus]}`}
+            className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-sm font-semibold ${PERMIT_STATUS_BADGE[effectiveStatus]}`}
           >
             {permitStatusLabel(effectiveStatus)}
           </span>

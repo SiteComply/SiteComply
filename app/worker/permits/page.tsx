@@ -142,7 +142,7 @@ function PermitRow({
               {p.permitTypeName}
             </p>
             <span
-              className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${PERMIT_STATUS_BADGE[p.status]}`}
+              className={`inline-flex shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${PERMIT_STATUS_BADGE[p.status]}`}
             >
               {permitStatusLabel(p.status)}
             </span>

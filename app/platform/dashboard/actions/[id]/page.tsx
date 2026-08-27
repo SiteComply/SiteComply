@@ -298,7 +298,7 @@ function Detail({
       <dd className="mt-0.5 break-words text-sm text-ink">
         {badge ? (
           <span
-            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${badge}`}
+            className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${badge}`}
           >
             {value}
           </span>
@@ -319,7 +319,7 @@ function Badge({
 }) {
   return (
     <span
-      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${className}`}
+      className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${className}`}
     >
       {children}
     </span>

@@ -309,7 +309,7 @@ export function DocumentForm({
               <p className="text-xs text-ink-subtle">
                 Selected: {file.name} · {formatBytes(file.size)}
                 {annotated && (
-                  <span className="ml-2 inline-flex rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">
+                  <span className="ml-2 inline-flex whitespace-nowrap rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">
                     Annotated copy will be saved alongside the original
                   </span>
                 )}

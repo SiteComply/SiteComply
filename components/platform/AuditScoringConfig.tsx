@@ -846,7 +846,7 @@ export function AuditScoringConfig({
                             {passing} out of {totalPossible} points
                           </p>
                         </div>
-                        <span className="inline-flex items-center gap-1 rounded-full bg-safe-500 px-2.5 py-1 text-xs font-semibold text-white">
+                        <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-safe-500 px-2.5 py-1 text-xs font-semibold text-white">
                           <PlatformIcon name="check" className="h-3.5 w-3.5" />
                           Pass
                         </span>
@@ -1017,7 +1017,7 @@ export function AuditScoringConfig({
                     }`}
                   >
                     Configure Questions
-                    <span className="rounded-full bg-brand-100 px-1.5 text-[10px] tabular-nums text-brand-700">
+                    <span className="whitespace-nowrap rounded-full bg-brand-100 px-1.5 text-[10px] tabular-nums text-brand-700">
                       {questionCount}
                     </span>
                     <span aria-hidden="true">→</span>

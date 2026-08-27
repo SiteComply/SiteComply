@@ -154,7 +154,7 @@ export function CscsProviderSettings({
           </p>
         </div>
         {config.needsCredentials ? (
-          <span className="rounded-full bg-hivis-400/25 px-2.5 py-1 text-xs font-semibold text-ink ring-1 ring-inset ring-hivis-500">
+          <span className="whitespace-nowrap rounded-full bg-hivis-400/25 px-2.5 py-1 text-xs font-semibold text-ink ring-1 ring-inset ring-hivis-500">
             Credentials required
           </span>
         ) : null}

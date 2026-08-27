@@ -121,7 +121,7 @@ export default async function WorkerHomePage() {
                     </span>
                     <span
                       className={cn(
-                        'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
+                        'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold',
                         onSite
                           ? 'bg-safe-50 text-safe-700'
                           : 'border border-line bg-surface-sunken text-ink-muted',

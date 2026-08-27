@@ -76,7 +76,7 @@ export default async function NotificationSettingsPage() {
                   <dd className="text-xs text-ink-subtle">{t.description}</dd>
                 </div>
                 <dd
-                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                  className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${
                     on
                       ? 'bg-safe-50 text-safe-700'
                       : 'bg-surface-sunken text-ink-subtle'

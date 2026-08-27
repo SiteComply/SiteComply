@@ -196,7 +196,7 @@ export function AiProviderSettings({
                   {p.fields.length > 0 && (
                     <span
                       className={cn(
-                        'rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                        'whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold',
                         configured
                           ? 'bg-safe-50 text-safe-700'
                           : 'bg-surface-sunken text-ink-subtle',
@@ -376,7 +376,7 @@ function StatusPill({ ok, warn, label }: { ok: boolean; warn: boolean; label: st
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold',
+        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold',
         ok
           ? 'bg-safe-50 text-safe-700'
           : warn

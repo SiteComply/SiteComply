@@ -515,7 +515,7 @@ function Badge({
 }) {
   return (
     <span
-      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${className}`}
+      className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${className}`}
     >
       {children}
     </span>

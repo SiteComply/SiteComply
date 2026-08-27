@@ -243,7 +243,7 @@ export function AuthAccessSettings({
 /** Says once, at panel level, that a whole region is set somewhere else. */
 function ManagedElsewhereBadge() {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-surface-sunken px-2.5 py-1 text-[11px] font-semibold text-ink-muted">
+    <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-surface-sunken px-2.5 py-1 text-[11px] font-semibold text-ink-muted">
       <svg
         viewBox="0 0 16 16"
         aria-hidden="true"

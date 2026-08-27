@@ -187,7 +187,7 @@ function TimeRow({
         {value}
       </span>
       {badge && (
-        <span className="inline-flex items-center gap-1 rounded-full bg-safe-50 px-2 py-0.5 text-xs font-semibold text-safe-700">
+        <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-safe-50 px-2 py-0.5 text-xs font-semibold text-safe-700">
           <WorkerIcon name="shield" className="h-3 w-3" />
           {badge}
         </span>

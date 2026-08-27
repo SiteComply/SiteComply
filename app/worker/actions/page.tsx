@@ -70,7 +70,7 @@ export default async function WorkerActionsPage() {
                   {overdue && (
                     <span
                       className={cn(
-                        'rounded-full px-2 py-0.5 text-xs font-semibold',
+                        'whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold',
                         ACTION_OVERDUE_BADGE,
                       )}
                     >
@@ -79,7 +79,7 @@ export default async function WorkerActionsPage() {
                   )}
                   <span
                     className={cn(
-                      'rounded-full px-2 py-0.5 text-xs font-semibold',
+                      'whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold',
                       ACTION_PRIORITY_BADGE[a.priority as ActionPriorityValue],
                     )}
                   >
@@ -87,7 +87,7 @@ export default async function WorkerActionsPage() {
                   </span>
                   <span
                     className={cn(
-                      'rounded-full px-2 py-0.5 text-xs font-semibold',
+                      'whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold',
                       ACTION_STATUS_BADGE[a.status as ActionStatusValue],
                     )}
                   >

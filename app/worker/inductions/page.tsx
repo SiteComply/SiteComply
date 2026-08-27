@@ -59,12 +59,12 @@ export default async function WorkerInductionsPage() {
                   </p>
                 </div>
                 {i.signed ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-safe-50 px-2 py-0.5 text-xs font-semibold text-safe-700">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-safe-50 px-2 py-0.5 text-xs font-semibold text-safe-700">
                     <WorkerIcon name="shield" className="h-3 w-3" />
                     Signed
                   </span>
                 ) : (
-                  <span className="rounded-full border border-line bg-surface-sunken px-2 py-0.5 text-xs font-semibold text-ink-subtle">
+                  <span className="whitespace-nowrap rounded-full border border-line bg-surface-sunken px-2 py-0.5 text-xs font-semibold text-ink-subtle">
                     Completed
                   </span>
                 )}

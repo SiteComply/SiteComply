@@ -220,7 +220,7 @@ function Group({
                     {n.badgeLabel}
                   </span>
                   {n.chip && (
-                    <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-[11px] font-semibold text-ink-subtle">
+                    <span className="whitespace-nowrap rounded-full bg-surface-sunken px-2 py-0.5 text-[11px] font-semibold text-ink-subtle">
                       {n.chip}
                     </span>
                   )}

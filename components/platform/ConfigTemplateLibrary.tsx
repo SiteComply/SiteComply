@@ -534,7 +534,7 @@ export function ConfigTemplateLibrary({
                               onClick={() =>
                                 setMandatory(r, !r.mandatory, r.reason ?? null)
                               }
-                              className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-40 ${
+                              className={`inline-flex items-center gap-2 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-40 ${
                                 r.mandatory
                                   ? 'border-brand-500/40 bg-brand-50 text-brand-700'
                                   : 'border-line bg-surface text-ink-subtle hover:bg-surface-sunken'

@@ -129,7 +129,7 @@ export default async function ComplianceSchedulesPage({
                   </td>
                   <td className="px-5 py-3">
                     <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${
                         s.active
                           ? 'bg-safe-50 text-safe-700'
                           : 'bg-surface-sunken text-ink-subtle'

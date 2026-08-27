@@ -42,7 +42,7 @@ export default async function OnSitePage() {
               </div>
               <span
                 className={cn(
-                  'shrink-0 rounded-full px-3 py-1 text-sm font-semibold',
+                  'shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-sm font-semibold',
                   site.workers.length > 0
                     ? 'bg-safe-50 text-safe-700'
                     : 'bg-surface-sunken text-ink-subtle',
@@ -108,7 +108,7 @@ function ComplianceBadge({ status }: { status: 'COMPLIANT' | 'INCOMPLETE' }) {
   return (
     <span
       className={cn(
-        'rounded-full px-2.5 py-0.5 text-xs font-semibold',
+        'whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold',
         status === 'COMPLIANT'
           ? 'bg-safe-50 text-safe-700'
           : 'bg-danger-50 text-danger-700',

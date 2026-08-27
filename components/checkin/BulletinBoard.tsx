@@ -120,11 +120,11 @@ function BulletinCard({
           Daily Bulletin
         </span>
         {isSafety && (
-          <span className="rounded-full bg-hivis-400/30 px-2 py-0.5 text-[11px] font-semibold text-ink">
+          <span className="whitespace-nowrap rounded-full bg-hivis-400/30 px-2 py-0.5 text-[11px] font-semibold text-ink">
             {bulletinCategoryLabel(bulletin.category)}
           </span>
         )}
-        <span className="ml-auto rounded-full bg-brand-500 px-2 py-0.5 text-[11px] font-semibold text-white">
+        <span className="ml-auto whitespace-nowrap rounded-full bg-brand-500 px-2 py-0.5 text-[11px] font-semibold text-white">
           New
         </span>
       </div>

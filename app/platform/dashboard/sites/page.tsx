@@ -169,7 +169,7 @@ function StatusBadge({ status }: { status: SiteStatusValue }) {
   return (
     <span
       className={cn(
-        'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
+        'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold',
         STATUS_BADGE_CLASS[status],
       )}
     >

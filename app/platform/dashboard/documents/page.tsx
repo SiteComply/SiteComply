@@ -214,7 +214,7 @@ export default async function PlatformDocumentsPage({
                       <div className="text-xs text-ink-subtle">
                         {d.fileName}
                         {d.annotated && (
-                          <span className="ml-2 inline-flex rounded-full bg-brand-600 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                          <span className="ml-2 inline-flex whitespace-nowrap rounded-full bg-brand-600 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
                             Annotated
                           </span>
                         )}

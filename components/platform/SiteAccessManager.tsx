@@ -336,7 +336,7 @@ export function SiteAccessManager({
                       list collapsed, the bar says how much is pending but not
                       whose. */}
                   {changed > 0 ? (
-                    <p className="mt-1 inline-flex items-center rounded-full bg-hivis-400/25 px-2 py-0.5 text-xs font-semibold text-ink ring-1 ring-inset ring-hivis-500">
+                    <p className="mt-1 inline-flex items-center whitespace-nowrap rounded-full bg-hivis-400/25 px-2 py-0.5 text-xs font-semibold text-ink ring-1 ring-inset ring-hivis-500">
                       {changed === 1
                         ? '1 section changed, not saved'
                         : `${changed} sections changed, not saved`}

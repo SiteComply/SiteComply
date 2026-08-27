@@ -60,7 +60,7 @@ export function DocIssueRow({
         trailing={
           <span
             className={cn(
-              'rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums',
+              'whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums',
               count > 0 ? badge : 'bg-surface-sunken text-ink-subtle',
             )}
           >
@@ -129,7 +129,7 @@ export function StatusPill({
   return (
     <span
       className={cn(
-        'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
+        'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold',
         tone === 'good' && 'bg-safe-50 text-safe-700',
         tone === 'warn' && 'bg-hivis-400/25 text-ink',
         tone === 'muted' &&

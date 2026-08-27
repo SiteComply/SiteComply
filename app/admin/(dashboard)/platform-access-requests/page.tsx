@@ -85,7 +85,7 @@ export default async function PlatformAccessRequestsPage({
               {tab.label}
               <span
                 className={cn(
-                  'rounded-full px-2 py-0.5 text-xs font-semibold',
+                  'whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold',
                   isActive
                     ? 'bg-brand-50 text-brand-700'
                     : 'bg-surface-sunken text-ink-subtle',
