@@ -49,7 +49,12 @@ export default async function SiteOverviewPage({
 
   // Site information completeness (SC-008) — a gentle nudge on the Overview.
   const siteInfo = await getSiteInformationForViewer(viewer, params.id);
-  const infoComplete = siteInfo?.completeness ?? null;
+  // The label promises what workers see, so the figure counts BOTH the Site
+  // Information sections and the emergency information on the worker's
+  // Emergency page. It previously used `completeness`, which covers only the six
+  // Site Information fields — so a site read 6/6 while the worker was told no
+  // first aider or A&E had been recorded.
+  const infoComplete = siteInfo?.workerFacingCompleteness ?? null;
 
   // SC-025 — completion state, controls and audit trail.
   const closureEvents = (await listClosureEvents(viewer, params.id)) ?? [];

@@ -12,6 +12,7 @@ import {
   SITE_MAP_MAX_BYTES,
   SITE_MAP_MIME_TYPES,
   SITE_INFO_SECTIONS,
+  SITE_EMERGENCY_SECTIONS,
 } from '@/services/sites/siteInformationConstants';
 
 /**
@@ -120,20 +121,81 @@ export function computeCompleteness(
   };
 }
 
+/** The emergency values as stored on the site record. */
+export interface SiteEmergencyFields {
+  fireAssemblyPoint: string | null;
+  firstAiderName: string | null;
+  firstAiderNumber: string | null;
+  firstAiderLocation: string | null;
+  nearestHospital: string | null;
+  emergencyNumber: string | null;
+}
+
+/** Which emergency sections are populated. */
+export function computeEmergencyCompleteness(
+  e: SiteEmergencyFields,
+): SiteInfoCompleteness {
+  const filled: Record<string, boolean> = {
+    fireAssemblyPoint: Boolean(e.fireAssemblyPoint?.trim()),
+    // Name only — matches the worker page, which keys the whole first-aider
+    // block off the name and treats location and number as optional detail.
+    firstAider: Boolean(e.firstAiderName?.trim()),
+    nearestHospital: Boolean(e.nearestHospital?.trim()),
+    emergencyNumber: Boolean(e.emergencyNumber?.trim()),
+  };
+  const missing = SITE_EMERGENCY_SECTIONS.filter((s) => !filled[s.key]).map(
+    (s) => s.label,
+  );
+  return {
+    complete: SITE_EMERGENCY_SECTIONS.length - missing.length,
+    total: SITE_EMERGENCY_SECTIONS.length,
+    missing,
+  };
+}
+
+/**
+ * Everything a worker can see about a site, as one figure — the Site Information
+ * sections PLUS the emergency sections.
+ *
+ * Kept separate from computeCompleteness() rather than folded into it, because
+ * the two are read in different places and each has to be honest about what it
+ * measures. The Site Information panel shows its OWN six sections; widening that
+ * number would misreport the panel the manager is looking at. The site Overview
+ * shows this one, under a label that promises what workers see — and the
+ * Emergency page is worker-facing, so it belongs in the total.
+ */
+export function computeWorkerFacingCompleteness(
+  fields: SiteInformationFields,
+  emergency: SiteEmergencyFields,
+): SiteInfoCompleteness {
+  const info = computeCompleteness(fields);
+  const emerg = computeEmergencyCompleteness(emergency);
+  return {
+    complete: info.complete + emerg.complete,
+    total: info.total + emerg.total,
+    missing: [...info.missing, ...emerg.missing],
+  };
+}
+
 // ─── Admin (site-manager) reads/writes ──────────────────────────────────────
 
 export interface SiteInformationForViewer {
   fields: SiteInformationFields;
+  /** The Site Information panel's own six sections. */
   completeness: SiteInfoCompleteness;
-  /** Read-only emergency summary (managed on the site record, shown for context). */
-  emergency: {
-    fireAssemblyPoint: string | null;
-    firstAiderName: string | null;
-    firstAiderNumber: string | null;
-    firstAiderLocation: string | null;
-    nearestHospital: string | null;
-    emergencyNumber: string | null;
-  };
+  /**
+   * Site Information + emergency, i.e. everything a worker can see. This is what
+   * the site Overview reports, so the figure there matches the worker's reality.
+   */
+  workerFacingCompleteness: SiteInfoCompleteness;
+  /** Emergency completeness on its own, for the emergency panel's own indicator. */
+  emergencyCompleteness: SiteInfoCompleteness;
+  /**
+   * Emergency values, stored on the site record. Editable by any role holding the
+   * `sites` edit permission — the same gate as the rest of this panel — via
+   * saveSiteEmergency(). Site identity and status stay Director-only.
+   */
+  emergency: SiteEmergencyFields;
 }
 
 export async function getSiteInformationForViewer(
@@ -160,8 +222,61 @@ export async function getSiteInformationForViewer(
   return {
     fields,
     completeness: computeCompleteness(fields),
+    workerFacingCompleteness: computeWorkerFacingCompleteness(fields, site),
+    emergencyCompleteness: computeEmergencyCompleteness(site),
     emergency: site,
   };
+}
+
+export interface SiteEmergencyInput {
+  fireAssemblyPoint?: string;
+  firstAiderName?: string;
+  firstAiderNumber?: string;
+  firstAiderLocation?: string;
+  nearestHospital?: string;
+  emergencyNumber?: string;
+}
+
+/**
+ * Save the emergency information a worker sees, from the Worker Experience tab.
+ *
+ * Gated on the SAME `sites` edit permission as the rest of that tab, so the
+ * roles the RBAC matrix puts in charge of running a site can maintain the first
+ * aider, nearest A&E, fire assembly point and emergency number. These fields
+ * previously reached the database only through the whole-site form, which is
+ * Director-only — so a Site Manager could see that the information was missing
+ * and had no way to add it.
+ *
+ * SITE_EDIT_ROLES is deliberately NOT used and NOT widened: site name, address,
+ * job reference, status, archive and reactivate stay Director-only. The write
+ * below whitelists six columns, so the wider site payload cannot ride along on
+ * this endpoint.
+ */
+export async function saveSiteEmergency(
+  viewer: PlatformViewer,
+  siteId: string,
+  input: SiteEmergencyInput,
+): Promise<SaveResult> {
+  if (!permits(viewer.role, 'sites', 'edit')) {
+    return { ok: false, reason: 'forbidden' };
+  }
+  // Site scope is the access boundary, exactly as saveSiteInformation applies it.
+  if (!viewer.siteIds.includes(siteId)) {
+    return { ok: false, reason: 'forbidden' };
+  }
+
+  await prisma.jobSite.update({
+    where: { id: siteId },
+    data: {
+      fireAssemblyPoint: clean(input.fireAssemblyPoint, SITE_TEXT_MAX),
+      firstAiderName: clean(input.firstAiderName, SITE_TEXT_MAX),
+      firstAiderNumber: clean(input.firstAiderNumber, SITE_TEXT_MAX),
+      firstAiderLocation: clean(input.firstAiderLocation, SITE_TEXT_MAX),
+      nearestHospital: clean(input.nearestHospital, SITE_TEXT_MAX),
+      emergencyNumber: clean(input.emergencyNumber, SITE_TEXT_MAX),
+    },
+  });
+  return { ok: true };
 }
 
 export interface SiteInformationInput {

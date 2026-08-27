@@ -22,7 +22,6 @@ import {
 } from '@/services/platformUsers/platformAccess';
 import {
   permits,
-  canEditSite,
 } from '@/services/platformUsers/platformPermissions';
 import { getSiteForEditByViewer } from '@/services/sites/platformSiteService';
 import { listBulletinsForSite } from '@/services/bulletins/bulletinService';
@@ -37,6 +36,7 @@ import {
   listOverridesForViewer,
 } from '@/services/geo/geoConfigService';
 import { getSiteInformationForViewer } from '@/services/sites/siteInformationService';
+import { SiteEmergencyConfig } from '@/components/platform/SiteEmergencyConfig';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,7 +79,6 @@ export default async function SiteExperiencePage({
   const canPublishBulletins = permits(viewer.role, 'bulletins', 'create');
   const canManageBulletins = permits(viewer.role, 'bulletins', 'edit');
   const canConfigureDashboard = permits(viewer.role, 'sites', 'edit');
-  const canEdit = canEditSite(viewer.role);
 
   const site = await getSiteForEditByViewer(viewer, params.id);
 
@@ -122,15 +121,6 @@ export default async function SiteExperiencePage({
   const siteInfo = canConfigureDashboard
     ? await getSiteInformationForViewer(viewer, params.id)
     : null;
-
-  const hasEmergency =
-    site &&
-    (site.fireAssemblyPoint ||
-      site.firstAiderName ||
-      site.firstAiderNumber ||
-      site.firstAiderLocation ||
-      site.nearestHospital ||
-      site.emergencyNumber);
 
   /**
    * UX REFRESH PHASE 3 — the eight panels are now one workspace.
@@ -329,56 +319,17 @@ export default async function SiteExperiencePage({
           />
         )}
 
-        {active === 'emergency' && (
-          <Panel title="Emergency information">
-            {hasEmergency ? (
-              <dl className="space-y-3">
-                {site!.fireAssemblyPoint && (
-                  <Detail
-                    label="Fire assembly point"
-                    value={site!.fireAssemblyPoint}
-                  />
-                )}
-                {site!.firstAiderName && (
-                  <Detail
-                    label="First aider"
-                    value={[
-                      site!.firstAiderName,
-                      site!.firstAiderLocation
-                        ? `at ${site!.firstAiderLocation}`
-                        : null,
-                      site!.firstAiderNumber
-                        ? `· ${site!.firstAiderNumber}`
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                  />
-                )}
-                {site!.nearestHospital && (
-                  <Detail label="Nearest A&E" value={site!.nearestHospital} />
-                )}
-                {site!.emergencyNumber && (
-                  <Detail
-                    label="Emergency number"
-                    value={site!.emergencyNumber}
-                  />
-                )}
-              </dl>
-            ) : (
-              <Empty>
-                No emergency information has been added for this site.
-              </Empty>
-            )}
-            {canEdit && (
-              <Link
-                href={`/platform/dashboard/sites/${params.id}/edit`}
-                className="mt-3 inline-block text-sm font-semibold text-brand-700 hover:underline"
-              >
-                Edit emergency information →
-              </Link>
-            )}
-          </Panel>
+        {active === 'emergency' && siteInfo && (
+          /* Editable here, behind the same `sites` edit permission as every
+             other section on this tab. It was read-only with a link to the
+             Director-only whole-site form, so a PM or Site Manager was shown
+             the gap and given no way to close it. */
+          <SiteEmergencyConfig
+            siteId={params.id}
+            values={siteInfo.emergency}
+            canEdit={canConfigureDashboard}
+            completeness={siteInfo.emergencyCompleteness}
+          />
         )}
       </SectionWorkspace>
     </PlatformShell>
