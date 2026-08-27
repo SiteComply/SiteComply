@@ -31,6 +31,7 @@ export default async function WorkerEmergencyPage() {
 
   return (
     <WorkerShell
+      submissionId={submission.id}
       siteName={site.name}
       checkedInAt={submission.checkedInAt}
       panels={panels}

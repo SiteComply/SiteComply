@@ -5,6 +5,7 @@ import { formatDateTimeUK } from '@/lib/datetime';
 import type { PanelVisibility } from '@/services/workerDashboard/dashboardPanels';
 import { WorkerNav } from './WorkerNav';
 import { SiteSwitcher, type SwitcherSite } from './SiteSwitcher';
+import { CheckOutOfSiteButton } from './CheckOutOfSiteButton';
 
 /**
  * Worker Dashboard shell (SC-003 / SC-004).
@@ -25,6 +26,7 @@ export function WorkerShell({
   unreadBulletins = 0,
   sites = [],
   activeSiteId,
+  submissionId,
 }: {
   children: ReactNode;
   siteName: string;
@@ -34,6 +36,13 @@ export function WorkerShell({
   /** Sites the worker is currently checked into (for the switcher). */
   sites?: SwitcherSite[];
   activeSiteId?: string;
+  /**
+   * The open check-in being viewed. Supplied by every worker page from
+   * requireWorkerContext(), so the header check-out is available wherever a
+   * worker finishes their session — not only on the Dashboard, which was the
+   * single page that carried the action.
+   */
+  submissionId?: string;
 }) {
   const multiSite = sites.length > 1 && activeSiteId;
   return (
@@ -73,6 +82,17 @@ export function WorkerShell({
                   Checked in: {formatDateTimeUK(checkedInAt)}
                 </span>
               </span>
+            )}
+            {/* Between the site context and Sign out: it acts on the site named
+                to its left. CHECK_OUT is a locked-on panel, but it is honoured
+                here exactly as the Dashboard honours it, so the header can never
+                outlive the setting. The Dashboard keeps its large primary
+                button; this is the secondary route for finishing elsewhere. */}
+            {submissionId && panels.CHECK_OUT && (
+              <CheckOutOfSiteButton
+                submissionId={submissionId}
+                variant="header"
+              />
             )}
             <a
               href="/api/worker/logout"

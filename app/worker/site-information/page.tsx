@@ -63,6 +63,7 @@ export default async function WorkerSiteInformationPage() {
 
   return (
     <WorkerShell
+      submissionId={submission.id}
       siteName={site.name}
       checkedInAt={submission.checkedInAt}
       panels={panels}

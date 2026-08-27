@@ -23,6 +23,7 @@ export default async function WorkerContactsPage() {
 
   return (
     <WorkerShell
+      submissionId={submission.id}
       siteName={site.name}
       checkedInAt={submission.checkedInAt}
       panels={panels}

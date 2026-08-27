@@ -40,6 +40,7 @@ export default async function WorkerActionsPage() {
 
   return (
     <WorkerShell
+      submissionId={submission.id}
       siteName={site.name}
       checkedInAt={submission.checkedInAt}
       panels={panels}

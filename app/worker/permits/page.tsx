@@ -43,6 +43,7 @@ export default async function WorkerPermitsPage() {
 
   return (
     <WorkerShell
+      submissionId={submission.id}
       siteName={site.name}
       checkedInAt={submission.checkedInAt}
       panels={panels}

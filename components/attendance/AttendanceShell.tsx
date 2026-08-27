@@ -23,6 +23,7 @@ export function AttendanceShell({
   if (context) {
     return (
       <WorkerShell
+        submissionId={context.submission.id}
         siteName={context.site.name}
         checkedInAt={context.submission.checkedInAt}
         panels={context.panels}

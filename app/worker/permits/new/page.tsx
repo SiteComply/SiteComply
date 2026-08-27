@@ -26,6 +26,7 @@ export default async function NewPermitPage({
 
   return (
     <WorkerShell
+      submissionId={submission.id}
       siteName={site.name}
       checkedInAt={submission.checkedInAt}
       panels={panels}

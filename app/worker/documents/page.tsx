@@ -26,6 +26,7 @@ export default async function WorkerDocumentsPage() {
 
   return (
     <WorkerShell
+      submissionId={submission.id}
       siteName={site.name}
       checkedInAt={submission.checkedInAt}
       panels={panels}

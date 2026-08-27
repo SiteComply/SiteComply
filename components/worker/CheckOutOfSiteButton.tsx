@@ -20,9 +20,20 @@ import { captureLocation } from '@/lib/clientGeolocation';
 export function CheckOutOfSiteButton({
   submissionId,
   className,
+  variant = 'primary',
 }: {
   submissionId: string;
   className?: string;
+  /**
+   * 'primary' — the Dashboard's large outlined exit action, unchanged.
+   * 'header'  — the compact control in the Worker Portal header, available on
+   *             every page. Sized and weighted like the neighbouring Sign out
+   *             so it reads as the same class of control rather than a second
+   *             primary button, but kept in the danger tone: the two sit side
+   *             by side and do very different things — one ends the attendance
+   *             record, the other just closes the session.
+   */
+  variant?: 'primary' | 'header';
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -61,12 +72,20 @@ export function CheckOutOfSiteButton({
         type="button"
         onClick={() => setConfirming(true)}
         className={cn(
-          'touch-target inline-flex items-center justify-center gap-2 rounded-xl border-2 border-danger-500 px-4 py-2.5 text-sm font-semibold text-danger-600 transition-colors hover:bg-danger-50',
+          'touch-target inline-flex items-center transition-colors',
+          variant === 'primary'
+            ? 'justify-center gap-2 rounded-xl border-2 border-danger-500 px-4 py-2.5 text-sm font-semibold text-danger-600 hover:bg-danger-50'
+            : // Mirrors the Sign out control's geometry — rounded-lg, px-3 py-2,
+              // text-sm font-semibold, 1px border — so the header reads as one
+              // row of peers rather than a primary button beside a quiet one.
+              'gap-1.5 rounded-lg border border-danger-200 px-3 py-2 text-sm font-semibold text-danger-600 hover:bg-danger-50',
           className,
         )}
       >
         <WorkerIcon name="logout" className="h-4 w-4" />
-        Check out of site
+        {/* Shorter in the header, where it shares a phone-width row with the
+            site name and Sign out. */}
+        {variant === 'primary' ? 'Check out of site' : 'Check out'}
       </button>
 
       <ConfirmDialog
