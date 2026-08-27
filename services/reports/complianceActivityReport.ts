@@ -286,10 +286,42 @@ export interface ComplianceActivityRow {
   auditScore: number | null;
 }
 
-/** Detail rows for the table and the CSV export. */
+/**
+ * The EXPORT ceiling. Not a truncation point — the export route counts first and
+ * refuses above this with an explanation, rather than returning a short file.
+ * "Export CSV for all" has to mean all.
+ */
+export const ACTIVITY_EXPORT_MAX_ROWS = 50_000;
+
+/**
+ * How many activities match, independent of any row cap.
+ *
+ * The screen's "Showing X of N" used to take N from the length of a result set
+ * capped at 2000, so above that it reported 2000 as the total — and pointed at
+ * an export that shared the same cap.
+ */
+export async function countComplianceActivities(
+  siteIds: string[],
+  range?: DateRange,
+): Promise<number> {
+  if (siteIds.length === 0) return 0;
+  return prisma.complianceOccurrence.count({
+    where: { jobSiteId: { in: siteIds }, ...dueDateWindow(range) },
+  });
+}
+
+/**
+ * Detail rows for the table and the CSV export.
+ *
+ * `opts.take` bounds the query. The screen passes its display limit, so it no
+ * longer loads up to 2000 rows to show 100. The export passes nothing and is
+ * deliberately UNCAPPED — its route checks countComplianceActivities() against
+ * ACTIVITY_EXPORT_MAX_ROWS first, which is what keeps that safe.
+ */
 export async function getComplianceActivityRows(
   siteIds: string[],
   range?: DateRange,
+  opts: { take?: number } = {},
 ): Promise<ComplianceActivityRow[]> {
   if (siteIds.length === 0) return [];
   const today = londonDateStr(new Date());
@@ -300,7 +332,7 @@ export async function getComplianceActivityRows(
       ...dueDateWindow(range),
     },
     orderBy: [{ dueDateLocal: 'desc' }, { timeOfDay: 'asc' }],
-    take: 2000,
+    ...(opts.take ? { take: opts.take } : {}),
     include: {
       schedule: {
         select: { title: true, auditTemplate: { select: { name: true } } },

@@ -26,6 +26,7 @@ import {
   getSiteComplianceScores,
   getComplianceTrend,
   getComplianceActivityRows,
+  countComplianceActivities,
   GENERATION_CAVEAT,
   TREND_WEEKS,
 } from '@/services/reports/complianceActivityReport';
@@ -75,15 +76,22 @@ export default async function ComplianceActivitiesReportPage({
   const aggregate = isAggregateOnly(viewer, REPORT);
   const canExport = canExportReport(viewer, REPORT);
 
-  const [kpis, siteScores, trend, allRows] = await Promise.all([
+  const [kpis, siteScores, trend, rows, totalRows] = await Promise.all([
     getComplianceKpis(filters.siteIds, filters.range),
     getSiteComplianceScores(filters.siteIds, filters.range),
     getComplianceTrend(filters.siteIds),
+    // Fetch only what is displayed. This used to pull up to 2000 rows and slice
+    // to 100, then report the length of that capped set as the total.
     aggregate
       ? Promise.resolve([])
-      : getComplianceActivityRows(filters.siteIds, filters.range),
+      : getComplianceActivityRows(filters.siteIds, filters.range, {
+          take: DISPLAY_LIMIT,
+        }),
+    // The true total, from its own count(), so "of N" is the dataset and not a cap.
+    aggregate
+      ? Promise.resolve(0)
+      : countComplianceActivities(filters.siteIds, filters.range),
   ]);
-  const rows = allRows.slice(0, DISPLAY_LIMIT);
   const noData = kpis.due === 0 && kpis.upcoming === 0;
 
   return (
@@ -256,9 +264,9 @@ export default async function ComplianceActivitiesReportPage({
           ) : (
             <section className="mt-6">
               <h2 className="mb-2 text-sm font-bold text-ink">Activities</h2>
-              {allRows.length > DISPLAY_LIMIT && (
+              {totalRows > rows.length && (
                 <p className="mb-1.5 text-xs text-ink-subtle">
-                  Showing {rows.length} of {allRows.length} — export CSV for
+                  Showing {rows.length} of {totalRows} — export CSV for
                   all.
                 </p>
               )}

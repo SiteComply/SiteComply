@@ -6,7 +6,11 @@ import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { getReportType } from '@/services/reports/reportRegistry';
 import { canExportReport } from '@/services/reports/reportAccess';
 import { parseReportFilters } from '@/services/reports/reportFilters';
-import { getComplianceActivityRows } from '@/services/reports/complianceActivityReport';
+import {
+  getComplianceActivityRows,
+  countComplianceActivities,
+  ACTIVITY_EXPORT_MAX_ROWS,
+} from '@/services/reports/complianceActivityReport';
 import { logReportExport } from '@/services/reports/reportExportLog';
 
 export const runtime = 'nodejs';
@@ -48,6 +52,26 @@ export async function GET(req: NextRequest) {
     },
     viewer,
   );
+
+  // Counted BEFORE the rows are loaded, so the uncapped query below never runs
+  // on an unbounded result set. The route refuses rather than truncating: the
+  // screen tells the user to "export CSV for all", and a short file that looks
+  // complete is worse than an error they can act on.
+  const total = await countComplianceActivities(filters.siteIds, filters.range);
+  if (total > ACTIVITY_EXPORT_MAX_ROWS) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          `This export would contain ${total.toLocaleString('en-GB')} activities, ` +
+          `which is above the ${ACTIVITY_EXPORT_MAX_ROWS.toLocaleString('en-GB')} limit. ` +
+          `Narrow the date range or sites and try again.`,
+        total,
+        limit: ACTIVITY_EXPORT_MAX_ROWS,
+      },
+      { status: 413 },
+    );
+  }
 
   const rows = await getComplianceActivityRows(filters.siteIds, filters.range);
   const csv = toCsv(

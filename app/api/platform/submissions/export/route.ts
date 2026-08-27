@@ -1,9 +1,14 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { toCsv } from '@/lib/csv';
 import { formatDateTimeUK } from '@/lib/datetime';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
+import {
+  parseCheckinStatusFilter,
+  parseCheckinSiteFilter,
+  checkedOutAtWhere,
+} from '@/services/submissions/checkinFilter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,7 +20,7 @@ export const dynamic = 'force-dynamic';
  * Manager, Auditor, H&S Consultant and Principal Contractor; refused for
  * Engineer and Client. Scoped to the viewer's accessible sites only.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
     return NextResponse.json(
@@ -30,9 +35,26 @@ export async function GET() {
     );
   }
 
+  // The export now mirrors the workspace filters. It previously exported the
+  // whole scoped set regardless, so a user who had filtered to one site and one
+  // status got a file containing records they were not looking at — easy to
+  // misread now the screen states "Showing 1-20 of N".
+  //
+  // The SAME helpers the page uses are applied here, so the two cannot drift:
+  // parseCheckinSiteFilter validates the site against the viewer's own sites,
+  // and checkedOutAtWhere translates the status filter.
+  const sp = req.nextUrl.searchParams;
+  const status = parseCheckinStatusFilter(sp.get('status') ?? undefined);
+  const siteId = parseCheckinSiteFilter(sp.get('site') ?? undefined, viewer.siteIds);
+
+  const where = {
+    jobSiteId: siteId ? siteId : { in: viewer.siteIds },
+    ...checkedOutAtWhere(status),
+  };
+
   const submissions = viewer.siteIds.length
     ? await prisma.submission.findMany({
-        where: { jobSiteId: { in: viewer.siteIds } },
+        where,
         orderBy: { checkedInAt: 'desc' },
         select: {
           checkedInAt: true,

@@ -102,6 +102,12 @@ export default async function PlatformSubmissionsPage({
     site: siteId ?? undefined,
   };
 
+  // The export gets the same two filters, so the CSV is the table. `page` is
+  // deliberately NOT carried: the export is the whole filtered set, not one page.
+  const exportQs = new URLSearchParams(
+    Object.entries(carriedParams).filter(([, v]) => v) as [string, string][],
+  ).toString();
+
   return (
     <PlatformShell>
       <PageHeader
@@ -116,7 +122,8 @@ export default async function PlatformSubmissionsPage({
           <>
             {canExport && counts.all > 0 && (
               <a
-                href="/api/platform/submissions/export"
+                // Carries the active filters so the CSV matches the table.
+                href={`/api/platform/submissions/export${exportQs ? `?${exportQs}` : ''}`}
                 className="touch-target inline-flex items-center rounded-lg border border-brand-200 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
               >
                 Export CSV
