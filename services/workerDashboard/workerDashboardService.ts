@@ -274,12 +274,8 @@ export async function getWorkerDashboardCounts(
       where: { jobSiteId: siteId, active: true, reads: { none: { workerId } } },
     }),
     prisma.siteBulletin.count({ where: { jobSiteId: siteId, active: true } }),
-    prisma.document.count({
-      where: { jobSiteId: siteId, category: DocumentCategory.RAMS },
-    }),
-    prisma.document.count({
-      where: { jobSiteId: siteId, category: { not: DocumentCategory.RAMS } },
-    }),
+    countWorkerDocuments(siteId, { category: DocumentCategory.RAMS }),
+    countWorkerDocuments(siteId, { excludeRams: true }),
     prisma.action.count({
       where: { jobSiteId: siteId, status: { in: ['OPEN', 'IN_PROGRESS'] } },
     }),
@@ -327,15 +323,58 @@ export interface WorkerDocument {
 }
 
 /**
+ * Strip the internal "(annotated)" marker a document title may carry.
+ *
+ * SC-017 appends it when the annotated copy is uploaded, so managers can tell the
+ * two rows apart in the Documents register. It is a processing detail: a worker
+ * should see the title the site team typed.
+ */
+function cleanWorkerTitle(title: string): string {
+  return title.replace(/\s*\(annotated\)\s*$/i, '').trim() || title;
+}
+
+/**
+ * Collapse original/annotated pairs to ONE document, the annotated copy winning.
+ *
+ * SC-017 stores an annotated image as its own Document row linked back to the
+ * original, which is right for versioning and the audit trail but meant a worker
+ * saw the same document twice — once plain, once "(annotated)" — with the suffix
+ * as the only thing distinguishing an apparent duplicate.
+ *
+ * The annotated copy takes precedence because the annotations are the point: the
+ * site team marked the document up for the worker to read. This mirrors what the
+ * audit EvidenceGallery already does on the platform side, where an annotated
+ * photo and its original render as one item.
+ *
+ * An annotated copy whose original has been deleted still shows on its own, and a
+ * document with no annotated copy is untouched.
+ */
+function pairAnnotated<T extends { id: string; annotated: boolean; originalDocumentId: string | null }>(
+  docs: T[],
+): T[] {
+  const supersededIds = new Set(
+    docs
+      .filter((d) => d.annotated && d.originalDocumentId)
+      .map((d) => d.originalDocumentId as string),
+  );
+  return docs.filter((d) => !supersededIds.has(d.id));
+}
+
+/**
  * Documents for the worker's site. `category` narrows to one bucket (RAMS for
  * the RAMS panel); `excludeRams` powers the Site documents panel, which shows
  * everything else so a document is never counted twice.
+ *
+ * Original/annotated pairs are collapsed to one entry and titles are cleaned of
+ * the internal marker — see pairAnnotated() and cleanWorkerTitle(). Nothing about
+ * storage, versioning or the annotation data changes; this is what the WORKER is
+ * shown.
  */
-export function getWorkerDocuments(
+export async function getWorkerDocuments(
   siteId: string,
   opts: { category?: DocumentCategory; excludeRams?: boolean } = {},
 ): Promise<WorkerDocument[]> {
-  return prisma.document.findMany({
+  const rows = await prisma.document.findMany({
     where: {
       jobSiteId: siteId,
       ...(opts.category ? { category: opts.category } : {}),
@@ -352,8 +391,37 @@ export function getWorkerDocuments(
       sizeBytes: true,
       expiresAt: true,
       createdAt: true,
+      // Read for pairing only; neither is returned to the worker view.
+      annotated: true,
+      originalDocumentId: true,
     },
   });
+  return pairAnnotated(rows).map(
+    ({ annotated: _a, originalDocumentId: _o, ...d }) => ({
+      ...d,
+      title: cleanWorkerTitle(d.title),
+    }),
+  );
+}
+
+/**
+ * How many documents a worker will actually SEE in a bucket — pairs collapsed,
+ * so the dashboard count matches the list it links to. A plain count() would
+ * report a paired document twice.
+ */
+export async function countWorkerDocuments(
+  siteId: string,
+  opts: { category?: DocumentCategory; excludeRams?: boolean } = {},
+): Promise<number> {
+  const rows = await prisma.document.findMany({
+    where: {
+      jobSiteId: siteId,
+      ...(opts.category ? { category: opts.category } : {}),
+      ...(opts.excludeRams ? { category: { not: DocumentCategory.RAMS } } : {}),
+    },
+    select: { id: true, annotated: true, originalDocumentId: true },
+  });
+  return pairAnnotated(rows).length;
 }
 
 /**
