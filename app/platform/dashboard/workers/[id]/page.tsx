@@ -12,6 +12,7 @@ import {
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { getWorkerDetailForViewer } from '@/services/workers/workerDetailService';
 import { CSCS_CARD_LABELS, cscsVerificationLabel } from '@/lib/cscs';
+import { ManualCheckOutNote } from '@/components/platform/ManualCheckOutNote';
 
 export const dynamic = 'force-dynamic';
 
@@ -132,7 +133,10 @@ export default async function WorkerDetailPage({
                           </td>
                           <td className="py-2.5 pr-3 tabular-nums text-ink-muted">
                             {h.checkedOutAt ? (
-                              formatDateTimeUK(h.checkedOutAt)
+                              <>
+                                {formatDateTimeUK(h.checkedOutAt)}
+                                <ManualCheckOutNote row={h} />
+                              </>
                             ) : (
                               <span className="font-semibold text-safe-700">
                                 On site

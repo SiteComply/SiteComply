@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { getActiveSiteWithChecklist } from '@/services/sites/siteService';
 import { canWorkerCheckIn } from '@/services/workerAccess/workerAssignmentService';
 import { evaluateGate } from '@/services/knowledgeChecks/attemptService';
+import { canOverrideCheckOut } from '@/services/platformUsers/platformPermissions';
+import { viewerSiteIdsFor } from '@/services/platformUsers/effectivePermissions';
+import type { PlatformViewer } from '@/services/platformUsers/platformViewerTypes';
 import {
   evaluateCheckInGate,
   computeCheckOutLocation,
@@ -269,4 +272,82 @@ export async function checkOut(
     data: { checkedOutAt: new Date(), ...loc },
   });
   return true;
+}
+
+
+/** BL-001 — a manual check-out is refused for one of these reasons. */
+export type OverrideCheckOutFailure =
+  | 'forbidden' //      role not in CHECKOUT_OVERRIDE_ROLES
+  | 'reason_required' // blank or whitespace-only reason
+  | 'not_found' //      no such check-in in the viewer's sites
+  | 'already_out'; //   someone already closed it
+
+export interface OverrideCheckOutResult {
+  ok: boolean;
+  reason?: OverrideCheckOutFailure;
+}
+
+/** Reasons are shown in full on the record, so they are capped, not truncated silently. */
+export const CHECKOUT_REASON_MAX = 500;
+
+/**
+ * BL-001 — close a check-in the WORKER never closed.
+ *
+ * A check-in is otherwise closable only by the worker who opened it, so one left
+ * open stays open forever and the on-site count — which a site uses as its fire
+ * roll — stays overstated forever, with no sweep and no expiry to correct it.
+ *
+ * What this does NOT do, deliberately:
+ *
+ *  - it never touches `checkedInAt`. The original record stands;
+ *  - it never backdates `checkedOutAt`. The time recorded is the moment of the
+ *    override, because a guessed departure time would read as fact;
+ *  - it never clears the manual flag. There is no "tidy up" path.
+ *
+ * SCOPE AND OPEN-STATE ARE ENFORCED IN THE WRITE, not before it. `updateMany`
+ * with the full predicate means two managers acting at the same instant cannot
+ * both succeed — the second matches zero rows. Reading first and then writing
+ * would leave exactly that gap. The reason a zero-row result occurred is worked
+ * out AFTERWARDS, and only to choose the error message.
+ */
+export async function overrideCheckOut(
+  viewer: PlatformViewer,
+  submissionId: string,
+  rawReason: string,
+): Promise<OverrideCheckOutResult> {
+  if (!canOverrideCheckOut(viewer.role)) return { ok: false, reason: 'forbidden' };
+
+  const reason = (rawReason ?? '').trim().slice(0, CHECKOUT_REASON_MAX);
+  if (!reason) return { ok: false, reason: 'reason_required' };
+
+  // The check-ins module's own boundary, not the viewer's whole site list: a
+  // contractor narrowed out of check-ins on one site must not act there.
+  const siteIds = viewerSiteIdsFor(viewer, 'checkins', 'view');
+  if (siteIds.length === 0) return { ok: false, reason: 'not_found' };
+
+  const written = await prisma.submission.updateMany({
+    where: {
+      id: submissionId,
+      jobSiteId: { in: siteIds },
+      checkedOutAt: null,
+    },
+    data: {
+      checkedOutAt: new Date(),
+      checkedOutManual: true,
+      checkedOutByUserId: viewer.id,
+      checkedOutByName: viewer.name,
+      checkedOutByRole: viewer.role,
+      checkedOutReason: reason,
+    },
+  });
+  if (written.count > 0) return { ok: true };
+
+  // Zero rows. Distinguish "not yours / no such record" from "already closed"
+  // only now, so the answer cannot disagree with what the write saw.
+  const existing = await prisma.submission.findFirst({
+    where: { id: submissionId, jobSiteId: { in: siteIds } },
+    select: { checkedOutAt: true },
+  });
+  if (!existing) return { ok: false, reason: 'not_found' };
+  return { ok: false, reason: 'already_out' };
 }

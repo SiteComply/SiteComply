@@ -26,6 +26,11 @@ export interface WorkerHistoryEntry {
   gdprConsent: boolean;
   checkedInAt: Date;
   checkedOutAt: Date | null;
+  // BL-001 — worker history must show a manual close as a manual close.
+  checkedOutManual: boolean;
+  checkedOutByName: string | null;
+  checkedOutByRole: string | null;
+  checkedOutReason: string | null;
 }
 
 export interface WorkerDetail {
@@ -118,6 +123,10 @@ export async function getWorkerDetailForViewer(
       gdprConsent: true,
       checkedInAt: true,
       checkedOutAt: true,
+      checkedOutManual: true,
+      checkedOutByName: true,
+      checkedOutByRole: true,
+      checkedOutReason: true,
       jobSite: { select: { id: true, name: true } },
     },
   });
@@ -134,6 +143,10 @@ export async function getWorkerDetailForViewer(
     gdprConsent: s.gdprConsent,
     checkedInAt: s.checkedInAt,
     checkedOutAt: s.checkedOutAt,
+    checkedOutManual: s.checkedOutManual,
+    checkedOutByName: s.checkedOutByName,
+    checkedOutByRole: s.checkedOutByRole,
+    checkedOutReason: s.checkedOutReason,
   }));
 
   const latest = subs[0];

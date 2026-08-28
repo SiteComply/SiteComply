@@ -11,6 +11,8 @@ interface ChecklistItem {
   satisfied: boolean;
   detail: string;
   unavailableReason?: string;
+  resolveHref?: string;
+  resolveLabel?: string;
 }
 
 interface Checklist {
@@ -252,6 +254,16 @@ export function ProjectCompletionPanel({
                         <span className="block text-xs text-ink-muted">
                           {i.unavailableReason ?? i.detail}
                         </span>
+                      ) : null}
+                      {/* BL-001 — a route from the blocker to the place it can
+                          be resolved. The action itself stays out of this list. */}
+                      {!i.satisfied && i.resolveHref ? (
+                        <a
+                          href={i.resolveHref}
+                          className="mt-1 inline-block text-sm font-semibold text-brand-700 hover:underline"
+                        >
+                          {i.resolveLabel ?? 'Review'} →
+                        </a>
                       ) : null}
                     </span>
                   </li>

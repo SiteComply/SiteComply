@@ -13,6 +13,7 @@ import {
 } from '@/services/reports/attendanceReport';
 import { formatHoursMinutes } from '@/lib/datetime';
 import { logReportExport } from '@/services/reports/reportExportLog';
+import { manualActorLabel } from '@/services/submissions/manualCheckOut';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -68,6 +69,11 @@ export async function GET(req: NextRequest) {
       'Location',
       'Distance (m)',
       'Status',
+      // BL-001 — the attendance export is the record most likely to be handed
+      // to a third party, so a reconstructed departure must be labelled here.
+      'Manual check-out',
+      'Checked out by',
+      'Check-out reason',
     ],
     rows.map((r) => {
       const mins = attendanceTotalMinutes(r);
@@ -86,6 +92,9 @@ export async function GET(req: NextRequest) {
           ? String(Math.round(r.checkInDistanceM))
           : '',
         r.status,
+        r.checkedOutManual ? 'Yes' : '',
+        r.checkedOutManual ? manualActorLabel(r) : '',
+        r.checkedOutManual ? (r.checkedOutReason ?? '') : '',
       ];
     }),
   );

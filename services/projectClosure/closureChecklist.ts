@@ -33,6 +33,13 @@ export interface ChecklistItem {
   detail: string;
   /** Why the platform cannot answer — UNAVAILABLE items only. */
   unavailableReason?: string;
+  /**
+   * Where to go to resolve this item. BL-001: the readiness list said what was
+   * wrong but gave no route to fixing it, and the one blocker a manager can now
+   * clear is the one they had no way to reach.
+   */
+  resolveHref?: string;
+  resolveLabel?: string;
 }
 
 export interface ClosureChecklist {
@@ -109,6 +116,14 @@ export async function buildClosureChecklist(
       satisfied: workersOnSite === 0,
       detail:
         'Everyone must be checked out before the project closes, or the site register will still show them on site.',
+      // The override is deliberately NOT offered here. Closure readiness is an
+      // assessment; putting a destructive action inside it invites clearing a
+      // blocker without looking at who it is — and this count is a fire roll.
+      resolveHref: `/platform/dashboard/submissions?status=on-site&site=${siteId}`,
+      resolveLabel:
+        workersOnSite === 1
+          ? 'Review the 1 open check-in'
+          : `Review the ${workersOnSite} open check-ins`,
     },
     {
       key: 'active_permits',

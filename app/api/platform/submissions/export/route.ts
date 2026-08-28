@@ -4,6 +4,7 @@ import { toCsv } from '@/lib/csv';
 import { formatDateTimeUK } from '@/lib/datetime';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
+import { manualActorLabel } from '@/services/submissions/manualCheckOut';
 import {
   parseCheckinStatusFilter,
   parseCheckinSiteFilter,
@@ -60,6 +61,10 @@ export async function GET(req: NextRequest) {
           checkedInAt: true,
           checkedOutAt: true,
           status: true,
+          checkedOutManual: true,
+          checkedOutByName: true,
+          checkedOutByRole: true,
+          checkedOutReason: true,
           worker: { select: { fullName: true, company: true } },
           jobSite: { select: { name: true, jobReference: true } },
         },
@@ -74,6 +79,11 @@ export async function GET(req: NextRequest) {
     'Checked in',
     'Checked out',
     'Status',
+    // BL-001 — a manual close must be identifiable in the export too, or the
+    // spreadsheet becomes the one place it looks like an ordinary check-out.
+    'Manual check-out',
+    'Checked out by',
+    'Check-out reason',
   ];
   const rows = submissions.map((s) => [
     s.worker.fullName,
@@ -83,6 +93,9 @@ export async function GET(req: NextRequest) {
     formatDateTimeUK(s.checkedInAt),
     s.checkedOutAt ? formatDateTimeUK(s.checkedOutAt) : '',
     s.status,
+    s.checkedOutManual ? 'Yes' : '',
+    s.checkedOutManual ? manualActorLabel(s) : '',
+    s.checkedOutManual ? (s.checkedOutReason ?? '') : '',
   ]);
   const csv = toCsv(header, rows);
 
