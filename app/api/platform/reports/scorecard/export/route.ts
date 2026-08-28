@@ -7,6 +7,7 @@ import { canExportReport } from '@/services/reports/reportAccess';
 import { parseReportFilters } from '@/services/reports/reportFilters';
 import { getScorecard } from '@/services/reports/scorecardReport';
 import { logReportExport } from '@/services/reports/reportExportLog';
+import { percentCell } from '@/services/reports/reportFormat';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -66,8 +67,8 @@ export async function GET(req: NextRequest) {
       r.checkIns,
       r.activeWorkers,
       r.companies,
-      r.compliancePct,
-      r.inductionPct,
+      percentCell(r.compliancePct),
+      percentCell(r.inductionPct),
       '',
       '',
     ]),

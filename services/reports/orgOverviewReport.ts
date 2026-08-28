@@ -11,8 +11,16 @@ import { toDateInputValue } from '@/lib/datetime';
 
 type Range = { gte?: Date; lt?: Date };
 
-function pct(n: number, d: number): number {
-  return d ? Math.round((n / d) * 100) : 0;
+/**
+ * A percentage, or null when there is nothing to take a percentage OF.
+ *
+ * `d === 0` used to yield 0, so a site with no check-ins in the period was
+ * reported as "0% compliant" on screen and in the CSV — indistinguishable from a
+ * site where every worker failed. No data and total failure are different facts
+ * and a director acts on them differently.
+ */
+function pct(n: number, d: number): number | null {
+  return d ? Math.round((n / d) * 100) : null;
 }
 
 export interface OrgOverview {
@@ -21,8 +29,8 @@ export interface OrgOverview {
   checkIns: number;
   onSiteNow: number;
   companies: number;
-  compliancePct: number;
-  inductionPct: number;
+  compliancePct: number | null;
+  inductionPct: number | null;
   avgPerDay: number;
   /** Check-ins per day (yyyy-mm-dd sorted ascending). */
   trend: { date: string; count: number }[];
@@ -33,7 +41,7 @@ export interface OrgOverview {
     checkIns: number;
     workers: number;
     onSiteNow: number;
-    compliancePct: number;
+    compliancePct: number | null;
   }[];
 }
 
@@ -47,8 +55,9 @@ export async function getOrgOverview(
     checkIns: 0,
     onSiteNow: 0,
     companies: 0,
-    compliancePct: 0,
-    inductionPct: 0,
+    // No sites in scope: no data, not 0%.
+    compliancePct: null,
+    inductionPct: null,
     avgPerDay: 0,
     trend: [],
     topCompanies: [],

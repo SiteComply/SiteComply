@@ -163,7 +163,10 @@ export async function recalculateAudit(
         audit.scoringEnabled && result.percent !== null
           ? Math.round(result.percent)
           : null,
-      calculatedPassed: audit.scoringEnabled ? result.passed : null,
+      // `result.passed` is now null until something has actually been scored,
+      // so an unscored audit persists null and the register renders "—" rather
+      // than "Fail". `?? null` keeps the column nullable when scoring is off.
+      calculatedPassed: audit.scoringEnabled ? (result.passed ?? null) : null,
       scoredAt: audit.scoringEnabled ? new Date() : null,
     },
   });

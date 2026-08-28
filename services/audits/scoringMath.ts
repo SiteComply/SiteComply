@@ -60,7 +60,17 @@ export interface ScoreResult {
   earnedPoints: number;
   /** 0–100. Null when nothing is scorable yet (avoids a misleading 0%). */
   percent: number | null;
-  passed: boolean;
+  /**
+   * Null when the audit has not been scored yet — for the same reason `percent`
+   * is nullable. A boolean cannot say "not known", so an unscored audit had to
+   * pick one, picked `false`, and was reported as FAILED on the register and the
+   * detail page. "Not yet scored" and "Fail" are different facts about an audit
+   * and a manager acts on them differently.
+   *
+   * A mandatory-item failure is still a real `false` even with no percent — see
+   * `didPass`.
+   */
+  passed: boolean | null;
   /** Items flagged mandatory that were answered FAIL — these force a fail. */
   mandatoryFailureIds: string[];
   bySection: SectionScore[];
@@ -210,10 +220,15 @@ function didPass(
   earnedPoints: number,
   percent: number | null,
   mandatoryFailureIds: string[],
-): boolean {
-  // The mandatory gate overrides everything, including a 100% score.
+): boolean | null {
+  // The mandatory gate overrides everything, including a 100% score. It stays
+  // FIRST and still returns a hard false: a mandatory item answered FAIL is a
+  // genuine failure even when nothing else has been scored (an INFO_ONLY or NA
+  // item contributes no points, so `percent` can legitimately still be null).
   if (mandatoryFailureIds.length > 0) return false;
-  if (percent === null) return false;
+  // Nothing scorable has been answered: the outcome is not known yet, which is
+  // not the same as failing.
+  if (percent === null) return null;
   if (config.method === 'PASS_FAIL') {
     // Every scorable item must pass; any FAIL already pulled percent below 100.
     return percent >= 100;

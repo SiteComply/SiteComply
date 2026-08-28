@@ -19,6 +19,7 @@ import {
 import { getScorecard } from '@/services/reports/scorecardReport';
 import { canUseAiSummaries } from '@/services/ai/aiConfig';
 import { AiSummaryPanel } from '@/components/platform/AiSummaryPanel';
+import { percentLabel } from '@/services/reports/reportFormat';
 
 export const dynamic = 'force-dynamic';
 
@@ -95,8 +96,8 @@ export default async function ScorecardReportPage({
           { label: 'Active workers', value: scorecard.totals.activeWorkers },
           {
             label: 'Compliance',
-            value: `${scorecard.totals.compliancePct}%`,
-            sub: `induction ${scorecard.totals.inductionPct}%`,
+            value: percentLabel(scorecard.totals.compliancePct),
+            sub: `induction ${percentLabel(scorecard.totals.inductionPct)}`,
           },
         ]}
       />
@@ -152,10 +153,10 @@ export default async function ScorecardReportPage({
                       {r.companies}
                     </td>
                     <td className="px-5 py-2 text-right font-semibold tabular-nums text-ink">
-                      {r.compliancePct}%
+                      {percentLabel(r.compliancePct)}
                     </td>
                     <td className="px-5 py-2 text-right tabular-nums text-ink">
-                      {r.inductionPct}%
+                      {percentLabel(r.inductionPct)}
                     </td>
                     <td className="px-5 py-2 text-right text-ink-subtle">—</td>
                     <td className="px-5 py-2 text-right text-ink-subtle">—</td>

@@ -78,7 +78,9 @@ export function CheckOutOfSiteButton({
             : // Mirrors the Sign out control's geometry — rounded-lg, px-3 py-2,
               // text-sm font-semibold, 1px border — so the header reads as one
               // row of peers rather than a primary button beside a quiet one.
-              'gap-1.5 rounded-lg border border-danger-200 px-3 py-2 text-sm font-semibold text-danger-600 hover:bg-danger-50',
+              // shrink-0 + whitespace-nowrap: on a narrow phone this was folding
+              // "Check out" onto two lines and squeezing its neighbours.
+              'shrink-0 gap-1.5 whitespace-nowrap rounded-lg border border-danger-200 px-3 py-2 text-sm font-semibold text-danger-600 hover:bg-danger-50',
           className,
         )}
       >
