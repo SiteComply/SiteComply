@@ -17,7 +17,8 @@ export const dynamic = 'force-dynamic';
  *
  * Status contract, so the client can say something true about each outcome:
  *   401 not signed in · 403 role not permitted · 400 reason missing
- *   404 not in the viewer's sites · 409 already checked out · 200 done
+ *   404 not in the viewer's sites · 409 already checked out or the project is
+ *   completed (read-only) · 200 done
  *
  * Authorisation and site scope are decided inside the service, in the same
  * statement that performs the write — not here — so this route cannot drift
@@ -28,6 +29,7 @@ const STATUS: Record<OverrideCheckOutFailure, number> = {
   reason_required: 400,
   not_found: 404,
   already_out: 409,
+  project_closed: 409,
 };
 
 const MESSAGE: Record<OverrideCheckOutFailure, string> = {
@@ -35,6 +37,8 @@ const MESSAGE: Record<OverrideCheckOutFailure, string> = {
   reason_required: 'A reason is required.',
   not_found: 'That check-in is not available on your sites.',
   already_out: 'That worker has already been checked out.',
+  project_closed:
+    'That project has been completed and its records are read-only. Reopen the project to change attendance.',
 };
 
 export async function POST(
