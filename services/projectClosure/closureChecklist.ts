@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { supersededDocumentIds } from '@/services/documents/supersededDocuments';
 
 /**
  * SC-025 — the completion checklist.
@@ -101,9 +102,17 @@ export async function buildClosureChecklist(
     }),
     // "Missing documents" is not directly answerable — there is no required-document
     // register. Expired documents ARE answerable and are the nearest true signal.
-    prisma.document.count({
-      where: { jobSiteId: siteId, expiresAt: { lt: new Date() } },
-    }),
+    // One document, not two: a superseded original is not counted, so an
+    // annotated pair sharing one expiry reads as one expired document.
+    supersededDocumentIds([siteId]).then((superseded) =>
+      prisma.document.count({
+        where: {
+          jobSiteId: siteId,
+          expiresAt: { lt: new Date() },
+          id: superseded.length > 0 ? { notIn: superseded } : undefined,
+        },
+      }),
+    ),
     prisma.closeOutPack.count({ where: { jobSiteId: siteId } }),
   ]);
 

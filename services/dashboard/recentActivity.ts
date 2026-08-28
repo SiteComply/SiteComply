@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
+import { supersededDocumentIds } from '@/services/documents/supersededDocuments';
 
 /**
  * Unified organisation activity stream for the Platform dashboard.
@@ -236,10 +237,20 @@ export async function getRecentActivity(
   }
 
   if (canDocs) {
+    // One document, not two. An annotated upload is stored as the untouched
+    // original plus the annotated copy, so an unfiltered feed shows the same
+    // upload twice — and since the two rows now carry the same title, it reads
+    // as the identical line repeated. Worse, the feed takes only SOURCE_TAKE
+    // rows: a pair burns two of those slots and pushes a genuine item off the
+    // list, so filtering afterwards would not do — the exclusion has to be in
+    // the query. Same rule and same helper as the Documents register.
+    const supersededDocs = await supersededDocumentIds(siteIds);
+    const notSuperseded =
+      supersededDocs.length > 0 ? { id: { notIn: supersededDocs } } : {};
     tasks.push(
       prisma.document
         .findMany({
-          where: site,
+          where: { ...site, ...notSuperseded },
           orderBy: { createdAt: 'desc' },
           take: SOURCE_TAKE,
           select: { id: true, title: true, createdAt: true, jobSite: { select: { name: true } } },
@@ -256,7 +267,7 @@ export async function getRecentActivity(
         ),
       prisma.document
         .findMany({
-          where: { ...site, expiresAt: { not: null, lt: now } },
+          where: { ...site, ...notSuperseded, expiresAt: { not: null, lt: now } },
           orderBy: { expiresAt: 'desc' },
           take: SOURCE_TAKE,
           select: { id: true, title: true, expiresAt: true },

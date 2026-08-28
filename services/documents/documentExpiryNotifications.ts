@@ -17,6 +17,7 @@ import {
 } from '@/services/documents/documentConstants';
 import { formatDateUK } from '@/lib/datetime';
 import type { RawNotification } from '@/services/notifications/notificationTypes';
+import { supersededDocumentIds } from '@/services/documents/supersededDocuments';
 
 /**
  * Document-expiry notifications — DERIVED on read from documents' expiry dates +
@@ -80,10 +81,15 @@ export async function deriveDocumentNotifications(
   const expiryThresholds = reminderOffsets(documentExpiryDays, EXPIRY_STEPS);
   const cutoff = new Date(todayMs + expiryThresholds[0]! * DAY_MS);
 
+  // One document, one reminder. An annotated pair shares an expiry date, so an
+  // unfiltered read fires the same reminder twice per threshold — two rows,
+  // identical titles, one real document. The superseded original is excluded.
+  const superseded = await supersededDocumentIds(viewer.siteIds);
   const docs = await prisma.document.findMany({
     where: {
       jobSiteId: { in: viewer.siteIds },
       expiresAt: { not: null, lte: cutoff },
+      id: superseded.length > 0 ? { notIn: superseded } : undefined,
     },
     orderBy: { expiresAt: 'asc' },
     select: {
