@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
+import { Button } from '@/components/ui/Button';
 
 /**
  * BL-001 — the authorised manual check-out control.
@@ -17,6 +18,14 @@ import { useToast } from '@/components/ui/Toast';
  *
  * The button is rendered only for a permitted role; the API re-checks anyway,
  * because a hidden button is not an access control.
+ *
+ * Both the trigger and the confirm carry the platform's `danger` variant —
+ * solid danger-600 with white text, 4.83:1 against white (AA for normal text,
+ * 6.47:1 on hover). This is an administrative override of an attendance record,
+ * not an ordinary action, and it should not look like one. The wording is the
+ * same in both states so the button the user pressed is the button they confirm;
+ * no trailing ellipsis, because the label states the action rather than hinting
+ * that something more follows.
  */
 export function ManualCheckOutPanel({
   submissionId,
@@ -64,13 +73,13 @@ export function ManualCheckOutPanel({
   if (!open) {
     return (
       <div className="mt-3">
-        <button
-          type="button"
+        <Button
+          variant="danger"
+          size="md"
           onClick={() => setOpen(true)}
-          className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-semibold text-ink"
         >
-          Check this worker out…
-        </button>
+          Manually check out worker
+        </Button>
         {openSinceLabel ? (
           <p className="mt-1 text-xs text-ink-subtle">{openSinceLabel}</p>
         ) : null}
@@ -97,14 +106,14 @@ export function ManualCheckOutPanel({
         The original check-in time is not changed.
       </p>
       <div className="mt-2 flex gap-2">
-        <button
-          type="button"
+        <Button
+          variant="danger"
+          size="md"
           onClick={submit}
           disabled={busy || reason.trim() === ''}
-          className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-semibold text-ink disabled:opacity-60"
         >
-          {busy ? 'Checking out…' : 'Check out worker'}
-        </button>
+          {busy ? 'Checking out…' : 'Manually check out worker'}
+        </Button>
         <button
           type="button"
           onClick={() => setOpen(false)}
