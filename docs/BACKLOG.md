@@ -10,9 +10,18 @@ Items here are **not** commitments and **not** in scope for REV-1.
 
 ## BL-001 — Authorised manual check-out
 
-**Status:** Deferred — reconsider in a future release
-**Raised:** 26 August 2026
+**Status:** ✅ **DELIVERED — live in production, 28 August 2026.** Closed.
+**Raised:** 26 August 2026 · **Delivered:** 28 August 2026
 **Reference:** tag `archive/manual-checkout` (archived branch `feature/archived-badge-style`)
+**Superseded by:** `docs/ATTENDANCE-OVERRIDE.md` — the as-built record.
+
+> The specification below is kept as the record of what was decided and why.
+> **It is not the as-built description.** Two things changed during delivery:
+> Directors were added to the override roles (a decision recorded in
+> `docs/RBAC.md` §6 note 1 before any code), and the reason is captured in an
+> inline disclosure rather than `ConfirmDialog`, which takes only a `message`
+> string and cannot host a field. See `docs/ATTENDANCE-OVERRIDE.md` for the
+> behaviour that actually shipped.
 
 ### The problem
 
@@ -174,3 +183,60 @@ site-access requirement that reads the flag it sets.
 
 Full behaviour, identification method and the phased checklist are in
 `docs/CSCS-CUTOVER.md`. No code changes made.
+
+## BL-004 — Automatic overnight check-out sweep
+
+**Status:** Not started — now unblocked by BL-001
+**Raised:** 28 August 2026
+
+BL-001 gives a human an accountable way to close a forgotten check-in. It does not
+stop them accumulating. A nightly sweep would close records open beyond a threshold
+without anyone having to notice them.
+
+**Why it was not built first.** A sweep writes a check-out with no actor and no
+reason. Before BL-001 there was no way to tell such a record from a worker's own
+check-out, so the sweep would have quietly corrupted attendance rather than
+annotating it. That distinction now exists in the schema, so the sweep is safe to
+build.
+
+**Constraints.** Use the same columns. Set `checkedOutByRole` to a reserved value
+(`SYSTEM` or similar) and `checkedOutByName` to something that reads as automated,
+so a swept close is distinguishable from a human override as well as from a genuine
+one — three states, not two. `checkedOutReason` should state the rule that fired
+and the threshold. Do not make it silent: a swept site should notify whoever owns
+it, or the fire roll simply becomes quietly wrong in the other direction.
+
+---
+
+## BL-005 — Surface ageing check-ins before they block something
+
+**Status:** Not started
+**Raised:** 28 August 2026
+
+An open check-in is a fire-roll error from the moment it goes stale, but the
+platform surfaces it nowhere until somebody tries to close the project. The
+measurement taken for BL-001 found twelve records older than seven days, six older
+than thirty, and the oldest at thirty-six — none of it visible anywhere.
+
+Somewhere in Check-ins or the Dashboard should say "N check-ins open longer than X".
+Deliberately not specified further here: where it belongs is a design decision, and
+the useful part of this item is the requirement, not a chosen widget.
+
+---
+
+## BL-006 — Reason quality on attendance overrides
+
+**Status:** Watch — do not build yet
+**Raised:** 28 August 2026
+
+The override reason is free text, mandatory and non-empty. That is the right
+starting point: it accepts the real range of circumstances and does not train people
+to click through a list.
+
+If audit review later shows reasons that are technically non-empty and practically
+useless, a short picker with a mandatory "other" free-text option would raise the
+floor without blocking genuine cases. **Review the reasons actually recorded before
+deciding.** Building this on suspicion would add friction to a safety action for no
+demonstrated gain.
+
+---

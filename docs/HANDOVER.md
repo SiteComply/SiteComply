@@ -227,6 +227,15 @@ proved no gate went missing.
 - **SC-014** — "Configure scoring" moved into the audit header; it used to sit
   inside a panel that only rendered for audits created from a template, so audits
   created from scratch had no route to it at all.
+- **BL-001 — authorised manual check-out** (28 Aug 2026). A check-in could only be
+  closed by the worker who opened it, so a forgotten one stayed open forever and the
+  on-site count — the site's **fire roll** — stayed overstated, with project closure
+  hard-blocked behind it. Director, Site Manager, Project Manager and Principal
+  Contractor can now close an open check-in with a mandatory reason, recorded as a
+  permanently and visibly manual event. `checkedInAt` is never touched,
+  `checkedOutAt` is never backdated, and time on site is not reported for a manual
+  close. **Behaviour, RBAC, audit trail and UI: `docs/ATTENDANCE-OVERRIDE.md`.
+  Day-to-day operation: `docs/ATTENDANCE-OPERATIONS.md`.**
 
 ---
 
@@ -241,10 +250,23 @@ configured threshold as a verdict.
 
 **Unmerged branches holding real work**
 
-- `feature/archived-badge-style` — 3 commits not in `main`, and **two of them are not
-  pushed anywhere**, including a GitHub Actions CI pipeline. This is the most
-  at-risk work in the repository; it exists only on this machine.
+- `feature/archived-badge-style` — 3 commits not in `main`. Its manual check-out
+  commit (`9c6fbbd`) is **superseded**: BL-001 shipped on 28 Aug 2026, rewritten
+  against the approved RBAC matrix rather than rebased (see BL-001 for why the
+  branch was not the starting point). The other two — branded error pages
+  (`4701580`) and a GitHub Actions CI pipeline (`1e0173c`) — are **still not pushed
+  anywhere**: `origin` is at `9c6fbbd`, this machine at `4701580`. Those two remain
+  the most at-risk work in the repository, and the CI pipeline is the only test
+  automation that exists.
 - `feature/remove-dashboard-placeholder` — 1 commit not in `main`.
+
+**Operational, not engineering**
+
+- **Twelve stale check-ins remain open in production**, and Test Site D is still
+  blocked from closure by two of them. The capability to clear them shipped with
+  BL-001; the work of confirming each worker is genuinely off site and recording why
+  has not been done. Procedure, and what makes an acceptable reason, are in
+  `docs/ATTENDANCE-OPERATIONS.md`. Deliberately not bulk-closable.
 
 **Deferred by decision (not defects)**
 
@@ -261,9 +283,12 @@ configured threshold as a verdict.
 
 **Known and unaddressed**
 
-- The SMS `devCode` is returned by the OTP endpoint and **production still uses the
-  mock provider**. Anyone who knows a registered mobile number can obtain a login
-  code. This is the most significant outstanding security item.
+- ~~The SMS `devCode` is returned by the OTP endpoint and production still uses the
+  mock provider.~~ **Resolved.** The `devCode` field was deleted (the only mention
+  left in the codebase is a comment in `services/auth/otpService.ts` recording that
+  no such field exists), and the `SMS_PROVIDER` app setting has been removed from
+  production. Verified 28 August 2026. *Corrected here because the entry described
+  a live credential leak that no longer exists.*
 - There is **no test runner** — no Jest, no Vitest, nothing in `npm scripts`.
   Verification is done by purpose-built scripts (`scripts/sc0XX_verify.ts`,
   `uxrefresh_nav_check.ts`, `sc017followup_check.ts`, `sc020followup_check.ts`) and by
