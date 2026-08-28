@@ -26,6 +26,13 @@ import {
 import { SiteFilterSelect } from '@/components/platform/SiteFilterSelect';
 import { PaginationControls } from '@/components/platform/PaginationControls';
 import { resolvePage } from '@/lib/pagination';
+import { canOverrideCheckOut } from '@/services/platformUsers/platformPermissions';
+import {
+  durationIsMeaningful,
+  daysOpen,
+} from '@/services/submissions/manualCheckOut';
+import { ManualCheckOutNote } from '@/components/platform/ManualCheckOutNote';
+import { ManualCheckOutPanel } from '@/components/platform/ManualCheckOutPanel';
 import {
   getCheckinCounts,
   listCheckinsForViewer,
@@ -83,6 +90,7 @@ export default async function PlatformSubmissionsPage({
   // with the highlighted pill above. No extra query: both numbers come from the
   // getCheckinCounts call already made.
   const pg = resolvePage(searchParams.page, countByFilter[status]);
+  const now = new Date();
   const submissions = await listCheckinsForViewer(viewer, status, siteId, {
     skip: pg.skip,
     take: pg.take,
@@ -237,9 +245,14 @@ export default async function PlatformSubmissionsPage({
                       <RailDetail
                         label="Checked out"
                         value={
-                          selected.checkedOutAt
-                            ? formatDateTimeUK(selected.checkedOutAt)
-                            : '— still on site'
+                          selected.checkedOutAt ? (
+                            <>
+                              {formatDateTimeUK(selected.checkedOutAt)}
+                              <ManualCheckOutNote row={selected} />
+                            </>
+                          ) : (
+                            '— still on site'
+                          )
                         }
                       />
                       {/* Derived from the two timestamps already loaded; no new
@@ -248,21 +261,37 @@ export default async function PlatformSubmissionsPage({
                       <RailDetail
                         label="Time on site"
                         value={
-                          selected.checkedOutAt
-                            ? formatHoursMinutes(
-                                Math.max(
-                                  0,
-                                  Math.round(
-                                    (selected.checkedOutAt.getTime() -
-                                      selected.checkedInAt.getTime()) /
-                                      60000,
+                          // A manual close records when a MANAGER acted, not when
+                          // the worker left, so the gap between the timestamps is
+                          // not a shift. Publishing it would put a fabricated
+                          // duration — sometimes weeks — into attendance.
+                          !durationIsMeaningful(selected)
+                            ? '— not measured (manual check-out)'
+                            : selected.checkedOutAt
+                              ? formatHoursMinutes(
+                                  Math.max(
+                                    0,
+                                    Math.round(
+                                      (selected.checkedOutAt.getTime() -
+                                        selected.checkedInAt.getTime()) /
+                                        60000,
+                                    ),
                                   ),
-                                ),
-                              )
-                            : '—'
+                                )
+                              : '—'
                         }
                       />
                     </dl>
+                    {/* BL-001 — the action sits with the record it acts on, and
+                        only for a role that may use it. The API re-checks. */}
+                    {!selected.checkedOutAt &&
+                    canOverrideCheckOut(viewer.role) ? (
+                      <ManualCheckOutPanel
+                        submissionId={selected.id}
+                        workerName={selected.worker.fullName}
+                        openSinceLabel={`Open since ${formatDateTimeUK(selected.checkedInAt)} · ${daysOpen(selected.checkedInAt, now)} days.`}
+                      />
+                    ) : null}
                     <Link
                       href={`/platform/dashboard/workers/${selected.worker.id}`}
                       className="mt-3 inline-block text-sm font-semibold text-brand-700 hover:underline"

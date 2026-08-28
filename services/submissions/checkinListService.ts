@@ -22,6 +22,12 @@ export interface CheckinListItem {
   id: string;
   checkedInAt: Date;
   checkedOutAt: Date | null;
+  // BL-001 — carried on every row so the list, the rail and the export all
+  // describe a manual close the same way, from one read.
+  checkedOutManual: boolean;
+  checkedOutByName: string | null;
+  checkedOutByRole: string | null;
+  checkedOutReason: string | null;
   worker: { id: string; fullName: string; company: string };
   jobSite: { name: string };
 }
@@ -79,6 +85,10 @@ export async function listCheckinsForViewer(
       id: true,
       checkedInAt: true,
       checkedOutAt: true,
+      checkedOutManual: true,
+      checkedOutByName: true,
+      checkedOutByRole: true,
+      checkedOutReason: true,
       worker: { select: { id: true, fullName: true, company: true } },
       jobSite: { select: { name: true } },
     },

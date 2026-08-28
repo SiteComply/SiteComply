@@ -593,6 +593,24 @@ model Submission {
   checkedInAt  DateTime         @default(now())
   checkedOutAt DateTime? // Set when the worker checks out / leaves site
 
+  // BL-001 — authorised manual check-out. A check-in is otherwise closable only
+  // by the worker who opened it, so one left open stays open forever and the
+  // on-site count — the site's fire roll — stays wrong forever.
+  //
+  // These annotate the close; they never rewrite the check-in. `checkedInAt` is
+  // untouched and `checkedOutAt` records the moment of the override rather than
+  // a guessed departure time: a fabricated time would read as fact.
+  //
+  // `checkedOutManual` is the flag every surface keys off. It is stored rather
+  // than derived because "was this closed by a manager?" must stay answerable
+  // even if the actor is later deleted — which is also why the actor is held
+  // WITHOUT a foreign key, with the name denormalised alongside it.
+  checkedOutManual   Boolean @default(false)
+  checkedOutByUserId String? // PlatformUser id — reference only, no FK
+  checkedOutByName   String? // denormalised so history survives user deletion
+  checkedOutByRole   String? // actor's role AT THE TIME, for the audit trail
+  checkedOutReason   String? // mandatory on override; capped by the service
+
   // AI knowledge check (SC-005), mirrored out of KnowledgeCheckAttempt for easy
   // compliance reporting. `passed` is true when the check was completed at 100%;
   // `skipped` is true when the site had checks on but no bank was ready and the
@@ -1604,7 +1622,7 @@ model CscsConfig {
   id String @id // fixed singleton key ("cscs")
 
   /// "mock" | "smartcheck". Defaults to mock until a partnership is live.
-  activeProvider String @default("mock")
+  activeProvider      String  @default("mock")
   /// Master switch. When false no verification runs and the worker's typed
   /// details stand — distinct from a provider that is configured but failing.
   verificationEnabled Boolean @default(true)

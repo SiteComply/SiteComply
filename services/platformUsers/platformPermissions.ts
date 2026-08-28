@@ -232,12 +232,26 @@ export const EXPORT_CAPABLE_ROLES: PlatformRoleValue[] = [
  * Special capabilities that sit outside the view/create/edit/export verbs.
  */
 
-/** Force check-out of a worker (check-in records are otherwise immutable). */
+/**
+ * Force check-out of a worker (check-in records are otherwise immutable).
+ *
+ * Director added 28 August 2026 — see docs/RBAC.md §6 note 1. Closure is
+ * hard-blocked while anyone is checked in, so excluding the role that closes
+ * projects left it unable to clear the thing blocking it. Immutability is
+ * unchanged: an override closes an open record and annotates it, and no role
+ * edits the CONTENT of a check-in.
+ */
 export const CHECKOUT_OVERRIDE_ROLES: PlatformRoleValue[] = [
+  'DIRECTOR',
   'SITE_MANAGER',
   'PROJECT_MANAGER',
   'PRINCIPAL_CONTRACTOR',
 ];
+
+/** Whether a role may force a worker's check-in closed. */
+export function canOverrideCheckOut(role: PlatformRoleValue): boolean {
+  return CHECKOUT_OVERRIDE_ROLES.includes(role);
+}
 
 /** Sign off / approve an audit. */
 export const AUDIT_SIGNOFF_ROLES: PlatformRoleValue[] = [

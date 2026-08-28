@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { viewerCan } from '@/services/platformUsers/effectivePermissions';
 import type { PlatformRoleValue } from '@/services/platformUsers/platformUserConstants';
+import { manualCheckOutSummary } from '@/services/submissions/manualCheckOut';
 import {
   CLOSE_OUT_SECTIONS,
   sectionMeta,
@@ -536,7 +537,15 @@ async function renderSection(
           { label: 'Company', value: r.worker.company },
           { label: 'CSCS', value: r.worker.cscsCardNumber ?? '—' },
           { label: 'Checked in', value: fmt(r.checkedInAt) },
-          { label: 'Checked out', value: fmt(r.checkedOutAt) },
+          // BL-001 — the pack is the handover record. A departure reconstructed
+          // by a manager is shown as exactly that, with who did it and why, so
+          // the pack cannot present it as the worker's own check-out.
+          {
+            label: 'Checked out',
+            value: r.checkedOutManual
+              ? `${fmt(r.checkedOutAt)} — manual, ${manualCheckOutSummary(r)}`
+              : fmt(r.checkedOutAt),
+          },
         ]),
       };
     }

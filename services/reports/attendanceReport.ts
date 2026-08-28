@@ -22,6 +22,11 @@ export interface AttendanceRow {
   id: string;
   checkedInAt: Date;
   checkedOutAt: Date | null;
+  // BL-001 — a manual close is not a shift; reporting must say so.
+  checkedOutManual: boolean;
+  checkedOutByName: string | null;
+  checkedOutByRole: string | null;
+  checkedOutReason: string | null;
   status: SubmissionStatus;
   /** SC-006: true when this check-in reused a still-valid earlier induction. */
   inductionReused: boolean;
@@ -45,7 +50,12 @@ export interface AttendanceRow {
 export function attendanceTotalMinutes(r: {
   checkedInAt: Date;
   checkedOutAt: Date | null;
+  checkedOutManual?: boolean;
 }): number | null {
+  // BL-001 — on a manual close `checkedOutAt` is when a MANAGER acted, not when
+  // the worker left, so the difference is not time on site. Returning null puts
+  // an honest blank in the report rather than a fabricated shift of days.
+  if (r.checkedOutManual) return null;
   if (!r.checkedOutAt) return null;
   return Math.max(
     0,
@@ -89,6 +99,10 @@ export async function getAttendanceRows(
       gpsUnavailable: true,
       checkInDistanceM: true,
       declarationAccepted: true,
+      checkedOutManual: true,
+      checkedOutByName: true,
+      checkedOutByRole: true,
+      checkedOutReason: true,
       worker: { select: { fullName: true, company: true } },
       jobSite: { select: { name: true, jobReference: true } },
     },
@@ -97,6 +111,10 @@ export async function getAttendanceRows(
     id: s.id,
     checkedInAt: s.checkedInAt,
     checkedOutAt: s.checkedOutAt,
+    checkedOutManual: s.checkedOutManual,
+    checkedOutByName: s.checkedOutByName,
+    checkedOutByRole: s.checkedOutByRole,
+    checkedOutReason: s.checkedOutReason,
     status: s.status,
     inductionReused: s.inductionReused,
     locationVerified: s.locationVerified,
