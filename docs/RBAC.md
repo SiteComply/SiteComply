@@ -55,7 +55,7 @@ Scope: Director = All sites; all others = Assigned Sites only.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | **Dashboard** | V | V | V | V | V | V | V | V |
 | **Sites** | V C E X | V C E X | V E | V | V | V | V E | V C E X |
-| **Check-ins** | V X | V X¹ | V X¹ | V | V X | V | V X | V X¹ |
+| **Check-ins** | V X¹ | V X¹ | V X¹ | V | V X | V | V X | V X¹ |
 | **Documents** | V C E X | V C E X | V C E X | V | V X | V C E | V C E X | V C E X |
 | **Audits** | V C E X³ | V C E X | V C E X³ | V | V C E X² | V | V C E X² | V C E X² |
 | **Reports** | V C E X | V C E X | V X | V | V C X | V | V C X | V C X |
@@ -65,8 +65,20 @@ Scope: Director = All sites; all others = Assigned Sites only.
 **Notes**
 
 1. **Check-ins are immutable.** The only mutation is a **check-out override**
-   (force check-out): Site Manager, Project Manager, Principal Contractor. No
-   role edits the content of a check-in record.
+   (force check-out): Director, Site Manager, Project Manager, Principal
+   Contractor. No role edits the content of a check-in record.
+
+   *Director added 28 August 2026.* Previously excluded on separation-of-duties
+   grounds. That reasoning is retained for **audit sign-off**, where it stops the
+   executive layer approving its own audit — but it does not hold here. A
+   check-out override approves nothing; it corrects an attendance record that a
+   worker failed to close. Directors already hold site closure and organisation
+   -wide authority, and closure is **hard-blocked** while anyone is still checked
+   in, so excluding them created a role that can be stopped from completing a
+   project by a stale record it has no way to clear. Because separation of duties
+   no longer constrains this capability, the audit trail is the control: every
+   override records the actor, a mandatory reason and a permanent manual flag,
+   shown wherever the check-out appears.
 2. **Audit sign-off / approval** (a capability beyond Edit): Auditor, H&S
    Consultant, Principal Contractor.
 3. **Create/edit without sign-off.** Director and Site Manager may author audits
@@ -108,7 +120,7 @@ name/version at creation, so template edits never alter historic audits.
 
 | Role | Scope | Can do | Cannot do |
 | --- | --- | --- | --- |
-| **Director** | All sites | Organisation-wide: view/create/edit/export **sites, documents, reports, actions and audits**; **create/edit/deactivate audit templates** and save audits as templates; delete audits; view & export check-ins | **Sign off audits** (or reopen a signed-off audit); edit/override check-ins; manage platform users |
+| **Director** | All sites | Organisation-wide: view/create/edit/export **sites, documents, reports, actions and audits**; **create/edit/deactivate audit templates** and save audits as templates; delete audits; view & export check-ins; check-out override | **Sign off audits** (or reopen a signed-off audit); edit the content of a check-in record; manage platform users |
 | **Project Manager** | Assigned | Full site setup, docs, audits, reports, actions; export; check-out override | Manage platform users |
 | **Site Manager** | Assigned | Run the site: edit site/induction/emergency, docs, actions; **create + edit audits** and use/save templates; export check-ins/reports; check-out override | Create sites; **sign off or delete audits**; edit/delete shared templates |
 | **Client** | Assigned | **View only** — dashboard, check-ins, docs, audits, reports on screen | Create/edit anything; **any export** |
