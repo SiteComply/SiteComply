@@ -16,6 +16,7 @@ import {
   type CompanyBranding,
 } from '@/services/company/companyConfigService';
 import { PHOTO_LIMIT } from '@/services/closeOut/closeOutSections';
+import { supersededDocumentIds } from '@/services/documents/supersededDocuments';
 import {
   supersededEvidenceIdsForSite,
   excludeIds,
@@ -93,8 +94,17 @@ export async function collectAppendices(
   };
 
   if (viewerCan(viewer, 'documents', 'view', siteId)) {
+    // One file per document. The pack is a client handover, so it carries the
+    // document as issued — the annotated version — not two near-identical
+    // files. This mirrors what the photo section below already does with
+    // superseded evidence originals. The original is retained in storage and
+    // remains reachable by direct id; it is simply not shipped in the archive.
+    const supersededDocs = await supersededDocumentIds([siteId]);
     const docs = await prisma.document.findMany({
-      where: { jobSiteId: siteId },
+      where: {
+        jobSiteId: siteId,
+        id: supersededDocs.length > 0 ? { notIn: supersededDocs } : undefined,
+      },
       orderBy: { createdAt: 'asc' },
       select: {
         title: true,

@@ -3,6 +3,7 @@ import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { viewerCan } from '@/services/platformUsers/effectivePermissions';
 import type { PlatformRoleValue } from '@/services/platformUsers/platformUserConstants';
 import { manualCheckOutSummary } from '@/services/submissions/manualCheckOut';
+import { supersededDocumentIds } from '@/services/documents/supersededDocuments';
 import {
   CLOSE_OUT_SECTIONS,
   sectionMeta,
@@ -112,8 +113,19 @@ async function countSection(
       ]);
       return findings + actions;
     }
-    case 'DOCUMENTS':
-      return prisma.document.count({ where: { jobSiteId: siteId } });
+    case 'DOCUMENTS': {
+      // One document, not two: an original superseded by a surviving annotated
+      // copy is not counted, matching the Documents register. The photo
+      // sections above already apply the equivalent evidence rule; this branch
+      // was simply never given it.
+      const supersededDocs = await supersededDocumentIds([siteId]);
+      return prisma.document.count({
+        where: {
+          jobSiteId: siteId,
+          id: supersededDocs.length > 0 ? { notIn: supersededDocs } : undefined,
+        },
+      });
+    }
     case 'ENVIRONMENTAL':
       // Environmental records are audits built from the SC-021 Environmental
       // Inspection template — there is no separate store, and pretending
@@ -665,8 +677,15 @@ async function renderSection(
     }
 
     case 'DOCUMENTS': {
+      // Excluded in the QUERY, not after it: the section is capped at 500, so
+      // superseded rows filtered later would consume slots and then vanish,
+      // quietly shortening the pack.
+      const supersededDocs = await supersededDocumentIds([siteId]);
       const rows = await prisma.document.findMany({
-        where: { jobSiteId: siteId },
+        where: {
+          jobSiteId: siteId,
+          id: supersededDocs.length > 0 ? { notIn: supersededDocs } : undefined,
+        },
         orderBy: { createdAt: 'desc' },
         take: 500,
       });
