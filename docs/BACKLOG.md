@@ -106,8 +106,37 @@ which is better carried as this specification than as code.
   routine case, a manual override handles the same-day one where the count must be
   right *now*, and only the manual override produces an accountable record. Worth
   considering together.
-- Before scheduling this, measure it: count open check-ins older than 24 hours in
-  production. The case above is structural, not measured.
+- ~~Before scheduling this, measure it: count open check-ins older than 24 hours in
+  production. The case above is structural, not measured.~~ **Measured — see below.**
+
+### Measurement (28 August 2026, production)
+
+The case is no longer structural. Taken from the live Check-ins register
+(`status=on-site`) and the project completion endpoint:
+
+| Figure | Value |
+|---|---|
+| Open check-ins ("on site" now) | **13** |
+| Older than 7 days | **12 of 13** |
+| Older than 30 days | **6 of 13** |
+| Oldest open check-in | **36 days** (checked in 23/07/2026, still open) |
+| Projects blocked from closure by this alone | **2** |
+
+Only one of the thirteen is plausibly a live presence; the rest are forgotten
+check-outs. Test Site 3 (1 worker) and Test Site D (2 workers) both return
+`canClose: false` with `Workers still checked in` as the **only** unsatisfied
+BLOCK item — every other check passes. Neither can be completed by anybody,
+because no role can close someone else's check-in.
+
+Two consequences worth stating plainly:
+
+- The on-site count is the site's **fire roll**. Six sites currently overstate it,
+  and the overstatement is permanent — there is no sweep, no expiry and no
+  override.
+- A Site Manager and a Director can both close a project but neither can clear the
+  thing blocking it; a Project Manager cannot close a project at all. The only
+  person who can resolve it is the worker, from their own phone, which fails
+  entirely once they have left the company.
 
 ---
 
