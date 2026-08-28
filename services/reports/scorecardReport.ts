@@ -12,8 +12,16 @@ import { prisma } from '@/lib/prisma';
 
 type Range = { gte?: Date; lt?: Date };
 
-function pct(n: number, d: number): number {
-  return d ? Math.round((n / d) * 100) : 0;
+/**
+ * A percentage, or null when there is nothing to take a percentage OF.
+ *
+ * `d === 0` used to yield 0, so a site with no check-ins in the period was
+ * reported as "0% compliant" on screen and in the CSV — indistinguishable from a
+ * site where every worker failed. No data and total failure are different facts
+ * and a director acts on them differently.
+ */
+function pct(n: number, d: number): number | null {
+  return d ? Math.round((n / d) * 100) : null;
 }
 
 export interface ScorecardRow {
@@ -22,8 +30,8 @@ export interface ScorecardRow {
   checkIns: number;
   activeWorkers: number;
   companies: number;
-  compliancePct: number;
-  inductionPct: number;
+  compliancePct: number | null;
+  inductionPct: number | null;
 }
 
 export interface Scorecard {
@@ -31,8 +39,8 @@ export interface Scorecard {
     sites: number;
     checkIns: number;
     activeWorkers: number;
-    compliancePct: number;
-    inductionPct: number;
+    compliancePct: number | null;
+    inductionPct: number | null;
   };
   rows: ScorecardRow[];
 }
@@ -42,7 +50,8 @@ export async function getScorecard(
   range: Range,
 ): Promise<Scorecard> {
   const empty: Scorecard = {
-    totals: { sites: 0, checkIns: 0, activeWorkers: 0, compliancePct: 0, inductionPct: 0 },
+    // No sites in scope: no data, not 0%.
+    totals: { sites: 0, checkIns: 0, activeWorkers: 0, compliancePct: null, inductionPct: null },
     rows: [],
   };
   if (!sites.length) return empty;

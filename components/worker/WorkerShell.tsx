@@ -56,29 +56,42 @@ export function WorkerShell({
 
       <header className="border-b border-line bg-surface">
         <div className="h-1 w-full bg-brand-500" aria-hidden="true" />
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Link href="/" aria-label="SiteComply home" className="inline-flex">
+        {/* Wraps to a second row below `sm` rather than overflowing. Adding the
+            header check-out put three items beside the brand, and on a 320px
+            phone the row ran off the screen: the logo was squeezed to nothing
+            and Sign out was clipped by the viewport edge. Everything keeps its
+            place on a normal screen; only the narrowest phones get the second
+            row, which is where a worker actually uses this. */}
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3">
+          <div className="flex shrink-0 items-center gap-2">
+            <Link
+              href="/"
+              aria-label="SiteComply home"
+              className="inline-flex shrink-0"
+            >
               <Logo />
             </Link>
-            <span className="rounded-md bg-safe-500 px-2 py-0.5 text-xs font-semibold text-white">
+            <span className="shrink-0 rounded-md bg-safe-500 px-2 py-0.5 text-xs font-semibold text-white">
               Worker
             </span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex w-full min-w-0 items-center justify-end gap-2 sm:w-auto sm:gap-3">
             {multiSite ? (
-              <span className="text-right">
+              <span className="min-w-0 text-right">
                 <SiteSwitcher sites={sites} activeSiteId={activeSiteId} />
-                <span className="mt-0.5 block text-xs text-ink-subtle">
+                <span className="mt-0.5 block truncate text-xs text-ink-subtle">
                   Checked in: {formatDateTimeUK(checkedInAt)}
                 </span>
               </span>
             ) : (
-              <span className="text-right">
-                <span className="block text-sm font-semibold text-ink">
+              // The site context is the only flexible item in the row, so it is
+              // the one that gives way: it truncates instead of pushing the
+              // actions off screen.
+              <span className="min-w-0 text-right">
+                <span className="block truncate text-sm font-semibold text-ink">
                   {siteName}
                 </span>
-                <span className="block text-xs text-ink-subtle">
+                <span className="block truncate text-xs text-ink-subtle">
                   Checked in: {formatDateTimeUK(checkedInAt)}
                 </span>
               </span>
@@ -96,7 +109,7 @@ export function WorkerShell({
             )}
             <a
               href="/api/worker/logout"
-              className="touch-target inline-flex items-center rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken"
+              className="touch-target inline-flex shrink-0 items-center whitespace-nowrap rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken"
             >
               Sign out
             </a>

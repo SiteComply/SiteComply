@@ -7,6 +7,7 @@ import { canRunReport, canExportReport } from '@/services/reports/reportAccess';
 import { parseReportFilters } from '@/services/reports/reportFilters';
 import { getOrgOverview } from '@/services/reports/orgOverviewReport';
 import { logReportExport } from '@/services/reports/reportExportLog';
+import { percentCell } from '@/services/reports/reportFormat';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -57,7 +58,7 @@ export async function GET(req: NextRequest) {
       s.checkIns,
       s.workers,
       s.onSiteNow,
-      s.compliancePct,
+      percentCell(s.compliancePct),
     ]),
   );
 

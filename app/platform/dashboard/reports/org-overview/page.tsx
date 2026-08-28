@@ -25,6 +25,7 @@ import {
 import { getOrgOverview } from '@/services/reports/orgOverviewReport';
 import { canUseAiSummaries } from '@/services/ai/aiConfig';
 import { AiSummaryPanel } from '@/components/platform/AiSummaryPanel';
+import { percentLabel } from '@/services/reports/reportFormat';
 
 export const dynamic = 'force-dynamic';
 
@@ -109,8 +110,8 @@ export default async function OrgOverviewReportPage({
       <div className="mt-4">
         <KpiCards
           items={[
-            { label: 'Compliance rate', value: `${o.compliancePct}%` },
-            { label: 'Induction completion', value: `${o.inductionPct}%` },
+            { label: 'Compliance rate', value: percentLabel(o.compliancePct) },
+            { label: 'Induction completion', value: percentLabel(o.inductionPct) },
             { label: 'Contractors', value: o.companies },
             { label: 'Sites in scope', value: o.totalSites },
           ]}
@@ -166,7 +167,7 @@ export default async function OrgOverviewReportPage({
                         {s.onSiteNow}
                       </td>
                       <td className="px-5 py-2 text-right font-semibold tabular-nums text-ink">
-                        {s.compliancePct}%
+                        {percentLabel(s.compliancePct)}
                       </td>
                     </tr>
                   ))}
