@@ -6,6 +6,7 @@ import { evaluateGate } from '@/services/knowledgeChecks/attemptService';
 import { canOverrideCheckOut } from '@/services/platformUsers/platformPermissions';
 import { viewerSiteIdsFor } from '@/services/platformUsers/effectivePermissions';
 import type { PlatformViewer } from '@/services/platformUsers/platformViewerTypes';
+import { getClosedSiteIds } from '@/services/projectClosure/projectWritable';
 import {
   evaluateCheckInGate,
   computeCheckOutLocation,
@@ -280,7 +281,8 @@ export type OverrideCheckOutFailure =
   | 'forbidden' //      role not in CHECKOUT_OVERRIDE_ROLES
   | 'reason_required' // blank or whitespace-only reason
   | 'not_found' //      no such check-in in the viewer's sites
-  | 'already_out'; //   someone already closed it
+  | 'already_out' //    someone already closed it
+  | 'project_closed'; // the record belongs to a completed project
 
 export interface OverrideCheckOutResult {
   ok: boolean;
@@ -322,8 +324,27 @@ export async function overrideCheckOut(
 
   // The check-ins module's own boundary, not the viewer's whole site list: a
   // contractor narrowed out of check-ins on one site must not act there.
-  const siteIds = viewerSiteIdsFor(viewer, 'checkins', 'view');
-  if (siteIds.length === 0) return { ok: false, reason: 'not_found' };
+  const scoped = viewerSiteIdsFor(viewer, 'checkins', 'view');
+  if (scoped.length === 0) return { ok: false, reason: 'not_found' };
+
+  // COMPLETED projects are read-only (SC-025) and the guard in lib/prisma.ts
+  // enforces that on every write. A completed site id must therefore not appear
+  // in the predicate AT ALL — the guard inspects the `where`, so merely failing
+  // to match is not enough; its presence alone throws. A Director sees every
+  // site including completed ones, which is why this surfaced for that role and
+  // not the others.
+  //
+  // Excluding them is also the right rule: closure already required nobody to be
+  // checked in, so a completed project has no open check-in to close, and
+  // reopening is the deliberate route back to writable.
+  const closed = await getClosedSiteIds(() =>
+    prisma.jobSite.findMany({
+      where: { status: 'COMPLETED' },
+      select: { id: true },
+    }),
+  );
+  const siteIds = scoped.filter((id) => !closed.has(id));
+  if (siteIds.length === 0) return { ok: false, reason: 'project_closed' };
 
   const written = await prisma.submission.updateMany({
     where: {
@@ -348,6 +369,13 @@ export async function overrideCheckOut(
     where: { id: submissionId, jobSiteId: { in: siteIds } },
     select: { checkedOutAt: true },
   });
-  if (!existing) return { ok: false, reason: 'not_found' };
-  return { ok: false, reason: 'already_out' };
+  if (existing) return { ok: false, reason: 'already_out' };
+
+  // Not in the writable set. Say WHICH, so "not found" does not mask a record
+  // the viewer can plainly see on a completed project.
+  const onClosed = await prisma.submission.findFirst({
+    where: { id: submissionId, jobSiteId: { in: scoped } },
+    select: { id: true },
+  });
+  return { ok: false, reason: onClosed ? 'project_closed' : 'not_found' };
 }
