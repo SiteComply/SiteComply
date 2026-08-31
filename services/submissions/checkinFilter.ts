@@ -9,6 +9,8 @@
  * reflect only the records the current user may see.
  */
 
+import { checkinSortParams, type CheckinSort } from './checkinSort';
+
 export type CheckinStatusFilter = 'all' | 'on-site' | 'checked-out';
 
 export const CHECKIN_STATUS_FILTERS: {
@@ -69,10 +71,20 @@ export function checkinFilterHref(
   basePath: string,
   status: CheckinStatusFilter,
   siteId: string | null,
+  sort?: CheckinSort,
 ): string {
   const params = new URLSearchParams();
   if (status !== 'all') params.set('status', status);
   if (siteId) params.set('site', siteId);
+  // Sort travels with the filters, so changing status or site keeps the column
+  // you are sorting by — and the sort links keep the filters. Omitted when it
+  // is the default, so the plain URL stays clean.
+  const sp = sort ? checkinSortParams(sort) : {};
+  if (sp.sort) params.set('sort', sp.sort);
+  if (sp.dir) params.set('dir', sp.dir);
+  // `page` is deliberately absent: both a filter change and a sort change
+  // reorder or resize the set, so page 4 of the old set means nothing in the
+  // new one.
   const q = params.toString();
   return q ? `${basePath}?${q}` : basePath;
 }

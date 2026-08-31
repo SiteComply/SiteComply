@@ -2,6 +2,11 @@ import { prisma } from '@/lib/prisma';
 import { DEFAULT_PAGE_SIZE } from '@/lib/pagination';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { checkedOutAtWhere, type CheckinStatusFilter } from './checkinFilter';
+import {
+  checkinOrderBy,
+  DEFAULT_CHECKIN_SORT,
+  type CheckinSort,
+} from './checkinSort';
 
 /**
  * Platform Check-ins list — viewer-scoped counts and rows for the Check-ins page.
@@ -52,7 +57,8 @@ export async function getCheckinCounts(
 }
 
 /**
- * One page of check-ins for the viewer, newest first, narrowed by `filter`.
+ * One page of check-ins for the viewer, narrowed by `filter` and ordered by
+ * `opts.sort` (newest first when none is given — the long-standing default).
  *
  * This used to take a bare `take` defaulting to 25 and no offset, so the page
  * could only ever show the 25 most recent records — while the status pills above
@@ -67,7 +73,7 @@ export async function listCheckinsForViewer(
   viewer: PlatformViewer,
   filter: CheckinStatusFilter,
   siteId?: string | null,
-  opts: { skip?: number; take?: number } = {},
+  opts: { skip?: number; take?: number; sort?: CheckinSort } = {},
 ): Promise<CheckinListItem[]> {
   if (viewer.siteIds.length === 0) return [];
   // `siteId` is already validated against the viewer's own sites by
@@ -78,7 +84,14 @@ export async function listCheckinsForViewer(
       jobSiteId: siteId ? siteId : { in: viewer.siteIds },
       ...checkedOutAtWhere(filter),
     },
-    orderBy: { checkedInAt: 'desc' },
+    // Sorting reorders a set the `where` above has ALREADY constrained to the
+    // viewer's sites, so — like paging — it cannot widen access.
+    //
+    // checkinOrderBy always appends a unique `id` tiebreaker. Without one, the
+    // previous `{ checkedInAt: 'desc' }` was already technically unstable for
+    // rows sharing a timestamp; with a two-value key like Status it would break
+    // paging outright, showing some rows twice and others never.
+    orderBy: checkinOrderBy(opts.sort ?? DEFAULT_CHECKIN_SORT),
     skip: opts.skip ?? 0,
     take: opts.take ?? DEFAULT_PAGE_SIZE,
     select: {
