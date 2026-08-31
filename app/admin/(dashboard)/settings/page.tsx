@@ -53,11 +53,14 @@ type SettingsArea = {
  * Two of them are therefore claims this page cannot currently verify:
  * "Using built-in defaults" is wrong the moment an admin saves an
  * authentication change, and "Profile and branding set" is wrong for an
- * organisation that has not set them. The CSCS line is true as at 31 Aug 2026
- * and is the one worth watching: **delete it when Smart Check goes live**
- * (docs/CSCS-CUTOVER.md), or the page will keep warning about a mock provider
- * that is no longer in use. Replacing all three with real reads is the
- * follow-up.
+ * organisation that has not set them.
+ *
+ * "CSCS onboarding pending" is the one with a shelf life. It describes where
+ * the organisation is in onboarding rather than which provider is wired, which
+ * is the right thing to say to an admin — but it is still a fixed string, so
+ * **delete it when Smart Check onboarding completes** (docs/CSCS-CUTOVER.md)
+ * or the page will keep reporting a pending step that is done. Replacing all
+ * three with real reads is the follow-up.
  */
 const SETTINGS_GROUPS: ReadonlyArray<{
   label: string;
@@ -72,7 +75,7 @@ const SETTINGS_GROUPS: ReadonlyArray<{
         title: 'Integrations',
         description:
           'SMS, AI and CSCS providers, credentials and connection tests.',
-        status: { kind: 'attention', label: 'CSCS on mock provider' },
+        status: { kind: 'attention', label: 'CSCS onboarding pending' },
       },
       {
         href: '/admin/settings/authentication',
