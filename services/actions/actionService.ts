@@ -27,6 +27,11 @@ import {
   ACTION_NOTE_MAX,
   type ActionBucket,
 } from '@/services/actions/actionConstants';
+import {
+  actionOrderBy,
+  DEFAULT_ACTION_SORT,
+  type ActionSort,
+} from './actionSort';
 
 /** Result of a mutation that can fail on scope or a required completion note. */
 export type ActionMutation =
@@ -221,6 +226,8 @@ export interface ActionListFilters {
   /** Pagination (omit for the full list). */
   skip?: number;
   take?: number;
+  /** Column ordering; omitted keeps the long-standing due-date order. */
+  sort?: ActionSort;
 }
 
 /** Shared site-scoped where clause for listActions + countActions. Null → no sites. */
@@ -300,13 +307,11 @@ export async function listActions(
 
   return prisma.action.findMany({
     where,
-    // A UNIQUE TIEBREAKER, NOT TIDINESS. Every key above can tie, so without a
-    // unique last key Postgres may return tied rows in any order and may choose
-    // differently on each query. With skip/take paging that means a row can
-    // appear on two pages while another appears on none — invisible on page one
-    // and only under paging. Ties are not rare here: rows created together in
-    // one transaction share createdAt exactly.
-    orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }, { id: 'asc' }],
+    // Ordering — including the unique `id` tiebreaker on every branch — lives in
+    // actionOrderBy. Without that last key, paging a tied ordering can show a
+    // row twice and another not at all; ties are routine here, because actions
+    // raised together when an audit is signed off share createdAt exactly.
+    orderBy: actionOrderBy(filters.sort ?? DEFAULT_ACTION_SORT),
     skip: filters.skip,
     take: filters.take,
     select: ACTION_LIST_SELECT,
