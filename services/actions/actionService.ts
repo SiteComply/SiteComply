@@ -300,7 +300,13 @@ export async function listActions(
 
   return prisma.action.findMany({
     where,
-    orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+    // A UNIQUE TIEBREAKER, NOT TIDINESS. Every key above can tie, so without a
+    // unique last key Postgres may return tied rows in any order and may choose
+    // differently on each query. With skip/take paging that means a row can
+    // appear on two pages while another appears on none — invisible on page one
+    // and only under paging. Ties are not rare here: rows created together in
+    // one transaction share createdAt exactly.
+    orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }, { id: 'asc' }],
     skip: filters.skip,
     take: filters.take,
     select: ACTION_LIST_SELECT,
