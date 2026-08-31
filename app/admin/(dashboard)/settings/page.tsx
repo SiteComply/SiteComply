@@ -1,64 +1,192 @@
 import Link from 'next/link';
+import {
+  SettingsIcon,
+  type SettingsIconName,
+} from '@/components/admin/SettingsIcons';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Admin → Settings landing. Groups administrative configuration areas; the first
- * is Integrations (SMS provider). Access is Admin-only via the (dashboard)
- * layout guard. New settings areas are added as cards here.
+ * Admin → Settings landing. A grouped index, not a dashboard.
+ *
+ * This was four cards in a responsive grid. Cards gave four administrative
+ * areas the visual weight of four features, spread them across three columns at
+ * desktop width, and left the page looking lighter and more fragmented than the
+ * thing it configures. It is now one vertical list per group: the sections read
+ * in a fixed order, the eye runs down a single rail of icons, and the status
+ * column lines up so it can be read as a column rather than four separate
+ * sentences.
+ *
+ * Adding an area is a row. Adding a group is a label and a container. Keep
+ * descriptions to one line — two is the ceiling; if a section needs three, its
+ * name is wrong.
  */
-const SETTINGS_AREAS = [
+
+/**
+ * Status vocabulary. A marker appears ONLY when the state is not nominal —
+ * healthy is plain text, and there are deliberately no green ticks. If every
+ * row carried a marker the one that matters would be one of four, instead of
+ * the only coloured pixel on the page.
+ *
+ *   text      — nominal. A plain value summary.
+ *   attention — working, but not in the state it should be in for live use.
+ *   pill      — ownership rather than health; must not read as a fault.
+ */
+type SettingsStatus =
+  | { kind: 'text'; label: string }
+  | { kind: 'attention'; label: string }
+  | { kind: 'pill'; label: string };
+
+type SettingsArea = {
+  href: string;
+  icon: SettingsIconName;
+  title: string;
+  description: string;
+  status: SettingsStatus;
+};
+
+/**
+ * STATUS TEXT IS STATIC. Nothing here reads live configuration — that was a
+ * deliberate scoping decision, so these strings are the SHAPE the reads should
+ * return, not the result of one.
+ *
+ * Two of them are therefore claims this page cannot currently verify:
+ * "Using built-in defaults" is wrong the moment an admin saves an
+ * authentication change, and "Profile and branding set" is wrong for an
+ * organisation that has not set them. The CSCS line is true as at 31 Aug 2026
+ * and is the one worth watching: **delete it when Smart Check goes live**
+ * (docs/CSCS-CUTOVER.md), or the page will keep warning about a mock provider
+ * that is no longer in use. Replacing all three with real reads is the
+ * follow-up.
+ */
+const SETTINGS_GROUPS: ReadonlyArray<{
+  label: string;
+  areas: ReadonlyArray<SettingsArea>;
+}> = [
   {
-    href: '/admin/settings/integrations',
-    title: 'Integrations',
-    body: 'Configure the SMS and AI providers used for worker verification codes and report summaries — select the active provider, set credentials and test connectivity.',
-    cta: 'Manage integrations',
+    label: 'Platform configuration',
+    areas: [
+      {
+        href: '/admin/settings/integrations',
+        icon: 'plug',
+        title: 'Integrations',
+        description:
+          'SMS, AI and CSCS providers, credentials and connection tests.',
+        status: { kind: 'attention', label: 'CSCS on mock provider' },
+      },
+      {
+        href: '/admin/settings/authentication',
+        icon: 'shield',
+        title: 'Authentication',
+        description:
+          'Passcode expiry and attempt limits, session timeout and sign-in methods.',
+        status: { kind: 'text', label: 'Using built-in defaults' },
+      },
+      {
+        href: '/admin/settings/notifications',
+        icon: 'bell',
+        title: 'Notifications',
+        description:
+          'Which platform notifications are active. Set by a Director in Platform Settings.',
+        status: { kind: 'pill', label: 'Read-only' },
+      },
+    ],
   },
   {
-    href: '/admin/settings/authentication',
-    title: 'Authentication',
-    body: 'Set one-time passcode expiry and attempt limits, the session timeout, and which SMS / email OTP sign-in methods are enabled.',
-    cta: 'Manage authentication',
+    label: 'Organisation',
+    areas: [
+      {
+        href: '/admin/settings/company',
+        icon: 'building',
+        title: 'Company',
+        description:
+          'Organisation name, support contacts, branding colours, tagline and logo.',
+        status: { kind: 'text', label: 'Profile and branding set' },
+      },
+    ],
   },
-  {
-    href: '/admin/settings/notifications',
-    title: 'Notifications',
-    // Reworded with the page: it is a read-only view now, and the old text
-    // promised editing plus three switches that no longer exist.
-    body: 'View which platform notifications are active. These are managed by a Director in Platform Settings → Notifications.',
-    cta: 'View notifications',
-  },
-  {
-    href: '/admin/settings/company',
-    title: 'Company',
-    body: 'Manage your organisation’s name, support email and phone, branding colours and tagline, and upload your company logo.',
-    cta: 'Manage company',
-  },
-] as const;
+];
+
+function StatusCell({ status }: { status: SettingsStatus }) {
+  if (status.kind === 'pill') {
+    return (
+      <span className="inline-flex items-center rounded-full border border-line bg-surface-sunken px-2.5 py-0.5 text-xs font-semibold text-ink-subtle">
+        {status.label}
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex items-center gap-2 text-sm text-ink-muted">
+      {status.kind === 'attention' && (
+        <span
+          className="h-2 w-2 shrink-0 rounded-full bg-hivis-500"
+          aria-hidden="true"
+        />
+      )}
+      {status.label}
+    </span>
+  );
+}
 
 export default function AdminSettingsPage() {
   return (
     <div className="space-y-6">
       <header className="space-y-1">
         <h1 className="text-2xl font-bold text-ink">Settings</h1>
+        {/* The old subtitle described Integrations only. */}
         <p className="text-ink-muted">
-          Configure how SiteComply integrates with external services.
+          Administrative configuration for this organisation.
         </p>
       </header>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {SETTINGS_AREAS.map((a) => (
-          <Link
-            key={a.href}
-            href={a.href}
-            className="flex flex-col rounded-xl border border-line bg-surface p-5 shadow-card transition-colors hover:border-brand-200 hover:bg-brand-50"
-          >
-            <h2 className="text-base font-semibold text-ink">{a.title}</h2>
-            <p className="mt-1 flex-1 text-sm text-ink-subtle">{a.body}</p>
-            <span className="mt-3 text-sm font-semibold text-brand-700">{a.cta} →</span>
-          </Link>
-        ))}
-      </div>
+      {SETTINGS_GROUPS.map((group) => (
+        <section key={group.label} className="space-y-2">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.06em] text-ink-subtle">
+            {group.label}
+          </h2>
+
+          <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+            {group.areas.map((area) => (
+              /*
+               * The whole row is the link, and nothing inside it is separately
+               * clickable — one hit target per row, no nested interactive
+               * elements. Below lg the status leaves its column and sits under
+               * the description rather than being squeezed or truncated.
+               */
+              <Link
+                key={area.href}
+                href={area.href}
+                className="group grid grid-cols-[1.25rem_minmax(0,1fr)_1rem] items-start gap-x-3 gap-y-1.5 px-4 py-3.5 transition-colors hover:bg-surface-sunken lg:min-h-[4.75rem] lg:grid-cols-[1.25rem_minmax(0,1fr)_17.5rem_1rem] lg:items-center lg:gap-x-4 lg:gap-y-0 lg:px-5 lg:py-4"
+              >
+                <SettingsIcon
+                  name={area.icon}
+                  className="col-start-1 row-start-1 mt-0.5 h-5 w-5 text-ink-subtle lg:mt-0"
+                />
+
+                <span className="col-start-2 row-start-1 flex min-w-0 flex-col gap-0.5">
+                  <span className="text-base font-semibold text-ink">
+                    {area.title}
+                  </span>
+                  <span className="text-sm text-ink-subtle">
+                    {area.description}
+                  </span>
+                </span>
+
+                <span className="col-start-2 row-start-2 min-w-0 lg:col-start-3 lg:row-start-1">
+                  <StatusCell status={area.status} />
+                </span>
+
+                <SettingsIcon
+                  name="chevron"
+                  strokeWidth={2}
+                  className="col-start-3 row-start-1 mt-1 h-4 w-4 text-ink-subtle/70 transition-colors group-hover:text-ink-muted lg:col-start-4 lg:mt-0"
+                />
+              </Link>
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
