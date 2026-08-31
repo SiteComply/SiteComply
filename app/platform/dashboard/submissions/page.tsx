@@ -25,6 +25,7 @@ import {
 } from '@/services/submissions/checkinFilter';
 import { SiteFilterSelect } from '@/components/platform/SiteFilterSelect';
 import { PaginationControls } from '@/components/platform/PaginationControls';
+import { SortArrow } from '@/components/platform/SortArrow';
 import {
   parseCheckinSort,
   nextSortFor,
@@ -54,45 +55,6 @@ export const dynamic = 'force-dynamic';
  * for Engineer and Client) and exports the filtered set in the order on screen.
  * (The route path stays /submissions to preserve existing URLs/bookmarks.)
  */
-/**
- * The sort indicator. Only the ACTIVE column shows a solid arrow; the others
- * reveal a faint one on hover or keyboard focus, which says "this is sortable"
- * without putting four arrows in a four-column header and letting none of them
- * mean anything. Decorative — the heading already carries `aria-sort`.
- */
-function SortArrow({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
-  const up = active ? dir === 'asc' : true;
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className={cn(
-        'h-3 w-3 shrink-0 transition-opacity',
-        active
-          ? 'opacity-100'
-          : 'opacity-0 group-hover:opacity-40 group-focus-visible:opacity-40',
-      )}
-    >
-      {up ? (
-        <>
-          <path d="M12 19V5" />
-          <path d="M5 12l7-7 7 7" />
-        </>
-      ) : (
-        <>
-          <path d="M12 5v14" />
-          <path d="M19 12l-7 7-7-7" />
-        </>
-      )}
-    </svg>
-  );
-}
-
 export default async function PlatformSubmissionsPage({
   searchParams,
 }: {

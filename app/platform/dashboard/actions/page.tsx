@@ -31,7 +31,15 @@ import {
   type ActionStatusValue,
 } from '@/services/actions/actionConstants';
 import { PaginationControls } from '@/components/platform/PaginationControls';
+import { cn } from '@/lib/cn';
+import { SortArrow } from '@/components/platform/SortArrow';
 import { resolvePage } from '@/lib/pagination';
+import {
+  parseActionSort,
+  nextSortFor,
+  actionSortParams,
+  ACTION_COLUMNS,
+} from '@/services/actions/actionSort';
 import { formatDateUK } from '@/lib/datetime';
 
 export const dynamic = 'force-dynamic';
@@ -78,6 +86,8 @@ export default async function PlatformActionsPage({
     priority?: string;
     q?: string;
     page?: string;
+    sort?: string;
+    dir?: string;
   };
 }) {
   const viewer = await requirePlatformViewer();
@@ -91,6 +101,9 @@ export default async function PlatformActionsPage({
   const site = searchParams.site ?? '';
   const priority = searchParams.priority ?? '';
   const q = (searchParams.q ?? '').trim();
+  // Unrecognised ?sort / ?dir fall back to the default, so a stale or mangled
+  // shared link still renders a sensible table.
+  const sort = parseActionSort(searchParams.sort, searchParams.dir);
   const filters = {
     bucket: bucket || undefined,
     siteId: site || undefined,
@@ -105,7 +118,7 @@ export default async function PlatformActionsPage({
   const pg = resolvePage(searchParams.page, total);
   const actions = await listActions(
     viewer,
-    { ...filters, skip: pg.skip, take: pg.take },
+    { ...filters, skip: pg.skip, take: pg.take, sort },
     now,
   );
   const canCreate = permits(viewer.role, 'actions', 'create');
@@ -113,7 +126,7 @@ export default async function PlatformActionsPage({
   const qp = (patch: Record<string, string>) => {
     const sp = new URLSearchParams();
     // Changing a bucket resets to page 1 (page is intentionally not carried here).
-    const merged = { bucket, site, priority, q, ...patch };
+    const merged = { bucket, site, priority, q, ...actionSortParams(sort), ...patch };
     for (const [k, v] of Object.entries(merged)) if (v) sp.set(k, v);
     const s = sp.toString();
     return `/platform/dashboard/actions${s ? `?${s}` : ''}`;
@@ -247,10 +260,52 @@ export default async function PlatformActionsPage({
                   four columns, one of them clearly the subject. */}
               <thead>
                 <tr className="border-b border-line text-left text-ink-subtle">
-                  <th className="px-5 py-2.5 font-medium">Action</th>
-                  <th className="px-5 py-2.5 font-medium">State</th>
-                  <th className="px-5 py-2.5 font-medium">Due</th>
-                  <th className="px-5 py-2.5 font-medium">Assigned</th>
+                  {ACTION_COLUMNS.map((col) => {
+                    const active = sort.key === col.key;
+                    const next = nextSortFor(col.key, sort);
+                    return (
+                      <th
+                        key={col.key}
+                        scope="col"
+                        className={cn(
+                          'px-5 py-2.5 font-medium',
+                          active && 'font-semibold text-ink',
+                        )}
+                        aria-sort={
+                          active
+                            ? sort.dir === 'asc'
+                              ? 'ascending'
+                              : 'descending'
+                            : 'none'
+                        }
+                      >
+                        {/*
+                          Links, not buttons — a server component with no client
+                          state, so every ordering is a real URL that can be
+                          shared and works without JS. qp() carries the filters
+                          and deliberately drops `page`, so sorting lands on
+                          page 1 rather than page 4 of a reordered set.
+
+                          `whitespace-nowrap` for the reason found on Check-ins:
+                          squeezed narrow, a two-word heading otherwise breaks
+                          across lines and takes its arrow with it.
+                        */}
+                        <Link
+                          href={qp({
+                            // Empty clears the param: qp() skips falsy values,
+                            // so returning to the default sort produces the
+                            // plain URL rather than one restating the default.
+                            sort: actionSortParams(next).sort ?? '',
+                            dir: actionSortParams(next).dir ?? '',
+                          })}
+                          className="group inline-flex items-center gap-1.5 whitespace-nowrap rounded hover:text-ink"
+                        >
+                          {col.label}
+                          <SortArrow active={active} dir={sort.dir} />
+                        </Link>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -326,7 +381,7 @@ export default async function PlatformActionsPage({
         {total > 0 && (
           <PaginationControls
             basePath="/platform/dashboard/actions"
-            params={{ bucket, site, priority, q }}
+            params={{ bucket, site, priority, q, ...actionSortParams(sort) }}
             pg={pg}
           />
         )}
