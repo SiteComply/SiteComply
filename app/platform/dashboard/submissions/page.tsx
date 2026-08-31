@@ -25,6 +25,12 @@ import {
 } from '@/services/submissions/checkinFilter';
 import { SiteFilterSelect } from '@/components/platform/SiteFilterSelect';
 import { PaginationControls } from '@/components/platform/PaginationControls';
+import {
+  parseCheckinSort,
+  nextSortFor,
+  checkinSortParams,
+  CHECKIN_COLUMNS,
+} from '@/services/submissions/checkinSort';
 import { resolvePage } from '@/lib/pagination';
 import { canOverrideCheckOut } from '@/services/platformUsers/platformPermissions';
 import {
@@ -45,19 +51,68 @@ export const dynamic = 'force-dynamic';
  * accessible sites only, with All / On site / Checked out status filter tabs
  * (default All) carrying live, viewer-scoped counts — mirroring the Sites status
  * filter. The Export button follows the RBAC check-ins export permission (hidden
- * for Engineer and Client) and exports the full scoped set regardless of filter.
+ * for Engineer and Client) and exports the filtered set in the order on screen.
  * (The route path stays /submissions to preserve existing URLs/bookmarks.)
  */
+/**
+ * The sort indicator. Only the ACTIVE column shows a solid arrow; the others
+ * reveal a faint one on hover or keyboard focus, which says "this is sortable"
+ * without putting four arrows in a four-column header and letting none of them
+ * mean anything. Decorative — the heading already carries `aria-sort`.
+ */
+function SortArrow({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
+  const up = active ? dir === 'asc' : true;
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={cn(
+        'h-3 w-3 shrink-0 transition-opacity',
+        active
+          ? 'opacity-100'
+          : 'opacity-0 group-hover:opacity-40 group-focus-visible:opacity-40',
+      )}
+    >
+      {up ? (
+        <>
+          <path d="M12 19V5" />
+          <path d="M5 12l7-7 7 7" />
+        </>
+      ) : (
+        <>
+          <path d="M12 5v14" />
+          <path d="M19 12l-7 7-7-7" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 export default async function PlatformSubmissionsPage({
   searchParams,
 }: {
-  searchParams: { status?: string; item?: string; site?: string; page?: string };
+  searchParams: {
+    status?: string;
+    item?: string;
+    site?: string;
+    page?: string;
+    sort?: string;
+    dir?: string;
+  };
 }) {
   const viewer = await requirePlatformViewer();
   assertModuleView(viewer, 'checkins');
 
   const canExport = permits(viewer.role, 'checkins', 'export');
   const status = parseCheckinStatusFilter(searchParams.status);
+  // Unrecognised ?sort / ?dir fall back to the default rather than erroring, so
+  // a mangled or stale shared link still renders a sensible table.
+  const sort = parseCheckinSort(searchParams.sort, searchParams.dir);
   // Validated against the viewer's own sites; anything else → All Sites.
   const siteId = parseCheckinSiteFilter(searchParams.site, viewer.siteIds);
 
@@ -94,6 +149,7 @@ export default async function PlatformSubmissionsPage({
   const submissions = await listCheckinsForViewer(viewer, status, siteId, {
     skip: pg.skip,
     take: pg.take,
+    sort,
   });
 
   // Selection is resolved against the rows ACTUALLY returned for this viewer
@@ -108,6 +164,11 @@ export default async function PlatformSubmissionsPage({
   const carriedParams = {
     status: status === 'all' ? undefined : status,
     site: siteId ?? undefined,
+    // Sorting is part of "the list you are looking at", so it is carried by the
+    // same mechanism as the filters: paging keeps it, and because the export
+    // link is built from this object below, the CSV comes out in the order on
+    // screen without a second place to keep in step.
+    ...checkinSortParams(sort),
   };
 
   // The export gets the same two filters, so the CSV is the table. `page` is
@@ -162,7 +223,7 @@ export default async function PlatformSubmissionsPage({
               items={CHECKIN_STATUS_FILTERS.map((f) => ({
                 key: f.value,
                 label: f.label,
-                href: checkinFilterHref(basePath, f.value, siteId),
+                href: checkinFilterHref(basePath, f.value, siteId, sort),
                 active: f.value === status,
                 count: countByFilter[f.value],
               }))}
@@ -175,6 +236,7 @@ export default async function PlatformSubmissionsPage({
                 basePath={basePath}
                 preserveParams={{
                   status: status === 'all' ? undefined : status,
+                  ...checkinSortParams(sort),
                 }}
               />
             )}
@@ -306,10 +368,58 @@ export default async function PlatformSubmissionsPage({
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-line text-left text-ink-subtle">
-                      <th className="px-5 py-2.5 font-medium">Worker</th>
-                      <th className="px-5 py-2.5 font-medium">Site</th>
-                      <th className="px-5 py-2.5 font-medium">Status</th>
-                      <th className="px-5 py-2.5 font-medium">Checked in</th>
+                      {CHECKIN_COLUMNS.map((col) => {
+                        const active = sort.key === col.key;
+                        const next = nextSortFor(col.key, sort);
+                        return (
+                          <th
+                            key={col.key}
+                            scope="col"
+                            className={cn(
+                              'px-5 py-2.5 font-medium',
+                              active && 'font-semibold text-ink',
+                            )}
+                            aria-sort={
+                              active
+                                ? sort.dir === 'asc'
+                                  ? 'ascending'
+                                  : 'descending'
+                                : 'none'
+                            }
+                          >
+                            {/*
+                              `whitespace-nowrap` is load-bearing, not tidiness:
+                              with the detail rail open the table can be narrow
+                              enough that "Checked in" broke onto a second line
+                              and took the sort arrow with it, leaving a ragged
+                              header row. The wrapper is already overflow-x-auto,
+                              so the table scrolls sideways instead — which is
+                              how this surface has always handled being squeezed.
+
+                              A link, not a button: this page is a server
+                              component with no client state, so every ordering
+                              is a real URL that can be shared, bookmarked and
+                              opened in a new tab — and it works without JS.
+                              checkinFilterHref carries the current filters and
+                              deliberately drops `page`, so a sort always lands
+                              on page 1 rather than page 4 of a set that has
+                              just been reordered underneath you.
+                            */}
+                            <Link
+                              href={checkinFilterHref(
+                                basePath,
+                                status,
+                                siteId,
+                                next,
+                              )}
+                              className="group inline-flex items-center gap-1.5 whitespace-nowrap rounded hover:text-ink"
+                            >
+                              {col.label}
+                              <SortArrow active={active} dir={sort.dir} />
+                            </Link>
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
@@ -330,6 +440,9 @@ export default async function PlatformSubmissionsPage({
                               href={`${basePath}?${new URLSearchParams({
                                 ...(status === 'all' ? {} : { status }),
                                 ...(siteId ? { site: siteId } : {}),
+                                // Without this the rail would open on a table
+                                // silently reverted to the default order.
+                                ...checkinSortParams(sort),
                                 ...(pg.page > 1
                                   ? { page: String(pg.page) }
                                   : {}),

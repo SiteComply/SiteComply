@@ -10,6 +10,10 @@ import {
   parseCheckinSiteFilter,
   checkedOutAtWhere,
 } from '@/services/submissions/checkinFilter';
+import {
+  parseCheckinSort,
+  checkinOrderBy,
+} from '@/services/submissions/checkinSort';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -47,6 +51,13 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const status = parseCheckinStatusFilter(sp.get('status') ?? undefined);
   const siteId = parseCheckinSiteFilter(sp.get('site') ?? undefined, viewer.siteIds);
+  // Same parser the page uses, so the file comes out in the order on screen. An
+  // export that silently reverted to newest-first would contradict the table it
+  // was taken from — the same failure the filter-aware fix already addressed.
+  const sort = parseCheckinSort(
+    sp.get('sort') ?? undefined,
+    sp.get('dir') ?? undefined,
+  );
 
   const where = {
     jobSiteId: siteId ? siteId : { in: viewer.siteIds },
@@ -56,7 +67,7 @@ export async function GET(req: NextRequest) {
   const submissions = viewer.siteIds.length
     ? await prisma.submission.findMany({
         where,
-        orderBy: { checkedInAt: 'desc' },
+        orderBy: checkinOrderBy(sort),
         select: {
           checkedInAt: true,
           checkedOutAt: true,
