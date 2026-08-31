@@ -388,6 +388,14 @@ export default async function PlatformSubmissionsPage({
                             }
                           >
                             {/*
+                              `whitespace-nowrap` is load-bearing, not tidiness:
+                              with the detail rail open the table can be narrow
+                              enough that "Checked in" broke onto a second line
+                              and took the sort arrow with it, leaving a ragged
+                              header row. The wrapper is already overflow-x-auto,
+                              so the table scrolls sideways instead — which is
+                              how this surface has always handled being squeezed.
+
                               A link, not a button: this page is a server
                               component with no client state, so every ordering
                               is a real URL that can be shared, bookmarked and
@@ -404,7 +412,7 @@ export default async function PlatformSubmissionsPage({
                                 siteId,
                                 next,
                               )}
-                              className="group inline-flex items-center gap-1.5 rounded hover:text-ink"
+                              className="group inline-flex items-center gap-1.5 whitespace-nowrap rounded hover:text-ink"
                             >
                               {col.label}
                               <SortArrow active={active} dir={sort.dir} />
