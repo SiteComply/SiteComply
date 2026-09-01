@@ -63,21 +63,42 @@ export function WorkerShell({
             place on a normal screen; only the narrowest phones get the second
             row, which is where a worker actually uses this. */}
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3">
-          <div className="flex shrink-0 items-center gap-2">
-            <Link
-              href="/"
-              aria-label="SiteComply home"
-              className="inline-flex shrink-0"
-            >
-              <Logo />
-            </Link>
-            <span className="shrink-0 rounded-md bg-safe-500 px-2 py-0.5 text-xs font-semibold text-white">
-              Worker
+          {/* Sign out sits with the identity, not with the site controls.
+              Below sm the actions row is full-width and held three items —
+              switcher, Check out, Sign out — needing about 407px in the 358px a
+              390px phone has. Sign out is the one with no relationship to the
+              site, so moving it here leaves two items to share that row and the
+              overflow has nowhere to come from. */}
+          <div className="flex w-full shrink-0 items-center justify-between gap-2 sm:w-auto sm:justify-start">
+            <span className="flex items-center gap-2">
+              <Link
+                href="/"
+                aria-label="SiteComply home"
+                className="inline-flex shrink-0"
+              >
+                <Logo />
+              </Link>
+              <span className="shrink-0 rounded-md bg-safe-500 px-2 py-0.5 text-xs font-semibold text-white">
+                Worker
+              </span>
             </span>
+            <a
+              href="/api/worker/logout"
+              className="touch-target inline-flex shrink-0 items-center whitespace-nowrap rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken sm:hidden"
+            >
+              Sign out
+            </a>
           </div>
           <div className="flex w-full min-w-0 items-center justify-end gap-2 sm:w-auto sm:gap-3">
             {multiSite ? (
-              <span className="min-w-0 text-right">
+              // `flex-1 min-w-0` is the fix for the overlap: the switcher was
+              // a fixed 192px that could not shrink, so at every phone width
+              // Check out was laid out on top of it — 117px of overlap at
+              // 320px, and every tap in that band, including over the select's
+              // own chevron, went to Check out. Flexible, it gives way and
+              // truncates instead, which is the rule the single-site branch
+              // below has always followed.
+              <span className="min-w-0 flex-1 text-right">
                 <SiteSwitcher sites={sites} activeSiteId={activeSiteId} />
                 <span className="mt-0.5 block truncate text-xs text-ink-subtle">
                   Checked in: {formatDateTimeUK(checkedInAt)}
@@ -107,9 +128,11 @@ export function WorkerShell({
                 variant="header"
               />
             )}
+            {/* Shown from sm up, where the single-row header has room for it.
+                Below sm the copy in the identity row above takes over. */}
             <a
               href="/api/worker/logout"
-              className="touch-target inline-flex shrink-0 items-center whitespace-nowrap rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken"
+              className="touch-target hidden shrink-0 items-center whitespace-nowrap rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken sm:inline-flex"
             >
               Sign out
             </a>
