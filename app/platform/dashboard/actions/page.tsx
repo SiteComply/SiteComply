@@ -198,7 +198,7 @@ export default async function PlatformActionsPage({
               defaultValue={site}
               className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
             >
-              <option value="">All my sites</option>
+              <option value="">All</option>
               {viewer.sites.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} · {s.jobReference}
@@ -213,7 +213,7 @@ export default async function PlatformActionsPage({
               defaultValue={priority}
               className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
             >
-              <option value="">All priorities</option>
+              <option value="">All</option>
               {ACTION_PRIORITIES.map((p) => (
                 <option key={p.value} value={p.value}>
                   {p.label}
