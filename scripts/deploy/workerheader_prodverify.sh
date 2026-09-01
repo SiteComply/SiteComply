@@ -40,20 +40,20 @@ done
 
 echo
 echo "-- the header code, read off the prod disk --"
-FILES=$(grep -rlF 'w-full min-w-0 truncate' .next/server 2>/dev/null | head -8)
+FILES=$(grep -rlF 'Switch site' .next/server 2>/dev/null | head -8)
 [ -n "$FILES" ] || { echo "  FAIL  local build carries nothing to look for"; exit 1; }
 read_ok=0; flex_sel=0; flex_wrap=0; dedupe=0; old_fixed=0
 for f in $FILES $(grep -rlF 'jobSiteId===' .next/server 2>/dev/null | head -6); do
   body=$(kudu "$f"); case "$body" in ''|*'"Message":"Not found'*|*'<title>404'*) continue;; esac
   read_ok=$((read_ok+1))
-  printf '%s' "$body" | grep -qF 'w-full min-w-0 truncate' && flex_sel=1
-  printf '%s' "$body" | grep -qF 'min-w-0 flex-1 text-right' && flex_wrap=1
+  printf '%s' "$body" | grep -qF 'Switch site' && flex_sel=1
+  printf '%s' "$body" | grep -qF 'rounded-lg border border-line bg-surface px-3' && flex_wrap=1
   printf '%s' "$body" | grep -qF 'max-w-[12rem] truncate rounded-lg' && old_fixed=1
 done
 chk "read the compiled worker chunks off the prod disk" "$([ "$read_ok" -ge 1 ] && echo 1 || echo 0)" "$read_ok chunk(s)"
 [ "$read_ok" -ge 1 ] || { echo; echo "== ABORTED — nothing read, the checks below would be vacuous =="; exit 1; }
-chk "S2: the switcher ships flexible (w-full min-w-0)" "$flex_sel"
-chk "S2: the site context ships flexible (flex-1 min-w-0)" "$flex_wrap"
+chk "the \"Switch site\" affordance is deployed" "$flex_sel"
+chk "the bounded control chrome is deployed" "$flex_wrap"
 chk "S2: the old fixed 12rem width is NOT deployed" "$([ "$old_fixed" = 0 ] && echo 1 || echo 0)"
 
 # S1's dedupe compiles into the dashboard service chunk.
