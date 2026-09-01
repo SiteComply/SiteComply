@@ -240,3 +240,55 @@ deciding.** Building this on suspicion would add friction to a safety action for
 demonstrated gain.
 
 ---
+## BL-007 — Invalid filter parameters in the URL
+
+**Status:** Not started
+**Raised:** 1 September 2026
+
+`/platform/dashboard/permits?status=BOGUS` returns **HTTP 500**. An unrecognised
+status falls through `scopeWhere` to `{ status: filters.status as PermitStatusValue }`
+and Prisma rejects the enum value. Reachable from a stale bookmark, a hand-edited
+URL, or a link written before a status was renamed.
+
+### It is one page, not a pattern
+
+Worth stating plainly, because "audit every filtered page" would be a much larger
+piece of work than this needs to be. Every other register already validates its
+filter parameters and falls back rather than throwing:
+
+| Register | Parameter | Guard |
+|---|---|---|
+| Check-ins | `status`, `site`, `sort`/`dir` | `parseCheckinStatusFilter`, `parseCheckinSiteFilter`, `parseCheckinSort` |
+| Actions | `bucket`, `priority` | `isActionBucket`, `isActionPriority` |
+| Audits | `status` | `isAuditStatus` |
+| Documents | `category`, `expiry` | `isDocumentCategory`, `isDocumentExpiryFilter` |
+| Permits | `site` | validated against `viewer.siteIds` |
+| **Permits** | **`status`** | **none — this is the gap** |
+
+### The guard already exists and is never called
+
+`isPermitStatus()` is defined in `services/permits/permitConstants.ts` and has
+**zero consumers**. The same shape as BL-001, where `CHECKOUT_OVERRIDE_ROLES` sat
+written but unused: the decision was taken, the helper was written, and nothing
+was wired to it.
+
+So the fix is a condition, not a design:
+
+```
+if (filters.status && filters.status !== 'all' && isPermitStatus(filters.status))
+```
+
+### Decide the fallback deliberately
+
+An unrecognised status should show **all permits**, matching what every other
+register does with a bad parameter, and matching what an absent `?status=` already
+means here. The alternative — an empty list — would be indistinguishable from a
+status that genuinely has no permits, which is worse than the 500 for being silent.
+
+### Why it is not urgent
+
+It needs a URL nobody's UI produces: every tab href is generated from
+`PERMIT_STATUSES`. It is reachable, not encountered. Group it with the next
+filtering or polish pass rather than deploying on its own.
+
+---
