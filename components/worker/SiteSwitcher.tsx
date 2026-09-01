@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
 import { WorkerIcon } from './icons';
+import { cn } from '@/lib/cn';
 
 export interface SwitcherSite {
   siteId: string;
@@ -26,6 +27,7 @@ export function SiteSwitcher({
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const selectId = useId();
 
   async function switchTo(siteId: string) {
     if (siteId === activeSiteId || busy) return;
@@ -51,20 +53,32 @@ export function SiteSwitcher({
     }
   }
 
+  const active = sites.find((s) => s.siteId === activeSiteId);
+
   return (
-    <label className="flex min-w-0 items-center gap-2 text-sm">
-      <span className="text-ink-subtle" aria-hidden="true">
-        <WorkerIcon name="building" className="h-4 w-4" />
-      </span>
-      <span className="sr-only">Active site</span>
-      {/* `w-full min-w-0` rather than a fixed max-width: a <select> will not
-          shrink below its widest option unless told to, which is what made this
-          a rigid 192px at every width and let the header's Check out button be
-          laid out on top of it. `touch-target` takes it from 35px to the 52px
-          the controls beside it already use. */}
+    /*
+     * ONE CONTROL, NOT THREE FRAGMENTS.
+     *
+     * This shipped as a bare <select> with the icon outside its border and the
+     * check-in time on a separate right-aligned line beneath it — a left-aligned
+     * name in a box, a floating icon and a right-aligned caption, which read as
+     * a heading with decoration rather than something you can tap.
+     *
+     * The chrome below is the visible control; the real <select> sits on top of
+     * it, transparent and filling it. That keeps the NATIVE picker — the iOS
+     * wheel, the Android sheet, keyboard and screen-reader behaviour — which a
+     * custom dropdown would have had to reimplement badly. The visible layer
+     * carries the focus ring via `peer-focus-visible`, so keyboard users still
+     * see what they are on.
+     */
+    <div className="relative min-w-0">
+      <label htmlFor={selectId} className="sr-only">
+        Active site — switch between the sites you are checked into
+      </label>
       <select
+        id={selectId}
         aria-label="Switch site"
-        className="touch-target w-full min-w-0 truncate rounded-lg border border-line bg-surface px-2 py-1.5 text-sm font-semibold text-ink disabled:opacity-60"
+        className="peer absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-default"
         value={activeSiteId}
         disabled={busy}
         onChange={(e) => switchTo(e.target.value)}
@@ -75,6 +89,33 @@ export function SiteSwitcher({
           </option>
         ))}
       </select>
-    </label>
+
+      <span
+        aria-hidden="true"
+        className={cn(
+          'touch-target flex w-full min-w-0 items-center gap-2 rounded-lg border border-line bg-surface px-3 py-1.5 text-left transition-colors',
+          'peer-hover:border-brand-200 peer-hover:bg-brand-50',
+          'peer-focus-visible:outline-none peer-focus-visible:ring-4 peer-focus-visible:ring-brand-500/40 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-surface',
+          busy && 'opacity-60',
+        )}
+      >
+        <WorkerIcon name="building" className="h-5 w-5 shrink-0 text-ink-subtle" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-ink">
+            {active?.siteName ?? 'Select a site'}
+          </span>
+          {/* The affordance, in words. An icon alone was not enough: workers
+              read this as a title of the page they were already on.
+
+              "Switch site" rather than "Tap to switch site" because at 320px
+              the longer string truncated to "Tap to switch…" — the one line
+              here whose whole job is to survive being squeezed. */}
+          <span className="block truncate text-xs text-ink-subtle">
+            {busy ? 'Switching…' : 'Switch site'}
+          </span>
+        </span>
+        <WorkerIcon name="chevronDown" className="h-4 w-4 shrink-0 text-ink-subtle" />
+      </span>
+    </div>
   );
 }

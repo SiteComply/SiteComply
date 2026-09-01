@@ -98,9 +98,17 @@ export function WorkerShell({
               // own chevron, went to Check out. Flexible, it gives way and
               // truncates instead, which is the rule the single-site branch
               // below has always followed.
-              <span className="min-w-0 flex-1 text-right">
+              <span className="min-w-0 flex-1 text-left">
                 <SiteSwitcher sites={sites} activeSiteId={activeSiteId} />
-                <span className="mt-0.5 block truncate text-xs text-ink-subtle">
+                {/* Left-aligned to sit under the control rather than opposite
+                    it. Right-aligned, it read as a caption belonging to the row
+                    instead of a line belonging to the site above it — part of
+                    why the group looked like a heading with decoration. It
+                    stays OUTSIDE the control deliberately: folding it into the
+                    control's second line, as first drawn, would put it in
+                    competition with "Tap to switch site" and at 320px the
+                    affordance is what would truncate away. */}
+                <span className="mt-0.5 block truncate pl-1 text-xs text-ink-subtle">
                   Checked in: {formatDateTimeUK(checkedInAt)}
                 </span>
               </span>

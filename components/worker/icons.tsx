@@ -21,7 +21,8 @@ export type WorkerIconName =
   | 'logout'
   | 'user'
   | 'shield'
-  | 'clock';
+  | 'clock'
+  | 'chevronDown';
 
 const PATHS: Record<WorkerIconName, ReactNode> = {
   grid: (
@@ -129,6 +130,7 @@ const PATHS: Record<WorkerIconName, ReactNode> = {
       <path d="M12 7v5l3 2" />
     </>
   ),
+  chevronDown: <path d="M6 9l6 6 6-6" />,
 };
 
 export function WorkerIcon({
