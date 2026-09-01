@@ -76,10 +76,17 @@ export function AttendanceRow({
         <p className="text-sm font-semibold tabular-nums text-ink">
           {inOut(record)}
         </p>
+        {/*
+          The warning is set larger than the hours label it replaces: it is the
+          only place a worker is told they left a shift open, and it was
+          rendering smaller than the date beside it.
+        */}
         <p
           className={cn(
-            'text-xs font-semibold tabular-nums',
-            incomplete ? 'text-hivis-600' : 'text-ink-subtle',
+            'font-semibold tabular-nums',
+            incomplete
+              ? 'text-sm text-hivis-600'
+              : 'text-xs text-ink-subtle',
           )}
         >
           {incomplete ? 'Not checked out' : hoursLabel(record)}
