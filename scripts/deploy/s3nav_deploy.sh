@@ -55,14 +55,20 @@ import re, sys
 s = open(sys.argv[1], encoding='utf-8').read()
 arr = s[s.index('const WORKER_NAV'):s.index('export function WorkerNav')]
 items = re.findall(r"href:\s*'([^']+)'.*?label:\s*'([^']+)'.*?shortLabel:\s*'([^']+)'", arr, re.S)
-want = ['/worker/dashboard','/worker/attendance','/worker/emergency','/worker/contacts',
-        '/worker/bulletins','/worker/rams','/worker/documents','/worker/permits',
-        '/worker/actions','/worker/inductions','/worker/site-information']
+want = ['/worker/dashboard','/worker/inductions','/worker/bulletins','/worker/attendance',
+        '/worker/site-information','/worker/rams','/worker/documents','/worker/permits',
+        '/worker/actions','/worker/contacts','/worker/emergency']
 hrefs = [i[0] for i in items]
 if hrefs != want:
     print('ERROR: nav order is not the approved order:'); print('  got:', hrefs); sys.exit(1)
-if hrefs.index('/worker/emergency') != 2:
-    print('ERROR: Emergency info is not third'); sys.exit(1)
+# Emergency info closes the list by decision (worker-journey ordering). Asserted
+# as its agreed position so an accidental reshuffle is still caught.
+if hrefs.index('/worker/emergency') != 10:
+    print('ERROR: Emergency info is not last'); sys.exit(1)
+# Attendance sits fourth so it clears the fold on 360-412px phones. Asserted by
+# position, because that is the whole reason it is there.
+if hrefs.index('/worker/attendance') != 3:
+    print('ERROR: Attendance is not fourth'); sys.exit(1)
 bad = [(l, s2) for _, l, s2 in items if s2 not in l]
 if bad:
     print('ERROR: short labels not contained in their accessible names:', bad); sys.exit(1)
@@ -116,12 +122,19 @@ echo "[4b] ARTIFACT guards. WorkerNav is a client component, so its array"
 echo "     compiles into the shared chunks, not any one page file..."
 python3 - <<'PY' || exit 1
 import os, re, sys
-want = [('/worker/dashboard','Dashboard','Dashboard'), ('/worker/attendance','Attendance','Attendance'),
-        ('/worker/emergency','Emergency info','Emergency'), ('/worker/contacts','Contacts','Contacts'),
-        ('/worker/bulletins','Bulletins','Bulletins'), ('/worker/rams','RAMS','RAMS'),
-        ('/worker/documents','Documents','Documents'), ('/worker/permits','Permits','Permits'),
-        ('/worker/actions','Actions','Actions'), ('/worker/inductions','Inductions','Inductions'),
-        ('/worker/site-information','Site information','Site info')]
+want = [
+        ('/worker/dashboard','Dashboard','Dashboard'),
+        ('/worker/inductions','Inductions','Inductions'),
+        ('/worker/bulletins','Bulletins','Bulletins'),
+        ('/worker/attendance','Attendance','Attendance'),
+        ('/worker/site-information','Site information','Site info'),
+        ('/worker/rams','RAMS','RAMS'),
+        ('/worker/documents','Documents','Documents'),
+        ('/worker/permits','Permits','Permits'),
+        ('/worker/actions','Actions','Actions'),
+        ('/worker/contacts','Contacts','Contacts'),
+        ('/worker/emergency','Emergency info','Emergency'),
+       ]
 # Match the compiled ARRAY ENTRIES, not every /worker/ link in the file. The
 # page bundles are full of unrelated links, and matching those is how the first
 # version of this guard managed to fail a build that was correct.
