@@ -35,6 +35,7 @@ echo "[1/8] Current prod build id:"; OLD_BUILD=$(kudu_buildid); echo "      OLD_
 echo "[2/8] SOURCE guards..."
 EXPECTED="app/platform/dashboard/permits/page.tsx
 docs/BACKLOG.md
+scripts/deploy/permitsalltab_deploy.sh
 scripts/permitstabs_verify.js"
 CH=$(git diff --name-only "$DEPLOYED" HEAD | sort)
 [ "$CH" = "$(printf '%s' "$EXPECTED" | sort)" ] \
