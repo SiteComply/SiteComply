@@ -104,9 +104,13 @@ echo "     these components compile into shared chunks, not a page file)..."
 grep -rqF 'Switch site' .next/server 2>/dev/null \
   && echo "      the affordance text compiled in." \
   || { echo "ERROR: 'Switch site' absent from the bundle. Aborting"; exit 1; }
-grep -rqF 'min-w-0 flex-1 text-right' .next/server 2>/dev/null \
-  && echo "      the flexible site-context wrapper compiled in." \
+grep -rqF 'min-w-0 flex-1 text-left' .next/server 2>/dev/null \
+  && echo "      the flexible, left-aligned site-context wrapper compiled in." \
   || { echo "ERROR: header wrapper classes absent from the bundle. Aborting"; exit 1; }
+# The bounded control itself, not just its text.
+grep -rqF 'rounded-lg border border-line bg-surface px-3' .next/server 2>/dev/null \
+  && echo "      the bounded control chrome compiled in." \
+  || { echo "ERROR: the control chrome is absent from the bundle. Aborting"; exit 1; }
 grep -rqF 'max-w-[12rem] truncate rounded-lg' .next/server 2>/dev/null \
   && { echo "ERROR: the old fixed-width switcher is still in the bundle. Aborting"; exit 1; }
 echo "      the old fixed-width switcher is gone from the bundle."
