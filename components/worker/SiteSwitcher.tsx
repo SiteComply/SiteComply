@@ -3,8 +3,7 @@
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
-import { WorkerIcon } from './icons';
-import { cn } from '@/lib/cn';
+import { SiteControlChrome } from './SiteControlChrome';
 
 export interface SwitcherSite {
   siteId: string;
@@ -90,32 +89,12 @@ export function SiteSwitcher({
         ))}
       </select>
 
-      <span
-        aria-hidden="true"
-        className={cn(
-          'touch-target flex w-full min-w-0 items-center gap-2 rounded-lg border border-line bg-surface px-3 py-1.5 text-left transition-colors',
-          'peer-hover:border-brand-200 peer-hover:bg-brand-50',
-          'peer-focus-visible:outline-none peer-focus-visible:ring-4 peer-focus-visible:ring-brand-500/40 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-surface',
-          busy && 'opacity-60',
-        )}
-      >
-        <WorkerIcon name="building" className="h-5 w-5 shrink-0 text-ink-subtle" />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-ink">
-            {active?.siteName ?? 'Select a site'}
-          </span>
-          {/* The affordance, in words. An icon alone was not enough: workers
-              read this as a title of the page they were already on.
-
-              "Switch site" rather than "Tap to switch site" because at 320px
-              the longer string truncated to "Tap to switch…" — the one line
-              here whose whole job is to survive being squeezed. */}
-          <span className="block truncate text-xs text-ink-subtle">
-            {busy ? 'Switching…' : 'Switch site'}
-          </span>
-        </span>
-        <WorkerIcon name="chevronDown" className="h-4 w-4 shrink-0 text-ink-subtle" />
-      </span>
+      <SiteControlChrome
+        siteName={active?.siteName ?? 'Select a site'}
+        supportingText={busy ? 'Switching…' : 'Switch site'}
+        interactive
+        dimmed={busy}
+      />
     </div>
   );
 }
