@@ -42,7 +42,7 @@ export function SiteFilterSelect({
       }}
       className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
     >
-      <option value="">All Sites</option>
+      <option value="">All sites</option>
       {sites.map((s) => (
         <option key={s.id} value={s.id}>
           {s.name}

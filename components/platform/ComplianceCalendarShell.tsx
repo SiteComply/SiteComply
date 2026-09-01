@@ -103,7 +103,7 @@ export function ComplianceCalendarShell({
             }}
             className="rounded-lg border border-line bg-surface px-3 py-2 text-sm"
           >
-            <option value="">All Sites</option>
+            <option value="">All sites</option>
             {sites.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}

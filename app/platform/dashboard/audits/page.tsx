@@ -112,7 +112,7 @@ export default async function PlatformAuditsPage({
               defaultValue={status}
               className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
             >
-              <option value="">All statuses</option>
+              <option value="">All</option>
               {AUDIT_STATUSES.map((s) => (
                 <option key={s.value} value={s.value}>
                   {s.label}
@@ -128,7 +128,7 @@ export default async function PlatformAuditsPage({
               defaultValue={site}
               className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
             >
-              <option value="">All my sites</option>
+              <option value="">All</option>
               {viewer.sites.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} · {s.jobReference}
