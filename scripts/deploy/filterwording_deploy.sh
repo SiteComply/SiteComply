@@ -46,10 +46,11 @@ app/platform/dashboard/permits/page.tsx
 components/platform/ComplianceCalendarShell.tsx
 components/platform/SiteFilterSelect.tsx
 scripts/actionsort_combined_verify.js
+scripts/deploy/filterwording_deploy.sh
 scripts/filterwording_verify.js"
 CH=$(git diff --name-only "$DEPLOYED" HEAD | sort)
 [ "$CH" = "$(printf '%s' "$EXPECTED" | sort)" ] \
-  && echo "      confirmed: exactly the six surfaces plus two verifiers changed." \
+  && echo "      confirmed: exactly the six surfaces plus its scripts changed." \
   || { echo "ERROR: unexpected file set:"; echo "$CH"; exit 1; }
 
 # NOTHING BUT OPTION TEXT MOVED. Every changed line must be an <option value="">.
