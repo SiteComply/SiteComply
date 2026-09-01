@@ -208,13 +208,33 @@ export async function getWorkerContext(): Promise<WorkerContext | null> {
     // SC-023 Phase 2 — resolved for THIS worker, so any per-worker restriction
     // applies across the whole worker portal from one place.
     panels: await getPanelVisibility(active.jobSiteId, worker.id),
-    openCheckIns: open.map((s) => ({
-      submissionId: s.id,
-      siteId: s.jobSiteId,
-      siteName: s.jobSite.name,
-      jobReference: s.jobSite.jobReference,
-      checkedInAt: s.checkedInAt,
-    })),
+    // ONE ENTRY PER SITE, NOT PER CHECK-IN.
+    //
+    // `open` is one row per open SUBMISSION, so a worker holding several open
+    // check-ins at the same site produced several identical entries. The header
+    // switcher rendered each of them — ten rows for two sites in the case that
+    // found this — with no way to tell them apart, and React logged a duplicate
+    // key for every repeat because the option is keyed by site.
+    //
+    // It also made `multiSite` (sites.length > 1) true for a worker on ONE site
+    // with two open check-ins there, so they were shown a switcher between a
+    // site and itself.
+    //
+    // Deduping here rather than in the header because every caller passes this
+    // straight to WorkerShell for exactly that purpose, and because the rest of
+    // the system already keys on the site: the active-site cookie stores a
+    // siteId, POST /api/worker/active-site takes a siteId, and the active
+    // check-in is resolved from `open` — which is ordered checkedInAt desc, so
+    // first-wins keeps the most recent check-in per site.
+    openCheckIns: open
+      .filter((s, i) => open.findIndex((o) => o.jobSiteId === s.jobSiteId) === i)
+      .map((s) => ({
+        submissionId: s.id,
+        siteId: s.jobSiteId,
+        siteName: s.jobSite.name,
+        jobReference: s.jobSite.jobReference,
+        checkedInAt: s.checkedInAt,
+      })),
     activeSiteId: active.jobSiteId,
   };
 }
