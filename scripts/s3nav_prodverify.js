@@ -26,13 +26,26 @@ const chk = (t, ok, d = '') => { console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${t}${d
 const signIn = async (ctx) => {
   const p = await ctx.newPage();
   await p.goto(`${BASE}/check-in`, { waitUntil: 'domcontentloaded', timeout: 120000 });
-  const req = await p.evaluate(async ([base, mobile]) => {
+  let req = await p.evaluate(async ([base, mobile]) => {
     const r = await fetch(`${base}/api/worker/otp/request`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ mobile }), credentials: 'include',
     });
     return { status: r.status, body: await r.text() };
   }, [BASE, MOBILE]);
+  // A 429 is the resend cooldown, not a failure — wait it out once and retry.
+  if (req.status === 429) {
+    const wait = (JSON.parse(req.body).resendInSeconds || 30) + 3;
+    console.log(`  ..     resend cooldown, waiting ${wait}s`);
+    await p.waitForTimeout(wait * 1000);
+    req = await p.evaluate(async ([base, mobile]) => {
+      const r = await fetch(`${base}/api/worker/otp/request`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mobile }), credentials: 'include',
+      });
+      return { status: r.status, body: await r.text() };
+    }, [BASE, MOBILE]);
+  }
   if (req.status !== 200) throw new Error(`OTP request failed: ${req.status} ${req.body}`);
   const ver = await p.evaluate(async ([base, mobile, code]) => {
     const r = await fetch(`${base}/api/worker/otp/verify`, {
@@ -134,9 +147,16 @@ const measure = async (ctx, width, label) => {
   chk('3 or more destinations in view at 320px', vis(320) >= 3, `${vis(320)}`);
   chk('4 or more destinations in view at 390px', vis(390) >= 4, `${vis(390)}`);
   chk('5 or more destinations in view at 430px', vis(430) >= 5, `${vis(430)}`);
-  chk('the strip is under 500px of scroll at every width',
-    WIDTHS.every(w => at(w).scroll < 500),
-    WIDTHS.map(w => `${w}:${at(w).scroll}`).join(' '));
+  // Per item, not a fixed length: production sites enable different panels, so
+  // the strip's total length depends on how many destinations that site has.
+  // This one has Permits on, giving 11 where the local site gives 10.
+  const stripPerItem = (w) => {
+    const r = at(w);
+    return Math.round((r.scroll + (w - 48)) / r.items.length);
+  };
+  chk('the strip costs under 80px per destination (was ~130px)',
+    WIDTHS.every(w => stripPerItem(w) <= 80),
+    WIDTHS.map(w => `${w}:${stripPerItem(w)}px/item`).join(' '));
   chk('a gradient with a chevron marks the end that still has items',
     WIDTHS.every(w => at(w).fades.length === 2 && at(w).fades.every(f => f.gradient && f.chevron)
       && at(w).fades.some(f => f.opacity > 0.9)));
