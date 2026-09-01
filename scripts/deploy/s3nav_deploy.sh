@@ -55,8 +55,8 @@ import re, sys
 s = open(sys.argv[1], encoding='utf-8').read()
 arr = s[s.index('const WORKER_NAV'):s.index('export function WorkerNav')]
 items = re.findall(r"href:\s*'([^']+)'.*?label:\s*'([^']+)'.*?shortLabel:\s*'([^']+)'", arr, re.S)
-want = ['/worker/dashboard','/worker/inductions','/worker/bulletins','/worker/site-information',
-        '/worker/attendance','/worker/rams','/worker/documents','/worker/permits',
+want = ['/worker/dashboard','/worker/inductions','/worker/bulletins','/worker/attendance',
+        '/worker/site-information','/worker/rams','/worker/documents','/worker/permits',
         '/worker/actions','/worker/contacts','/worker/emergency']
 hrefs = [i[0] for i in items]
 if hrefs != want:
@@ -65,8 +65,10 @@ if hrefs != want:
 # as its agreed position so an accidental reshuffle is still caught.
 if hrefs.index('/worker/emergency') != 10:
     print('ERROR: Emergency info is not last'); sys.exit(1)
-if hrefs.index('/worker/attendance') != 4:
-    print('ERROR: Attendance is not fifth'); sys.exit(1)
+# Attendance sits fourth so it clears the fold on 360-412px phones. Asserted by
+# position, because that is the whole reason it is there.
+if hrefs.index('/worker/attendance') != 3:
+    print('ERROR: Attendance is not fourth'); sys.exit(1)
 bad = [(l, s2) for _, l, s2 in items if s2 not in l]
 if bad:
     print('ERROR: short labels not contained in their accessible names:', bad); sys.exit(1)
@@ -124,8 +126,8 @@ want = [
         ('/worker/dashboard','Dashboard','Dashboard'),
         ('/worker/inductions','Inductions','Inductions'),
         ('/worker/bulletins','Bulletins','Bulletins'),
-        ('/worker/site-information','Site information','Site info'),
         ('/worker/attendance','Attendance','Attendance'),
+        ('/worker/site-information','Site information','Site info'),
         ('/worker/rams','RAMS','RAMS'),
         ('/worker/documents','Documents','Documents'),
         ('/worker/permits','Permits','Permits'),

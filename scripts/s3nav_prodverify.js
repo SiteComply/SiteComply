@@ -146,6 +146,7 @@ const measure = async (ctx, width, label) => {
     WIDTHS.every(w => at(w).items[0].href === '/worker/dashboard'
       && at(w).items[1].href === '/worker/inductions'
       && at(w).items[2].href === '/worker/bulletins'
+      && at(w).items[3].href === '/worker/attendance'
       && at(w).items[at(w).items.length - 1].href === '/worker/emergency'));
   // Emergency info closes the list by decision. Reported, not asserted away.
   console.log('  NOTE  Emergency info: ' + WIDTHS.map(w => {

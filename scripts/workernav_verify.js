@@ -221,7 +221,7 @@ const probe = async (br, width) => {
     JSON.stringify(interaction.atEnd));
 
   // Permits is off on this site, so it is absent from the rendered strip.
-  const EXPECTED_HREFS = ['/worker/dashboard', '/worker/inductions', '/worker/bulletins', '/worker/site-information', '/worker/attendance', '/worker/rams', '/worker/documents', '/worker/actions', '/worker/contacts', '/worker/emergency'];
+  const EXPECTED_HREFS = ['/worker/dashboard', '/worker/inductions', '/worker/bulletins', '/worker/attendance', '/worker/site-information', '/worker/rams', '/worker/documents', '/worker/actions', '/worker/contacts', '/worker/emergency'];
   chk('routes and order are exactly as specified',
     JSON.stringify(at(390).items.map(i => i.href)) === JSON.stringify(EXPECTED_HREFS),
     at(390).items.map(i => i.href).join(' '));

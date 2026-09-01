@@ -26,9 +26,11 @@ import { WorkerIcon, type WorkerIconName } from './icons';
  *
  * ORDER follows the worker journey rather than module type: the hub, then
  * onboarding and site communications, then the operational modules, then the
- * pages a worker looks up rather than works from. Only the first four or five
- * items are reachable without scrolling on a phone, so this array is the whole
- * of the discoverability decision — change it deliberately.
+ * pages a worker looks up rather than works from. Attendance sits fourth
+ * specifically so it clears the fold — only four pills fit between 360 and
+ * 412px, which covers most phones in use. Only the first four or five items are
+ * reachable without scrolling, so this array is the whole of the
+ * discoverability decision — change it deliberately.
  */
 const WORKER_NAV: {
   href: string;
@@ -64,13 +66,6 @@ const WORKER_NAV: {
     panels: ['DAILY_BULLETIN'],
   },
   {
-    href: '/worker/site-information',
-    label: 'Site information',
-    shortLabel: 'Site info',
-    icon: 'building',
-    panels: ['SITE_INFORMATION'],
-  },
-  {
     // Always visible (panels: []) — a worker's own attendance record is never
     // hidden by a site's panel config (SC-010).
     href: '/worker/attendance',
@@ -78,6 +73,13 @@ const WORKER_NAV: {
     shortLabel: 'Attendance',
     icon: 'clock',
     panels: [],
+  },
+  {
+    href: '/worker/site-information',
+    label: 'Site information',
+    shortLabel: 'Site info',
+    icon: 'building',
+    panels: ['SITE_INFORMATION'],
   },
   // Then the operational modules, in the order a task tends to need them.
   {
