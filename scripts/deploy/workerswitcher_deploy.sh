@@ -74,8 +74,15 @@ code "$SW" | grep -qF 'absolute inset-0 h-full w-full cursor-pointer opacity-0' 
   || { echo "ERROR: the native select is no longer overlaying the control. Aborting"; exit 1; }
 code "$SW" | grep -qF 'peer-focus-visible:ring-4' \
   || { echo "ERROR: focus would be invisible — the ring moved to the hidden select. Aborting"; exit 1; }
-code "$SHELL_C" | grep -qF 'min-w-0 flex-1 text-right' \
-  || { echo "ERROR: the site context is not flexible in the header row. Aborting"; exit 1; }
+# Flexibility is the S2 mechanism and must survive; the alignment is this
+# change's own fix — the caption was right-aligned opposite the control, which
+# is part of what made the group read as fragments. Carried over from the
+# previous deploy script, this guard still demanded text-right and stopped a
+# correct build.
+code "$SHELL_C" | grep -qF 'min-w-0 flex-1' \
+  || { echo "ERROR: the site context is not flexible — the overlap would return. Aborting"; exit 1; }
+code "$SHELL_C" | grep -qF 'min-w-0 flex-1 text-left' \
+  || { echo "ERROR: the caption is not aligned under the control. Aborting"; exit 1; }
 echo "      S2: site control is flexible, touch-sized, no fixed width."
 
 # Sign out must appear exactly twice — one per breakpoint — or a width loses it.
