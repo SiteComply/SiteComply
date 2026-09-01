@@ -7,7 +7,7 @@
  * the surrounding filters are links that set query params, so this keeps the
  * whole filter state in the URL — shareable, bookmarkable, and restored by the
  * back button. Same control and wording as the Compliance Calendar's site
- * filter ("All Sites", `?site=`), so the two read as one product.
+ * filter ("All sites", `?site=`), so the two read as one product.
  *
  * Props are plain data only — a server component cannot pass a function across
  * the client boundary, so the href is composed here from `basePath` and the

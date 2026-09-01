@@ -11,7 +11,7 @@ import { MonthPicker } from '@/components/platform/MonthPicker';
 
 /**
  * SC-020 Phase 1 — the client shell holding the calendar header controls from the
- * REV-1 example (Filter / All Sites / Today / prev-next / + Schedule Activity)
+ * REV-1 example (Filter / All sites / Today / prev-next / + Schedule Activity)
  * and the schedule dialog. Period navigation is done with links so the server
  * component re-renders and generation runs for the new window.
  */
