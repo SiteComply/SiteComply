@@ -37,7 +37,7 @@ echo "[1/8] Current prod build id:"; OLD_BUILD=$(kudu_buildid); echo "      OLD_
 
 echo "[2/8] SOURCE guards..."
 EXPECTED="app/admin/(dashboard)/submissions/page.tsx
-scripts/deploy/filterwording_prodverify.sh
+scripts/deploy/filterwordingadmin_deploy.sh
 scripts/filterwording_admin_verify.js"
 CH=$(git diff --name-only "$DEPLOYED" HEAD | sort)
 [ "$CH" = "$(printf '%s' "$EXPECTED" | sort)" ] \
