@@ -15,7 +15,7 @@ RG=rgSiteComply; APP=sitecomply-web
 SCM="https://${APP}.scm.azurewebsites.net"; HEALTH="https://${APP}.azurewebsites.net/api/health"
 ZIP=/tmp/s3nav_deploy.zip
 NAV='components/worker/WorkerNav.tsx'
-DEPLOYED=e0c465f
+DEPLOYED=14f4498
 
 kudu_buildid() { local tok; tok=$(az account get-access-token --query accessToken -o tsv 2>/dev/null) || return 1
   curl -s --max-time 20 -H "Authorization: Bearer $tok" "${SCM}/api/vfs/site/wwwroot/.next/BUILD_ID" 2>/dev/null | tr -d '[:space:]'; }
@@ -32,7 +32,7 @@ sys.stdout.write(s)
 DOCPY
 }
 
-echo "== S3 NAV DEPLOY =="
+echo "== WORKER NAV ORDER DEPLOY =="
 echo "on commit: $(git rev-parse --short HEAD) ($(git rev-parse --abbrev-ref HEAD))"
 echo "[1/8] Current prod build id:"; OLD_BUILD=$(kudu_buildid); echo "      OLD_BUILD=${OLD_BUILD:-<unknown>}"
 
@@ -40,7 +40,6 @@ echo "[2/8] SOURCE guards..."
 EXPECTED="components/worker/WorkerNav.tsx
 scripts/deploy/s3nav_deploy.sh
 scripts/s3nav_prodverify.js
-scripts/workernav_deep_verify.js
 scripts/workernav_verify.js"
 CH=$(git diff --name-only "$DEPLOYED" HEAD | sort)
 [ "$CH" = "$(printf '%s' "$EXPECTED" | sort)" ] \
@@ -182,4 +181,4 @@ CODE=""; for i in $(seq 1 20); do sleep 15; CODE=$(curl -s -o /dev/null -w "%{ht
   echo "      [$i] health: HTTP ${CODE}"; [ "$CODE" = "200" ] && break; done
 
 echo "== DEPLOY SUMMARY =="; echo "   old build: ${OLD_BUILD:-<unknown>}"; echo "   new build: ${NEW_BUILD}"; echo "   health:    HTTP ${CODE}"
-[ "$CODE" = "200" ] && echo "== S3 NAV DEPLOY COMPLETE ==" || { echo "== HEALTH NOT 200 =="; exit 3; }
+[ "$CODE" = "200" ] && echo "== WORKER NAV ORDER DEPLOY COMPLETE ==" || { echo "== HEALTH NOT 200 =="; exit 3; }
