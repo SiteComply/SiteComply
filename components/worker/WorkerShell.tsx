@@ -5,6 +5,7 @@ import { formatDateTimeUK } from '@/lib/datetime';
 import type { PanelVisibility } from '@/services/workerDashboard/dashboardPanels';
 import { WorkerNav } from './WorkerNav';
 import { SiteSwitcher, type SwitcherSite } from './SiteSwitcher';
+import { SiteControlChrome } from './SiteControlChrome';
 import { CheckOutOfSiteButton } from './CheckOutOfSiteButton';
 
 /**
@@ -113,14 +114,26 @@ export function WorkerShell({
                 </span>
               </span>
             ) : (
-              // The site context is the only flexible item in the row, so it is
-              // the one that gives way: it truncates instead of pushing the
-              // actions off screen.
-              <span className="min-w-0 text-right">
-                <span className="block truncate text-sm font-semibold text-ink">
-                  {siteName}
-                </span>
-                <span className="block truncate text-xs text-ink-subtle">
+              // THE SAME OBJECT, READ-ONLY.
+              //
+              // A worker on one site has nothing to switch to, so this must not
+              // behave like the switcher — but it should not look like a
+              // different species either. It was plain right-aligned text, so
+              // checking into a second site changed the whole block's shape,
+              // weight and alignment.
+              //
+              // Same chrome, same geometry, same alignment; recessed fill, no
+              // chevron, "Current site". And NO <select> is rendered here at
+              // all — not a disabled one — so there is nothing focusable, no
+              // hover, and assistive technology reads text rather than
+              // announcing a control that cannot do anything.
+              <span className="min-w-0 flex-1 text-left">
+                <SiteControlChrome
+                  siteName={siteName}
+                  supportingText="Current site"
+                  interactive={false}
+                />
+                <span className="mt-0.5 block truncate pl-1 text-xs text-ink-subtle">
                   Checked in: {formatDateTimeUK(checkedInAt)}
                 </span>
               </span>
