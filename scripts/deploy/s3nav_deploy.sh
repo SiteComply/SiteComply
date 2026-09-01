@@ -39,6 +39,7 @@ echo "[1/8] Current prod build id:"; OLD_BUILD=$(kudu_buildid); echo "      OLD_
 echo "[2/8] SOURCE guards..."
 EXPECTED="components/worker/WorkerNav.tsx
 scripts/deploy/s3nav_deploy.sh
+scripts/s3nav_prodverify.js
 scripts/workernav_deep_verify.js
 scripts/workernav_verify.js"
 CH=$(git diff --name-only "$DEPLOYED" HEAD | sort)
@@ -115,33 +116,36 @@ echo "[4b] ARTIFACT guards. WorkerNav is a client component, so its array"
 echo "     compiles into the shared chunks, not any one page file..."
 python3 - <<'PY' || exit 1
 import os, re, sys
-want = ['/worker/dashboard','/worker/attendance','/worker/emergency','/worker/contacts',
-        '/worker/bulletins','/worker/rams','/worker/documents','/worker/permits',
-        '/worker/actions','/worker/inductions','/worker/site-information']
+want = [('/worker/dashboard','Dashboard','Dashboard'), ('/worker/attendance','Attendance','Attendance'),
+        ('/worker/emergency','Emergency info','Emergency'), ('/worker/contacts','Contacts','Contacts'),
+        ('/worker/bulletins','Bulletins','Bulletins'), ('/worker/rams','RAMS','RAMS'),
+        ('/worker/documents','Documents','Documents'), ('/worker/permits','Permits','Permits'),
+        ('/worker/actions','Actions','Actions'), ('/worker/inductions','Inductions','Inductions'),
+        ('/worker/site-information','Site information','Site info')]
+# Match the compiled ARRAY ENTRIES, not every /worker/ link in the file. The
+# page bundles are full of unrelated links, and matching those is how the first
+# version of this guard managed to fail a build that was correct.
+ENTRY = re.compile(r'href:"(/worker/[a-z-]+)",label:"([^"]*)",shortLabel:"([^"]*)"')
 hits = []
 for root in ('.next/server', '.next/static'):
     for dp, _, fns in os.walk(root):
         for fn in fns:
             if not fn.endswith('.js'): continue
-            p = os.path.join(dp, fn)
-            try: s = open(p, encoding='utf-8', errors='ignore').read()
+            fp = os.path.join(dp, fn)
+            try: body = open(fp, encoding='utf-8', errors='ignore').read()
             except OSError: continue
-            if '/worker/site-information' not in s or '/worker/emergency' not in s: continue
-            # first occurrence order of the whole set, in this chunk
-            seq = [h for h in re.findall(r'/worker/[a-z-]+', s)]
-            first = {}
-            for h in seq:
-                first.setdefault(h, len(first))
-            order = sorted((h for h in want if h in first), key=lambda h: first[h])
-            hits.append((p, order))
+            found = ENTRY.findall(body)
+            if found: hits.append((fp, found))
 if not hits:
     print('ERROR: no compiled chunk carries the nav array. Aborting'); sys.exit(1)
-bad = [(p, o) for p, o in hits if o != want]
+bad = [(fp, f) for fp, f in hits if f != want]
 if bad:
-    print('ERROR: compiled nav order is not the approved order:')
-    for p, o in bad: print('  ', p, o)
+    print('ERROR: the compiled nav array is not the approved one:')
+    for fp, f in bad:
+        print('  ', fp); print('     ', f)
     sys.exit(1)
-print(f'      {len(hits)} chunk(s) carry the array, all in the approved order.')
+print(f'      {len(hits)} chunk(s) carry the array; all 11 entries in the approved order,')
+print('      each with the approved label and short label.')
 PY
 for want in 'shortLabel' 'Site info' 'Emergency info' 'pointer-events-none absolute inset-y-0'; do
   grep -rqF "$want" .next/server .next/static 2>/dev/null \
