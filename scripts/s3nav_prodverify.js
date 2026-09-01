@@ -142,8 +142,18 @@ const measure = async (ctx, width, label) => {
   chk('every item clears the 52px touch target',
     WIDTHS.every(w => at(w).items.every(i => i.h >= 52)),
     `min ${Math.min(...WIDTHS.flatMap(w => at(w).items.map(i => i.h)))}px`);
-  chk('Emergency info is third and in view at every width',
-    WIDTHS.every(w => at(w).items[2].href === '/worker/emergency' && at(w).items[2].state === 'visible'));
+  chk('the order is the approved worker-journey order',
+    WIDTHS.every(w => at(w).items[0].href === '/worker/dashboard'
+      && at(w).items[1].href === '/worker/inductions'
+      && at(w).items[2].href === '/worker/bulletins'
+      && at(w).items[at(w).items.length - 1].href === '/worker/emergency'));
+  // Emergency info closes the list by decision. Reported, not asserted away.
+  console.log('  NOTE  Emergency info: ' + WIDTHS.map(w => {
+    const it = at(w).items; const i = it.findIndex(x => x.href === '/worker/emergency');
+    return `${w}:#${i + 1}/${it.length} ${it[i].state}`; }).join('  '));
+  console.log('  NOTE  Attendance:     ' + WIDTHS.map(w => {
+    const it = at(w).items; const i = it.findIndex(x => x.href === '/worker/attendance');
+    return `${w}:#${i + 1} ${it[i].state}`; }).join('  '));
   chk('3 or more destinations in view at 320px', vis(320) >= 3, `${vis(320)}`);
   chk('4 or more destinations in view at 390px', vis(390) >= 4, `${vis(390)}`);
   chk('5 or more destinations in view at 430px', vis(430) >= 5, `${vis(430)}`);

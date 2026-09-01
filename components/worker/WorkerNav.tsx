@@ -19,10 +19,16 @@ import { WorkerIcon, type WorkerIconName } from './icons';
  * is a panel too, but it is locked on, so it is always present.
  *
  * S3: on phones the items stack their icon over a short label, which roughly
- * halves each pill, and the strip carries edge fades plus scroll buttons so it
- * is visible that the list continues past the right edge. `shortLabel` is always
+ * halves each pill, and the strip carries edge fades plus a chevron so it is
+ * visible that the list continues past the right edge. `shortLabel` is always
  * a substring of `label`, which the accessible name keeps, so the visible text
  * never disagrees with what a screen reader announces (WCAG 2.5.3).
+ *
+ * ORDER follows the worker journey rather than module type: the hub, then
+ * onboarding and site communications, then the operational modules, then the
+ * pages a worker looks up rather than works from. Only the first four or five
+ * items are reachable without scrolling on a phone, so this array is the whole
+ * of the discoverability decision — change it deliberately.
  */
 const WORKER_NAV: {
   href: string;
@@ -40,6 +46,30 @@ const WORKER_NAV: {
     icon: 'grid',
     panels: [],
   },
+  // Onboarding and site communications lead: what a worker was told, and what
+  // they are being told now.
+  {
+    // Always visible (SC-011) — the worker's own signed induction records.
+    href: '/worker/inductions',
+    label: 'Inductions',
+    shortLabel: 'Inductions',
+    icon: 'clipboard',
+    panels: [],
+  },
+  {
+    href: '/worker/bulletins',
+    label: 'Bulletins',
+    shortLabel: 'Bulletins',
+    icon: 'megaphone',
+    panels: ['DAILY_BULLETIN'],
+  },
+  {
+    href: '/worker/site-information',
+    label: 'Site information',
+    shortLabel: 'Site info',
+    icon: 'building',
+    panels: ['SITE_INFORMATION'],
+  },
   {
     // Always visible (panels: []) — a worker's own attendance record is never
     // hidden by a site's panel config (SC-010).
@@ -49,31 +79,7 @@ const WORKER_NAV: {
     icon: 'clock',
     panels: [],
   },
-  // Emergency info and Contacts lead the list rather than closing it: they are
-  // the two destinations whose value depends on being reachable immediately,
-  // and on a phone anything past the fifth item needs a deliberate swipe.
-  {
-    href: '/worker/emergency',
-    label: 'Emergency info',
-    shortLabel: 'Emergency',
-    icon: 'alert',
-    panels: ['EMERGENCY_INFORMATION', 'FIRST_AIDER', 'FIRE_ASSEMBLY_POINT'],
-  },
-  {
-    href: '/worker/contacts',
-    label: 'Contacts',
-    shortLabel: 'Contacts',
-    icon: 'phone',
-    panels: ['SITE_CONTACTS'],
-  },
-  // Then the things a worker opens on an ordinary shift.
-  {
-    href: '/worker/bulletins',
-    label: 'Bulletins',
-    shortLabel: 'Bulletins',
-    icon: 'megaphone',
-    panels: ['DAILY_BULLETIN'],
-  },
+  // Then the operational modules, in the order a task tends to need them.
   {
     href: '/worker/rams',
     label: 'RAMS',
@@ -102,21 +108,21 @@ const WORKER_NAV: {
     icon: 'clipboard',
     panels: ['OUTSTANDING_ACTIONS'],
   },
-  // Reference material a worker looks up rather than does, so it closes the list.
+  // Contacts and Emergency information close the list. Both are reached by
+  // scrolling the strip on a phone; the dashboard also links to them.
   {
-    // Always visible (SC-011) — the worker's own signed induction records.
-    href: '/worker/inductions',
-    label: 'Inductions',
-    shortLabel: 'Inductions',
-    icon: 'clipboard',
-    panels: [],
+    href: '/worker/contacts',
+    label: 'Contacts',
+    shortLabel: 'Contacts',
+    icon: 'phone',
+    panels: ['SITE_CONTACTS'],
   },
   {
-    href: '/worker/site-information',
-    label: 'Site information',
-    shortLabel: 'Site info',
-    icon: 'building',
-    panels: ['SITE_INFORMATION'],
+    href: '/worker/emergency',
+    label: 'Emergency info',
+    shortLabel: 'Emergency',
+    icon: 'alert',
+    panels: ['EMERGENCY_INFORMATION', 'FIRST_AIDER', 'FIRE_ASSEMBLY_POINT'],
   },
 ];
 
