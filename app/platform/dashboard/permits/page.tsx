@@ -82,12 +82,33 @@ export default async function PlatformPermitsPage({
           Same filter, same query string, one fewer place to look. */}
       <SegmentedNav
         label="Filter permits by status"
-        items={PERMIT_STATUSES.map((s) => ({
-          key: s.value,
-          label: s.label,
-          href: qp({ status: status === s.value ? '' : s.value }),
-          active: status === s.value,
-        }))}
+        items={[
+          // "All permits" leads the strip and is selected on first load. The
+          // page ALREADY defaulted to every permit — `status` has always been
+          // '' when absent — but nothing said so: no tab was highlighted and
+          // "Awaiting approval" sat first, which read as the default view
+          // without being it. This makes the existing default visible.
+          //
+          // Its href is the bare path, because dropping the parameter is what
+          // "no status filter" has always meant here. Existing bookmarks and
+          // the sidebar link keep working unchanged.
+          {
+            key: 'all',
+            label: 'All permits',
+            href: qp({ status: '' }),
+            active: status === '',
+          },
+          ...PERMIT_STATUSES.map((s) => ({
+            key: s.value,
+            label: s.label,
+            // No toggle. Clicking the active tab used to CLEAR the filter,
+            // which was the only route back to the full register and was
+            // invisible. "All permits" is that route now, so a tab does one
+            // thing: select its own status.
+            href: qp({ status: s.value }),
+            active: status === s.value,
+          })),
+        ]}
       />
 
       {/* Remaining filters — a no-JS GET form (Apply to submit). */}
