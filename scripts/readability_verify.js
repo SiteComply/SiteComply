@@ -93,17 +93,32 @@ const crop = async (p, sel, file, minW=250) => {
     const other=Array.from(document.querySelectorAll('a[href^="/worker/attendance/"]'))
       .map(a=>Array.from(a.querySelectorAll('p')).find(e=>/^\\d+h \\d+m$/.test(e.innerText.trim())))
       .find(Boolean);
-    return {warn:warn?ratio(warn):null, hours:other?ratio(other):null};
+    // The amber must remain on the row itself once the text goes dark.
+    // borderColor is empty when the sides differ, and the icon fill is an
+    // alpha value, so read the resolved side and match the rgb triple rather
+    // than the whole colour string.
+    let rowAmber=null;
+    if(row){ const AMBER=/(217, 148, 6|250, 204, 21|245, 178, 11)/;
+      const all=[row,...row.querySelectorAll('*')];
+      rowAmber=all.some(e=>{const cs=getComputedStyle(e);
+        return AMBER.test(cs.borderTopColor+' '+cs.backgroundColor+' '+cs.color);}); }
+    return {warn:warn?ratio(warn):null, hours:other?ratio(other):null, rowAmber};
   `));
   chk('"Not checked out" is 14px', r3.warn && r3.warn.size === 14, r3.warn ? `${r3.warn.size}px` : 'not found');
   chk('the hours label it replaces stays 12px', !r3.hours || r3.hours.size === 12, r3.hours ? `${r3.hours.size}px` : 'no complete rows on screen');
-  // NOT an approved item: discovered while implementing. The whole hivis scale
-  // fails on white (2.56:1 at its darkest), so this cannot be fixed without a
-  // palette change. Reported rather than silently passed or silently altered.
-  console.log(`  NOTE  "Not checked out" contrast is ${r3.warn ? r3.warn.r : '?'}:1 — FAILS AA (4.5:1).`);
-  console.log('        Unchanged by this work; no amber token in the palette reaches 4.5:1 on white.');
-  chk('"Not checked out" contrast is no worse than before', r3.warn && r3.warn.r >= 2.5, r3.warn ? `${r3.warn.r}:1 (was 2.56:1)` : '');
-  await crop(p, 'a[href^="/worker/attendance/"]', 'after-notcheckedout.png');
+  chk('"Not checked out" meets AA (4.5:1)', r3.warn && r3.warn.r >= 4.5,
+      r3.warn ? `${r3.warn.r}:1 — ${r3.warn.fg} on ${r3.warn.bg} (was 2.56:1 amber)` : '');
+  // The amber has to survive somewhere, or the row stops reading as a warning.
+  chk('the row still carries the warning in its own chrome',
+      r3.rowAmber === true, r3.rowAmber === true ? 'amber border and icon intact' : 'AMBER LOST');
+  // Frame the WARNING row, not the first attendance link on the page — that
+  // selector matches the Overview/History tabs and captured those instead.
+  await p.evaluate(() => {
+    const w = Array.from(document.querySelectorAll('p')).find(e => /^Not checked out$/.test(e.innerText.trim()));
+    const row = w && w.closest('a');
+    if (row) { row.setAttribute('data-warnrow', '1'); row.scrollIntoView({block: 'center'}); }
+  });
+  await crop(p, '[data-warnrow]', 'after-notcheckedout.png');
   await c.close();
 
   const c2 = await ctx(br, 390); const p2 = await c2.newPage();
