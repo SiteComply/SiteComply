@@ -100,16 +100,24 @@ for want in 'bg-brand-600 text-white shadow-sm shadow-brand-700/20' \
   grep -rqF "$want" .next/server .next/static 2>/dev/null \
     || { echo "ERROR: '$want' absent from the bundle. Aborting"; exit 1; }
 done
-# The exact old literals must be gone. Bare token names still appear elsewhere
-# in the app legitimately, so match the whole class string these components used.
-for gone in 'bg-brand-500 text-white shadow-sm shadow-brand-600/20' \
-            'bg-safe-500 px-2 py-0.5 text-xs font-semibold text-white' \
+# The exact old literals must be gone from the bundle.
+#
+# NOT listed here: 'bg-brand-500 text-white shadow-sm shadow-brand-600/20'.
+# That string is ALSO produced by components/ui/Button.tsx and
+# components/platform/PlatformNav.tsx, which are unchanged and correct, and they
+# bundle into the same chunk as the worker nav — so its presence proves nothing
+# either way and its absence can never be asserted here. The first version of
+# this guard listed it and aborted a build that was right. What actually covers
+# the nav is the pair above: the SOURCE guard proves WorkerNav.tsx no longer
+# contains brand-500, and the presence guard proves brand-600 compiled in.
+for gone in 'bg-safe-500 px-2 py-0.5 text-xs font-semibold text-white' \
             'text-sm text-hivis-600' \
             'mt-1.5 block text-[11px] font-medium'; do
   ! grep -rqF "$gone" .next/server .next/static 2>/dev/null \
     || { echo "ERROR: the old value '$gone' is still compiled in. Aborting"; exit 1; }
 done
-echo "      new values compiled in; every old value gone from the bundle."
+echo "      new values compiled in; the old values are gone (see the note above"
+echo "      on the one string that is shared with Button and cannot be asserted)."
 
 echo "[5/8] Packaging zip..."; rm -f "$ZIP"; zip -rq "$ZIP" . -x '.git/*' -x '.env' -x '.next/cache/*' -x 'scripts/*'
 echo "      $(du -h "$ZIP" | cut -f1) -> $ZIP"
