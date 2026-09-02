@@ -79,7 +79,13 @@ export function WorkerShell({
               >
                 <Logo />
               </Link>
-              <span className="shrink-0 rounded-md bg-safe-700 px-2 py-0.5 text-xs font-semibold text-white">
+              {/*
+                safe-500 BY DECISION (2026-09-02): white on it is 2.7:1, under
+                the 4.5:1 AA needs for small text, and safe-700 would give
+                4.87:1. Brand consistency with the SiteComply logo was chosen
+                over the contrast score. Do not change without raising it first.
+              */}
+              <span className="shrink-0 rounded-md bg-safe-500 px-2 py-0.5 text-xs font-semibold text-white">
                 Worker
               </span>
             </span>

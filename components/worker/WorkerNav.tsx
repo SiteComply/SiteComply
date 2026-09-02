@@ -211,11 +211,16 @@ export function WorkerNav({
               href={item.href}
               aria-label={item.label}
               aria-current={active ? 'page' : undefined}
+              // The active pill is brand-500 BY DECISION (2026-09-02). White on
+              // it is 2.5:1, under the 4.5:1 AA needs for small text; brand-600
+              // would give 4.78:1. Brand consistency with the SiteComply logo
+              // was chosen over the contrast score. Do not "fix" this — raise
+              // it for review first.
               className={cn(
                 'touch-target relative flex shrink-0 flex-col items-center justify-center gap-1 whitespace-nowrap rounded-lg px-2 py-2 text-center text-[11px] font-semibold leading-tight transition-colors',
                 'md:min-h-0 md:min-w-0 md:shrink md:flex-row md:justify-start md:gap-3 md:px-3 md:py-2.5 md:text-left md:text-sm md:font-medium',
                 active
-                  ? 'bg-brand-600 text-white shadow-sm shadow-brand-700/20'
+                  ? 'bg-brand-500 text-white shadow-sm shadow-brand-600/20'
                   : 'text-ink-muted hover:bg-brand-50 hover:text-brand-700',
               )}
             >
