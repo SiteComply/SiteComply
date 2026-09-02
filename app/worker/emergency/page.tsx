@@ -144,9 +144,13 @@ function Detail({
 }) {
   return (
     <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
-        {label}
-      </p>
+      {/*
+        14px, and not uppercase: this is the one screen whose whole purpose is
+        being read quickly, outdoors, by someone who may be under stress.
+        Uppercase removes the word-shape cues a reader uses at a glance and the
+        letter-spacing spreads an already-small word.
+      */}
+      <p className="text-sm font-medium text-ink-subtle">{label}</p>
       {tel ? (
         <a
           href={`tel:${value.replace(/\s+/g, '')}`}

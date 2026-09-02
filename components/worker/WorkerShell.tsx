@@ -79,7 +79,7 @@ export function WorkerShell({
               >
                 <Logo />
               </Link>
-              <span className="shrink-0 rounded-md bg-safe-500 px-2 py-0.5 text-xs font-semibold text-white">
+              <span className="shrink-0 rounded-md bg-safe-700 px-2 py-0.5 text-xs font-semibold text-white">
                 Worker
               </span>
             </span>

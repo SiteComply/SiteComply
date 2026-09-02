@@ -41,7 +41,10 @@ export function Steps({ current }: { current: CheckinStep }) {
             />
             <span
               className={cn(
-                'mt-1.5 block text-[11px] font-medium',
+                // 12px, not 11px: four standalone words with no icon to carry
+                // the meaning, on the flow a worker uses at the gate. Verified
+                // not to wrap or overflow down to 320px.
+                'mt-1.5 block text-xs font-medium',
                 state === 'upcoming' ? 'text-ink-subtle' : 'text-ink',
               )}
             >

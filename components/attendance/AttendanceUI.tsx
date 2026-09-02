@@ -76,10 +76,20 @@ export function AttendanceRow({
         <p className="text-sm font-semibold tabular-nums text-ink">
           {inOut(record)}
         </p>
+        {/*
+          The warning is set larger than the hours label it replaces: it is the
+          only place a worker is told they left a shift open, and it was
+          rendering smaller than the date beside it.
+
+          It is ink, not hivis-600. Amber on white tops out at 2.56:1 — the
+          whole hivis scale fails AA on this background — and the row already
+          carries the warning in its amber border and icon, so the colour is
+          not what makes this readable. ink is 17.9:1.
+        */}
         <p
           className={cn(
-            'text-xs font-semibold tabular-nums',
-            incomplete ? 'text-hivis-600' : 'text-ink-subtle',
+            'font-semibold tabular-nums',
+            incomplete ? 'text-sm text-ink' : 'text-xs text-ink-subtle',
           )}
         >
           {incomplete ? 'Not checked out' : hoursLabel(record)}
