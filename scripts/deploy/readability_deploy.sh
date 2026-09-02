@@ -18,7 +18,7 @@ SHELL_C='components/worker/WorkerShell.tsx'
 EMERG='app/worker/emergency/page.tsx'
 ATT='components/attendance/AttendanceUI.tsx'
 STEPS='components/checkin/Steps.tsx'
-DEPLOYED=48a7b01
+DEPLOYED=2782c5e
 
 kudu_buildid() { local tok; tok=$(az account get-access-token --query accessToken -o tsv 2>/dev/null) || return 1
   curl -s --max-time 20 -H "Authorization: Bearer $tok" "${SCM}/api/vfs/site/wwwroot/.next/BUILD_ID" 2>/dev/null | tr -d '[:space:]'; }
@@ -35,35 +35,30 @@ sys.stdout.write(s)
 DOCPY
 }
 
-echo "== READABILITY DEPLOY =="
+echo "== BRAND COLOUR REVERT DEPLOY =="
 echo "on commit: $(git rev-parse --short HEAD) ($(git rev-parse --abbrev-ref HEAD))"
 echo "[1/8] Current prod build id:"; OLD_BUILD=$(kudu_buildid); echo "      OLD_BUILD=${OLD_BUILD:-<unknown>}"
 
 echo "[2/8] SOURCE guards..."
-EXPECTED="app/worker/emergency/page.tsx
-components/attendance/AttendanceUI.tsx
-components/checkin/Steps.tsx
-components/worker/WorkerNav.tsx
+EXPECTED="components/worker/WorkerNav.tsx
 components/worker/WorkerShell.tsx
 scripts/deploy/readability_deploy.sh
-scripts/deploy/s3nav_deploy.sh
+scripts/readability_prodverify.js
 scripts/readability_verify.js"
 CH=$(git diff --name-only "$DEPLOYED" HEAD | sort)
 [ "$CH" = "$(printf '%s' "$EXPECTED" | sort)" ] \
   && echo "      confirmed: five components plus the verification and deploy scripts." \
   || { echo "ERROR: unexpected file set:"; echo "$CH"; exit 1; }
 
-# CONTRAST. The failing fills must be gone from these components entirely — a
-# leftover would be invisible in review and fail only on a phone in sunlight.
-code "$NAV" | grep -qF 'bg-brand-600 text-white' \
-  || { echo "ERROR: the active nav pill is not brand-600. Aborting"; exit 1; }
-! code "$NAV" | grep -q 'bg-brand-500' \
-  || { echo "ERROR: brand-500 still present in the nav (2.5:1). Aborting"; exit 1; }
-code "$SHELL_C" | grep -qF 'bg-safe-700 px-2 py-0.5 text-xs font-semibold text-white' \
-  || { echo "ERROR: the Worker badge is not safe-700. Aborting"; exit 1; }
-! code "$SHELL_C" | grep -qE 'bg-safe-(500|600)' \
-  || { echo "ERROR: safe-500/600 still present (2.7:1 / 3.6:1 — neither passes). Aborting"; exit 1; }
-echo "      both failing fills replaced with the shades measured to pass AA."
+# BRAND COLOURS ARE HELD BY DECISION (2026-09-02). They fail AA and that is
+# accepted in exchange for consistency with the SiteComply logo. The guard is
+# therefore that the brand fill is still there — an accessibility change that
+# quietly darkens branded UI is what must not ship.
+code "$NAV" | grep -qF 'bg-brand-500 text-white shadow-sm shadow-brand-600/20' \
+  || { echo "ERROR: the active nav pill is not the brand blue. Aborting"; exit 1; }
+code "$SHELL_C" | grep -qF 'bg-safe-500 px-2 py-0.5 text-xs font-semibold text-white' \
+  || { echo "ERROR: the Worker badge is not the brand green. Aborting"; exit 1; }
+echo "      branded fills intact: nav pill brand-500, Worker badge safe-500."
 
 # THE OPEN-SHIFT WARNING: dark text, and the amber must survive on the row.
 code "$ATT" | grep -qF "incomplete ? 'text-sm text-ink' : 'text-xs text-ink-subtle'" \
@@ -93,8 +88,7 @@ NEW_BUILD=$(tr -d '[:space:]' < .next/BUILD_ID); echo "      NEW_BUILD=${NEW_BUI
 
 echo "[4b] ARTIFACT guards. These are client components, so they compile into"
 echo "     the shared chunks rather than any one page file..."
-for want in 'bg-brand-600 text-white shadow-sm shadow-brand-700/20' \
-            'bg-safe-700 px-2 py-0.5 text-xs font-semibold text-white' \
+for want in 'bg-safe-500 px-2 py-0.5 text-xs font-semibold text-white' \
             'text-sm font-medium text-ink-subtle' \
             'mt-1.5 block text-xs font-medium'; do
   grep -rqF "$want" .next/server .next/static 2>/dev/null \
@@ -110,7 +104,7 @@ done
 # this guard listed it and aborted a build that was right. What actually covers
 # the nav is the pair above: the SOURCE guard proves WorkerNav.tsx no longer
 # contains brand-500, and the presence guard proves brand-600 compiled in.
-for gone in 'bg-safe-500 px-2 py-0.5 text-xs font-semibold text-white' \
+for gone in 'bg-safe-700 px-2 py-0.5 text-xs font-semibold text-white' \
             'text-sm text-hivis-600' \
             'mt-1.5 block text-[11px] font-medium'; do
   ! grep -rqF "$gone" .next/server .next/static 2>/dev/null \
@@ -135,4 +129,4 @@ CODE=""; for i in $(seq 1 20); do sleep 15; CODE=$(curl -s -o /dev/null -w "%{ht
   echo "      [$i] health: HTTP ${CODE}"; [ "$CODE" = "200" ] && break; done
 
 echo "== DEPLOY SUMMARY =="; echo "   old build: ${OLD_BUILD:-<unknown>}"; echo "   new build: ${NEW_BUILD}"; echo "   health:    HTTP ${CODE}"
-[ "$CODE" = "200" ] && echo "== READABILITY DEPLOY COMPLETE ==" || { echo "== HEALTH NOT 200 =="; exit 3; }
+[ "$CODE" = "200" ] && echo "== BRAND COLOUR REVERT DEPLOY COMPLETE ==" || { echo "== HEALTH NOT 200 =="; exit 3; }

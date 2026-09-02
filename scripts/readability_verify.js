@@ -62,11 +62,17 @@ const crop = async (p, sel, file, minW=250) => {
     const badge=Array.from(document.querySelectorAll('*')).find(e=>/bg-safe-/.test(typeof e.className==='string'?e.className:''));
     return {active:ratio(lbl(act)), inactive:ratio(lbl(inact)), badge:badge?ratio(badge):null};
   `));
-  chk('active nav pill label meets AA (4.5:1)', r1.active.r >= 4.5,
-      `${r1.active.r}:1 — white on ${r1.active.bg} at ${r1.active.size}px (was 2.5:1)`);
+  // BRAND COLOURS ARE HELD BY DECISION (2026-09-02), not by accident. These two
+  // fail AA and the owner has accepted that in exchange for consistency with the
+  // SiteComply logo. The assertion is therefore that the BRAND colour is intact
+  // — a silent drift away from it is the regression, not the low ratio.
+  chk('active nav pill keeps the brand blue (brand-500)',
+      r1.active.bg === 'rgb(0, 174, 239)', `${r1.active.bg} at ${r1.active.size}px`);
+  chk('Worker role badge keeps the brand green (safe-500)',
+      r1.badge.bg === 'rgb(57, 181, 74)', `${r1.badge.bg} at ${r1.badge.size}px`);
+  console.log(`  NOTE  accepted below AA by decision: nav pill ${r1.active.r}:1, badge ${r1.badge.r}:1 (AA is 4.5:1).`);
+  console.log('        brand-600 would give 4.78:1 and safe-700 4.87:1 if this is ever revisited.');
   chk('inactive nav labels unchanged and still strong', r1.inactive.r >= 4.5, `${r1.inactive.r}:1`);
-  chk('Worker role badge meets AA (4.5:1)', r1.badge.r >= 4.5,
-      `${r1.badge.r}:1 — white on ${r1.badge.bg} at ${r1.badge.size}px (was 2.7:1)`);
   await crop(p, 'nav[aria-label="Worker dashboard sections"] a[aria-current="page"]', 'after-nav.png', 300);
   await crop(p, 'header', 'after-badge.png', 300);
 

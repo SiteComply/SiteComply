@@ -85,8 +85,13 @@ const crop = async (p, sel, file) => {
     const badge=Array.from(document.querySelectorAll('*')).find(e=>/bg-safe-/.test(typeof e.className==='string'?e.className:''));
     return {active:ratio(lbl(act)), inactive:ratio(lbl(inact)), badge:badge?ratio(badge):null};
   `));
-  chk('active nav pill label meets AA', r1.active.r >= 4.5, `${r1.active.r}:1 on ${r1.active.bg} (was 2.5:1)`);
-  chk('Worker role badge meets AA', r1.badge && r1.badge.r >= 4.5, r1.badge ? `${r1.badge.r}:1 on ${r1.badge.bg} (was 2.7:1)` : 'badge not found');
+  // See the note in readability_verify.js: the brand fills are held below AA by
+  // decision, so what is asserted is that they are still the brand colours.
+  chk('active nav pill keeps the brand blue (brand-500)',
+      r1.active.bg === 'rgb(0, 174, 239)', `${r1.active.bg}`);
+  chk('Worker role badge keeps the brand green (safe-500)',
+      r1.badge && r1.badge.bg === 'rgb(57, 181, 74)', r1.badge ? r1.badge.bg : 'badge not found');
+  console.log(`  NOTE  accepted below AA by decision: nav pill ${r1.active.r}:1, badge ${r1.badge ? r1.badge.r : '?'}:1 (AA is 4.5:1).`);
   chk('inactive nav labels unaffected', r1.inactive.r >= 4.5, `${r1.inactive.r}:1`);
   await crop(p, 'nav[aria-label="Worker dashboard sections"] a[aria-current="page"]', 'prod-nav.png');
   await crop(p, 'header', 'prod-badge.png');
