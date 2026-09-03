@@ -52,7 +52,8 @@ export async function POST(req: NextRequest) {
   // Authentication & Access). Refused HERE, at the write, not only by hiding
   // the button: the endpoint is reachable directly and the setting is a
   // control, not a decoration. The worker is told what to do instead.
-  const { expressCheckInEnabled } = await getAuthRuntimeConfig();
+  const { expressCheckInEnabled, workerSessionTtlSeconds } =
+    await getAuthRuntimeConfig();
   if (!expressCheckInEnabled) {
     return NextResponse.json(
       {
@@ -74,6 +75,6 @@ export async function POST(req: NextRequest) {
   }
 
   // Land on this site's dashboard (SC-004), consistent with a full check-in.
-  setActiveWorkerSiteCookie(body.siteId);
+  setActiveWorkerSiteCookie(body.siteId, workerSessionTtlSeconds);
   return NextResponse.json(result);
 }

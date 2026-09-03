@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWorkerSession, setActiveWorkerSiteCookie } from '@/lib/session';
+import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { prisma } from '@/lib/prisma';
 
@@ -62,6 +63,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  setActiveWorkerSiteCookie(siteId);
+  // The active-site cookie tracks the session lifetime, so it must not
+  // outlive or under-live the session it belongs to.
+  const { workerSessionTtlSeconds } = await getAuthRuntimeConfig();
+  setActiveWorkerSiteCookie(siteId, workerSessionTtlSeconds);
   return NextResponse.json({ ok: true });
 }

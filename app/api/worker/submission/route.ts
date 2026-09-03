@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWorkerSession, setActiveWorkerSiteCookie } from '@/lib/session';
+import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { createCheckIn } from '@/services/submissions/submissionService';
 import { parseLocationFix } from '@/services/geo/geoValidationService';
@@ -71,7 +72,10 @@ export async function POST(req: NextRequest) {
 
   // Make the site just checked into the active one, so landing on the dashboard
   // (SC-004) shows this site even if the worker is checked into others.
-  setActiveWorkerSiteCookie(body.siteId);
+  // The active-site cookie tracks the session lifetime, so it must not
+  // outlive or under-live the session it belongs to.
+  const { workerSessionTtlSeconds } = await getAuthRuntimeConfig();
+  setActiveWorkerSiteCookie(body.siteId, workerSessionTtlSeconds);
 
   return NextResponse.json(result);
 }
