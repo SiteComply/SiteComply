@@ -24,7 +24,7 @@ import {
   AUDIT_STATUS_BADGE,
   type AuditStatusValue,
 } from '@/services/audits/auditConstants';
-import { PaginationControls } from '@/components/platform/PaginationControls';
+import { PaginationControls } from '@/components/ui/PaginationControls';
 import { resolvePage } from '@/lib/pagination';
 import { formatDateUK } from '@/lib/datetime';
 

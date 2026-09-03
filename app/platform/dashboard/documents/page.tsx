@@ -25,7 +25,7 @@ import {
 } from '@/services/documents/documentConstants';
 import { DocumentDeleteButton } from '@/components/platform/DocumentDeleteButton';
 import { DocumentExpiryBadge } from '@/components/platform/DocumentExpiryBadge';
-import { PaginationControls } from '@/components/platform/PaginationControls';
+import { PaginationControls } from '@/components/ui/PaginationControls';
 import { resolvePage } from '@/lib/pagination';
 import { formatDateUK } from '@/lib/datetime';
 

@@ -24,7 +24,7 @@ import {
   type CheckinStatusFilter,
 } from '@/services/submissions/checkinFilter';
 import { SiteFilterSelect } from '@/components/platform/SiteFilterSelect';
-import { PaginationControls } from '@/components/platform/PaginationControls';
+import { PaginationControls } from '@/components/ui/PaginationControls';
 import { SortArrow } from '@/components/platform/SortArrow';
 import {
   parseCheckinSort,

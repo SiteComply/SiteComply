@@ -17,15 +17,6 @@ export interface SubmissionFilters {
 }
 
 /**
- * The LIST cap. The admin Check-ins screen renders every row it is given in one
- * page, so it stays bounded — but the screen now reports the TRUE total from
- * countSubmissions() alongside it and says so when the two differ. It used to
- * print `rows.length` as "N records found", which meant that past this cap it
- * stated the cap as though it were the total: a confident wrong answer.
- */
-const LIST_MAX_ROWS = 1000;
-
-/**
  * The EXPORT ceiling. This is NOT a truncation point — the export refuses and
  * explains itself rather than silently returning a short file. "Export CSV"
  * promises the filtered set, so returning part of it without saying so produces
@@ -80,19 +71,32 @@ export async function countSubmissions(
   return prisma.submission.count({ where: buildWhere(filters) });
 }
 
-/** The list view's page of rows — capped, newest first. */
-export async function querySubmissions(filters: SubmissionFilters) {
+/**
+ * One page of the list view, newest first.
+ *
+ * Replaces a flat 1,000-row cap: past that ceiling the remaining check-ins were
+ * simply unreachable in the UI and the only route to them was the CSV export.
+ * `skip`/`take` come from resolvePage() in lib/pagination.ts, so an out-of-range
+ * ?page= is clamped before it reaches here.
+ *
+ * THE TIEBREAKER IS LOAD-BEARING. checkedInAt alone is not unique — a gang
+ * checking in together shares a timestamp to the second — and a non-unique sort
+ * lets rows swap between pages, so the same record can appear on two pages while
+ * another is never shown at all. `id` makes the order total. This is the same
+ * fix already carried by checkinSort.ts and by Actions, Audits, Documents and
+ * Permits.
+ */
+export async function querySubmissions(
+  filters: SubmissionFilters,
+  paging?: { skip: number; take: number },
+) {
   return prisma.submission.findMany({
     where: buildWhere(filters),
-    orderBy: { checkedInAt: 'desc' },
-    take: LIST_MAX_ROWS,
+    orderBy: [{ checkedInAt: 'desc' }, { id: 'asc' }],
+    skip: paging?.skip,
+    take: paging?.take,
     include: ROW_INCLUDE,
   });
-}
-
-/** The number of rows the list view will show for these filters. */
-export function listCap(): number {
-  return LIST_MAX_ROWS;
 }
 
 /**
@@ -106,7 +110,9 @@ export function listCap(): number {
 export async function querySubmissionsForExport(filters: SubmissionFilters) {
   return prisma.submission.findMany({
     where: buildWhere(filters),
-    orderBy: { checkedInAt: 'desc' },
+    // Same total ordering as the list, so the CSV matches what was on screen
+    // and two exports of one filter set come out in the same order.
+    orderBy: [{ checkedInAt: 'desc' }, { id: 'asc' }],
     include: ROW_INCLUDE,
   });
 }

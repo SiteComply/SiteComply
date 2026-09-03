@@ -2,9 +2,10 @@ import Link from 'next/link';
 import {
   querySubmissions,
   countSubmissions,
-  listCap,
   listSitesForFilter,
 } from '@/services/submissions/submissionQueryService';
+import { resolvePage } from '@/lib/pagination';
+import { PaginationControls } from '@/components/ui/PaginationControls';
 import { formatDateTimeUK } from '@/lib/datetime';
 import { cn } from '@/lib/cn';
 
@@ -16,6 +17,7 @@ interface SearchParams {
   from?: string;
   to?: string;
   status?: string;
+  page?: string;
 }
 
 /**
@@ -36,15 +38,17 @@ export default async function SubmissionsPage({
     status: searchParams.status || undefined,
   };
 
-  // `total` is an independent count(), not rows.length. The screen used to
-  // print the length of a capped result set as "N records found", so past the
-  // cap it reported the cap as though it were the total.
-  const [sites, rows, total] = await Promise.all([
+  // `total` is an independent count(), not rows.length — and it has to be
+  // resolved BEFORE the page bounds, because resolvePage clamps ?page= against
+  // it. The screen used to print the length of a capped result set as "N
+  // records found", so past the cap it reported the cap as though it were the
+  // total.
+  const [sites, total] = await Promise.all([
     listSitesForFilter(),
-    querySubmissions(filters),
     countSubmissions(filters),
   ]);
-  const truncated = total > rows.length;
+  const pg = resolvePage(searchParams.page, total);
+  const rows = await querySubmissions(filters, { skip: pg.skip, take: pg.take });
 
   const exportQs = new URLSearchParams(
     Object.entries(filters).filter(([, v]) => v) as [string, string][],
@@ -142,17 +146,12 @@ export default async function SubmissionsPage({
       </form>
 
       <p className="text-sm text-ink-subtle">
-        {/* The true total always, so this figure never contradicts the data. */}
+        {/* The true total always, so this figure never contradicts the data.
+            The "Showing the first 1,000 — export CSV for all" caveat that used
+            to sit here is gone with the cap: every record is now reachable by
+            paging, so there is nothing left to warn about. The per-page range
+            is stated by PaginationControls at the foot of the list. */}
         {total.toLocaleString('en-GB')} {total === 1 ? 'record' : 'records'} found.
-        {truncated && (
-          // Only when the list is actually cut short. The same wording the
-          // Reports suite uses, and the export it points at really is complete.
-          <>
-            {' '}
-            Showing the first {listCap().toLocaleString('en-GB')} — export CSV
-            for all.
-          </>
-        )}
       </p>
 
       {rows.length === 0 ? (
@@ -194,6 +193,18 @@ export default async function SubmissionsPage({
               </Link>
             </li>
           ))}
+          {/* Inside the bordered card, as the platform lists render it: the
+              controls read as the foot of the list rather than as a detached
+              row beneath it. `params` deliberately omits `page` — the control
+              sets that itself and preserves everything else, which is what
+              keeps filters intact across paging. */}
+          <li>
+            <PaginationControls
+              basePath="/admin/submissions"
+              params={filters as Record<string, string | undefined>}
+              pg={pg}
+            />
+          </li>
         </ul>
       )}
     </div>
