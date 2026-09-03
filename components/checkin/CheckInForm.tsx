@@ -127,9 +127,13 @@ export function CheckInForm() {
         setCodeError(data.error ?? 'That code didn’t work. Please try again.');
         return;
       }
-      // MFA passed — continue into identity & site selection (Stage 4).
+      // MFA passed. A worker who is ALREADY checked in goes straight back to
+      // their dashboard and active site — walking them through details and site
+      // selection again would ask questions their open check-in has answered,
+      // and tapping the wrong site there is how a second open check-in is made.
+      // Everyone else continues into identity & site selection (Stage 4).
       clearFlow();
-      router.push('/check-in/details');
+      router.push(data.checkedIn ? '/worker/dashboard' : '/check-in/details');
     } catch {
       setCodeError('Network problem. Check your signal and try again.');
     } finally {

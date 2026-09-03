@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyCode } from '@/services/auth/otpService';
 import { normaliseUkMobile } from '@/lib/phone';
 import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
+import { listOpenCheckIns } from '@/services/workerDashboard/workerDashboardService';
 import {
   createWorkerSessionToken,
   setWorkerSessionCookie,
@@ -69,8 +70,17 @@ export async function POST(req: NextRequest) {
   // The worker session now carries the identity; the pending-OTP cookie is done.
   clearWorkerOtpMobileCookie();
 
+  // Already on site? Then the check-in funnel has nothing left to ask, and the
+  // client sends them to their dashboard instead of back through details and
+  // site selection. This mirrors the recognition /check-in already performs —
+  // it is reported here so the worker never sees those steps at all.
+  const checkedIn = result.workerId
+    ? (await listOpenCheckIns(result.workerId)).length > 0
+    : false;
+
   return NextResponse.json({
     ok: true,
     workerKnown: Boolean(result.workerId),
+    checkedIn,
   });
 }

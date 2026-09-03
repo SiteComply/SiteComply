@@ -4,6 +4,7 @@ import { Steps } from '@/components/checkin/Steps';
 import { IdentityForm } from '@/components/checkin/IdentityForm';
 import { getWorkerSession } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
+import { getWorkerContext } from '@/services/workerDashboard/workerDashboardService';
 import { formatUkMobileForDisplay } from '@/lib/phone';
 import { toDateInputValue } from '@/lib/datetime';
 
@@ -16,6 +17,13 @@ export const dynamic = 'force-dynamic';
 export default async function CheckInDetailsPage() {
   const session = getWorkerSession();
   if (!session) redirect('/check-in');
+
+  // Safety net for the same recognition the client performs after OTP: a worker
+  // who is already checked in has nothing to answer here, however they arrived
+  // (back button, bookmark, a stale tab). Deliberately NOT applied to
+  // /check-in/site — a worker checked in at one site still needs that route to
+  // check in at a second one.
+  if (await getWorkerContext()) redirect('/worker/dashboard');
 
   const worker = await getWorkerByMobile(session.mobile);
   const recognised = Boolean(worker);
