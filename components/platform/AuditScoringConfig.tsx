@@ -89,7 +89,7 @@ export function AuditScoringConfig({
   const [bands, setBands] = useState<ScoreBandDraft[]>(initial.scoreBands);
   /**
    * Which workspace is on screen. The benchmark's scoring screen ENDS at
-   * "Configure Questions →" — the per-question editor is somewhere else. This is
+   * "Set question rules →" — the per-question editor is somewhere else. This is
    * that somewhere else, without leaving the form: both views are the same
    * component and the same state, so Save Scoring still saves everything at once
    * and nothing about the workflow, the permissions or the payload changes.
@@ -950,8 +950,8 @@ export function AuditScoringConfig({
             and read as four more widgets. */}
             <div className="border-t border-line lg:col-span-2 lg:col-start-1 lg:row-start-2">
               <Card
-                title="Question Scoring Rules"
-                hint="Choose how individual questions are scored"
+                title="How questions are scored"
+                hint="The rules a question can use, and how many use each"
               >
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   {QUESTION_RULES.map((rule) => (
@@ -1007,7 +1007,7 @@ export function AuditScoringConfig({
                     />
                     {issues.items
                       ? issues.items
-                      : 'You can set the rule for each question when configuring the audit content.'}
+                      : 'Questions come from the audit template. Set how each one scores.'}
                   </p>
                   <button
                     type="button"
@@ -1016,7 +1016,7 @@ export function AuditScoringConfig({
                       issues.items ? 'text-danger-600' : 'text-brand-700'
                     }`}
                   >
-                    Configure Questions
+                    Set question rules
                     <span className="whitespace-nowrap rounded-full bg-brand-100 px-1.5 text-[10px] tabular-nums text-brand-700">
                       {questionCount}
                     </span>
@@ -1029,9 +1029,12 @@ export function AuditScoringConfig({
         </div>
       )}
 
-      {/* ---------------- Secondary workspace — Configure Questions ----------
+      {/* ---------------- Secondary workspace — Question Scoring Rules ------
           The per-question editor, at full width, reached from the hand-off on
-          the Question Scoring Rules card. It is the SAME component and the same
+          the "How questions are scored" card. Questions themselves are NOT
+          authored here — they are copied from the audit template when the audit
+          is created. This screen only decides how each one scores, which is why
+          it is named for the rules rather than for the questions. It is the SAME component and the same
           state as the scoring workspace, so Save Scoring still writes everything
           in one request and no permission, workflow or payload changes; only
           which of the two is on screen. */}
@@ -1051,7 +1054,7 @@ export function AuditScoringConfig({
             </p>
           </div>
           <Card
-            title={`Configure Questions (${questionCount})`}
+            title={`Question Scoring Rules (${questionCount})`}
             hint="Assign each question to a section and choose how it scores"
           >
             {items.length === 0 ? (
