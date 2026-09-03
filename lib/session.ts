@@ -198,13 +198,22 @@ export function clearWorkerOtpMobileCookie(): void {
  */
 const ACTIVE_SITE_COOKIE = 'sc_worker_site';
 
-export function setActiveWorkerSiteCookie(siteId: string): void {
+export function setActiveWorkerSiteCookie(
+  siteId: string,
+  maxAgeSeconds?: number,
+): void {
   cookies().set(ACTIVE_SITE_COOKIE, siteId, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: WORKER_TTL_SECONDS,
+    // Must track the SESSION lifetime, not a constant. When the worker session
+    // TTL was raised the hardcoded two hours meant a multi-site worker's chosen
+    // site silently reverted to their most recent check-in part-way through a
+    // shift while they were still signed in. Callers pass the configured value,
+    // exactly as they do for the session cookie itself.
+    maxAge:
+      maxAgeSeconds && maxAgeSeconds > 0 ? maxAgeSeconds : WORKER_TTL_SECONDS,
   });
 }
 
