@@ -30,7 +30,7 @@ import {
   type ActionPriorityValue,
   type ActionStatusValue,
 } from '@/services/actions/actionConstants';
-import { PaginationControls } from '@/components/platform/PaginationControls';
+import { PaginationControls } from '@/components/ui/PaginationControls';
 import { cn } from '@/lib/cn';
 import { SortArrow } from '@/components/platform/SortArrow';
 import { resolvePage } from '@/lib/pagination';

@@ -3,9 +3,12 @@ import type { ResolvedPage } from '@/lib/pagination';
 
 /**
  * The shared result-count + page navigation bar shown at the foot of every
- * platform list view. Renders "Showing X–Y of N" plus Previous / Next links that
- * preserve the current search and filters (only the `page` param changes). Used
- * consistently across Documents, Audits and Actions so the experience matches.
+ * paginated list view. Renders "Showing X–Y of N" plus Previous / Next links
+ * that preserve the current search and filters (only the `page` param changes).
+ *
+ * Lives in components/ui rather than components/platform because the Admin
+ * Centre uses it too — Check-ins is the first Admin list to paginate, and it
+ * reuses this rather than growing a second implementation that would drift.
  */
 export function PaginationControls({
   basePath,

@@ -20,7 +20,7 @@ import {
   permitStatusLabel,
   PERMIT_STATUS_BADGE,
 } from '@/services/permits/permitConstants';
-import { PaginationControls } from '@/components/platform/PaginationControls';
+import { PaginationControls } from '@/components/ui/PaginationControls';
 import { resolvePage } from '@/lib/pagination';
 import { formatDateTimeUK } from '@/lib/datetime';
 
