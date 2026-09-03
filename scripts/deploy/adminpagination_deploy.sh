@@ -34,13 +34,16 @@ echo "on commit: $(git rev-parse --short HEAD) ($(git rev-parse --abbrev-ref HEA
 echo "[1/8] Current prod build id:"; OLD_BUILD=$(kudu_buildid); echo "      OLD_BUILD=${OLD_BUILD:-<unknown>}"
 
 echo "[2/8] SOURCE guards..."
+# NOTE: the control was RENAMED into components/ui. `git diff --name-only`
+# reports a detected rename as the DESTINATION path only, so the old
+# components/platform path must NOT be listed here — listing it aborted this
+# deploy once. The "old copy is gone" check below covers the source side.
 EXPECTED="app/admin/(dashboard)/submissions/page.tsx
 app/platform/dashboard/actions/page.tsx
 app/platform/dashboard/audits/page.tsx
 app/platform/dashboard/documents/page.tsx
 app/platform/dashboard/permits/page.tsx
 app/platform/dashboard/submissions/page.tsx
-components/platform/PaginationControls.tsx
 components/ui/PaginationControls.tsx
 scripts/adminpagination_verify.js
 scripts/deploy/adminpagination_deploy.sh
