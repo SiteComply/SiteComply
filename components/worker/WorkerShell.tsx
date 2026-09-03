@@ -96,7 +96,16 @@ export function WorkerShell({
               Sign out
             </a>
           </div>
-          <div className="flex w-full min-w-0 items-center justify-end gap-2 sm:w-auto sm:gap-3">
+          {/*
+            items-START, not items-center. The site control and the two buttons
+            are all 52px, but the control's wrapper is taller because the
+            "Checked in" line belongs to it — so centring the row centred that
+            taller column and left the card sitting 9px above the buttons at
+            every width from 320 to 1280. Aligning tops puts all three controls
+            on one baseline and lets the timestamp hang below the card it
+            describes, which is where it belongs.
+          */}
+          <div className="flex w-full min-w-0 items-start justify-end gap-2 sm:w-auto sm:gap-3">
             {multiSite ? (
               // `flex-1 min-w-0` is the fix for the overlap: the switcher was
               // a fixed 192px that could not shrink, so at every phone width
