@@ -227,13 +227,13 @@ if(!/lg:grid-cols-\[minmax\(0,3fr\)_minmax\(0,4\.3fr\)_minmax\(0,3\.1fr\)\]/.tes
 // thing that made this read as a dashboard with an editor bolted underneath.
 // Substring tests, not regex: the escaping needed for parens and quotes inside
 // this shell-quoted node block is where a guard silently becomes unparseable.
-if(sc.indexOf('setView') < 0 || sc.indexOf('Configure Questions') < 0)
-  fail('the Configure Questions hand-off is gone — the question editor is back on the landing screen');
+if(sc.indexOf('setView') < 0 || sc.indexOf('Set question rules') < 0)
+  fail('the Set question rules hand-off is gone — the question editor is back on the landing screen');
 // Two cards in column one, as the benchmark draws them.
 if(sc.indexOf('title=\"Scoring Method\"') < 0 || sc.indexOf('title=\"Scoring Options\"') < 0)
   fail('Scoring Method and Scoring Options are no longer separate cards');
 if(!/lg:col-span-2 lg:col-start-1 lg:row-start-2/.test(sc))
-  fail('Question Scoring Rules is no longer the wide band on row 2');
+  fail('the How questions are scored band is no longer the wide band on row 2');
 if(!/lg:grid-cols-4/.test(sc))
   fail('the four scoring-rule tiles are no longer one row');
 // The question editor must NOT be a row of the scoring grid any more. It was
@@ -241,7 +241,7 @@ if(!/lg:grid-cols-4/.test(sc))
 // dashboard with an editor bolted underneath; it is now a separate view behind
 // the hand-off. row-start-3 reappearing means it has been put back.
 if(/lg:row-start-3/.test(sc))
-  fail('the question editor is back in the scoring grid — it belongs in the Configure Questions view');
+  fail('the question editor is back in the scoring grid — it belongs in the Question Scoring Rules view');
 if(!/lg:sticky lg:top-6/.test(sc))
   fail('the Score Preview rail is no longer sticky on the inner div');
 // ONE SURFACE, NOT CARDS. White cards on a grey page are figure-and-ground:
