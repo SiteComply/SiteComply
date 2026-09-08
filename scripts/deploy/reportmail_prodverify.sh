@@ -67,7 +67,9 @@ if [ "${SENT:-0}" -gt 0 ]; then
 elif [ "${FAILED:-0}" -gt 0 ]; then
   bad "Graph REFUSED every message" "$FAILED failed — see the table in docs/ISSUE-REPORTING.md"
 elif [ "${CONS:-0}" -eq 0 ]; then
-  bad "there was nothing to send" "the backlog was already drained; file a report and re-run"
+  # Not a failure: on any run after the first the backlog is already drained.
+  # The fresh report in [5]/[6] is what proves the transport on THIS run.
+  echo "  note  the backlog was already drained — steps 5 and 6 carry the proof"
 else
   bad "messages are still pending" "considered=$CONS but none sent"
 fi
@@ -81,9 +83,16 @@ sleep 5
 R2=$(curl -s --max-time 180 -X POST -H "x-scheduler-secret: $SEC" "$SWEEP")
 echo "      sweep: $R2"
 C2=$(echo "$R2" | python3 -c "import json,sys;print(json.load(sys.stdin).get('considered',0))" 2>/dev/null || echo -1)
-[ "${C2:-1}" -eq 0 ] \
-  && ok "nothing was left pending" "the report was delivered as it was filed" \
-  || bad "the new report was still pending" "considered=$C2 — inline delivery did not complete"
+# `considered=0` only means anything when mail is ON. While it is off the sweep
+# short-circuits and returns zero without looking at a single row — an earlier
+# version of this script read that as a pass, which was worthless.
+if ! echo "$R2" | grep -q '"mail":"enabled"'; then
+  bad "cannot judge inline delivery" "mail is off, so considered=0 proves nothing"
+elif [ "${C2:-1}" -eq 0 ]; then
+  ok "nothing was left pending" "the report was delivered as it was filed, not left for the timer"
+else
+  bad "the new report was still pending" "considered=$C2 — inline delivery did not complete"
+fi
 
 echo
 echo "== $PASS passed, $FAIL failed =="
