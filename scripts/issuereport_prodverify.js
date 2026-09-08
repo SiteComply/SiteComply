@@ -21,10 +21,11 @@ let fails = 0;
 const chk = (t, ok, d='') => { console.log(`  ${ok?'PASS':'FAIL'}  ${t}${d?` — ${d}`:''}`); if(!ok) fails++; };
 
 const probe = (p) => p.evaluate(() => {
-  const btn = document.querySelector('button[aria-label="Report an issue or give feedback"]');
+  const btn = Array.from(document.querySelectorAll('button[aria-label="Report an issue or give feedback"]'))
+    .filter(b => b.getClientRects().length)[0];
   if (!btn) return null;
   const b = btn.getBoundingClientRect();
-  const hdr = btn.closest('header') || btn.closest('aside') || document.body;
+  const hdr = btn.closest('aside') || btn.closest('header') || document.body;
   let overlap = 0;
   for (const el of hdr.querySelectorAll('a,button')) {
     if (el === btn || btn.contains(el) || el.contains(btn) || !el.getClientRects().length) continue;
@@ -34,7 +35,19 @@ const probe = (p) => p.evaluate(() => {
     if (x>1 && y>1) overlap = Math.max(overlap, Math.round(x*y));
   }
   const span = btn.querySelector('span');
+  // Where it sits relative to the other chrome actions, scoped to the container
+  // that actually holds the VISIBLE control — the DOM carries two instances and
+  // querySelector returns the hidden one first.
+  const near = (re) => { const e = Array.from(hdr.querySelectorAll('a,button'))
+    .filter(x => x.getClientRects().length).find(x => re.test(x.innerText||''));
+    return e ? e.getBoundingClientRect() : null; };
+  const co = near(/check out/i), so = near(/sign out/i);
   return { w: Math.round(b.width), h: Math.round(b.height),
+    x: Math.round(b.left), y: Math.round(b.top),
+    checkOutX: co?Math.round(co.left):null, checkOutY: co?Math.round(co.top):null,
+    signOutX: so?Math.round(so.left):null, signOutY: so?Math.round(so.top):null,
+    visibleCount: Array.from(document.querySelectorAll('button[aria-label="Report an issue or give feedback"]'))
+      .filter(x => x.getClientRects().length).length,
     labelShown: !!span && span.getClientRects().length > 0,
     isFlag: !!btn.querySelector('path[d^="M5 21V4"]'),
     overlap, aboveFold: b.top >= 0 && b.bottom <= window.innerHeight,
@@ -68,6 +81,11 @@ const probe = (p) => p.evaluate(() => {
     chk('no overlap, above the fold, no page overflow',
         pr.overlap===0 && pr.aboveFold && pr.pageOverflow===0,
         `overlap=${pr.overlap} aboveFold=${pr.aboveFold} overflow=${pr.pageOverflow}`);
+    chk('exactly one visible control', pr.visibleCount===1, `${pr.visibleCount}`);
+    chk('in the account foot, paired with Sign out on one row',
+        pr.signOutY!==null && pr.y===pr.signOutY && pr.x < pr.signOutX,
+        `feedback=(${pr.x},${pr.y}) signOut=(${pr.signOutX},${pr.signOutY})`);
+    chk('low in the viewport — the foot, not the rail head', pr.y > 400, `y=${pr.y}`);
   }
   await pp.screenshot({path: path.join(OUT,'prod-platform-1280.png'), clip:{x:0,y:0,width:760,height:300}});
 
@@ -113,6 +131,24 @@ const probe = (p) => p.evaluate(() => {
     chk('above the fold, no page overflow', wr.aboveFold && wr.pageOverflow===0);
   }
   await wp.screenshot({path: path.join(OUT,'prod-worker-390.png'), clip:{x:0,y:0,width:390,height:260}});
+  chk('390px: exactly one visible control', wr && wr.visibleCount===1, wr?`${wr.visibleCount}`:'');
+  chk('390px: still in the identity row, above the site row',
+      wr && wr.checkOutY!==null && wr.y < wr.checkOutY, wr?`y=${wr.y} checkOutY=${wr.checkOutY}`:'');
+  // desktop: the new action-group placement
+  await wp.setViewportSize({width:1280, height:900});
+  await wp.reload({waitUntil:'domcontentloaded', timeout:120000});
+  await wp.waitForTimeout(1200);
+  const wd = await probe(wp);
+  chk('1280px: exactly one visible control', wd && wd.visibleCount===1, wd?`${wd.visibleCount}`:'');
+  chk('1280px: between Check out and Sign out',
+      wd && wd.checkOutX < wd.x && wd.x < wd.signOutX,
+      wd?`checkOut=${wd.checkOutX} feedback=${wd.x} signOut=${wd.signOutX}`:'');
+  chk('1280px: on the same line as Check out',
+      wd && Math.abs(wd.y - wd.checkOutY) <= 2, wd?`y=${wd.y} vs ${wd.checkOutY}`:'');
+  await wp.screenshot({path: path.join(OUT,'prod-worker-1280.png'), clip:{x:0,y:0,width:1280,height:150}});
+  await wp.setViewportSize({width:390, height:844});
+  await wp.reload({waitUntil:'domcontentloaded', timeout:120000});
+  await wp.waitForTimeout(900);
   // open the dialog for a real screenshot
   await wp.click('button[aria-label="Report an issue or give feedback"]');
   await wp.waitForTimeout(900);
