@@ -10,24 +10,28 @@ const DESCRIPTION_MIN = 10;
 
 type ReportType = 'BUG' | 'FEEDBACK' | 'SUGGESTION';
 
-const TYPES: { value: ReportType; label: string; hint: string; icon: 'flag' | 'chat' | 'idea' }[] = [
+const TYPES: { value: ReportType; label: string; hint: string; icon: 'flag' | 'idea' }[] = [
   { value: 'BUG', label: 'Bug or problem', hint: 'Something is broken or behaving wrongly', icon: 'flag' },
-  { value: 'FEEDBACK', label: 'Feedback', hint: 'How something works for you', icon: 'chat' },
+  { value: 'FEEDBACK', label: 'Feedback', hint: 'How something works for you', icon: 'flag' },
   { value: 'SUGGESTION', label: 'Suggestion', hint: 'An idea for an improvement', icon: 'idea' },
 ];
 
 /**
- * A FLAG for "bug or problem", not an insect. The insect glyph read as a sun at
- * 20px, and "flag a problem" is the action people recognise — it says raise
- * this, which is what the chip does.
+ * One glyph for the whole feature: the entry point and both "raise something"
+ * chips use the same flag, by decision, so the control and the workflow behind
+ * it read as one thing.
+ *
+ * The cost, recorded because it is not obvious from the code: Bug and Feedback
+ * are now told apart by their LABELS ALONE. If the icons should differentiate
+ * the types again, give Feedback back a speech bubble — that is the only change
+ * needed.
  */
-const PATHS: Record<'flag' | 'chat' | 'idea', string> = {
+const PATHS: Record<'flag' | 'idea', string> = {
   flag: 'M5 21V4M5 5h13l-2.6 4L18 13H5',
-  chat: 'M4 5h16v11H9l-5 4z',
   idea: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5V15h8v-1.5A6 6 0 0 0 12 3z',
 };
 
-function TypeIcon({ name, className }: { name: 'flag' | 'chat' | 'idea'; className?: string }) {
+function TypeIcon({ name, className }: { name: 'flag' | 'idea'; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}
       strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
