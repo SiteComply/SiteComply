@@ -10,23 +10,27 @@ const DESCRIPTION_MIN = 10;
 
 type ReportType = 'BUG' | 'FEEDBACK' | 'SUGGESTION';
 
-const TYPES: { value: ReportType; label: string; hint: string; icon: 'bug' | 'chat' | 'idea' }[] = [
-  { value: 'BUG', label: 'Bug or problem', hint: 'Something is broken or behaving wrongly', icon: 'bug' },
+const TYPES: { value: ReportType; label: string; hint: string; icon: 'flag' | 'chat' | 'idea' }[] = [
+  { value: 'BUG', label: 'Bug or problem', hint: 'Something is broken or behaving wrongly', icon: 'flag' },
   { value: 'FEEDBACK', label: 'Feedback', hint: 'How something works for you', icon: 'chat' },
   { value: 'SUGGESTION', label: 'Suggestion', hint: 'An idea for an improvement', icon: 'idea' },
 ];
 
-const PATHS: Record<'bug' | 'chat' | 'idea', string> = {
-  bug: 'M12 8V6M7 11H4M20 11h-3M6.5 17.5 4.5 19M17.5 17.5l2 1.5',
+/**
+ * A FLAG for "bug or problem", not an insect. The insect glyph read as a sun at
+ * 20px, and "flag a problem" is the action people recognise — it says raise
+ * this, which is what the chip does.
+ */
+const PATHS: Record<'flag' | 'chat' | 'idea', string> = {
+  flag: 'M5 21V4M5 5h13l-2.6 4L18 13H5',
   chat: 'M4 5h16v11H9l-5 4z',
   idea: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5V15h8v-1.5A6 6 0 0 0 12 3z',
 };
 
-function TypeIcon({ name, className }: { name: 'bug' | 'chat' | 'idea'; className?: string }) {
+function TypeIcon({ name, className }: { name: 'flag' | 'chat' | 'idea'; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}
       strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      {name === 'bug' && <circle cx="12" cy="13" r="5" />}
       <path d={PATHS[name]} />
     </svg>
   );
