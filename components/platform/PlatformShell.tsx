@@ -119,7 +119,15 @@ export async function PlatformShell({ children }: { children: ReactNode }) {
         <aside className="shrink-0 border-b border-line bg-surface md:sticky md:top-0 md:h-dvh md:w-60 md:border-b-0 md:border-r print:hidden">
           <div className="h-1 w-full bg-brand-500" aria-hidden="true" />
           <div className="flex h-[calc(100%-0.25rem)] flex-col">
-            <div className="flex items-center justify-between gap-2 px-4 py-3 md:justify-start">
+            {/*
+              flex-wrap, because the rail is only 240px wide and the brand needs
+              170 of it: beside the brand there is nowhere near room for the
+              feedback control, and without wrapping it squashed the logo to
+              nothing. Wrapping lets it drop to its own line in the rail on
+              desktop while staying inline in the wider collapsed header on
+              phones — no breakpoint to keep in step with the rail width.
+            */}
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 md:justify-start">
               <div className="flex items-center gap-2">
                 <Link
                   href="/"
