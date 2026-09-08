@@ -143,9 +143,12 @@ export async function PlatformShell({ children }: { children: ReactNode }) {
               {/* Top of the rail, which is `md:sticky md:top-0` — so on desktop
                   this stays in view however far the page scrolls. On phones the
                   rail collapses into this row and it travels with it. */}
-              <div className="ml-auto flex items-center gap-2">
+              {/* Phones only. On desktop this pair lives in the rail foot with the
+                  identity, because at the top of the rail it read as a navigation
+                  item rather than an account or support function. */}
+              <div className="ml-auto flex items-center gap-2 md:hidden">
                 <ReportIssueButton portal="PLATFORM" canBeContacted />
-                <div className="md:hidden">{signOut}</div>
+                {signOut}
               </div>
             </div>
 
@@ -162,7 +165,13 @@ export async function PlatformShell({ children }: { children: ReactNode }) {
             {viewer && (
               <div className="hidden border-t border-line px-4 py-3 md:block">
                 {identity}
-                <div className="mt-2">{signOut}</div>
+                {/* Immediately above Sign out, not beside it: the rail is 240px and
+                    stacking keeps both controls at full size rather than squeezing
+                    two onto one line. */}
+                <div className="mt-2 flex flex-col items-start gap-2">
+                  <ReportIssueButton portal="PLATFORM" canBeContacted />
+                  {signOut}
+                </div>
               </div>
             )}
           </div>

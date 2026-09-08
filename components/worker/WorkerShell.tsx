@@ -95,7 +95,7 @@ export function WorkerShell({
                 crowding caused the tap-interception defect fixed earlier. At
                 320px the label is hidden and 56px of free width is enough for
                 the icon; from 360px the label fits without clipping the badge. */}
-            <span className="flex shrink-0 items-center gap-2">
+            <span className="flex shrink-0 items-center gap-2 sm:hidden">
               <ReportIssueButton
                 portal="WORKER"
                 canBeContacted={false}
@@ -178,6 +178,20 @@ export function WorkerShell({
                 variant="header"
               />
             )}
+            {/* From sm up it belongs with the worker's active controls, between
+                Check out and Sign out: Check out stays the primary action and this
+                reads as the secondary one. Below sm it sits in the identity row
+                instead — the instance above — because this row has no space for a
+                third item on a phone. Only one is ever in the accessibility tree:
+                the other is display:none, not merely visually hidden. */}
+            <span className="hidden sm:inline-flex">
+              <ReportIssueButton
+                portal="WORKER"
+                canBeContacted={false}
+                activeSiteId={activeSiteId}
+                activeSiteName={siteName}
+              />
+            </span>
             {/* Shown from sm up, where the single-row header has room for it.
                 Below sm the copy in the identity row above takes over. */}
             <a
