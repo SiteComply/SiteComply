@@ -9,11 +9,12 @@ import {
 } from '@/lib/session';
 
 /**
- * Issue reports (Phase 1): capture and storage.
+ * Issue reports: capture and storage.
  *
- * The row is the record. Delivery to the tech mailbox is Phase 2 and is
- * deliberately not referenced here — a report is complete once it is stored,
- * which is what lets the capture path ship before any mail transport exists.
+ * The row is the record. Delivery (Phase 2) is deliberately NOT called from
+ * here — this function's contract is that a report is complete once it is
+ * stored, and nothing about mail may make it slower or able to fail. The caller
+ * kicks delivery off after a successful create; the hourly sweep is the net.
  */
 
 /**
@@ -192,7 +193,8 @@ export interface ReportInput {
 }
 
 export type CreateResult =
-  | { ok: true; reference: string }
+  /** `id` is for the caller to hand to delivery. It is never sent to a client. */
+  | { ok: true; id: string; reference: string }
   | { ok: false; error: string; retryAfterSeconds?: number };
 
 /** How many reports this person has filed inside each window. */
@@ -258,10 +260,10 @@ export async function createIssueReport(
       viewportHeight: intOrNull(input.viewportHeight),
       devicePixelRatio: floatOrNull(input.devicePixelRatio),
     },
-    select: { reference: true },
+    select: { id: true, reference: true },
   });
 
-  return { ok: true, reference: row.reference };
+  return { ok: true, id: row.id, reference: row.reference };
 }
 
 function intOrNull(v: unknown): number | null {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SchedulerTrigger } from '@prisma/client';
 import { runScheduledGeneration } from '@/services/compliance/schedulerRunner';
+import { authoriseScheduler } from '@/lib/schedulerAuth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,31 +27,15 @@ export const dynamic = 'force-dynamic';
  *    shows.
  */
 
-/** Timing-safe string comparison over the raw bytes. */
-function secretsMatch(a: string, b: string): boolean {
-  const ab = Buffer.from(a, 'utf8');
-  const bb = Buffer.from(b, 'utf8');
-  if (ab.length !== bb.length) return false;
-  let diff = 0;
-  for (let i = 0; i < ab.length; i++) diff |= ab[i]! ^ bb[i]!;
-  return diff === 0;
-}
-
 export async function POST(req: NextRequest) {
-  const expected = process.env.SCHEDULER_SECRET;
-  if (!expected) {
-    // Disabled, not open.
+  const auth = authoriseScheduler(req);
+  if (auth === 'disabled') {
     return NextResponse.json(
       { ok: false, error: 'Scheduler is not configured.' },
       { status: 503 },
     );
   }
-
-  const provided =
-    req.headers.get('x-scheduler-secret') ??
-    req.nextUrl.searchParams.get('secret') ??
-    '';
-  if (!secretsMatch(provided, expected)) {
+  if (auth !== 'ok') {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 
