@@ -106,6 +106,32 @@ sign-in: the mailbox is in a different tenant, and an application-permission
    Policy changes can take up to an hour to take effect.
 5. **Add the app settings** above and restart the App Service.
 
+### End-to-end test
+
+1. Confirm the settings landed and the app restarted cleanly (health 200).
+2. Sign in to any experience, click **Feedback**, send a report. The inline path
+   delivers within seconds — do not wait for the timer.
+3. Check `tech@sitecomply.co.uk`. The subject is
+   `[SiteComply] SC-R-nnnn — <type> from <experience>`.
+4. Expect the **backlog** as well: the first sweep picks up every `DISABLED` row,
+   so the earlier verification reports (SC-R-0001..0003) arrive too. That is the
+   design, not a fault.
+5. To force a sweep instead of waiting for :25 past:
+   `curl -X POST -H "x-scheduler-secret: <SCHEDULER_SECRET>" \
+     https://app.sitecomply.co.uk/api/system/reports/deliver`
+   A healthy response reads `{"ok":true,"mail":"enabled",...}`.
+
+### Troubleshooting
+
+| Symptom | Cause |
+| --- | --- |
+| `mail":"disabled"` after setting the values | One of the five is missing or blank — config is all-or-nothing. Check for a trailing space. |
+| 403 `ErrorAccessDenied` | The access policy (step 4) is missing, names the wrong app id, or has not propagated. Allow an hour. |
+| 401 `invalid_client` | Wrong secret, or the secret **ID** was pasted instead of its **Value**. |
+| `AADSTS700016` app not found | Registered in the wrong tenant, or `REPORT_MAIL_TENANT_ID` is the subscription tenant rather than the mailbox tenant. |
+| 403 with consent granted | `Mail.Send` was added as **Delegated** rather than **Application**. |
+| Mail stops months later | The client secret expired. Nothing watches for this yet. |
+
 ### Verifying
 
 - `npx tsx scripts/reportdelivery_verify.ts` — runs the real service against the
