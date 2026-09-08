@@ -143,9 +143,12 @@ export async function PlatformShell({ children }: { children: ReactNode }) {
               {/* Top of the rail, which is `md:sticky md:top-0` — so on desktop
                   this stays in view however far the page scrolls. On phones the
                   rail collapses into this row and it travels with it. */}
-              <div className="ml-auto flex items-center gap-2">
+              {/* Phones only. On desktop this pair lives in the rail foot with the
+                  identity, because at the top of the rail it read as a navigation
+                  item rather than an account or support function. */}
+              <div className="ml-auto flex items-center gap-2 md:hidden">
                 <ReportIssueButton portal="PLATFORM" canBeContacted />
-                <div className="md:hidden">{signOut}</div>
+                {signOut}
               </div>
             </div>
 
@@ -162,7 +165,16 @@ export async function PlatformShell({ children }: { children: ReactNode }) {
             {viewer && (
               <div className="hidden border-t border-line px-4 py-3 md:block">
                 {identity}
-                <div className="mt-2">{signOut}</div>
+                {/* One horizontal action group: both are account/support actions and
+                    read as a pair rather than two stacked buttons. It fits — the
+                    rail leaves 208px and the two need 193 — and `flex-wrap` is the
+                    safety net, so if a longer label ever appears they drop to two
+                    lines instead of squashing, which is how the rail head crushed
+                    the logo before it was fixed. */}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <ReportIssueButton portal="PLATFORM" canBeContacted />
+                  {signOut}
+                </div>
               </div>
             )}
           </div>
