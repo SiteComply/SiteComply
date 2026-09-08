@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { ReportIssueButton } from '@/components/ui/ReportIssueButton';
 import Link from 'next/link';
 import { Logo } from '@/components/brand/Logo';
 import { ROLE_LABELS } from '@/services/platformUsers/platformUserConstants';
@@ -131,9 +132,13 @@ export async function PlatformShell({ children }: { children: ReactNode }) {
                   Platform
                 </span>
               </div>
-              {/* On phones the sign-out has nowhere else to go, so it stays in
-                  the top row beside the logo. */}
-              <div className="md:hidden">{signOut}</div>
+              {/* Top of the rail, which is `md:sticky md:top-0` — so on desktop
+                  this stays in view however far the page scrolls. On phones the
+                  rail collapses into this row and it travels with it. */}
+              <div className="ml-auto flex items-center gap-2">
+                <ReportIssueButton portal="PLATFORM" canBeContacted />
+                <div className="md:hidden">{signOut}</div>
+              </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 md:pb-0">

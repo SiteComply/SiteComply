@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { ReportIssueButton } from '@/components/ui/ReportIssueButton';
 import Link from 'next/link';
 import { Logo } from '@/components/brand/Logo';
 import { AdminNav } from '@/components/admin/AdminNav';
@@ -47,6 +48,9 @@ export function AdminShell({
                 {adminRole.toLowerCase()}
               </span>
             </span>
+            {/* Top-right of the top row, the same position in all three
+                experiences, so it is above the fold on every page. */}
+            <ReportIssueButton portal="ADMIN" canBeContacted />
             {/* Sign-out is a plain navigation to the logout route. */}
             <a
               href="/api/admin/auth/logout"
