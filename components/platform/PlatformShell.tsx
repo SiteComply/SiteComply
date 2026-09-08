@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { ReportIssueButton } from '@/components/ui/ReportIssueButton';
 import Link from 'next/link';
 import { Logo } from '@/components/brand/Logo';
 import { ROLE_LABELS } from '@/services/platformUsers/platformUserConstants';
@@ -118,7 +119,15 @@ export async function PlatformShell({ children }: { children: ReactNode }) {
         <aside className="shrink-0 border-b border-line bg-surface md:sticky md:top-0 md:h-dvh md:w-60 md:border-b-0 md:border-r print:hidden">
           <div className="h-1 w-full bg-brand-500" aria-hidden="true" />
           <div className="flex h-[calc(100%-0.25rem)] flex-col">
-            <div className="flex items-center justify-between gap-2 px-4 py-3 md:justify-start">
+            {/*
+              flex-wrap, because the rail is only 240px wide and the brand needs
+              170 of it: beside the brand there is nowhere near room for the
+              feedback control, and without wrapping it squashed the logo to
+              nothing. Wrapping lets it drop to its own line in the rail on
+              desktop while staying inline in the wider collapsed header on
+              phones — no breakpoint to keep in step with the rail width.
+            */}
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 md:justify-start">
               <div className="flex items-center gap-2">
                 <Link
                   href="/"
@@ -131,9 +140,13 @@ export async function PlatformShell({ children }: { children: ReactNode }) {
                   Platform
                 </span>
               </div>
-              {/* On phones the sign-out has nowhere else to go, so it stays in
-                  the top row beside the logo. */}
-              <div className="md:hidden">{signOut}</div>
+              {/* Top of the rail, which is `md:sticky md:top-0` — so on desktop
+                  this stays in view however far the page scrolls. On phones the
+                  rail collapses into this row and it travels with it. */}
+              <div className="ml-auto flex items-center gap-2">
+                <ReportIssueButton portal="PLATFORM" canBeContacted />
+                <div className="md:hidden">{signOut}</div>
+              </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 md:pb-0">

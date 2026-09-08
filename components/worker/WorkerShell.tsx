@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { ReportIssueButton } from '@/components/ui/ReportIssueButton';
 import Link from 'next/link';
 import { Logo } from '@/components/brand/Logo';
 import { formatDateTimeUK } from '@/lib/datetime';
@@ -89,12 +90,25 @@ export function WorkerShell({
                 Worker
               </span>
             </span>
-            <a
-              href="/api/worker/logout"
-              className="touch-target inline-flex shrink-0 items-center whitespace-nowrap rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken sm:hidden"
-            >
-              Sign out
-            </a>
+            {/* In the IDENTITY row beside Sign out — deliberately not the row
+                below, which carries the site control and Check out and is where
+                crowding caused the tap-interception defect fixed earlier. At
+                320px the label is hidden and 56px of free width is enough for
+                the icon; from 360px the label fits without clipping the badge. */}
+            <span className="flex shrink-0 items-center gap-2">
+              <ReportIssueButton
+                portal="WORKER"
+                canBeContacted={false}
+                activeSiteId={activeSiteId}
+                activeSiteName={siteName}
+              />
+              <a
+                href="/api/worker/logout"
+                className="touch-target inline-flex shrink-0 items-center whitespace-nowrap rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface-sunken sm:hidden"
+              >
+                Sign out
+              </a>
+            </span>
           </div>
           {/*
             items-START, not items-center. The site control and the two buttons
