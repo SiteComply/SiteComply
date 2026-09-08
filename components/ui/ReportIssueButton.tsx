@@ -88,10 +88,14 @@ export function ReportIssueButton({
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9}
           strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0" aria-hidden="true">
-          {/* A speech bubble, not a flag: "tell us something" is what should be
-              read. A flag suggests reporting CONTENT, which is a different and
-              more alarming idea on a safety product. */}
-          <path d="M4 5h16v11H9l-5 4z" />
+          {/*
+            The same flag as the "Bug or problem" chip, so the trigger and the
+            workflow it opens share one visual language. (An earlier version
+            argued for a speech bubble here on the grounds that a flag suggests
+            reporting CONTENT; in review the flag read more clearly as "raise
+            this", which is what the control does.)
+          */}
+          <path d="M5 21V4M5 5h13l-2.6 4L18 13H5" />
         </svg>
         <span className="hidden min-[375px]:inline">Feedback</span>
       </button>
