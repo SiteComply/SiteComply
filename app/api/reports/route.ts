@@ -5,6 +5,7 @@ import {
   resolveReporter,
   DESCRIPTION_MAX,
 } from '@/services/reports/reportService';
+import { deliverInBackground } from '@/services/reports/reportDelivery';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -81,6 +82,11 @@ export async function POST(req: NextRequest) {
       { status },
     );
   }
+
+  // After the row exists, never before, and never awaited: the reporter has
+  // filed their report successfully whatever the mailbox does next. Only the
+  // reference goes back — the id stays server-side.
+  deliverInBackground(result.id);
 
   return NextResponse.json({ ok: true, reference: result.reference });
 }
