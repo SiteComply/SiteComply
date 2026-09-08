@@ -165,10 +165,13 @@ export async function PlatformShell({ children }: { children: ReactNode }) {
             {viewer && (
               <div className="hidden border-t border-line px-4 py-3 md:block">
                 {identity}
-                {/* Immediately above Sign out, not beside it: the rail is 240px and
-                    stacking keeps both controls at full size rather than squeezing
-                    two onto one line. */}
-                <div className="mt-2 flex flex-col items-start gap-2">
+                {/* One horizontal action group: both are account/support actions and
+                    read as a pair rather than two stacked buttons. It fits — the
+                    rail leaves 208px and the two need 193 — and `flex-wrap` is the
+                    safety net, so if a longer label ever appears they drop to two
+                    lines instead of squashing, which is how the rail head crushed
+                    the logo before it was fixed. */}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
                   <ReportIssueButton portal="PLATFORM" canBeContacted />
                   {signOut}
                 </div>
