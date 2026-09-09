@@ -25,7 +25,8 @@ const chk = (t, ok, d = '') => { console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${t}${d
 (async () => {
   console.log(`== FEEDBACK DIALOG — TYPING FOCUS ==\n   ${BASE}\n`);
   const br = await chromium.launch();
-  const ctx = await br.newContext({ viewport: { width: 1280, height: 900 } });
+  const W = parseInt(process.env.WIDTH || '1280', 10);
+  const ctx = await br.newContext({ viewport: { width: W, height: W < 600 ? 844 : 900 }, isMobile: W < 600, hasTouch: W < 600 });
   const pg = await ctx.newPage();
 
   await pg.goto(`${BASE}/platform`, { waitUntil: 'domcontentloaded', timeout: 120000 });
