@@ -64,12 +64,20 @@ export function ReportIssueDialog({
   onClose,
   context,
   canBeContacted,
+  portal,
 }: {
   open: boolean;
   onClose: () => void;
   context: ReportContext | null;
   /** False for workers — we hold a mobile for them, not an email address. */
   canBeContacted: boolean;
+  /**
+   * Which experience this report is being filed from. Sent to the server so it
+   * reads the matching session rather than guessing by cookie precedence, which
+   * mis-attributed reports for anyone holding two sessions at once. It selects
+   * a cookie; it does not grant identity.
+   */
+  portal: 'PLATFORM' | 'ADMIN' | 'WORKER';
 }) {
   const [type, setType] = useState<ReportType>('BUG');
   const [description, setDescription] = useState('');
@@ -119,7 +127,9 @@ export function ReportIssueDialog({
       const res = await fetch('/api/reports', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ type, description, contactRequested: contact, ...context }),
+        // `portal` last so a future field on ReportContext cannot shadow it —
+        // the server chooses which session to trust from this value.
+        body: JSON.stringify({ type, description, contactRequested: contact, ...context, portal }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
