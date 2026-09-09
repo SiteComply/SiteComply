@@ -39,8 +39,11 @@ export async function POST(req: NextRequest) {
   // An unrecognised value is treated as absent rather than rejected, so a stale
   // bundle still files reports — it just falls back to the old precedence.
   const requestedPortal = isReportPortal(body.portal) ? body.portal : null;
+  const bodyPagePath = typeof body.pagePath === 'string' ? body.pagePath : null;
 
-  const reporter = await resolveReporter(requestedPortal);
+  // The page path is the fallback signal for clients too old to send `portal`.
+  // Like `portal`, it only chooses which session to read.
+  const reporter = await resolveReporter(requestedPortal, bodyPagePath);
   if (!reporter) {
     return NextResponse.json(
       {

@@ -97,9 +97,32 @@ async function main() {
   chk('filing from Admin resolves the ADMIN', asAdmin?.portal === IssueReportPortal.ADMIN, `${asAdmin?.name}`);
   chk('even though a worker session is also present', (await resolveReporter(IssueReportPortal.WORKER))?.portal === IssueReportPortal.WORKER);
 
-  console.log('\n[6] A stale client that sends no portal still works');
-  const legacy = await resolveReporter(undefined);
-  chk('falls back to precedence rather than failing', legacy !== null, `${legacy?.portal}`);
+  console.log('\n[6] A STALE client, sending no portal — the case that kept the bug alive');
+  // Restore both sessions; [4] and [5] left the jar in a different state.
+  jar['sc_platform'] = createPlatformSessionToken({ userId: puser.id, email: puser.email, name: puser.name, role: 'DIRECTOR' });
+  jar['sc_worker'] = createWorkerSessionToken({ mobile: worker.mobile, workerId: worker.id, fullName: worker.fullName });
+  delete jar['sc_admin'];
+
+  const staleWorker = await resolveReporter(undefined, '/worker/dashboard');
+  chk('a worker PAGE resolves the worker even with no portal field',
+      staleWorker?.portal === IssueReportPortal.WORKER, `${staleWorker?.portal} / ${staleWorker?.name}`);
+  const stalePlatform = await resolveReporter(undefined, '/platform/dashboard/submissions');
+  chk('a platform PAGE resolves the platform user',
+      stalePlatform?.portal === IssueReportPortal.PLATFORM, `${stalePlatform?.portal} / ${stalePlatform?.name}`);
+  chk('so a stale client ALSO gets two separate cooldown buckets',
+      staleWorker!.ref !== stalePlatform!.ref, `${staleWorker!.ref} vs ${stalePlatform!.ref}`);
+  const staleWithQuery = await resolveReporter(undefined, '/worker/permits?status=open');
+  chk('a query string does not defeat the inference', staleWithQuery?.portal === IssueReportPortal.WORKER);
+  const unknownPath = await resolveReporter(undefined, '/something/else');
+  chk('an unrecognised path still resolves someone rather than failing', unknownPath !== null, `${unknownPath?.portal}`);
+
+  console.log('\n[7] Inference never grants a session you do not hold');
+  delete jar['sc_worker'];
+  const noWorker = await resolveReporter(undefined, '/worker/dashboard');
+  chk('a worker page with no worker session falls back, it does not invent one',
+      noWorker?.portal === IssueReportPortal.PLATFORM, `${noWorker?.portal}`);
+  const explicitWorker = await resolveReporter(IssueReportPortal.WORKER, '/worker/dashboard');
+  chk('but an EXPLICIT worker portal with no worker session is refused', explicitWorker === null, String(explicitWorker));
 
   console.log(`\n== ${pass} passed, ${failures.length} failed ==`);
   if (failures.length) { for (const f of failures) console.log(`   FAILED: ${f}`); process.exitCode = 1; }
