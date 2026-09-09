@@ -130,6 +130,7 @@ export function ReportIssueButton({
         onClose={() => setOpen(false)}
         context={context}
         canBeContacted={canBeContacted}
+        portal={portal}
       />
     </div>
   );

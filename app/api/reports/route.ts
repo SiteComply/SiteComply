@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { IssueReportType } from '@prisma/client';
+import { IssueReportPortal, IssueReportType } from '@prisma/client';
 import {
   createIssueReport,
   resolveReporter,
@@ -21,21 +21,36 @@ export const dynamic = 'force-dynamic';
  * treated as untrusted support context, never used for authorisation. An
  * unauthenticated caller is refused outright — every experience that can reach
  * this is behind a session already, so there is no anonymous path to leave open.
+ *
+ * `portal` in the body is the one exception, and it is not an exception to the
+ * rule above: it selects WHICH session cookie to read, and the caller must still
+ * hold a valid session for it. Naming a portal you are not signed in to is a 401,
+ * not an impersonation. Without it the server guessed by cookie precedence, and
+ * guessed wrong for anyone holding two sessions at once.
  */
 export async function POST(req: NextRequest) {
-  const reporter = await resolveReporter();
-  if (!reporter) {
-    return NextResponse.json(
-      { ok: false, error: 'Please sign in again to send a report.' },
-      { status: 401 },
-    );
-  }
-
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
   } catch {
     return NextResponse.json({ ok: false, error: 'Invalid request.' }, { status: 400 });
+  }
+
+  // An unrecognised value is treated as absent rather than rejected, so a stale
+  // bundle still files reports — it just falls back to the old precedence.
+  const requestedPortal = isReportPortal(body.portal) ? body.portal : null;
+
+  const reporter = await resolveReporter(requestedPortal);
+  if (!reporter) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: requestedPortal
+          ? 'Your session for this part of SiteComply has expired. Please sign in again to send a report.'
+          : 'Please sign in again to send a report.',
+      },
+      { status: 401 },
+    );
   }
 
   const type = String(body.type ?? '');
@@ -93,4 +108,8 @@ export async function POST(req: NextRequest) {
 
 function isReportType(v: string): v is IssueReportType {
   return (Object.values(IssueReportType) as string[]).includes(v);
+}
+
+function isReportPortal(v: unknown): v is IssueReportPortal {
+  return typeof v === 'string' && (Object.values(IssueReportPortal) as string[]).includes(v);
 }

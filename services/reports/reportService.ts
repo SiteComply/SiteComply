@@ -67,58 +67,90 @@ export interface Reporter {
  * report as somebody else, and the reporter's identity is the main thing that
  * makes a report actionable.
  *
- * Checked in a fixed order so a browser holding two sessions (an administrator
- * who is also a platform user) reports consistently rather than depending on
- * cookie order.
+ * `requested` says which EXPERIENCE the report is being filed from, and selects
+ * which cookie to read. It does NOT confer identity: the caller must still hold
+ * a valid session for that portal or this returns null. Passing a portal you are
+ * not signed in to gets you nothing.
+ *
+ * This parameter exists because resolving by fixed precedence was WRONG. One
+ * browser can hold a platform and a worker session at once — a site manager who
+ * is also on site — and the old order took the platform one every time. A
+ * worker's bug report was then stored as `portal: PLATFORM` under the manager's
+ * name, and the two identities shared one rate-limit allowance, so filing from
+ * the Worker Portal blocked the next Platform report.
+ *
+ * `requested` is optional so that a browser still running an older bundle keeps
+ * working: it falls back to the previous precedence order rather than failing.
  */
-export async function resolveReporter(): Promise<Reporter | null> {
+export async function resolveReporter(
+  requested?: IssueReportPortal | null,
+): Promise<Reporter | null> {
+  if (requested === IssueReportPortal.PLATFORM) return platformReporter();
+  if (requested === IssueReportPortal.ADMIN) return adminReporter();
+  if (requested === IssueReportPortal.WORKER) return workerReporter();
+
+  // No portal supplied — a stale client. Fixed order, as before, so a browser
+  // holding two sessions at least reports consistently.
+  return (await platformReporter()) ?? (await adminReporter()) ?? (await workerReporter());
+}
+
+/**
+ * The rate limit counts on this, so it must identify ONE account. Prefixed by
+ * portal so it is self-describing and cannot collide across the three tables —
+ * these are ids from different models, and an unprefixed key silently assumes
+ * they can never coincide.
+ */
+function refFor(portal: IssueReportPortal, id: string): string {
+  return `${portal.toLowerCase()}:${id}`;
+}
+
+async function platformReporter(): Promise<Reporter | null> {
   const platform = getPlatformSession();
-  if (platform) {
-    const user = await prisma.platformUser.findUnique({
-      where: { id: platform.userId },
-      select: { id: true, name: true, company: true, role: true, email: true },
-    });
-    if (!user) return null;
-    return {
-      portal: IssueReportPortal.PLATFORM,
-      ref: user.id,
-      name: user.name,
-      role: String(user.role),
-      org: user.company,
-      email: user.email,
-    };
-  }
+  if (!platform) return null;
+  const user = await prisma.platformUser.findUnique({
+    where: { id: platform.userId },
+    select: { id: true, name: true, company: true, role: true, email: true },
+  });
+  if (!user) return null;
+  return {
+    portal: IssueReportPortal.PLATFORM,
+    ref: refFor(IssueReportPortal.PLATFORM, user.id),
+    name: user.name,
+    role: String(user.role),
+    org: user.company,
+    email: user.email,
+  };
+}
 
+async function adminReporter(): Promise<Reporter | null> {
   const admin = getAdminSession();
-  if (admin) {
-    return {
-      portal: IssueReportPortal.ADMIN,
-      ref: admin.adminId,
-      name: admin.name,
-      role: admin.role,
-      org: null,
-      email: admin.email,
-    };
-  }
+  if (!admin) return null;
+  return {
+    portal: IssueReportPortal.ADMIN,
+    ref: refFor(IssueReportPortal.ADMIN, admin.adminId),
+    name: admin.name,
+    role: admin.role,
+    org: null,
+    email: admin.email,
+  };
+}
 
+async function workerReporter(): Promise<Reporter | null> {
   const worker = getWorkerSession();
-  if (worker) {
-    const w = await prisma.worker.findUnique({
-      where: { mobile: worker.mobile },
-      select: { id: true, fullName: true, company: true },
-    });
-    if (!w) return null;
-    return {
-      portal: IssueReportPortal.WORKER,
-      ref: w.id,
-      name: w.fullName,
-      role: 'Worker',
-      org: w.company,
-      email: null,
-    };
-  }
-
-  return null;
+  if (!worker) return null;
+  const w = await prisma.worker.findUnique({
+    where: { mobile: worker.mobile },
+    select: { id: true, fullName: true, company: true },
+  });
+  if (!w) return null;
+  return {
+    portal: IssueReportPortal.WORKER,
+    ref: refFor(IssueReportPortal.WORKER, w.id),
+    name: w.fullName,
+    role: 'Worker',
+    org: w.company,
+    email: null,
+  };
 }
 
 /** Enough of the User-Agent to reproduce a layout bug. Not a fingerprint. */
