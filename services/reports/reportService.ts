@@ -79,19 +79,47 @@ export interface Reporter {
  * name, and the two identities shared one rate-limit allowance, so filing from
  * the Worker Portal blocked the next Platform report.
  *
- * `requested` is optional so that a browser still running an older bundle keeps
- * working: it falls back to the previous precedence order rather than failing.
+ * `requested` is optional because a browser running an older bundle does not send
+ * it. That case is NOT handled by falling straight back to precedence — doing so
+ * silently reproduced the exact bug this function exists to fix, for every user
+ * who had not hard-reloaded. Instead the page path is used to infer the
+ * experience, which older clients do send, and precedence is the last resort.
  */
 export async function resolveReporter(
   requested?: IssueReportPortal | null,
+  pagePath?: string | null,
 ): Promise<Reporter | null> {
-  if (requested === IssueReportPortal.PLATFORM) return platformReporter();
-  if (requested === IssueReportPortal.ADMIN) return adminReporter();
-  if (requested === IssueReportPortal.WORKER) return workerReporter();
+  const portal = requested ?? portalFromPath(pagePath);
 
-  // No portal supplied — a stale client. Fixed order, as before, so a browser
-  // holding two sessions at least reports consistently.
+  if (portal) {
+    const byPortal =
+      portal === IssueReportPortal.PLATFORM
+        ? await platformReporter()
+        : portal === IssueReportPortal.ADMIN
+          ? await adminReporter()
+          : await workerReporter();
+
+    // An EXPLICIT portal is authoritative: the client said where it is, so a
+    // missing session there is a refusal, not an invitation to guess again.
+    if (requested) return byPortal;
+    // An INFERRED one is a best guess, so fall through if it finds nothing.
+    if (byPortal) return byPortal;
+  }
+
   return (await platformReporter()) ?? (await adminReporter()) ?? (await workerReporter());
+}
+
+/**
+ * Which experience a page path belongs to. Only ever used to CHOOSE which
+ * session cookie to read — like `requested`, it grants nothing on its own.
+ */
+function portalFromPath(pagePath?: string | null): IssueReportPortal | null {
+  if (!pagePath) return null;
+  const path = pagePath.split('?')[0]!;
+  if (path.startsWith('/worker') || path.startsWith('/check-in')) return IssueReportPortal.WORKER;
+  if (path.startsWith('/admin')) return IssueReportPortal.ADMIN;
+  if (path.startsWith('/platform')) return IssueReportPortal.PLATFORM;
+  return null;
 }
 
 /**
