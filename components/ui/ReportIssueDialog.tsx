@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { cn } from '@/lib/cn';
@@ -56,8 +56,12 @@ export interface ReportContext {
  *
  * ONE REQUIRED FIELD. Everything else is captured for the reporter, because a
  * report that takes twenty seconds gets written and one that takes two minutes
- * does not. The context panel is shown rather than hidden — people are more
- * willing to send something when they can see exactly what travels with it.
+ * does not.
+ *
+ * The page, device and session context is still captured and sent — it is what
+ * makes a report actionable — but it is no longer LISTED in the dialog. That
+ * panel was removed as clutter; the trade-off is that the reporter no longer
+ * sees what travels with their report before sending it.
  */
 export function ReportIssueDialog({
   open,
@@ -82,29 +86,16 @@ export function ReportIssueDialog({
   const [type, setType] = useState<ReportType>('BUG');
   const [description, setDescription] = useState('');
   const [contact, setContact] = useState(false);
-  const [showContext, setShowContext] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reference, setReference] = useState<string | null>(null);
 
   const tooShort = description.trim().length < DESCRIPTION_MIN;
 
-  const contextLine = useMemo(() => {
-    if (!context) return '';
-    return [
-      context.pageTitle || context.pagePath,
-      context.pagePath,
-      `${context.viewportWidth}×${context.viewportHeight}`,
-    ]
-      .filter(Boolean)
-      .join(' · ');
-  }, [context]);
-
   function reset() {
     setType('BUG');
     setDescription('');
     setContact(false);
-    setShowContext(false);
     setError(null);
     setReference(null);
   }
@@ -235,45 +226,26 @@ export function ReportIssueDialog({
           <label htmlFor="report-description" className="block text-xs font-semibold text-ink-muted">
             What happened?
           </label>
+          <p id="report-help" className="mt-1 text-xs text-ink-subtle">
+            Please provide as much detail as possible about the bug, feedback or suggestion.
+          </p>
           <textarea
             id="report-description"
-            rows={4}
+            rows={5}
             value={description}
             maxLength={DESCRIPTION_MAX}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Tell us what you expected and what happened instead."
-            aria-describedby="report-count"
+            // No placeholder: it would repeat the guidance line directly above,
+            // and a placeholder disappears the moment someone starts typing —
+            // which is when guidance is worth having.
+            // Both the guidance and the counter, in that order — the guidance is
+            // the useful half and a screen reader should hear it first.
+            aria-describedby="report-help report-count"
             className="mt-1.5 w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink placeholder:text-ink-subtle focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/20"
           />
           <p id="report-count" className="mt-1 text-right text-xs text-ink-subtle">
             {description.length} / {DESCRIPTION_MAX}
           </p>
-        </div>
-
-        {/*
-          Shown, not hidden. This is the honest version of "we collect some
-          context": the reporter can read exactly what goes with the report
-          before deciding to send it.
-        */}
-        <div className="mt-2 rounded-xl border border-line bg-surface-sunken px-3 py-2.5">
-          <button
-            type="button"
-            onClick={() => setShowContext((v) => !v)}
-            aria-expanded={showContext}
-            className="flex w-full items-center justify-between gap-2 text-left"
-          >
-            <span className="text-xs font-semibold text-ink-muted">
-              Sent automatically with your report
-            </span>
-            <span className="text-xs text-ink-subtle">{showContext ? 'Hide' : 'Show'}</span>
-          </button>
-          {showContext && (
-            <p className="mt-1.5 text-xs leading-relaxed text-ink-subtle">
-              Your name, role and organisation · the page you are on ({contextLine}) ·
-              your browser and device · the time. No screenshot is taken, and the
-              filters in your address bar are not included.
-            </p>
-          )}
         </div>
 
         {canBeContacted && (
