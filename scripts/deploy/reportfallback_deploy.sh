@@ -39,7 +39,7 @@ scripts/reportattribution_verify.ts
 services/reports/reportService.ts"
 CH=$(git diff --name-only "$DEPLOYED" HEAD | sort)
 [ "$CH" = "$(printf '%s' "$EXPECTED" | sort)" ] \
-  && echo "      confirmed: the service, the route, the two client files." \
+  && echo "      confirmed: the service and the route. No client change." \
   || { echo "ERROR: unexpected file set:"; diff <(echo "$CH") <(printf '%s' "$EXPECTED" | sort); exit 1; }
 
 # --- Identity STILL comes only from the cookie.
@@ -57,12 +57,12 @@ code "$SVC" | grep -qE 'reporterName|name:' || die "the reporter shape is gone"
 echo "      identity still comes from the session cookie alone."
 
 # --- The portal selects a cookie, and an absent session is refused.
-code "$SVC" | grep -q 'if (requested === IssueReportPortal.WORKER) return workerReporter();' \
-  || die "the requested portal does not select the worker session"
-code "$SVC" | grep -q 'if (requested === IssueReportPortal.PLATFORM) return platformReporter();' \
-  || die "the requested portal does not select the platform session"
-code "$SVC" | grep -q 'if (requested === IssueReportPortal.ADMIN) return adminReporter();' \
-  || die "the requested portal does not select the admin session"
+# The selection is a ternary now; assert each arm is reachable from the portal.
+code "$SVC" | grep -q 'portal === IssueReportPortal.PLATFORM' || die "the portal does not select the platform session"
+code "$SVC" | grep -q 'portal === IssueReportPortal.ADMIN' || die "the portal does not select the admin session"
+code "$SVC" | grep -q '? await platformReporter()' || die "platformReporter is not reachable from the portal"
+code "$SVC" | grep -q '? await adminReporter()' || die "adminReporter is not reachable from the portal"
+code "$SVC" | grep -q ': await workerReporter();' || die "workerReporter is not reachable from the portal"
 # Each per-portal resolver must bail when its session is missing — that is what
 # makes a spoofed portal a 401 rather than a free identity.
 [ "$(code "$SVC" | grep -c 'if (!platform) return null;\|if (!admin) return null;\|if (!worker) return null;')" = "3" ] \
