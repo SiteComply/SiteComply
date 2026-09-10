@@ -164,7 +164,16 @@ for i in $(seq 1 40); do
   [ "$CUR" = "$NEW_BUILD" ] && { echo "      new build landed."; break; }; sleep 15
 done
 [ "$(kudu_buildid)" = "$NEW_BUILD" ] || die "the new build never landed"
+
+# RESTART EXPLICITLY. The build landing on disk does NOT mean the running
+# process picked it up — this deploy reported a new BUILD_ID and healthy 200s
+# while the OLD process was still serving, and the first production check
+# failed against code that had already been replaced on disk. Health is served
+# by the old container throughout, so health is not evidence either.
+echo "      restarting so the running process picks up the new build..."
+az webapp restart -g "$RG" -n "$APP" -o none || die "restart failed"
 for i in $(seq 1 30); do H=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$HEALTH"); echo "      [$i] health: HTTP $H"; [ "$H" = "200" ] && break; sleep 10; done
+echo "      NOTE: verify BEHAVIOUR, not health."
 
 echo "== DEPLOY SUMMARY =="
 echo "   old build: $OLD_BUILD"
