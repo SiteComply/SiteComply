@@ -114,9 +114,13 @@ PY
 python3 - <<'PY' || exit 1
 import re, sys
 s = open('services/workerAccess/workerAssignmentService.ts', encoding='utf-8').read()
-i = s.find('export async function transferAssignment')
-if i < 0: i = s.find('transferAssignment')
-seg = s[i:i+4000]
+# The function is transferWorker. An earlier version searched for
+# "transferAssignment", matched a COMMENT mentioning it, and inspected the wrong
+# region of the file — then reported the transfer path as broken when it was not.
+i = s.find('export async function transferWorker')
+if i < 0:
+    print('ERROR: transferWorker not found. Aborting'); sys.exit(1)
+seg = s[i:]
 if 'WorkerAssignmentStatus.INVITED' not in seg:
     print("ERROR: a transfer no longer lands as INVITED — the receiving site would lose its say. Aborting"); sys.exit(1)
 if 'autoApproved: false' not in seg:
