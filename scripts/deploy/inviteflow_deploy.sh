@@ -15,8 +15,19 @@ DEPLOYED=5a16415
 SVC='services/workerAccess/workerAssignmentService.ts'
 DLG='components/platform/InviteWorkerDialog.tsx'
 die() { echo "ERROR: $1. Aborting"; exit 1; }
-kudu_buildid() { local tok; tok=$(az account get-access-token --query accessToken -o tsv 2>/dev/null) || return 1
-  curl -s --max-time 20 -H "Authorization: Bearer $tok" "${SCM}/api/vfs/site/wwwroot/.next/BUILD_ID" 2>/dev/null | tr -d '[:space:]'; }
+# Kudu intermittently refuses the connection while the app itself is healthy.
+# One failed read is not evidence of anything, so retry before believing it —
+# an earlier run aborted the whole deploy on a single transient HTTP 000.
+kudu_buildid() {
+  local tok v i
+  for i in 1 2 3 4 5; do
+    tok=$(az account get-access-token --query accessToken -o tsv 2>/dev/null) || return 1
+    v=$(curl -s --max-time 45 -H "Authorization: Bearer $tok" "${SCM}/api/vfs/site/wwwroot/.next/BUILD_ID" 2>/dev/null | tr -d '[:space:]')
+    [ -n "$v" ] && { printf '%s' "$v"; return 0; }
+    sleep 10
+  done
+  return 1
+}
 code() { python3 - "$1" <<'DOCPY'
 import re, sys
 s = open(sys.argv[1], encoding='utf-8').read()
