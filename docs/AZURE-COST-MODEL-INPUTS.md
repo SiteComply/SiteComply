@@ -51,21 +51,76 @@ Redis, Service Bus, private endpoints, staging slots.
 
 ### Resilience posture (all currently the cheapest option)
 
-| | Setting |
-|---|---|
-| Database HA | **Disabled** (no standby) |
-| Database geo-redundant backup | **Disabled** |
-| Database backup retention | 35 days |
-| Storage replication | **LRS** (single datacentre) |
-| App Service instances | **1** |
-| Zone redundancy | **Off** everywhere |
+| | Setting | Changeable in place? |
+|---|---|---|
+| Database HA | **Disabled** (no standby) | Requires leaving Burstable — see §3 |
+| Database geo-redundant backup | **Disabled** | **No — creation-time only** |
+| Database backup retention | 35 days | Yes |
+| Storage replication | **LRS** (single datacentre) | LRS→ZRS needs a migration; LRS→GRS is in place |
+| App Service instances | **1** | Yes (tier permitting) |
+| Zone redundancy | **Off** everywhere | Requires Premium V2/V3 SKU |
 
-Any cost model for a customer-facing launch should price the resilient variant
-separately — these four settings are where most of the increase will come from.
+**Geo-redundant backup has been confirmed as a requirement.** That single
+decision forces a database rebuild — see §3, which should be read before any
+costing work.
 
 ---
 
-## 3. Measured utilisation (10 September 2026)
+## 3. Geo-redundant backup forces a database rebuild
+
+**`sitecomply-pg` cannot have geo-redundant backup enabled.** On PostgreSQL
+Flexible Server this is a **creation-time-only** property. Verified against
+azure-cli 2.87.0 on 10 September 2026:
+
+| Flag | On `create` | On `update` |
+|---|---|---|
+| `--geo-redundant-backup` | ✅ present | ❌ **absent** |
+| `--zonal-resiliency` (HA enable) | ✅ present | ❌ absent |
+| `--tier` (Burstable → General Purpose) | ✅ | ✅ **in place** |
+| `--standby-zone`, `--allow-same-zone` | ✅ | ✅ |
+
+So delivering geo-redundant backup means **building a new server and migrating
+the data**. There is no in-place path.
+
+### Why this is good news, if it is done once
+
+The current server is `Standard_B1ms` on the **Burstable** tier, which supports
+neither HA nor zone redundancy at all. Every resilience requirement therefore
+converges on the same migration:
+
+1. **Geo-redundant backup** — new server, no alternative.
+2. **HA (standby replica)** — needs General Purpose or Memory Optimized.
+   Burstable cannot do it.
+3. **Zone-redundant HA** — needs a non-Burstable tier *and* a standby placed in
+   a different availability zone. The current server sits in **zone 1**.
+
+Doing these as three separate exercises means three migrations and three
+outages. **Doing them as one server build is one migration.** The cost model
+should assume a single rebuild that lands on the final shape, not an incremental
+upgrade path.
+
+### What the rebuild involves
+
+- Create a replacement server with `--geo-redundant-backup Enabled`, the target
+  tier, and `--zonal-resiliency` / `--standby-zone` set.
+- Migrate the data (~4.12 GB today, so a dump/restore window is short).
+- Repoint `DATABASE_URL` and restart the app.
+- **A migration reconciliation is already outstanding** (migrations are applied
+  by hand; `_prisma_migrations` has never been verified) — the rebuild is the
+  natural moment to resolve it.
+- Cost during cutover: both servers exist briefly. Negligible, but not zero.
+
+### Zone redundancy for the App Service
+
+Confirmed from the CLI: zone redundancy **requires a Premium V2 or V3 SKU**
+(`P1V2/P2V2/P3V2` or `P1V3/P2V3/P3V3`). The current plan is **B1 Basic**, so
+zone redundancy is not reachable without moving to Premium — Standard (S1) will
+not do it either. A zone-redundant plan also requires a **minimum of 2
+instances**, so the line item is *tier increase × instance count*, not a flag.
+
+---
+
+## 4. Measured utilisation (10 September 2026)
 
 ### Database
 | Metric | Value |
@@ -103,7 +158,7 @@ separately — these four settings are where most of the increase will come from
 
 ---
 
-## 4. Cost drivers, per unit of business activity
+## 5. Cost drivers, per unit of business activity
 
 ### Per worker, per working day
 | Driver | Volume | Consumes |
@@ -163,7 +218,7 @@ but it does require an M365 licence for that mailbox.
 
 ---
 
-## 5. Data growth surfaces
+## 6. Data growth surfaces
 
 The schema has **75 models**. The tables that grow with usage rather than with
 configuration:
@@ -184,7 +239,7 @@ decision — a growth assumption the model should make explicit.
 
 ---
 
-## 6. What breaks first as load increases
+## 7. What breaks first as load increases
 
 Ordered by how soon it bites.
 
@@ -211,29 +266,68 @@ Ordered by how soon it bites.
 
 ---
 
-## 7. Scaling decision points to price
+## 8. Scaling decision points to price
 
 Each of these is a genuine either/or the model should carry as an option, not a
 foregone conclusion.
 
-**App Service**
-- B1 → S1 (autoscale, slots) → P0v3/P1v3 (better price/performance, zone
-  redundancy available)
-- Scale-out rules: instance count vs instance size
-- Whether to add a staging slot (doubles nothing on Premium; costs an instance
-  on Standard)
+**App Service — tier ladder**
 
-**Database**
-- Burstable B1ms → General Purpose (2–4 vCore)
+| Option | Buys | Cost shape |
+|---|---|---|
+| B1 (today) | nothing beyond a single instance | baseline |
+| S1 | autoscale, staging slots | per instance |
+| P0v3 / P1v3 | better price/performance, more memory, **zone redundancy eligible** | per instance |
+| **P1v3 × 2, zone-redundant** | survives a zone failure | **2 × Premium instance minimum** |
+
+Zone redundancy is not a switch — it is *Premium SKU × at least 2 instances*.
+Price it as a multiplier on the instance line, not an add-on.
+
+**Database — resilience options, all requiring the §3 rebuild**
+
+| Option | Requires | Cost shape |
+|---|---|---|
+| Geo-redundant backup | **Required.** New server. | Backup storage billed in a paired region; roughly doubles backup storage, compute unchanged |
+| Same-zone HA | General Purpose or Memory Optimized | **≈ 2× compute** — a full standby is provisioned |
+| **Zone-redundant HA** | GP/MO + standby in a different zone | **≈ 2× compute**, same as same-zone; the zone placement is free, the standby is not |
+| Read replica | GP/MO | + 1 × compute per replica, plus cross-region egress if remote |
+
+Three points the model should not blur:
+
+1. **HA is priced as a second server.** Same-zone and zone-redundant HA cost
+   effectively the same — you pay for the standby either way. **Zone-redundant
+   is therefore the obvious choice**: same money, materially better failure
+   coverage. There is no reason to buy same-zone HA in a region with zones.
+2. **Geo-redundant backup is not HA and does not provide failover.** It is
+   backup storage in the paired region, enabling geo-restore after a regional
+   loss. It costs backup storage, not compute. The two are independent line
+   items and both were asked for.
+3. **HA does not remove the need for backups.** A standby replicates
+   corruption and deletion faithfully.
+
+**Compute sizing, independent of resilience**
+- Burstable B1ms → General Purpose 2 vCore (`Standard_D2s_v3`) is the realistic
+  production floor; 4 vCore (`D4s_v3`) if check-in bursts are large
 - Storage growth beyond 32 GB, and the IOPS tier that comes with it
-- HA standby: **roughly doubles the database line**
-- Geo-redundant backup
-- Read replicas if reporting load grows
+- Note **HA multiplies whatever compute size is chosen** — sizing and resilience
+  compound, so decide the tier first
 
-**Storage**
-- LRS → ZRS or GRS
+**Storage (`scdocsuk` — documents and photos)**
+
+| Option | Protects against | Note |
+|---|---|---|
+| LRS (today) | disk failure | single datacentre |
+| ZRS | datacentre/zone loss | **requires a migration**, not a flag |
+| GRS | regional loss | can be changed in place from LRS |
+| GZRS | zone *and* regional loss | requires migration |
+
+If geo-redundancy is a requirement for the database, **the document store should
+match it** — geo-restoring the database while the photographs and RAMS attached
+to those records sit in a lost region would give a legally awkward half-recovery
+of an H&S compliance record. Recommend GRS or GZRS, priced against LRS.
+
 - Lifecycle management: move old audit photos and documents to Cool/Archive.
-  Given photos are stored as annotated *pairs*, this is where the saving is.
+  Given annotated photos are stored as *pairs*, this is where the saving is.
 
 **SMS (ACS)**
 - Per-message UK pricing × active workers per day × sites
@@ -256,14 +350,18 @@ foregone conclusion.
 
 ---
 
-## 8. Known gaps that will add cost at go-live
+## 9. Known gaps that will add cost at go-live
 
 These are real, currently-unfunded line items:
 
 - **No monitoring at all.** The `microsoft.insights` resource provider is
   **NotRegistered** on this subscription, so there is no Application Insights
   and no alerting anywhere. Registration is free; ingestion is not.
-- **No HA, no geo-redundancy, no zone redundancy** on any component.
+- **Geo-redundant backup: required, not yet in place**, and it cannot be added
+  to the existing database (§3). This is now a **go-live task with a migration
+  attached**, not a pricing option.
+- **HA and zone redundancy: to be priced as options** (§8). Neither is
+  reachable on the current Burstable tier or B1 plan.
 - **No CI.** The only pipeline that exists is on an unpushed branch. No hosted
   runner cost is currently incurred.
 - **No CDN or WAF.**
@@ -273,7 +371,7 @@ These are real, currently-unfunded line items:
 
 ---
 
-## 9. Variables the model needs, which this document cannot supply
+## 10. Variables the model needs, which this document cannot supply
 
 The measured figures above describe a system with **no customers**. To build the
 model, these have to come from the business:
@@ -288,29 +386,44 @@ model, these have to come from the business:
 7. Audits per site per month, and photo evidence per audit
 8. Retention policy — how long check-in history, documents and photos are kept
    (currently unbounded)
-9. Target availability (this decides HA, zone redundancy and geo-backup, which
-   together are the largest optional cost)
+9. Target availability — **partly decided already**: geo-redundant backup is a
+   stated requirement, and HA and zone redundancy are to be priced as options
+   (§8). What is still needed from the business is the **RPO and RTO** those
+   choices are meant to satisfy, because they decide whether HA is bought at all
+   or geo-restore alone is accepted:
+   - *Geo-backup only* — survives regional loss, but recovery is a restore
+     measured in hours, and you lose data written since the last geo-replicated
+     backup.
+   - *+ HA* — survives a node or zone failure in minutes with no data loss, but
+     does nothing for regional loss.
+   - *Both* — the two cover different failures and are usually bought together.
 10. Growth curve over the modelling period
 
 ### Suggested modelling shape
 
 Because the largest costs are step-functions (instance tier, database tier, HA
 on/off) rather than smooth curves, model **discrete tiers** rather than a linear
-per-user cost:
+per-user cost. Geo-redundant backup is present from the first band, since it is
+a requirement and forces the rebuild anyway:
 
-| Band | Rough shape |
-|---|---|
-| Pilot | 1–2 organisations, few sites — current architecture, upgraded App Service |
-| Small | General Purpose database, S1/P0v3 with autoscale, no HA |
-| Growth | HA standby, ZRS storage, Redis, App Insights with a cap |
-| Scale | Multi-instance, read replicas, lifecycle-managed storage, possibly PTU for AI |
+| Band | App Service | Database | Storage | Resilience |
+|---|---|---|---|---|
+| **Pilot** | S1 × 1 | GP 2 vCore, **geo-backup on** | LRS or GRS | geo-restore only |
+| **Small** | P0v3/P1v3 × 1–2, autoscale | GP 2 vCore, geo-backup | GRS | geo-restore only |
+| **Growth** | P1v3 × 2, **zone-redundant** | GP 2–4 vCore, **zone-redundant HA**, geo-backup | GZRS | zone + regional |
+| **Scale** | P1v3 × 3+, autoscale | GP 4+ vCore, HA, geo-backup, read replica | GZRS + lifecycle tiering | zone + regional, read scale-out |
 
 Fixed monthly cost dominates at the low end; SMS, storage and AI tokens dominate
-the variable component as worker numbers rise.
+the variable component as worker numbers rise. **The single largest step is
+enabling HA**, which roughly doubles the database compute line wherever it lands
+in the sequence.
+
+For each band, model it twice — with and without HA — so the resilience decision
+can be seen as a discrete number rather than being buried in the tier.
 
 ---
 
-## 10. Caveats
+## 11. Caveats
 
 - **No prices in this document, by design.** The subscription is a Sponsorship
   account; its rates are not commercial rates.
@@ -322,4 +435,9 @@ the variable component as worker numbers rise.
 - HTTP/2 is disabled on the web app; enabling it is free and reduces bytes on
   the wire.
 - Database `publicNetworkAccess` is **Enabled**; a private endpoint would change
-  both the security posture and the networking line item.
+  both the security posture and the networking line item. If the server is being
+  rebuilt for geo-backup anyway (§3), that is the cheapest moment to fix this
+  too — it is another creation-time-friendly decision.
+- The creation-time constraints in §3 were confirmed against **azure-cli
+  2.87.0**. Azure occasionally relaxes such limits; re-check before committing
+  to a migration plan, in case geo-backup has since become settable in place.
