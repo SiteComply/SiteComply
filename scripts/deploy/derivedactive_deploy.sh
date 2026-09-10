@@ -39,6 +39,7 @@ echo "[1/8] Current prod build id:"; OLD_BUILD=$(kudu_buildid); echo "      OLD_
 
 echo "[2/8] SOURCE guards..."
 EXPECTED="app/api/platform/auth-settings/route.ts
+services/auth/authConfigService.ts
 app/platform/dashboard/sites/[id]/workers/page.tsx
 components/platform/AuthAccessSettings.tsx
 scripts/backfill_assignment_acceptance.ts
@@ -71,6 +72,17 @@ for w in "Access controls" "Invited workers only" "Require an active site assign
 done
 code app/api/platform/auth-settings/route.ts | grep -qE "invitedWorkersOnly|requireActiveSiteAssignment" \
   && die "the API still accepts a setting that cannot change anything"
+# Leaving these in the save payload would overwrite the stored values with false
+# every time an UNRELATED setting was saved.
+python3 - <<'PY' || exit 1
+import re, sys
+s = open('services/auth/authConfigService.ts', encoding='utf-8').read()
+m = re.search(r'const data = \{(.*?)\};', s, re.S)
+if not m: print('ERROR: the auth save payload is gone. Aborting'); sys.exit(1)
+if 'invitedWorkersOnly' in m.group(1) or 'requireActiveSiteAssignment' in m.group(1):
+    print('ERROR: the retired settings are still written on save. Aborting'); sys.exit(1)
+print('      the retired settings are never written back on save.')
+PY
 # ...but the REST of that page must survive.
 grep -q "Panel" components/platform/AuthAccessSettings.tsx || die "the settings page lost its other panels"
 echo "      the two dead settings are gone from the UI and the API."

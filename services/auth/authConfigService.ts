@@ -264,8 +264,6 @@ export interface SavePlatformAuthSettingsInput {
   workerSessionTtlSeconds?: number | string | null;
   workerSmsLoginEnabled?: boolean;
   expressCheckInEnabled?: boolean;
-  invitedWorkersOnly?: boolean;
-  requireActiveSiteAssignment?: boolean;
 }
 
 export async function getPlatformAuthSettings(): Promise<PlatformAuthSettingsView> {
@@ -322,17 +320,9 @@ export async function savePlatformAuthSettings(
   if ('error' in session) errors.sessionTtlSeconds = session.error;
   if ('error' in worker) errors.workerSessionTtlSeconds = worker.error;
 
-  // "Require an ACTIVE assignment" is a stricter form of "must be invited": an
-  // active assignment is an assignment. Allowing the strict one without the
-  // base one would describe a rule the access check cannot express, so it is
-  // refused here rather than silently reinterpreted.
-  if (
-    input.requireActiveSiteAssignment === true &&
-    input.invitedWorkersOnly !== true
-  ) {
-    errors.requireActiveSiteAssignment =
-      'Requiring an active site assignment also requires “Invited workers only”.';
-  }
+  // The rule that "require an ACTIVE assignment" needs "invited workers only"
+  // was validated here. Both settings are retired: every site requires an
+  // invitation unconditionally, so neither can be supplied or change anything.
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
@@ -341,8 +331,10 @@ export async function savePlatformAuthSettings(
     workerSessionTtlSeconds: (worker as { value: number }).value,
     workerSmsLoginEnabled: input.workerSmsLoginEnabled !== false,
     expressCheckInEnabled: input.expressCheckInEnabled !== false,
-    invitedWorkersOnly: input.invitedWorkersOnly === true,
-    requireActiveSiteAssignment: input.requireActiveSiteAssignment === true,
+    // invitedWorkersOnly / requireActiveSiteAssignment are deliberately NOT
+    // written. They are retired, and including them here would have quietly
+    // overwritten the stored values with false every time an unrelated setting
+    // was saved.
     updatedByUserId: user.userId,
     updatedByName: user.name,
   };
