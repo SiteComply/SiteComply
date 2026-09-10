@@ -60,7 +60,9 @@ CH=$(git diff --name-only "$DEPLOYED" HEAD | sort)
 # in an explanatory comment is not the same as a button still being rendered.
 # An earlier version grepped the raw file and failed on its own comment.
 for w in "Suspend" "Remove" "Approve" "Reinstate" "Transfer" "Export CSV" "assignmentStatusLabel"; do
-  code components/platform/WorkerAccessManager.tsx | grep -q "$w" \
+  # -w, not a substring match: the response type field `autoApproved` contains
+  # "Approve" and failed this guard twice.
+  code components/platform/WorkerAccessManager.tsx | grep -qw "$w" \
     && die "the settings panel still carries \"$w\" — the worker list was not fully removed"
 done
 grep -q "rows: AssignmentRow" components/platform/WorkerAccessManager.tsx \
