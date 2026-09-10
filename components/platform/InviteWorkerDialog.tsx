@@ -37,7 +37,12 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ fullName: '', company: '', mobile: '' });
-  const [sent, setSent] = useState<{ name: string; code: string } | null>(null);
+  const [sent, setSent] = useState<{
+    name: string;
+    autoApproved: boolean;
+    /** Set only when the mobile already belonged to a worker. */
+    existing: { fullName: string; company: string | null } | null;
+  } | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
 
   // Portalled to <body>. The dialog is rendered from inside the roster's
@@ -93,7 +98,8 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
       }
       setSent({
         name: form.fullName.trim(),
-        code: data.invitationCode as string,
+        autoApproved: data.autoApproved === true,
+        existing: (data.existingWorker as { fullName: string; company: string | null } | null) ?? null,
       });
       setForm({ fullName: '', company: '', mobile: '' });
       // Refresh so the roster and the assignment list pick the worker up.
@@ -140,9 +146,8 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
                       Invite a worker
                     </h2>
                     <p className="mt-0.5 text-xs text-ink-subtle">
-                      They receive a text with an invitation code and appear in
-                      the roster once they accept. You will still need to
-                      approve them before they can check in.
+                      They receive a text with a link to sign in, and appear on
+                      the roster straight away with access to this project.
                     </p>
                   </div>
                   <button
@@ -165,20 +170,40 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
                   <div className="space-y-4">
                     <div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
                       <p className="text-sm font-semibold text-brand-700">
-                        Invitation sent to {sent.name}
-                      </p>
-                      <p className="mt-1 text-sm text-brand-700">
-                        Invitation code:{' '}
-                        <span className="font-mono text-base font-bold">
-                          {sent.code}
-                        </span>
+                        Invitation sent to {sent.existing?.fullName ?? sent.name}
                       </p>
                       <p className="mt-1 text-xs text-brand-700">
-                        Read this to the worker if the text message does not
-                        arrive. They still need approving before they can check
-                        in.
+                        {sent.autoApproved
+                          ? 'They have access to this project now. They still need a valid card and induction before they can check in.'
+                          : 'They were previously suspended or removed from this project, so their access needs approving on the roster before they can check in.'}
                       </p>
                     </div>
+
+                    {/*
+                      The mobile was already on SiteComply. Their existing record
+                      is kept — it may carry verified competency and induction
+                      history — so the name and company just typed are NOT used.
+                      Saying so is the whole point: discarding them silently was
+                      the defect.
+                    */}
+                    {sent.existing ? (
+                      <div className="rounded-xl border border-line bg-surface-sunken px-4 py-3">
+                        <p className="text-sm font-semibold text-ink">
+                          This worker was already on SiteComply
+                        </p>
+                        <p className="mt-1 text-xs text-ink-muted">
+                          Their existing details are used, not the ones you
+                          entered:{' '}
+                          <span className="font-semibold">
+                            {sent.existing.fullName}
+                            {sent.existing.company ? `, ${sent.existing.company}` : ''}
+                          </span>
+                          . This keeps their card verification and induction
+                          history intact. Ask the worker to correct their details
+                          when they sign in if they are wrong.
+                        </p>
+                      </div>
+                    ) : null}
                     <div className="flex flex-wrap justify-end gap-2">
                       <button
                         type="button"

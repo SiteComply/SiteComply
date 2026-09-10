@@ -170,7 +170,7 @@ export function WorkerAccessManager({
       }
       setNotice(ok);
       router.refresh();
-      return data as { invitationCode?: string; smsDelivered?: boolean };
+      return data as { smsDelivered?: boolean; autoApproved?: boolean };
     } finally {
       setBusy(null);
     }
@@ -431,12 +431,7 @@ export function WorkerAccessManager({
                     ? ` · approved ${formatDateTimeUK(r.approvedAt)}${r.approvedByName ? ` by ${r.approvedByName}` : ''}`
                     : ''}
                 </p>
-                {r.status === 'INVITED' && r.invitationCode ? (
-                  <p className="mt-0.5 text-xs text-ink-muted">
-                    Invitation code:{' '}
-                    <span className="font-mono">{r.invitationCode}</span>
-                  </p>
-                ) : null}
+
               </div>
 
               {canManage ? (
