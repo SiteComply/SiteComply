@@ -18,13 +18,6 @@ import type { AssignmentRow } from '@/services/workerAccess/workerAssignmentServ
  * no authority. `canManage` only decides whether they are shown.
  */
 
-const ROLE_LABEL: Record<string, string> = {
-  EMPLOYEE: 'Employee',
-  CONTRACTOR: 'Contractor',
-  SUPERVISOR: 'Supervisor',
-  CLIENT_REP: 'Client representative',
-};
-
 /** yyyy-mm-dd for a date input, from the stored London-midnight instant. */
 function toInput(d: Date | string): string {
   return new Date(d).toISOString().slice(0, 10);
@@ -50,10 +43,12 @@ export function WorkerAssignmentActions({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
+  // Dates and Transfer are separate actions with separate panels. They used to
+  // share one disclosure labelled "Role & dates", which buried "move this worker
+  // to another project" inside a form about dates.
+  const [panel, setPanel] = useState<'dates' | 'transfer' | null>(null);
   const [transferTo, setTransferTo] = useState('');
   const [detail, setDetail] = useState({
-    role: row.role ?? '',
     startDate: row.startDate ? toInput(row.startDate) : '',
     endDate: row.endDate ? toInput(row.endDate) : '',
   });
@@ -76,7 +71,7 @@ export function WorkerAssignmentActions({
         return;
       }
       setNotice(ok);
-      setEditing(false);
+      setPanel(null);
       router.refresh();
     } finally {
       setBusy(false);
@@ -135,9 +130,24 @@ export function WorkerAssignmentActions({
           </button>
         )}
 
-        <button type="button" onClick={() => setEditing((v) => !v)} className={BTN}>
-          {editing ? 'Close' : 'Role & dates'}
+        <button
+          type="button"
+          onClick={() => setPanel((p) => (p === 'dates' ? null : 'dates'))}
+          className={BTN}
+        >
+          {panel === 'dates' ? 'Close' : 'Access dates'}
         </button>
+
+        {/* Transfer is its own action, not a field inside a form about dates. */}
+        {otherSites.length > 0 && row.status !== 'REMOVED' ? (
+          <button
+            type="button"
+            onClick={() => setPanel((p) => (p === 'transfer' ? null : 'transfer'))}
+            className={BTN}
+          >
+            {panel === 'transfer' ? 'Close' : 'Transfer'}
+          </button>
+        ) : null}
 
         {row.status !== 'REMOVED' ? (
           <button
@@ -163,23 +173,8 @@ export function WorkerAssignmentActions({
         ) : null}
       </div>
 
-      {editing ? (
+      {panel === 'dates' ? (
         <div className="mt-3 space-y-2 border-t border-line pt-3">
-          <label className="block text-xs text-ink-muted">
-            Role
-            <select
-              value={detail.role}
-              onChange={(e) => setDetail((d) => ({ ...d, role: e.target.value }))}
-              className={FIELD}
-            >
-              <option value="">Not set</option>
-              {Object.entries(ROLE_LABEL).map(([v, l]) => (
-                <option key={v} value={v}>
-                  {l}
-                </option>
-              ))}
-            </select>
-          </label>
           <label className="block text-xs text-ink-muted">
             Access from
             <input
@@ -212,51 +207,57 @@ export function WorkerAssignmentActions({
             Save
           </button>
           <p className="text-xs text-ink-subtle">
-            The role is recorded for reporting only — it does not change what this
-            worker can see or do. Access runs to the END of the “access to” day.
+            Outside these dates the worker is refused at check-in and told when
+            their access starts or ended. Leave both empty for unrestricted
+            access. Access runs to the END of the “access to” day.
           </p>
-
-          {otherSites.length > 0 && row.status !== 'REMOVED' ? (
-            <div className="space-y-2 border-t border-line pt-3">
-              <label className="block text-xs text-ink-muted">
-                Transfer to another project
-                <select
-                  value={transferTo}
-                  onChange={(e) => setTransferTo(e.target.value)}
-                  className={FIELD}
-                >
-                  <option value="">Choose a project…</option>
-                  {otherSites.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                disabled={busy || !transferTo}
-                onClick={() => {
-                  if (
-                    !window.confirm(
-                      `Transfer ${row.workerName} to the selected project?\n\nThey will need approving there before they can check in, and are removed from this project. Their history here is kept.`,
-                    )
-                  ) {
-                    return;
-                  }
-                  call(
-                    { action: 'transfer', assignmentId: row.id, toSiteId: transferTo },
-                    `${row.workerName} transferred — they need approving on the destination project.`,
-                  );
-                }}
-                className={BTN}
-              >
-                Transfer
-              </button>
-            </div>
-          ) : null}
         </div>
       ) : null}
+
+      {panel === 'transfer' ? (
+        <div className="mt-3 space-y-2 border-t border-line pt-3">
+          <label className="block text-xs text-ink-muted">
+            Transfer to another project
+            <select
+              value={transferTo}
+              onChange={(e) => setTransferTo(e.target.value)}
+              className={FIELD}
+            >
+              <option value="">Choose a project…</option>
+              {otherSites.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            disabled={busy || !transferTo}
+            onClick={() => {
+              if (
+                !window.confirm(
+                  `Transfer ${row.workerName} to the selected project?\n\nThey will need approving there before they can check in, and are removed from this project. Their history here is kept.`,
+                )
+              ) {
+                return;
+              }
+              call(
+                { action: 'transfer', assignmentId: row.id, toSiteId: transferTo },
+                `${row.workerName} transferred — they need approving on the destination project.`,
+              );
+            }}
+            className={BTN}
+          >
+            Transfer
+          </button>
+          <p className="text-xs text-ink-subtle">
+            They are removed from this project and must be approved on the
+            destination before they can check in there. Their history here is kept.
+          </p>
+        </div>
+      ) : null}
+
 
       {error ? (
         <p role="alert" className="mt-2 text-xs font-medium text-danger-700">
