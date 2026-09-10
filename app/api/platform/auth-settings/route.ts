@@ -60,8 +60,10 @@ export async function PATCH(req: NextRequest) {
         | null,
       workerSmsLoginEnabled: body.workerSmsLoginEnabled === true,
       expressCheckInEnabled: body.expressCheckInEnabled === true,
-      invitedWorkersOnly: body.invitedWorkersOnly === true,
-      requireActiveSiteAssignment: body.requireActiveSiteAssignment === true,
+      // `invitedWorkersOnly` and `requireActiveSiteAssignment` are no longer
+      // accepted. Every site requires an invitation unconditionally, so these
+      // could not change any outcome — taking them would let a caller believe
+      // they had configured something.
     },
     { userId: viewer.id, name: viewer.name },
   );

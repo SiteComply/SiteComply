@@ -35,8 +35,6 @@ export function AuthAccessSettings({
     workerSessionTtlSeconds: settings.workerSessionTtlSeconds,
     workerSmsLoginEnabled: settings.workerSmsLoginEnabled,
     expressCheckInEnabled: settings.expressCheckInEnabled,
-    invitedWorkersOnly: settings.invitedWorkersOnly,
-    requireActiveSiteAssignment: settings.requireActiveSiteAssignment,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -199,43 +197,19 @@ export function AuthAccessSettings({
         />
       </Panel>
 
-      <Panel
-        title="Access controls"
-        hint="The minimum standard for reaching a site, across the whole organisation."
-      >
-        <Toggle
-          label="Invited workers only"
-          hint="A worker must have been invited to a project before they can check in — on every site, including those not enforcing access themselves."
-          checked={form.invitedWorkersOnly}
-          disabled={!canEdit}
-          onChange={(v) =>
-            setForm((f) => ({
-              ...f,
-              invitedWorkersOnly: v,
-              // The stricter rule cannot stand on its own: an active assignment
-              // is an assignment. Clearing the base rule clears it too, rather
-              // than leaving a combination the access check cannot express and
-              // the server would reject on save.
-              requireActiveSiteAssignment: v
-                ? f.requireActiveSiteAssignment
-                : false,
-            }))
-          }
-        />
-        <Toggle
-          label="Require an active site assignment"
-          hint="Stricter: the invitation must also be approved and within its access dates. Requires “Invited workers only”."
-          checked={form.requireActiveSiteAssignment}
-          disabled={!canEdit || !form.invitedWorkersOnly}
-          onChange={(v) => set('requireActiveSiteAssignment', v)}
-        />
-        <p className="mt-2 text-xs text-ink-subtle">
-          These set a floor. A site already enforcing worker access keeps its
-          own stricter rules — switching these on can only narrow who gets in,
-          never widen it.
-        </p>
-      </Panel>
+      {/*
+        THE "ACCESS CONTROLS" PANEL WAS HERE — two toggles, "Invited workers
+        only" and "Require an active site assignment".
 
+        They raised an organisation-wide floor under the per-site Controlled
+        Access switch. That switch is gone and every site now requires an
+        invitation unconditionally, so neither toggle could change any outcome:
+        on or off, the behaviour was identical. Their help text also described
+        the per-site switch that no longer exists.
+
+        The columns remain in the schema, unread. Removing them needs a
+        hand-applied migration for no gain.
+      */}
     </div>
   );
 }

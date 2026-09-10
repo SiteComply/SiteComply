@@ -12,20 +12,27 @@
  * "Active" claims someone is on the project before they have ever arrived. It
  * reads INVITED until their first check-in to this site, then ACTIVE.
  *
+ * `arrivedAt` is DERIVED from attendance history, not stored. A stored flag
+ * needed a backfill in every environment and could drift from the check-ins it
+ * was summarising.
+ *
  * "Awaiting approval" survives only for a genuinely INVITED row, which now
  * arises in exactly three ways: re-inviting a suspended worker, re-inviting a
  * removed one, and a transfer in from another site.
  */
 export interface AssignmentLabelInput {
   status: string;
-  /** Set at the worker's FIRST check-in to this site. Null until then. */
-  acceptedAt: Date | string | null;
+  /**
+   * The worker's first check-in to this site, DERIVED from attendance history
+   * rather than stored. Null until they have actually turned up.
+   */
+  arrivedAt: Date | string | null;
 }
 
 export function assignmentStatusLabel(a: AssignmentLabelInput): string {
   switch (a.status) {
     case 'ACTIVE':
-      return a.acceptedAt ? 'Active' : 'Invited';
+      return a.arrivedAt ? 'Active' : 'Invited';
     case 'INVITED':
       return 'Awaiting approval';
     case 'SUSPENDED':
@@ -43,7 +50,7 @@ export function assignmentStatusClass(a: AssignmentLabelInput): string {
     case 'ACTIVE':
       // Invited-but-not-yet-arrived is deliberately NEUTRAL, not green. Green
       // says "on the project"; they have not turned up yet.
-      return a.acceptedAt ? 'bg-safe-50 text-safe-700' : 'bg-surface-sunken text-ink-muted';
+      return a.arrivedAt ? 'bg-safe-50 text-safe-700' : 'bg-surface-sunken text-ink-muted';
     case 'INVITED':
       return 'bg-hivis-500/10 text-ink-muted';
     case 'SUSPENDED':

@@ -206,8 +206,8 @@ export default async function SiteWorkersPage({
    * which is the page's primary surface.
    */
   const assignments = access?.rows ?? [];
-  const activeCount = assignments.filter((r) => r.status === 'ACTIVE' && r.acceptedAt).length;
-  const invitedCount = assignments.filter((r) => r.status === 'ACTIVE' && !r.acceptedAt).length;
+  const activeCount = assignments.filter((r) => r.status === 'ACTIVE' && r.arrivedAt).length;
+  const invitedCount = assignments.filter((r) => r.status === 'ACTIVE' && !r.arrivedAt).length;
   const awaitingCount = assignments.filter((r) => r.status === 'INVITED').length;
   const expiring = assignments.filter((r) => r.expiringSoon);
   const otherSites = viewer.sites

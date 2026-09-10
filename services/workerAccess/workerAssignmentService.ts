@@ -225,7 +225,8 @@ export interface AssignmentRow {
   status: WorkerAssignmentStatus;
   invitedByName: string | null;
   invitedAt: Date;
-  acceptedAt: Date | null;
+  /** First check-in to this site, derived from attendance history. */
+  arrivedAt: Date | null;
   approvedByName: string | null;
   approvedAt: Date | null;
   backfilled: boolean;
@@ -261,6 +262,24 @@ export async function listSiteAssignments(
     },
   });
 
+  /*
+   * WHETHER A WORKER HAS ACTUALLY ARRIVED IS DERIVED, NOT STORED.
+   *
+   * It used to be a stored `acceptedAt` written at check-in, which meant every
+   * environment needed a one-off backfill before workers who had been on site
+   * for months stopped reading "Invited" — and a stored flag can drift from the
+   * attendance history it is supposed to summarise. Attendance history IS the
+   * answer, so it is read directly: one aggregate for the whole site.
+   */
+  const firstCheckIns = await prisma.submission.groupBy({
+    by: ['workerId'],
+    where: { jobSiteId: siteId },
+    _min: { checkedInAt: true },
+  });
+  const arrivedAt = new Map(
+    firstCheckIns.map((f) => [f.workerId, f._min.checkedInAt ?? null]),
+  );
+
   return {
     // Always true now: every site requires an invitation.
     enforced: true,
@@ -273,7 +292,8 @@ export async function listSiteAssignments(
       status: r.status,
       invitedByName: r.invitedByName,
       invitedAt: r.invitedAt,
-      acceptedAt: r.acceptedAt,
+      // Their first check-in to THIS site, or null if they have never arrived.
+      arrivedAt: arrivedAt.get(r.workerId) ?? null,
       approvedByName: r.approvedByName,
       approvedAt: r.approvedAt,
       backfilled: r.backfilled,
@@ -718,18 +738,15 @@ export function removeAssignment(
  * `JobSite.workerAccessEnforced` remains in the schema, unread.
  */
 
-/** Record that a worker accepted — informational in Phase 1, never a gate. */
-export async function recordAcceptance(
-  workerId: string,
-  siteId: string,
-): Promise<void> {
-  await prisma.workerSiteAssignment
-    .updateMany({
-      where: { workerId, jobSiteId: siteId, acceptedAt: null },
-      data: { acceptedAt: new Date() },
-    })
-    .catch(() => {});
-}
+/*
+ * recordAcceptance() was here.
+ *
+ * It wrote `acceptedAt` at check-in so the roster could say Active. That is now
+ * DERIVED from attendance history in listSiteAssignments — the check-ins are the
+ * answer, so summarising them into a second column only created something that
+ * needed backfilling in every environment and could drift from what it copied.
+ * `WorkerSiteAssignment.acceptedAt` remains in the schema, unwritten and unread.
+ */
 
 /* -------------------------------------------------------------------------- */
 /* Phase 2 — details, transfers, per-worker panels                              */
