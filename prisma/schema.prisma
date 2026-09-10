@@ -2694,9 +2694,12 @@ model WorkerSiteAssignment {
 
   status WorkerAssignmentStatus @default(INVITED)
 
-  /// Short code a manager can read out when SMS cannot be delivered. Site huts
-  /// have poor signal; a flow that only works with a delivered message fails on
-  /// a real site, so this is a permanent feature and not test scaffolding.
+  /// RETIRED. Was generated, texted and displayed, but never read back anywhere —
+  /// there was no field to enter it and no lookup against it, so the "read it out
+  /// if the text does not arrive" instruction could not work. It could not be
+  /// rescued as an SMS fallback either: sign-in needs an OTP that is itself sent
+  /// by SMS. Nothing writes this now; the column is kept only because dropping it
+  /// needs a hand-applied migration for no behavioural gain.
   invitationCode String?
 
   invitedByUserId String?

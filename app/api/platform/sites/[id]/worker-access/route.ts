@@ -199,13 +199,16 @@ export async function PATCH(
   }
 
   if (result.ok) {
-    // The invitation code comes back so a manager can read it out immediately.
-    // With SMS on the mock provider this is the ONLY working route, and on a
-    // real site with poor signal it is often the faster one.
+    // `existingWorker` is present only when the mobile was already known, and
+    // carries the details that will actually be used — the invite deliberately
+    // does not overwrite a record that may hold verified competency.
+    // `autoApproved` says whether access was granted outright, or still needs a
+    // manager to approve it (a previously suspended or removed worker does).
     return NextResponse.json({
       ok: true,
-      invitationCode: result.invitationCode,
       smsDelivered: result.smsDelivered,
+      existingWorker: result.existingWorker ?? null,
+      autoApproved: result.autoApproved ?? false,
     });
   }
   const status =

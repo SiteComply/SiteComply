@@ -233,7 +233,6 @@ export interface AssignmentRow {
   company: string;
   mobile: string;
   status: WorkerAssignmentStatus;
-  invitationCode: string | null;
   invitedByName: string | null;
   invitedAt: Date;
   acceptedAt: Date | null;
@@ -281,7 +280,6 @@ export async function listSiteAssignments(
       company: r.worker.company,
       mobile: r.worker.mobile,
       status: r.status,
-      invitationCode: r.invitationCode,
       invitedByName: r.invitedByName,
       invitedAt: r.invitedAt,
       acceptedAt: r.acceptedAt,
@@ -323,8 +321,15 @@ export type AssignmentResult =
   | {
       ok: true;
       assignmentId: string;
-      invitationCode?: string;
       smsDelivered?: boolean;
+      /**
+       * Set when the mobile already belonged to a worker. The invite does NOT
+       * overwrite their name or company, so the manager is told which details
+       * will actually be used rather than the ones they just typed.
+       */
+      existingWorker?: { fullName: string; company: string | null };
+      /** True when the invitation granted access outright — see inviteWorker. */
+      autoApproved?: boolean;
     }
   | {
       ok: false;
@@ -333,20 +338,33 @@ export type AssignmentResult =
     };
 
 /**
- * A short, readable invitation code.
+ * Where to send the worker.
  *
- * Excludes characters that are misheard or misread when a manager reads one out
- * over site noise — no O/0, I/1, S/5. The fallback only works if the code
- * survives being spoken.
+ * Reads APP_BASE_URL, which is the variable actually set on the App Service. The
+ * previous code read NEXT_PUBLIC_APP_URL, which is NOT set in production, so
+ * every invitation SMS fell through to the literal words "the SiteComply app" and
+ * carried no link at all.
  */
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRTUVWXYZ2346789';
-function makeInvitationCode(): string {
-  let out = '';
-  for (let i = 0; i < 6; i++) {
-    out += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
-  }
-  return out;
+function appUrl(): string {
+  return (process.env.APP_BASE_URL || 'https://app.sitecomply.co.uk').replace(/\/+$/, '');
 }
+
+/*
+ * The invitation code has been REMOVED.
+ *
+ * It was generated, stored, texted to the worker and shown to the manager — and
+ * never read back anywhere in the product. There was no field to enter it and no
+ * lookup against it, so the "read it out if the text does not arrive" instruction
+ * on the invite dialog asked managers to perform an action that could not work.
+ *
+ * It could not be rescued as a fallback either: signing in requires an OTP that
+ * is itself delivered by SMS, so a worker whose text never arrives cannot get in
+ * regardless of what code they hold.
+ *
+ * `WorkerSiteAssignment.invitationCode` is deliberately left in the schema. It is
+ * nullable, nothing reads it, and dropping it would need a hand-applied migration
+ * for no behavioural gain. New rows simply leave it null.
+ */
 
 async function guard(
   viewer: PlatformViewer,
@@ -436,9 +454,29 @@ export async function inviteWorker(
     };
   }
 
+  // Read BEFORE the upsert: whether this mobile is already known decides what
+  // the manager is told, and the existing assignment's status decides whether
+  // this invitation can grant access outright.
+  const priorWorker = await prisma.worker.findUnique({
+    where: { mobile: mobile.e164 },
+    select: { id: true, fullName: true, company: true },
+  });
+  const priorAssignment = priorWorker
+    ? await prisma.workerSiteAssignment.findUnique({
+        where: { workerId_jobSiteId: { workerId: priorWorker.id, jobSiteId: siteId } },
+        select: { status: true },
+      })
+    : null;
+
   // Upsert rather than create: a worker already known to the platform (from
   // another site) must not be duplicated, and their existing record — CSCS
   // verification, induction history — carries over.
+  //
+  // `update: {}` is deliberate and stays. A re-invitation must not overwrite a
+  // record carrying verified competency. What was WRONG was doing that silently:
+  // the manager typed a name and company that were validated and then discarded
+  // without a word. The values are returned to the caller instead, so the invite
+  // dialog can say which details will actually be used.
   const worker = await prisma.worker.upsert({
     where: { mobile: mobile.e164 },
     create: { mobile: mobile.e164, fullName, company },
@@ -446,31 +484,64 @@ export async function inviteWorker(
     select: { id: true, fullName: true },
   });
 
-  const code = makeInvitationCode();
+  /*
+   * APPROVAL, and when it is skipped.
+   *
+   * Inviting and approving require the IDENTICAL permission — both call guard(),
+   * which checks canManageWorkerAccess plus site scope. So for a first
+   * invitation the approval step was the same person clicking again: ceremony,
+   * not control, and it left workers stuck at "Awaiting approval" after a
+   * manager had already decided they should be on site.
+   *
+   * It is NOT ceremony in two cases, and both are preserved:
+   *
+   *   SUSPENDED — access was withdrawn, possibly for a safety or conduct
+   *               reason. Re-inviting must not silently restore it.
+   *   REMOVED   — the same, and the removal was explicit.
+   *
+   * Transfers between sites are also untouched (see transferAssignment): the
+   * RECEIVING site's manager must still approve, or one site could push a worker
+   * onto another site's roster without their consent.
+   *
+   * This does not weaken site safety. Competency and induction requirements are
+   * evaluated separately and afterwards, in canWorkerCheckIn — an auto-approved
+   * worker with a lapsed CSCS card still cannot check in.
+   */
+  const needsExplicitApproval =
+    priorAssignment?.status === WorkerAssignmentStatus.SUSPENDED ||
+    priorAssignment?.status === WorkerAssignmentStatus.REMOVED;
+
+  const status = needsExplicitApproval
+    ? WorkerAssignmentStatus.INVITED
+    : WorkerAssignmentStatus.ACTIVE;
+  const approval = needsExplicitApproval
+    ? { approvedAt: null, approvedByUserId: null, approvedByName: null }
+    : {
+        approvedAt: new Date(),
+        approvedByUserId: viewer.id,
+        approvedByName: viewer.name,
+      };
+
   const assignment = await prisma.workerSiteAssignment.upsert({
     where: { workerId_jobSiteId: { workerId: worker.id, jobSiteId: siteId } },
     create: {
       workerId: worker.id,
       jobSiteId: siteId,
-      status: WorkerAssignmentStatus.INVITED,
-      invitationCode: code,
+      status,
       invitedByUserId: viewer.id,
       invitedByName: viewer.name,
+      ...approval,
     },
-    // Re-inviting someone previously removed or suspended returns them to
-    // INVITED rather than silently restoring access — re-approval is deliberate.
     update: {
-      status: WorkerAssignmentStatus.INVITED,
-      invitationCode: code,
+      status,
       invitedByUserId: viewer.id,
       invitedByName: viewer.name,
       invitedAt: new Date(),
       suspendedAt: null,
       suspendedByName: null,
       removedAt: null,
-      approvedAt: null,
-      approvedByName: null,
       backfilled: false,
+      ...approval,
     },
     select: { id: true },
   });
@@ -483,9 +554,12 @@ export async function inviteWorker(
     actorName: viewer.name,
     message:
       `You have been invited to ${g.site.name} on SiteComply. ` +
-      `Your invitation code is ${code}. ` +
-      `Sign in at ${process.env.NEXT_PUBLIC_APP_URL ?? 'the SiteComply app'} to complete your induction.`,
+      `Sign in at ${appUrl()} to complete your induction.`,
   });
+
+  const smsNote = sms.ok
+    ? 'Invitation SMS sent.'
+    : `Invitation SMS not delivered: ${sms.error}`;
 
   await recordEvent(
     worker.id,
@@ -494,16 +568,35 @@ export async function inviteWorker(
     g.site.name,
     'INVITED',
     viewer.name,
-    sms.ok
-      ? 'Invitation SMS sent.'
-      : `Invitation SMS not delivered: ${sms.error}`,
+    needsExplicitApproval
+      ? `${smsNote} Previously ${priorAssignment?.status.toLowerCase()} — approval required.`
+      : smsNote,
   );
+
+  // Auto-approval is recorded as its own event. Access changing hands should be
+  // visible in the history as an approval, not inferred from an invitation.
+  if (!needsExplicitApproval) {
+    await recordEvent(
+      worker.id,
+      worker.fullName,
+      siteId,
+      g.site.name,
+      'APPROVED',
+      viewer.name,
+      'Approved automatically — granted by the manager who sent the invitation.',
+    );
+  }
 
   return {
     ok: true,
     assignmentId: assignment.id,
-    invitationCode: code,
     smsDelivered: sms.ok,
+    // Only when the mobile was already known: these are the details that will be
+    // used, which are NOT the ones the manager just typed.
+    ...(priorWorker
+      ? { existingWorker: { fullName: priorWorker.fullName, company: priorWorker.company } }
+      : {}),
+    autoApproved: !needsExplicitApproval,
   };
 }
 
@@ -822,7 +915,6 @@ export async function transferWorker(
   });
   if (!existing) return { ok: false, reason: 'not_found' };
 
-  const code = makeInvitationCode();
   const [, created] = await prisma.$transaction([
     prisma.workerSiteAssignment.update({
       where: { id: assignmentId },
@@ -839,7 +931,6 @@ export async function transferWorker(
         workerId: existing.workerId,
         jobSiteId: toSiteId,
         status: WorkerAssignmentStatus.INVITED,
-        invitationCode: code,
         invitedByUserId: viewer.id,
         invitedByName: viewer.name,
         // The role travels with the worker; the DATES do not. An access window
@@ -849,7 +940,6 @@ export async function transferWorker(
       },
       update: {
         status: WorkerAssignmentStatus.INVITED,
-        invitationCode: code,
         invitedByUserId: viewer.id,
         invitedByName: viewer.name,
         invitedAt: new Date(),
@@ -889,7 +979,9 @@ export async function transferWorker(
     }),
   ]);
 
-  return { ok: true, assignmentId: created.id, invitationCode: code };
+  // Transfers still require the RECEIVING site's manager to approve. One site
+  // must not be able to place a worker on another site's roster unilaterally.
+  return { ok: true, assignmentId: created.id, autoApproved: false };
 }
 
 /* -------------------------------------------------------------------------- */

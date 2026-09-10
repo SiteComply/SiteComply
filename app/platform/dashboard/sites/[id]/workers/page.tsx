@@ -310,16 +310,6 @@ export default async function SiteWorkersPage({
                         }`}
                       />
                     )}
-                    {selectedWorker.assignment.invitationCode && (
-                      <RailDetail
-                        label="Invitation code"
-                        value={
-                          <span className="font-mono">
-                            {selectedWorker.assignment.invitationCode}
-                          </span>
-                        }
-                      />
-                    )}
                   </>
                 )}
               </dl>
@@ -410,8 +400,9 @@ export default async function SiteWorkersPage({
               </span>
             </span>
             <span className="mt-0.5 block pl-5 text-xs font-normal text-ink-subtle">
-              Invite and approve workers, set access windows, and choose what a
-              worker must satisfy before they can check in.
+              Invite workers, set access windows, and choose what a worker must
+              satisfy before they can check in. Approval is only needed to
+              restore someone who was suspended or removed.
             </span>
           </summary>
           <div className="border-t border-line p-4">
