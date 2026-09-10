@@ -84,7 +84,11 @@ for pat in (r"\{r\.status === 'SUSPENDED' \? 'Reinstate' : 'Approve'\}",
             r"waiting > 0 \?[^\n]*",
             r"They will need approving there[^`]*",
             r"they need approving on the destination project[^`]*",
-            r"autoApproved\??: boolean"):
+            r"autoApproved\??: boolean",
+            # The retained button's action string. It belongs to the same control
+            # as the label already stripped above and fires only for non-ACTIVE.
+            r"\? 'reinstate'",
+            r": 'approve',"):
     s = re.sub(pat, '', s)
 leftovers = [m for m in re.findall(r"[^\n]*[Aa]pprov[^\n]*", s)
              if 'approvedAt' not in m and 'approvedByName' not in m and 'only needed to restore' not in m]
