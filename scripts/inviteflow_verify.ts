@@ -212,6 +212,37 @@ async function main() {
   const src = require('fs').readFileSync('services/submissions/submissionService.ts', 'utf8');
   chk('check-in no longer writes an acceptance column', !/recordAcceptance/.test(src));
 
+  console.log('\n[11] Worker roles are gone; access dates still gate access');
+  const dated = await prisma.workerSiteAssignment.findFirst({ where: { workerId: w1.id, jobSiteId: site.id } });
+  // Passing a role must be ignored, not stored.
+  await svc.setAssignmentDetails(viewer, site.id, dated.id, {
+    role: 'SUPERVISOR', startDate: '2026-01-01', endDate: '2026-12-31',
+  } as any);
+  const afterRole = await prisma.workerSiteAssignment.findFirst({ where: { id: dated.id } });
+  chk('a role supplied to setDetails is ignored', afterRole.role === null, String(afterRole.role));
+  chk('the access dates ARE stored', afterRole.startDate !== null && afterRole.endDate !== null);
+
+  // Dates still gate.
+  const pending = svc.evaluateAssignmentGate({
+    status: WorkerAssignmentStatus.ACTIVE,
+    startDate: new Date(Date.parse('2099-01-01T00:00:00Z')), endDate: null });
+  chk('a future start date still blocks', pending.blocked === true, pending.short);
+  const expired = svc.evaluateAssignmentGate({
+    status: WorkerAssignmentStatus.ACTIVE,
+    startDate: null, endDate: new Date(Date.parse('2020-01-01T00:00:00Z')) });
+  chk('a past end date still blocks', expired.blocked === true, expired.short);
+
+  const exportSrc = require('fs').readFileSync('app/api/platform/sites/[id]/worker-access/export/route.ts', 'utf8');
+  chk('the CSV export has no Role column', !/'Role',/.test(exportSrc));
+  // Comment-stripped: the file DOCUMENTS the old "Role & dates" grouping, and a
+  // comment saying so is not a button still saying so.
+  const actionsSrc = require('fs').readFileSync('components/platform/WorkerAssignmentActions.tsx', 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  chk('the rail offers Access dates, not Role & dates',
+      /'Access dates'/.test(actionsSrc) && !/Role & dates/.test(actionsSrc));
+  chk('Transfer is a top-level action', /panel === 'transfer' \? 'Close' : 'Transfer'/.test(actionsSrc));
+
   console.log(`\n== ${pass} passed, ${failures.length} failed ==`);
   if (failures.length) { for (const f of failures) console.log(`   FAILED: ${f}`); process.exitCode = 1; }
 }

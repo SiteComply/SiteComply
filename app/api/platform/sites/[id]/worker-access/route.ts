@@ -20,7 +20,7 @@ export const dynamic = 'force-dynamic';
  * PATCH /api/platform/sites/[id]/worker-access
  *   { action: 'invite', mobile, fullName, company }
  *   { action: 'approve' | 'suspend' | 'reinstate' | 'remove', assignmentId }
- *   { action: 'setDetails', assignmentId, role?, startDate?, endDate? }
+ *   { action: 'setDetails', assignmentId, startDate?, endDate? }
  *   { action: 'transfer', assignmentId, toSiteId }
  *   { action: 'setPanel', workerId, panel, enabled }
  *   { action: 'setRequirement', requirement, enabled, confirm? }
@@ -86,9 +86,10 @@ export async function PATCH(
       result = await removeAssignment(viewer, params.id, assignmentId);
       break;
     case 'setDetails':
-      // SC-023 Phase 2 — role and access window. The role is metadata only.
+      // SC-023 Phase 2 — the access window. `role` is no longer accepted: it was
+      // recorded and never read, so taking it would let a caller believe they had
+      // set something meaningful.
       result = await setAssignmentDetails(viewer, params.id, assignmentId, {
-        role: typeof body.role === 'string' ? body.role : null,
         startDate: typeof body.startDate === 'string' ? body.startDate : null,
         endDate: typeof body.endDate === 'string' ? body.endDate : null,
       });

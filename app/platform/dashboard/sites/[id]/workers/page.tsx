@@ -338,14 +338,6 @@ export default async function SiteWorkersPage({
                         assignmentStatusLabel(selectedWorker.assignment)
                       }
                     />
-                    {selectedWorker.assignment.role && (
-                      <RailDetail
-                        label="Role on site"
-                        value={String(selectedWorker.assignment.role)
-                          .toLowerCase()
-                          .replace(/_/g, ' ')}
-                      />
-                    )}
                     {selectedWorker.assignment.endDate && (
                       <RailDetail
                         label="Access until"

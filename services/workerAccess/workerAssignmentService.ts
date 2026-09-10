@@ -1,6 +1,5 @@
 import {
   WorkerAssignmentStatus,
-  WorkerSiteRole,
   AccessRequirement,
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -231,7 +230,6 @@ export interface AssignmentRow {
   approvedAt: Date | null;
   backfilled: boolean;
   /** SC-023 Phase 2 — recorded only; never affects access or visibility. */
-  role: WorkerSiteRole | null;
   startDate: Date | null;
   endDate: Date | null;
   /** Derived from the dates on every read — never stored. */
@@ -297,7 +295,6 @@ export async function listSiteAssignments(
       approvedByName: r.approvedByName,
       approvedAt: r.approvedAt,
       backfilled: r.backfilled,
-      role: r.role,
       startDate: r.startDate,
       endDate: r.endDate,
       windowState: windowState(r.startDate, r.endDate),
@@ -753,13 +750,14 @@ export function removeAssignment(
 /* -------------------------------------------------------------------------- */
 
 /**
- * Set the recorded role and access window for an assignment.
+ * Set the access window for an assignment.
  *
- * The role is METADATA. Nothing reads it to decide access or visibility, so
- * changing it can never silently alter what someone can do — that stays the job
- * of approval, suspension and the explicit panel settings.
+ * These dates DO gate access: outside the window the worker is refused at
+ * check-in and told when it starts or ended. Optional; clearing both restores
+ * unrestricted access.
  *
- * Dates are optional; clearing both restores unrestricted access.
+ * A recorded `role` used to be set here too. Nothing ever read it, so it has been
+ * removed from the workflow — see the note in the body.
  */
 export async function setAssignmentDetails(
   viewer: PlatformViewer,
@@ -780,11 +778,9 @@ export async function setAssignmentDetails(
   });
   if (!existing) return { ok: false, reason: 'not_found' };
 
-  const role =
-    input.role &&
-    (Object.values(WorkerSiteRole) as string[]).includes(input.role)
-      ? (input.role as WorkerSiteRole)
-      : null;
+  // `role` is no longer accepted. It was recorded and never read — no
+  // permission, gate, report or workflow consumed it — and it sat unset on 26 of
+  // 27 assignments. The column and enum stay in the schema, now unwritten.
   const startDate = parseAccessDate(input.startDate);
   const endDate = parseAccessDate(input.endDate);
 
@@ -800,11 +796,10 @@ export async function setAssignmentDetails(
 
   await prisma.workerSiteAssignment.update({
     where: { id: assignmentId },
-    data: { role, startDate, endDate },
+    data: { startDate, endDate },
   });
 
   const detail = [
-    role ? `role ${role}` : 'role cleared',
     startDate ? `from ${formatDateUK(startDate)}` : 'no start date',
     endDate ? `to ${formatDateUK(endDate)} inclusive` : 'no end date',
   ].join(', ');
@@ -883,9 +878,9 @@ export async function transferWorker(
         status: WorkerAssignmentStatus.INVITED,
         invitedByUserId: viewer.id,
         invitedByName: viewer.name,
-        // The role travels with the worker; the DATES do not. An access window
-        // agreed for one project says nothing about another.
-        role: existing.role,
+        // The DATES do not travel: an access window agreed for one project says
+        // nothing about another. The recorded role no longer travels either — it
+        // is no longer written anywhere.
         transferredFromSiteName: from.site.name,
       },
       update: {
@@ -893,7 +888,6 @@ export async function transferWorker(
         invitedByUserId: viewer.id,
         invitedByName: viewer.name,
         invitedAt: new Date(),
-        role: existing.role,
         startDate: null,
         endDate: null,
         suspendedAt: null,
