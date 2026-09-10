@@ -12,8 +12,7 @@
  * gate with "You have not been invited to this project", and nobody is warned.
  *
  * Safe to re-run: only workers with NO assignment for that site are given one,
- * and `acceptedAt` is set from their first check-in so they read Active, not
- * Invited. Anyone who already has an assignment — including suspended and
+ * Anyone who already has an assignment — including suspended and
  * removed workers — is left exactly as they are.
  *
  * Dry run:  npx tsx scripts/backfill_assignments_from_checkins.ts
@@ -57,13 +56,8 @@ async function main() {
     if (!apply) continue;
 
     for (const workerId of missing) {
-      const first = await prisma.submission.findFirst({
-        where: { workerId, jobSiteId: site.id },
-        orderBy: { checkedInAt: 'asc' },
-        select: { checkedInAt: true },
-      });
-      // createMany would be faster, but each row needs its own acceptedAt and a
-      // unique-constraint collision here should be a no-op, not a failure.
+      // createMany would be faster, but a unique-constraint collision here
+      // should be a no-op, not a failure for the whole run.
       try {
         await prisma.workerSiteAssignment.create({
           data: {
@@ -73,7 +67,8 @@ async function main() {
             invitedByName: 'Backfilled from existing check-ins',
             approvedByName: 'Backfilled from existing check-ins',
             approvedAt: new Date(),
-            acceptedAt: first?.checkedInAt ?? new Date(),
+            // They read "Active" immediately: the roster derives that from their
+            // attendance history, which is exactly why they are in this list.
             backfilled: true,
           },
         });

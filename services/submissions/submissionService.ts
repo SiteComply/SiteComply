@@ -24,7 +24,6 @@ import {
   type SignatureInput,
   type SignatureRecord,
 } from '@/services/inductionSignature/signatureService';
-import { recordAcceptance } from '@/services/workerAccess/workerAssignmentService';
 
 /**
  * Check-in (Submission) operations.
@@ -230,12 +229,6 @@ export async function createCheckIn(
       data: { submissionId: submission.id },
     });
   }
-  // The worker has now actually turned up on this project. Record it against the
-  // assignment: that is what turns their roster status from "Invited" into
-  // "Active". Deliberately AFTER the submission exists and deliberately not
-  // awaited into the result — a bookkeeping write must never be able to fail a
-  // check-in, which is the safety-critical action here.
-  void recordAcceptance(input.workerId, input.siteId);
 
 
   return {

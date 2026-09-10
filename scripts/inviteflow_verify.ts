@@ -164,37 +164,53 @@ async function main() {
       events.map((e: any) => e.action).join(' → '));
 
   /* ---------------- 7. Invited until first check-in ---------------- */
-  console.log('\n[7] The roster says Invited until the worker turns up');
-  const fresh = await prisma.workerSiteAssignment.findFirst({ where: { workerId: w1.id, jobSiteId: site.id } });
-  chk('a newly invited worker has no acceptance yet', fresh.acceptedAt === null);
-  chk('...and is labelled Invited, not Approved',
-      assignmentStatusLabel(fresh) === 'Invited', assignmentStatusLabel(fresh));
-  chk('no approval wording appears for a normal invite',
-      !/approv/i.test(assignmentStatusLabel(fresh)), assignmentStatusLabel(fresh));
+  console.log('\n[7] Active is DERIVED from attendance history, not stored');
+  const listed = await svc.listSiteAssignments(viewer, site.id);
+  const freshRow = listed.rows.find((r: any) => r.workerId === w1.id);
+  chk('a newly invited worker has not arrived', freshRow.arrivedAt === null);
+  chk('...and is labelled Invited', assignmentStatusLabel(freshRow) === 'Invited', assignmentStatusLabel(freshRow));
+  chk('no approval wording for a normal invite', !/approv/i.test(assignmentStatusLabel(freshRow)));
 
-  await svc.recordAcceptance(w1.id, site.id);
-  const arrived = await prisma.workerSiteAssignment.findFirst({ where: { workerId: w1.id, jobSiteId: site.id } });
-  chk('checking in records the acceptance', arrived.acceptedAt !== null);
-  chk('...and the label becomes Active', assignmentStatusLabel(arrived) === 'Active', assignmentStatusLabel(arrived));
+  // A real check-in — no bookkeeping column is written; the row IS the evidence.
+  const firstAt = new Date(Date.parse('2026-01-02T08:00:00Z'));
+  await prisma.submission.create({
+    data: {
+      workerId: w1.id, jobSiteId: site.id, checklistVersion: 1, answers: {},
+      status: 'COMPLIANT', gdprConsent: true, checkedInAt: firstAt,
+    },
+  });
+  const after = await svc.listSiteAssignments(viewer, site.id);
+  const arrivedRow = after.rows.find((r: any) => r.workerId === w1.id);
+  chk('the label becomes Active with no backfill and no extra write',
+      assignmentStatusLabel(arrivedRow) === 'Active', assignmentStatusLabel(arrivedRow));
+  chk('arrival is the FIRST check-in', new Date(arrivedRow.arrivedAt).getTime() === firstAt.getTime(),
+      String(arrivedRow.arrivedAt));
 
-  const before = arrived.acceptedAt;
-  await svc.recordAcceptance(w1.id, site.id);
-  const again = await prisma.workerSiteAssignment.findFirst({ where: { workerId: w1.id, jobSiteId: site.id } });
-  chk('a second check-in does not move the first-arrival time',
-      again.acceptedAt.getTime() === before.getTime());
+  // A later check-in must not move the first-arrival time.
+  await prisma.submission.create({
+    data: {
+      workerId: w1.id, jobSiteId: site.id, checklistVersion: 1, answers: {},
+      status: 'COMPLIANT', gdprConsent: true, checkedInAt: new Date(Date.parse('2026-03-04T08:00:00Z')),
+    },
+  });
+  const later = await svc.listSiteAssignments(viewer, site.id);
+  chk('a second check-in does not move first arrival',
+      new Date(later.rows.find((r: any) => r.workerId === w1.id).arrivedAt).getTime() === firstAt.getTime());
+
+  chk('nothing writes the retired acceptance column',
+      !/data: \{ acceptedAt/.test(require('fs').readFileSync('services/workerAccess/workerAssignmentService.ts','utf8')));
 
   console.log('\n[8] Approval wording only where approval applies');
   chk('a SUSPENDED row still reads as suspended',
-      assignmentStatusLabel({ status: 'SUSPENDED', acceptedAt: null }) === 'Suspended');
+      assignmentStatusLabel({ status: 'SUSPENDED', arrivedAt: null }) === 'Suspended');
   chk('a genuinely INVITED row still says Awaiting approval',
-      assignmentStatusLabel({ status: 'INVITED', acceptedAt: null }) === 'Awaiting approval');
+      assignmentStatusLabel({ status: 'INVITED', arrivedAt: null }) === 'Awaiting approval');
   chk('an accepted ACTIVE row never says approved',
-      !/approv/i.test(assignmentStatusLabel({ status: 'ACTIVE', acceptedAt: new Date() })));
+      !/approv/i.test(assignmentStatusLabel({ status: 'ACTIVE', arrivedAt: new Date() })));
 
-  console.log('\n[9] Check-in wires acceptance for real');
+  console.log('\n[9] The check-in path writes no acceptance bookkeeping');
   const src = require('fs').readFileSync('services/submissions/submissionService.ts', 'utf8');
-  chk('the check-in path calls recordAcceptance', /recordAcceptance\(input\.workerId, input\.siteId\)/.test(src));
-  chk('...and does not await it into the check-in result', /void recordAcceptance/.test(src));
+  chk('check-in no longer writes an acceptance column', !/recordAcceptance/.test(src));
 
   console.log(`\n== ${pass} passed, ${failures.length} failed ==`);
   if (failures.length) { for (const f of failures) console.log(`   FAILED: ${f}`); process.exitCode = 1; }
