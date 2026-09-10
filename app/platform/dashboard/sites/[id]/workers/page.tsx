@@ -26,6 +26,7 @@ import {
   listSiteRequirements,
 } from '@/services/workerAccess/workerAssignmentService';
 import { assignmentStatusLabel } from '@/services/workerAccess/assignmentLabels';
+import { WorkerAssignmentActions } from '@/components/platform/WorkerAssignmentActions';
 
 export const dynamic = 'force-dynamic';
 
@@ -197,9 +198,46 @@ export default async function SiteWorkersPage({
   // synchronise.
   const canInvite = canManageWorkerAccess(viewer.role) && access !== null;
 
+  /*
+   * Roster summary and expiry warning, lifted OUT of the access panel.
+   *
+   * Both were inside a collapsed <details>, so a manager only saw an imminent
+   * loss of access if they happened to open it. They belong with the roster,
+   * which is the page's primary surface.
+   */
+  const assignments = access?.rows ?? [];
+  const activeCount = assignments.filter((r) => r.status === 'ACTIVE' && r.acceptedAt).length;
+  const invitedCount = assignments.filter((r) => r.status === 'ACTIVE' && !r.acceptedAt).length;
+  const awaitingCount = assignments.filter((r) => r.status === 'INVITED').length;
+  const expiring = assignments.filter((r) => r.expiringSoon);
+  const otherSites = viewer.sites
+    .filter((x) => x.id !== params.id && x.status === 'ACTIVE')
+    .map((x) => ({ id: x.id, name: x.name }));
+
   return (
     <PlatformShell>
       <SiteDetailHeader viewer={viewer} siteId={params.id} active="workers" />
+
+      {/* SC-023 Phase 2 — surfaced BEFORE it bites at the gate. A manager should
+          learn about an expiry from this page, not from a worker being turned
+          away on Monday morning. It used to sit inside the collapsed access
+          panel, where it was only seen by someone who went looking. */}
+      {expiring.length > 0 ? (
+        <div className="mt-4 rounded-xl border border-hivis-500/40 bg-hivis-500/10 px-4 py-3">
+          <p className="text-sm font-semibold text-ink">
+            {expiring.length} worker{expiring.length === 1 ? '' : 's'} lose access
+            within 7 days
+          </p>
+          <p className="text-xs text-ink-muted">
+            {expiring
+              .map(
+                (r) =>
+                  `${r.workerName} (${r.daysUntilExpiry} day${r.daysUntilExpiry === 1 ? '' : 's'})`,
+              )
+              .join(', ')}
+          </p>
+        </div>
+      ) : null}
 
       {/* UX REFRESH PHASE 10 — see WorkSurface: no selection, no rail, so the
           "Roster" title never rendered. */}
@@ -220,10 +258,28 @@ export default async function SiteWorkersPage({
                 'w-full items-center justify-between',
               )}
             >
-              <span className="text-sm font-semibold text-ink">
-                Workers on this project
-              </span>
-              <InviteWorkerDialog siteId={params.id} />
+              <div className="min-w-0">
+                <span className="block text-sm font-semibold text-ink">
+                  Workers on this project
+                </span>
+                {assignments.length > 0 ? (
+                  <span className="block text-xs text-ink-subtle">
+                    {activeCount} active
+                    {invitedCount > 0 ? ` · ${invitedCount} invited` : ''}
+                    {/* Only a suspended, removed or transferred worker reaches this. */}
+                    {awaitingCount > 0 ? ` · ${awaitingCount} awaiting approval` : ''}
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={`/api/platform/sites/${params.id}/worker-access/export`}
+                  className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink"
+                >
+                  Export CSV
+                </a>
+                <InviteWorkerDialog siteId={params.id} />
+              </div>
             </div>
           ) : undefined
         }
@@ -311,6 +367,18 @@ export default async function SiteWorkersPage({
               >
                 View worker record →
               </Link>
+
+              {/* Suspend, reinstate, remove, role & dates, transfer — reached by
+                  selecting the worker, rather than from a second list. Renders
+                  nothing without the capability; the server re-checks regardless. */}
+              {selectedWorker.assignment ? (
+                <WorkerAssignmentActions
+                  siteId={params.id}
+                  row={selectedWorker.assignment}
+                  canManage={canManageWorkerAccess(viewer.role)}
+                  otherSites={otherSites}
+                />
+              ) : null}
             </>
           )
         }
@@ -385,28 +453,24 @@ export default async function SiteWorkersPage({
               >
                 ›
               </span>
-              Manage project access
+              Project access settings
               <span className="font-normal text-ink-subtle">
-                ({access.rows.length} assigned
-                {access.enforced ? ' · controlled access ON' : ''})
+                ({access.enforced ? 'controlled access ON' : 'controlled access off'})
               </span>
             </span>
             <span className="mt-0.5 block pl-5 text-xs font-normal text-ink-subtle">
-              Invite workers, set access windows, and choose what a worker must
-              satisfy before they can check in. Approval is only needed to
-              restore someone who was suspended or removed.
+              Whether access to this project is controlled, and what a worker
+              must satisfy before they can check in. Individual workers are
+              managed by selecting them in the list above.
             </span>
           </summary>
           <div className="border-t border-line p-4">
             <WorkerAccessManager
               siteId={params.id}
               enforced={access.enforced}
-              rows={access.rows}
               canManage={canManageWorkerAccess(viewer.role)}
               canSetEnforcement={canSetEnforcement(viewer.role)}
-              otherSites={viewer.sites
-                .filter((x) => x.id !== params.id && x.status === 'ACTIVE')
-                .map((x) => ({ id: x.id, name: x.name }))}
+              otherSites={otherSites}
               requirements={requirements}
             />
           </div>
