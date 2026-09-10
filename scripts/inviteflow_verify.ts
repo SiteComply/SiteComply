@@ -129,16 +129,29 @@ async function main() {
 
   /* ---------------- 5. Safety is unchanged ---------------- */
   console.log('\n[5] Auto-approval does not bypass competency or induction');
+  // The gate takes only the assignment now: enforcement is unconditional.
   const gateApproved = svc.evaluateAssignmentGate(
-    true, { invitedWorkersOnly: true, requireActiveSiteAssignment: true },
     { status: WorkerAssignmentStatus.ACTIVE, startDate: null, endDate: null });
   chk('an ACTIVE assignment still defers to the requirement checks',
       gateApproved.blocked === false && gateApproved.requirementsPending === true,
       `blocked=${gateApproved.blocked} requirementsPending=${gateApproved.requirementsPending}`);
   const gateInvited = svc.evaluateAssignmentGate(
-    true, { invitedWorkersOnly: true, requireActiveSiteAssignment: true },
     { status: WorkerAssignmentStatus.INVITED, startDate: null, endDate: null });
   chk('an INVITED assignment is still blocked', gateInvited.blocked === true, gateInvited.short);
+
+  console.log('\n[10] Every site requires an invitation — there is no switch');
+  const noAssignment = svc.evaluateAssignmentGate(null);
+  chk('a worker with NO assignment is refused', noAssignment.blocked === true, noAssignment.short);
+  chk('...and told why', /not been invited/i.test(noAssignment.reason ?? ''), noAssignment.reason);
+  chk('the gate takes only the assignment', svc.evaluateAssignmentGate.length === 1,
+      `arity ${svc.evaluateAssignmentGate.length}`);
+  const suspended = svc.evaluateAssignmentGate(
+    { status: WorkerAssignmentStatus.SUSPENDED, startDate: null, endDate: null });
+  chk('a suspended worker is refused', suspended.blocked === true, suspended.short);
+  const svcSrc = require('fs').readFileSync('services/workerAccess/workerAssignmentService.ts', 'utf8');
+  chk('nothing reads the per-site enforcement flag any more',
+      !/site\.workerAccessEnforced|siteEnforced/.test(svcSrc));
+  chk('the enforcement setter is gone', !/export async function setSiteEnforcement/.test(svcSrc));
 
   /* ---------------- 6. Audit trail ---------------- */
   console.log('\n[6] The history still explains what happened');

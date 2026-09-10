@@ -34,7 +34,7 @@ export function stateLabel(state: AttendanceState): string {
   return state === 'complete'
     ? 'Complete'
     : state === 'onsite'
-      ? 'On site now'
+      ? 'On site'
       : 'Not checked out';
 }
 

@@ -7,7 +7,6 @@ import {
   suspendAssignment,
   reinstateAssignment,
   removeAssignment,
-  setSiteEnforcement,
   setAssignmentDetails,
   transferWorker,
   setWorkerPanel,
@@ -26,7 +25,6 @@ export const dynamic = 'force-dynamic';
  *   { action: 'setPanel', workerId, panel, enabled }
  *   { action: 'setRequirement', requirement, enabled, confirm? }
  *       → 409 with the preview until `confirm: true` is sent
- *   { action: 'setEnforcement', enabled }        → DIRECTOR ONLY
  *
  * SC-023 Phase 1. Gated on the worker-access capability plus site scope, both
  * re-checked in the service. An out-of-scope site returns 404, not 403, so the
@@ -65,23 +63,6 @@ export async function PATCH(
 
   const assignmentId =
     typeof body.assignmentId === 'string' ? body.assignmentId : '';
-
-  if (body.action === 'setEnforcement') {
-    if (typeof body.enabled !== 'boolean') {
-      return NextResponse.json(
-        { ok: false, error: 'Invalid request.' },
-        { status: 400 },
-      );
-    }
-    const r = await setSiteEnforcement(viewer, params.id, body.enabled);
-    if (r.ok) return NextResponse.json({ ok: true });
-    const status =
-      r.reason === 'forbidden' ? 403 : r.reason === 'not_found' ? 404 : 409;
-    return NextResponse.json(
-      { ok: false, error: r.error ?? 'Could not change enforcement.' },
-      { status },
-    );
-  }
 
   let result;
   switch (body.action) {

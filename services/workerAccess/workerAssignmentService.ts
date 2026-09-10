@@ -90,18 +90,25 @@ export type AssignmentGate =
   | { blocked: true; reason: string; short: string };
 
 export function evaluateAssignmentGate(
-  siteEnforced: boolean,
-  org: { invitedWorkersOnly: boolean; requireActiveSiteAssignment: boolean },
   assignment: {
     status: WorkerAssignmentStatus;
     startDate: Date | null;
     endDate: Date | null;
   } | null,
 ): AssignmentGate {
-  if (!siteEnforced && !org.invitedWorkersOnly) {
-    return { blocked: false, requirementsPending: false };
-  }
-
+  /*
+   * ENFORCEMENT IS NO LONGER OPTIONAL.
+   *
+   * There used to be a per-site `workerAccessEnforced` switch, plus two
+   * organisation-wide overrides, deciding whether an assignment was a record or
+   * a gate. It was OFF on every site in production, so it protected nothing it
+   * was meant to protect, while making the rule impossible to state simply.
+   *
+   * A worker is invited and assigned to a project before they work there. That
+   * is the workflow, so it is now the behaviour, with no configuration to get
+   * wrong. The column and the org settings remain in the schema; nothing reads
+   * them for this decision any more.
+   */
   if (!assignment) {
     return {
       blocked: true,
@@ -109,10 +116,6 @@ export function evaluateAssignmentGate(
       reason:
         'You have not been invited to this project. Ask your site manager to invite you before checking in.',
     };
-  }
-
-  if (!siteEnforced && !org.requireActiveSiteAssignment) {
-    return { blocked: false, requirementsPending: false };
   }
 
   switch (assignment.status) {
@@ -172,37 +175,22 @@ export async function canWorkerCheckIn(
     where: { id: siteId },
     // `name` is selected here rather than re-queried inside the requirements
     // branch, which is one fewer round trip on the path that needs it.
-    select: { workerAccessEnforced: true, name: true },
+    select: { name: true },
   });
   if (!site)
     return { allowed: false, reason: 'That site is no longer available.' };
 
-  /* ORGANISATION-WIDE FLOOR under the per-site flag.
-   *
-   * Access has always been decided per site, defaulting off. A Director can now
-   * set a minimum for the whole organisation (Settings → Authentication &
-   * Access) instead of visiting every site:
-   *
-   *   invitedWorkersOnly          — an assignment must EXIST, everywhere.
-   *   requireActiveSiteAssignment — ...and it must be active and in-window.
-   *
-   * A site that already enforces is UNCHANGED: `siteEnforced` still applies the
-   * full status, window and requirement checks exactly as before, so switching
-   * these on can only ever narrow access, never widen it. Both default off, so
-   * deploying before anyone saves changes nothing. */
-  const org = await getAuthRuntimeConfig();
-  const siteEnforced = site.workerAccessEnforced;
-
-  const assignment =
-    siteEnforced || org.invitedWorkersOnly
-      ? await prisma.workerSiteAssignment.findUnique({
-          where: { workerId_jobSiteId: { workerId, jobSiteId: siteId } },
-          select: { status: true, startDate: true, endDate: true },
-        })
-      : null;
+    /* Every site requires an invitation. The organisation-wide
+     * `invitedWorkersOnly` and `requireActiveSiteAssignment` settings used to
+     * raise a floor under the per-site switch; with that switch gone they are
+     * strictly redundant and are no longer read here. */
+  const assignment = await prisma.workerSiteAssignment.findUnique({
+    where: { workerId_jobSiteId: { workerId, jobSiteId: siteId } },
+    select: { status: true, startDate: true, endDate: true },
+  });
 
   // Shared with the site-selection list, so both read from one set of words.
-  const gate = evaluateAssignmentGate(siteEnforced, org, assignment);
+  const gate = evaluateAssignmentGate(assignment);
   if (gate.blocked) return { allowed: false, reason: gate.reason };
 
   // SC-023 Phase 3 — competency and induction requirements, evaluated LAST. A
@@ -219,7 +207,9 @@ export async function canWorkerCheckIn(
     }
   }
 
-  return { allowed: true, enforced: siteEnforced || org.invitedWorkersOnly };
+  // `enforced` is now always true — every site requires an invitation. Kept on
+  // the result so callers reading it do not change meaning.
+  return { allowed: true, enforced: true };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -257,7 +247,7 @@ export async function listSiteAssignments(
   if (!viewer.siteIds.includes(siteId)) return null;
   const site = await prisma.jobSite.findUnique({
     where: { id: siteId },
-    select: { workerAccessEnforced: true },
+    select: { id: true },
   });
   if (!site) return null;
 
@@ -272,7 +262,8 @@ export async function listSiteAssignments(
   });
 
   return {
-    enforced: site.workerAccessEnforced,
+    // Always true now: every site requires an invitation.
+    enforced: true,
     rows: rows.map((r) => ({
       id: r.id,
       workerId: r.workerId,
@@ -715,75 +706,17 @@ export function removeAssignment(
   );
 }
 
-/**
- * Switch enforcement for a site. DIRECTOR ONLY — this can deny site access.
+/*
+ * setSiteEnforcement() was here.
  *
- * Turning it ON is refused while workers have checked in here but have no
- * ACTIVE assignment: that configuration would turn people away at the gate the
- * next morning with no warning. The refusal names the count so the Director can
- * invite or backfill them first.
+ * It also REFUSED to switch enforcement on while anyone had checked in without
+ * an approved assignment — "they will be turned away at the gate". Enforcement
+ * is now unconditional, so that guard has no moment to run in. Its job moves to
+ * scripts/backfill_assignments_from_checkins.ts, which must be run once so the
+ * people already working on a site keep their access.
+ *
+ * `JobSite.workerAccessEnforced` remains in the schema, unread.
  */
-export async function setSiteEnforcement(
-  viewer: PlatformViewer,
-  siteId: string,
-  enabled: boolean,
-): Promise<
-  | { ok: true; unassigned?: number }
-  | { ok: false; reason: string; error?: string }
-> {
-  if (!canSetEnforcement(viewer.role)) {
-    return { ok: false, reason: 'forbidden' };
-  }
-  if (!viewer.siteIds.includes(siteId))
-    return { ok: false, reason: 'not_found' };
-  const site = await prisma.jobSite.findUnique({
-    where: { id: siteId },
-    select: { id: true, name: true },
-  });
-  if (!site) return { ok: false, reason: 'not_found' };
-
-  if (enabled) {
-    const known = await prisma.submission.findMany({
-      where: { jobSiteId: siteId },
-      select: { workerId: true },
-      distinct: ['workerId'],
-    });
-    const active = await prisma.workerSiteAssignment.findMany({
-      where: {
-        jobSiteId: siteId,
-        status: WorkerAssignmentStatus.ACTIVE,
-        workerId: { in: known.map((k) => k.workerId) },
-      },
-      select: { workerId: true },
-    });
-    const activeIds = new Set(active.map((a) => a.workerId));
-    const unassigned = known.filter((k) => !activeIds.has(k.workerId)).length;
-    if (unassigned > 0) {
-      return {
-        ok: false,
-        reason: 'blocked',
-        error: `${unassigned} worker${unassigned === 1 ? ' has' : 's have'} checked in here but ${unassigned === 1 ? 'is' : 'are'} not approved. Invite or approve them first, or they will be turned away at the gate.`,
-      };
-    }
-  }
-
-  await prisma.jobSite.update({
-    where: { id: siteId },
-    data: { workerAccessEnforced: enabled },
-  });
-  await recordEvent(
-    null,
-    '—',
-    siteId,
-    site.name,
-    enabled ? 'ENFORCEMENT_ON' : 'ENFORCEMENT_OFF',
-    viewer.name,
-    enabled
-      ? 'Only invited and approved workers may now check in.'
-      : 'Any worker may check in, as before.',
-  );
-  return { ok: true };
-}
 
 /** Record that a worker accepted — informational in Phase 1, never a gate. */
 export async function recordAcceptance(
@@ -1355,21 +1288,13 @@ export type SiteAccessHint =
 
 export async function siteAccessHintsForWorker(
   workerId: string,
-  sites: { id: string; workerAccessEnforced: boolean }[],
+  sites: { id: string }[],
 ): Promise<Map<string, SiteAccessHint>> {
   const hints = new Map<string, SiteAccessHint>();
   if (sites.length === 0) return hints;
 
-  const org = await getAuthRuntimeConfig();
-  const enforcing = sites.filter(
-    (s) => s.workerAccessEnforced || org.invitedWorkersOnly,
-  );
-
-  // Nothing enforces access, so no site can be distinguished from another.
-  // Badging every site "Access Granted" would be noise carrying no
-  // information, so the list is left exactly as it is today.
-  if (enforcing.length === 0) return hints;
-
+  // Every site enforces now, so every site is hinted.
+  const enforcing = sites;
   const ids = enforcing.map((s) => s.id);
   const [assignments, withRequirements] = await Promise.all([
     prisma.workerSiteAssignment.findMany({
@@ -1390,11 +1315,7 @@ export async function siteAccessHintsForWorker(
   const gated = new Set(withRequirements.map((r) => r.jobSiteId));
 
   for (const site of enforcing) {
-    const gate = evaluateAssignmentGate(
-      site.workerAccessEnforced,
-      org,
-      bySite.get(site.id) ?? null,
-    );
+    const gate = evaluateAssignmentGate(bySite.get(site.id) ?? null);
     if (gate.blocked) {
       hints.set(site.id, {
         state: 'blocked',

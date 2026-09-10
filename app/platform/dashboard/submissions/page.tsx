@@ -259,7 +259,7 @@ export default async function PlatformSubmissionsPage({
                       <RailDetail
                         label="Status"
                         value={
-                          selected.checkedOutAt ? 'Checked out' : 'On site now'
+                          selected.checkedOutAt ? 'Checked out' : 'On site'
                         }
                       />
                       <RailDetail

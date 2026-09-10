@@ -18,16 +18,12 @@ import { useRouter } from 'next/navigation';
 
 export function WorkerAccessManager({
   siteId,
-  enforced,
   canManage,
-  canSetEnforcement,
   otherSites = [],
   requirements = [],
 }: {
   siteId: string;
-  enforced: boolean;
   canManage: boolean;
-  canSetEnforcement: boolean;
   /** SC-023 Phase 2 — projects this manager can transfer a worker to. */
   otherSites?: { id: string; name: string }[];
   /** SC-023 Phase 3 — competency requirements for this site. */
@@ -149,50 +145,15 @@ export function WorkerAccessManager({
         </p>
       ) : null}
 
-      <div
-        className={`rounded-xl border px-4 py-3 ${
-          enforced
-            ? 'border-safe-500/40 bg-safe-50'
-            : 'border-line bg-surface-sunken'
-        }`}
-      >
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-bold text-ink">
-              {enforced
-                ? 'Controlled access is ON for this site'
-                : 'Controlled access is OFF for this site'}
-            </p>
-            <p className="text-xs text-ink-muted">
-              {enforced
-                ? 'Only workers invited to this project can check in. Anyone else is turned away and told why.'
-                : 'Any worker can check in, as before. Invitations below are recorded but not enforced.'}
-            </p>
-          </div>
-          {canSetEnforcement ? (
-            <button
-              type="button"
-              disabled={busy === 'enforce'}
-              onClick={() =>
-                call(
-                  { action: 'setEnforcement', enabled: !enforced },
-                  'enforce',
-                  enforced
-                    ? 'Controlled access switched off.'
-                    : 'Controlled access switched on.',
-                )
-              }
-              className="shrink-0 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
-            >
-              {enforced ? 'Switch off' : 'Switch on'}
-            </button>
-          ) : (
-            <span className="shrink-0 text-xs text-ink-subtle">
-              Only a Director can change this.
-            </span>
-          )}
-        </div>
-      </div>
+      {/*
+        THE CONTROLLED ACCESS SWITCH WAS HERE.
+
+        It decided whether an assignment was a record or a gate, and it was OFF
+        on every site in production — so it protected nothing it was meant to
+        protect, while making the rule impossible to state simply. A worker is
+        invited and assigned to a project before they work there; that is now
+        the behaviour, with no configuration to get wrong.
+      */}
 
       {requirements.length > 0 && canManage ? (
         <div className="rounded-xl border border-line bg-surface p-4">
@@ -200,8 +161,9 @@ export function WorkerAccessManager({
             Requirements before a worker can check in
           </h4>
           <p className="mb-3 text-xs text-ink-muted">
-            All off by default. These only apply where controlled access is
-            switched on, and a worker is told exactly which ones they fail.
+            All off by default. Every worker must be invited to this project
+            before they can check in; these add further conditions on top, and a
+            worker is told exactly which ones they fail.
           </p>
 
           {pendingReq ? (

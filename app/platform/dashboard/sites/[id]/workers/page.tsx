@@ -156,9 +156,9 @@ export default async function SiteWorkersPage({
   };
 
   const ROSTER_STATE_LABEL: Record<RosterState, string> = {
-    'on-site': 'On site now',
+    'on-site': 'On site',
     'checked-out': 'Checked out',
-    assigned: 'Assigned, not present',
+    assigned: 'Off site',
     invited: 'Invited',
     suspended: 'Suspended',
     removed: 'Removed',
@@ -454,22 +454,17 @@ export default async function SiteWorkersPage({
                 ›
               </span>
               Project access settings
-              <span className="font-normal text-ink-subtle">
-                ({access.enforced ? 'controlled access ON' : 'controlled access off'})
-              </span>
             </span>
             <span className="mt-0.5 block pl-5 text-xs font-normal text-ink-subtle">
-              Whether access to this project is controlled, and what a worker
-              must satisfy before they can check in. Individual workers are
-              managed by selecting them in the list above.
+              What a worker must satisfy before they can check in, on top of
+              being invited to this project. Individual workers are managed by
+              selecting them in the list above.
             </span>
           </summary>
           <div className="border-t border-line p-4">
             <WorkerAccessManager
               siteId={params.id}
-              enforced={access.enforced}
               canManage={canManageWorkerAccess(viewer.role)}
-              canSetEnforcement={canSetEnforcement(viewer.role)}
               otherSites={otherSites}
               requirements={requirements}
             />
