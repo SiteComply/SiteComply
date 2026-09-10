@@ -56,8 +56,11 @@ CH=$(git diff --name-only "$DEPLOYED" HEAD | sort)
   || { echo "ERROR: unexpected file set:"; diff <(echo "$CH") <(printf '%s' "$EXPECTED" | sort); exit 1; }
 
 # --- The duplicate list is gone from the settings panel.
+# Comment-stripped: the file DOCUMENTS what was removed, and those words appearing
+# in an explanatory comment is not the same as a button still being rendered.
+# An earlier version grepped the raw file and failed on its own comment.
 for w in "Suspend" "Remove" "Approve" "Reinstate" "Transfer" "Export CSV" "assignmentStatusLabel"; do
-  grep -q "$w" components/platform/WorkerAccessManager.tsx \
+  code components/platform/WorkerAccessManager.tsx | grep -q "$w" \
     && die "the settings panel still carries \"$w\" — the worker list was not fully removed"
 done
 grep -q "rows: AssignmentRow" components/platform/WorkerAccessManager.tsx \
