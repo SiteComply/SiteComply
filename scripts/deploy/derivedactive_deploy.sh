@@ -102,7 +102,11 @@ NEW_BUILD=$(cat .next/BUILD_ID); echo "      NEW_BUILD=$NEW_BUILD"
 
 echo "[4b] ARTIFACT guards..."
 grep -rq "Off site" .next/static/chunks/ .next/server/ || die "the status labels are not in the build"
-grep -rq "Invited workers only" .next/ 2>/dev/null && die "the removed setting is still shipped"
+# Scan only what SHIPS. Scanning .next/ wholesale also reads .next/cache and
+# .next/trace — build by-products that are not deployed — and this guard fired
+# on one of them while the shipped output was already clean.
+grep -rq "Invited workers only" .next/static/ .next/server/ 2>/dev/null \
+  && die "the removed setting is still shipped"
 echo "      the labels shipped and the dead setting is not in the build."
 
 echo "[5/8] Packaging zip..."
