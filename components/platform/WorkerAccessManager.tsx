@@ -2,42 +2,23 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatDateTimeUK } from '@/lib/datetime';
-import type { AssignmentRow } from '@/services/workerAccess/workerAssignmentService';
-import {
-  assignmentStatusLabel,
-  assignmentStatusClass,
-} from '@/services/workerAccess/assignmentLabels';
 
 /**
- * SC-023 Phase 1 — invite workers to a project and control their access.
+ * PROJECT ACCESS SETTINGS — site-level, not a list of people.
+ *
+ * This was "Manage project access" and carried a second worker list with an
+ * Approve button on every row. The roster above is where workers are viewed and,
+ * by selecting one, managed. What belongs here is only what applies to the
+ * PROJECT: whether access is enforced at all, and what a worker must satisfy.
  *
  * The enforcement switch sits at the TOP with its current state spelled out,
  * because everything below means something different depending on it: with
  * enforcement off these are records, with it on they are the gate.
  */
 
-/** yyyy-mm-dd for a date input, from the stored London-midnight instant. */
-function toInput(d: Date | string): string {
-  return new Date(d).toISOString().slice(0, 10);
-}
-
-const ROLE_LABEL: Record<string, string> = {
-  EMPLOYEE: 'Employee',
-  CONTRACTOR: 'Contractor',
-  SUPERVISOR: 'Supervisor',
-  CLIENT_REP: 'Client representative',
-};
-
-const WINDOW_NOTE: Record<string, string> = {
-  pending: 'Access has not started yet',
-  expired: 'Access has ended',
-};
-
 export function WorkerAccessManager({
   siteId,
   enforced,
-  rows,
   canManage,
   canSetEnforcement,
   otherSites = [],
@@ -45,7 +26,6 @@ export function WorkerAccessManager({
 }: {
   siteId: string;
   enforced: boolean;
-  rows: AssignmentRow[];
   canManage: boolean;
   canSetEnforcement: boolean;
   /** SC-023 Phase 2 — projects this manager can transfer a worker to. */
@@ -69,13 +49,6 @@ export function WorkerAccessManager({
   // which opens the disclosure and this form together. One invite path.
 
 
-  const [editing, setEditing] = useState<string | null>(null);
-  const [detail, setDetail] = useState({
-    role: '',
-    startDate: '',
-    endDate: '',
-  });
-  const [transferTo, setTransferTo] = useState<Record<string, string>>({});
   const [pendingReq, setPendingReq] = useState<{
     requirement: string;
     label: string;
@@ -134,14 +107,6 @@ export function WorkerAccessManager({
     }
   }
 
-  function openDetails(r: AssignmentRow) {
-    setEditing(editing === r.id ? null : r.id);
-    setDetail({
-      role: r.role ?? '',
-      startDate: r.startDate ? toInput(r.startDate) : '',
-      endDate: r.endDate ? toInput(r.endDate) : '',
-    });
-  }
 
   async function call(body: Record<string, unknown>, key: string, ok: string) {
     setBusy(key);
@@ -167,12 +132,6 @@ export function WorkerAccessManager({
   }
 
 
-  // "Active" now means on the project for real — invited AND turned up at least
-  // once. Counting every ACTIVE row as active would overstate the roster.
-  const active = rows.filter((r) => r.status === 'ACTIVE' && r.acceptedAt).length;
-  const invited = rows.filter((r) => r.status === 'ACTIVE' && !r.acceptedAt).length;
-  const waiting = rows.filter((r) => r.status === 'INVITED').length;
-  const expiring = rows.filter((r) => r.expiringSoon);
 
   return (
     <div className="space-y-4">
@@ -234,26 +193,6 @@ export function WorkerAccessManager({
           )}
         </div>
       </div>
-
-      {/* SC-023 Phase 2 — surfaced BEFORE it bites at the gate. A manager
-          should learn about an expiry from this page, not from a worker being
-          turned away on Monday morning. */}
-      {expiring.length > 0 ? (
-        <div className="rounded-xl border border-hivis-500/40 bg-hivis-500/10 px-4 py-3">
-          <p className="text-sm font-semibold text-ink">
-            {expiring.length} worker{expiring.length === 1 ? '' : 's'} lose
-            access within {7} days
-          </p>
-          <p className="text-xs text-ink-muted">
-            {expiring
-              .map(
-                (r) =>
-                  `${r.workerName} (${r.daysUntilExpiry} day${r.daysUntilExpiry === 1 ? '' : 's'})`,
-              )
-              .join(', ')}
-          </p>
-        </div>
-      ) : null}
 
       {requirements.length > 0 && canManage ? (
         <div className="rounded-xl border border-line bg-surface p-4">
@@ -350,294 +289,16 @@ export function WorkerAccessManager({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-ink-muted">
-          {rows.length} assignment{rows.length === 1 ? '' : 's'} · {active}{' '}
-          active
-          {invited > 0 ? ` · ${invited} invited` : ''}
-          {/* Non-zero only for a suspended, removed or transferred worker. */}
-          {waiting > 0 ? ` · ${waiting} awaiting approval` : ''}
-        </p>
-        {canManage ? (
-          <div className="flex flex-wrap gap-2">
-            {/* The invite TRIGGER moved to the Workers-tab toolbar above the
-                roster, where the action belongs. The invite FORM below is
-                unchanged, so there is still exactly one implementation. */}
-            <a
-              href={`/api/platform/sites/${siteId}/worker-access/export`}
-              className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink"
-            >
-              Export CSV
-            </a>
-          </div>
-        ) : null}
-      </div>
+      {/*
+        THE WORKER LIST USED TO BE HERE.
+        It showed the same people as "Workers on this project" above, in a second
+        vocabulary, with an Approve button beside every ordinary worker for a step
+        that no longer exists. Workers are viewed in the roster and managed by
+        selecting them there — see WorkerAssignmentActions. What is left is what
+        this panel should always have been: settings for the PROJECT, not a list
+        of people.
+      */}
 
-
-      {rows.length === 0 ? (
-        <p className="rounded-xl border border-line bg-surface px-5 py-10 text-center text-sm text-ink-subtle">
-          No workers assigned to this project yet.
-        </p>
-      ) : (
-        <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
-          {rows.map((r) => (
-            <li
-              key={r.id}
-              className="flex flex-wrap items-start justify-between gap-3 px-4 py-3"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-ink">
-                  {r.workerName}
-                  <span
-                    className={`ml-2 rounded px-1.5 py-0.5 text-xs font-medium ${assignmentStatusClass(r)}`}
-                  >
-                    {assignmentStatusLabel(r)}
-                  </span>
-                  {r.backfilled ? (
-                    <span className="ml-2 rounded bg-surface-sunken px-1.5 py-0.5 text-xs font-medium text-ink-muted">
-                      Existing worker
-                    </span>
-                  ) : null}
-                </p>
-                <p className="text-xs text-ink-muted">
-                  {r.company} · {r.mobile}
-                </p>
-                {r.role ||
-                r.startDate ||
-                r.endDate ||
-                r.transferredFromSiteName ? (
-                  <p className="mt-0.5 text-xs text-ink-muted">
-                    {r.role ? (ROLE_LABEL[r.role] ?? r.role) : 'Role not set'}
-                    {r.startDate || r.endDate
-                      ? ` · ${r.startDate ? formatDateTimeUK(r.startDate).slice(0, 10) : 'any date'} to ${r.endDate ? formatDateTimeUK(r.endDate).slice(0, 10) : 'no end'}`
-                      : ''}
-                    {WINDOW_NOTE[r.windowState]
-                      ? ` · ${WINDOW_NOTE[r.windowState]}`
-                      : ''}
-                    {r.transferredFromSiteName
-                      ? ` · transferred from ${r.transferredFromSiteName}`
-                      : ''}
-                  </p>
-                ) : null}
-                <p className="mt-0.5 text-xs text-ink-subtle">
-                  Invited {formatDateTimeUK(r.invitedAt)}
-                  {r.invitedByName ? ` by ${r.invitedByName}` : ''}
-                  {/* Only worth saying when access was granted SEPARATELY from the
-                      invitation — reinstating a suspended worker, or a transfer
-                      being accepted. For an ordinary invite the two are the same
-                      moment and the same person, so it would just repeat itself. */}
-                  {r.approvedAt &&
-                  Math.abs(new Date(r.approvedAt).getTime() - new Date(r.invitedAt).getTime()) > 5000
-                    ? ` · access granted ${formatDateTimeUK(r.approvedAt)}${r.approvedByName ? ` by ${r.approvedByName}` : ''}`
-                    : ''}
-                  {r.acceptedAt
-                  ? ` · first checked in ${formatDateTimeUK(r.acceptedAt)}`
-                  : ''}
-                </p>
-
-              </div>
-
-              {canManage ? (
-                <div className="flex shrink-0 flex-wrap gap-2">
-                  {r.status !== 'ACTIVE' ? (
-                    <button
-                      type="button"
-                      disabled={busy === r.id}
-                      onClick={() =>
-                        call(
-                          {
-                            action:
-                              r.status === 'SUSPENDED'
-                                ? 'reinstate'
-                                : 'approve',
-                            assignmentId: r.id,
-                          },
-                          r.id,
-                          `${r.workerName} can now check in.`,
-                        )
-                      }
-                      className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
-                    >
-                      {r.status === 'SUSPENDED' ? 'Reinstate' : 'Approve'}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={busy === r.id}
-                      onClick={() =>
-                        call(
-                          { action: 'suspend', assignmentId: r.id },
-                          r.id,
-                          `${r.workerName}'s access is suspended.`,
-                        )
-                      }
-                      className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
-                    >
-                      Suspend
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => openDetails(r)}
-                    className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink"
-                  >
-                    {editing === r.id ? 'Close' : 'Role & dates'}
-                  </button>
-                  {r.status !== 'REMOVED' ? (
-                    <button
-                      type="button"
-                      disabled={busy === r.id}
-                      onClick={() => {
-                        if (
-                          !window.confirm(
-                            `Remove ${r.workerName} from this project?\n\nTheir check-ins, inductions and permits here are kept.`,
-                          )
-                        ) {
-                          return;
-                        }
-                        call(
-                          { action: 'remove', assignmentId: r.id },
-                          r.id,
-                          `${r.workerName} removed from this project.`,
-                        );
-                      }}
-                      className="rounded-lg border border-danger-500/40 bg-surface px-3 py-1.5 text-xs font-semibold text-danger-700 disabled:opacity-40"
-                    >
-                      Remove
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {editing === r.id && canManage ? (
-                <div className="mt-3 border-t border-line pt-3">
-                  <div className="flex flex-wrap items-end gap-2">
-                    <label className="text-xs text-ink-muted">
-                      Role
-                      <select
-                        value={detail.role}
-                        onChange={(e) =>
-                          setDetail((d) => ({ ...d, role: e.target.value }))
-                        }
-                        className="mt-0.5 block rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink"
-                      >
-                        <option value="">Not set</option>
-                        {Object.entries(ROLE_LABEL).map(([v, l]) => (
-                          <option key={v} value={v}>
-                            {l}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="text-xs text-ink-muted">
-                      Access from
-                      <input
-                        type="date"
-                        value={detail.startDate}
-                        onChange={(e) =>
-                          setDetail((d) => ({
-                            ...d,
-                            startDate: e.target.value,
-                          }))
-                        }
-                        className="mt-0.5 block rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink"
-                      />
-                    </label>
-                    <label className="text-xs text-ink-muted">
-                      Access to (inclusive)
-                      <input
-                        type="date"
-                        value={detail.endDate}
-                        onChange={(e) =>
-                          setDetail((d) => ({ ...d, endDate: e.target.value }))
-                        }
-                        className="mt-0.5 block rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      disabled={busy === r.id}
-                      onClick={() =>
-                        call(
-                          {
-                            action: 'setDetails',
-                            assignmentId: r.id,
-                            ...detail,
-                          },
-                          r.id,
-                          `Updated ${r.workerName}.`,
-                        )
-                      }
-                      className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
-                    >
-                      Save
-                    </button>
-                  </div>
-                  <p className="mt-1.5 text-xs text-ink-subtle">
-                    The role is recorded for reporting only — it does not change
-                    what this worker can see or do. Access runs to the END of
-                    the “access to” day.
-                  </p>
-
-                  {otherSites.length > 0 && r.status !== 'REMOVED' ? (
-                    <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
-                      <select
-                        aria-label={`Transfer ${r.workerName} to`}
-                        value={transferTo[r.id] ?? ''}
-                        onChange={(e) =>
-                          setTransferTo((t) => ({
-                            ...t,
-                            [r.id]: e.target.value,
-                          }))
-                        }
-                        className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink"
-                      >
-                        <option value="">Transfer to…</option>
-                        {otherSites.map((o) => (
-                          <option key={o.id} value={o.id}>
-                            {o.name}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        disabled={busy === r.id || !transferTo[r.id]}
-                        onClick={() => {
-                          if (
-                            !window.confirm(
-                              `Transfer ${r.workerName} to the selected project?\n\nThey will need approving there before they can check in, and are removed from this project. Their history here is kept.`,
-                            )
-                          ) {
-                            return;
-                          }
-                          call(
-                            {
-                              action: 'transfer',
-                              assignmentId: r.id,
-                              toSiteId: transferTo[r.id],
-                            },
-                            r.id,
-                            `${r.workerName} transferred — they need approving on the destination project.`,
-                          );
-                        }}
-                        className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
-                      >
-                        Transfer
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <p className="text-xs text-ink-subtle">
-        Removing or suspending someone never deletes their history. A worker
-        already checked in can always check out, so the site record of who is on
-        the premises stays correct.
-      </p>
     </div>
   );
 }
