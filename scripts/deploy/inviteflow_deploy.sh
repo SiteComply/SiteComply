@@ -80,10 +80,19 @@ echo "      the SMS carries a real link and no code."
 code "$SVC" | grep -q 'update: {},' || die "the worker upsert no longer protects an existing record"
 code "$SVC" | grep -q 'existingWorker: { fullName: priorWorker.fullName, company: priorWorker.company }' \
   || die "the existing worker's details are not returned to the dialog"
-code "$DLG" | grep -q 'This worker was already on SiteComply' || die "the dialog does not warn"
-code "$DLG" | grep -q 'not the ones you entered' || die "the warning does not say which details win"
-echo "      an existing record is still protected, and the manager is told."
-
+# Copy wraps across lines in JSX, so match against whitespace-normalised text.
+# Grepping line-by-line failed on a phrase that was simply formatted onto two
+# lines, and reported a correct warning as missing.
+python3 - <<'PY' || exit 1
+import re, sys
+t = re.sub(r'\s+', ' ', open('components/platform/InviteWorkerDialog.tsx', encoding='utf-8').read())
+for phrase in ('This worker was already on SiteComply',
+               'not the ones you entered',
+               'card verification and induction history intact'):
+    if phrase not in t:
+        print(f'ERROR: the dialog warning is missing "{phrase}". Aborting'); sys.exit(1)
+print('      an existing record is still protected, and the manager is told.')
+PY
 # --- APPROVAL: the two cases that must keep it.
 code "$SVC" | grep -q 'WorkerAssignmentStatus.SUSPENDED' || die "SUSPENDED is not handled"
 code "$SVC" | grep -q 'WorkerAssignmentStatus.REMOVED' || die "REMOVED is not handled"
