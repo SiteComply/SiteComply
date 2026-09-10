@@ -4,6 +4,10 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatDateTimeUK } from '@/lib/datetime';
 import type { AssignmentRow } from '@/services/workerAccess/workerAssignmentService';
+import {
+  assignmentStatusLabel,
+  assignmentStatusClass,
+} from '@/services/workerAccess/assignmentLabels';
 
 /**
  * SC-023 Phase 1 — invite workers to a project and control their access.
@@ -28,20 +32,6 @@ const ROLE_LABEL: Record<string, string> = {
 const WINDOW_NOTE: Record<string, string> = {
   pending: 'Access has not started yet',
   expired: 'Access has ended',
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  INVITED: 'Awaiting approval',
-  ACTIVE: 'Approved',
-  SUSPENDED: 'Suspended',
-  REMOVED: 'Removed',
-};
-
-const STATUS_CLASS: Record<string, string> = {
-  INVITED: 'bg-hivis-500/10 text-ink-muted',
-  ACTIVE: 'bg-safe-50 text-safe-700',
-  SUSPENDED: 'bg-danger-50 text-danger-700',
-  REMOVED: 'bg-surface-sunken text-ink-muted',
 };
 
 export function WorkerAccessManager({
@@ -177,7 +167,10 @@ export function WorkerAccessManager({
   }
 
 
-  const active = rows.filter((r) => r.status === 'ACTIVE').length;
+  // "Active" now means on the project for real — invited AND turned up at least
+  // once. Counting every ACTIVE row as active would overstate the roster.
+  const active = rows.filter((r) => r.status === 'ACTIVE' && r.acceptedAt).length;
+  const invited = rows.filter((r) => r.status === 'ACTIVE' && !r.acceptedAt).length;
   const waiting = rows.filter((r) => r.status === 'INVITED').length;
   const expiring = rows.filter((r) => r.expiringSoon);
 
@@ -213,7 +206,7 @@ export function WorkerAccessManager({
             </p>
             <p className="text-xs text-ink-muted">
               {enforced
-                ? 'Only approved workers can check in. Anyone else is turned away and told why.'
+                ? 'Only workers invited to this project can check in. Anyone else is turned away and told why.'
                 : 'Any worker can check in, as before. Invitations below are recorded but not enforced.'}
             </p>
           </div>
@@ -284,7 +277,7 @@ export function WorkerAccessManager({
                 </p>
               ) : (
                 <p className="mt-0.5 text-xs text-ink-muted">
-                  No currently approved worker would be affected.
+                  No worker on this project would be affected.
                 </p>
               )}
               <div className="mt-2 flex gap-2">
@@ -337,8 +330,8 @@ export function WorkerAccessManager({
                   <p className="text-xs text-ink-muted">{q.description}</p>
                   <p className="mt-0.5 text-xs text-ink-subtle">
                     {q.blockedCount === 0
-                      ? 'All approved workers meet this.'
-                      : `${q.blockedCount} approved worker${q.blockedCount === 1 ? '' : 's'} would not meet this: ${q.blockedNames.join(', ')}`}
+                      ? 'All workers on this project meet this.'
+                      : `${q.blockedCount} worker${q.blockedCount === 1 ? '' : 's'} on this project would not meet this: ${q.blockedNames.join(', ')}`}
                   </p>
                 </div>
                 <button
@@ -360,7 +353,9 @@ export function WorkerAccessManager({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-ink-muted">
           {rows.length} assignment{rows.length === 1 ? '' : 's'} · {active}{' '}
-          approved
+          active
+          {invited > 0 ? ` · ${invited} invited` : ''}
+          {/* Non-zero only for a suspended, removed or transferred worker. */}
           {waiting > 0 ? ` · ${waiting} awaiting approval` : ''}
         </p>
         {canManage ? (
@@ -394,9 +389,9 @@ export function WorkerAccessManager({
                 <p className="text-sm font-semibold text-ink">
                   {r.workerName}
                   <span
-                    className={`ml-2 rounded px-1.5 py-0.5 text-xs font-medium ${STATUS_CLASS[r.status]}`}
+                    className={`ml-2 rounded px-1.5 py-0.5 text-xs font-medium ${assignmentStatusClass(r)}`}
                   >
-                    {STATUS_LABEL[r.status] ?? r.status}
+                    {assignmentStatusLabel(r)}
                   </span>
                   {r.backfilled ? (
                     <span className="ml-2 rounded bg-surface-sunken px-1.5 py-0.5 text-xs font-medium text-ink-muted">
@@ -427,9 +422,17 @@ export function WorkerAccessManager({
                 <p className="mt-0.5 text-xs text-ink-subtle">
                   Invited {formatDateTimeUK(r.invitedAt)}
                   {r.invitedByName ? ` by ${r.invitedByName}` : ''}
-                  {r.approvedAt
-                    ? ` · approved ${formatDateTimeUK(r.approvedAt)}${r.approvedByName ? ` by ${r.approvedByName}` : ''}`
+                  {/* Only worth saying when access was granted SEPARATELY from the
+                      invitation — reinstating a suspended worker, or a transfer
+                      being accepted. For an ordinary invite the two are the same
+                      moment and the same person, so it would just repeat itself. */}
+                  {r.approvedAt &&
+                  Math.abs(new Date(r.approvedAt).getTime() - new Date(r.invitedAt).getTime()) > 5000
+                    ? ` · access granted ${formatDateTimeUK(r.approvedAt)}${r.approvedByName ? ` by ${r.approvedByName}` : ''}`
                     : ''}
+                  {r.acceptedAt
+                  ? ` · first checked in ${formatDateTimeUK(r.acceptedAt)}`
+                  : ''}
                 </p>
 
               </div>

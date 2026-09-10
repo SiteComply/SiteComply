@@ -25,15 +25,9 @@ import {
   canSetEnforcement,
   listSiteRequirements,
 } from '@/services/workerAccess/workerAssignmentService';
+import { assignmentStatusLabel } from '@/services/workerAccess/assignmentLabels';
 
 export const dynamic = 'force-dynamic';
-
-const ASSIGNMENT_STATUS_LABEL: Record<string, string> = {
-  INVITED: 'Invited, not yet approved',
-  ACTIVE: 'Approved',
-  SUSPENDED: 'Suspended',
-  REMOVED: 'Removed from project',
-};
 
 /** Platform → Site Details — Workers tab: on-site now + recent check-ins. */
 export default async function SiteWorkersPage({
@@ -285,9 +279,7 @@ export default async function SiteWorkersPage({
                     <RailDetail
                       label="Project access"
                       value={
-                        ASSIGNMENT_STATUS_LABEL[
-                          selectedWorker.assignment.status
-                        ] ?? selectedWorker.assignment.status
+                        assignmentStatusLabel(selectedWorker.assignment)
                       }
                     />
                     {selectedWorker.assignment.role && (

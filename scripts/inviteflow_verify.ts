@@ -27,6 +27,7 @@ process.env.APP_BASE_URL = 'https://app.sitecomply.co.uk';
 
 const { prisma } = require('../lib/prisma');
 const svc = require('../services/workerAccess/workerAssignmentService');
+const { assignmentStatusLabel } = require('../services/workerAccess/assignmentLabels');
 
 let pass = 0; const failures: string[] = [];
 const chk = (t: string, ok: boolean, d = '') => {
@@ -148,6 +149,39 @@ async function main() {
   chk('the approval is recorded as its own event, not inferred',
       events.some((e: any) => e.action === 'APPROVED' && /automatically/i.test(e.detail ?? '')),
       events.map((e: any) => e.action).join(' → '));
+
+  /* ---------------- 7. Invited until first check-in ---------------- */
+  console.log('\n[7] The roster says Invited until the worker turns up');
+  const fresh = await prisma.workerSiteAssignment.findFirst({ where: { workerId: w1.id, jobSiteId: site.id } });
+  chk('a newly invited worker has no acceptance yet', fresh.acceptedAt === null);
+  chk('...and is labelled Invited, not Approved',
+      assignmentStatusLabel(fresh) === 'Invited', assignmentStatusLabel(fresh));
+  chk('no approval wording appears for a normal invite',
+      !/approv/i.test(assignmentStatusLabel(fresh)), assignmentStatusLabel(fresh));
+
+  await svc.recordAcceptance(w1.id, site.id);
+  const arrived = await prisma.workerSiteAssignment.findFirst({ where: { workerId: w1.id, jobSiteId: site.id } });
+  chk('checking in records the acceptance', arrived.acceptedAt !== null);
+  chk('...and the label becomes Active', assignmentStatusLabel(arrived) === 'Active', assignmentStatusLabel(arrived));
+
+  const before = arrived.acceptedAt;
+  await svc.recordAcceptance(w1.id, site.id);
+  const again = await prisma.workerSiteAssignment.findFirst({ where: { workerId: w1.id, jobSiteId: site.id } });
+  chk('a second check-in does not move the first-arrival time',
+      again.acceptedAt.getTime() === before.getTime());
+
+  console.log('\n[8] Approval wording only where approval applies');
+  chk('a SUSPENDED row still reads as suspended',
+      assignmentStatusLabel({ status: 'SUSPENDED', acceptedAt: null }) === 'Suspended');
+  chk('a genuinely INVITED row still says Awaiting approval',
+      assignmentStatusLabel({ status: 'INVITED', acceptedAt: null }) === 'Awaiting approval');
+  chk('an accepted ACTIVE row never says approved',
+      !/approv/i.test(assignmentStatusLabel({ status: 'ACTIVE', acceptedAt: new Date() })));
+
+  console.log('\n[9] Check-in wires acceptance for real');
+  const src = require('fs').readFileSync('services/submissions/submissionService.ts', 'utf8');
+  chk('the check-in path calls recordAcceptance', /recordAcceptance\(input\.workerId, input\.siteId\)/.test(src));
+  chk('...and does not await it into the check-in result', /void recordAcceptance/.test(src));
 
   console.log(`\n== ${pass} passed, ${failures.length} failed ==`);
   if (failures.length) { for (const f of failures) console.log(`   FAILED: ${f}`); process.exitCode = 1; }
