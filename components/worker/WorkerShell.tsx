@@ -87,7 +87,7 @@ export function WorkerShell({
                 over the contrast score. Do not change without raising it first.
               */}
               <span className="shrink-0 rounded-md bg-safe-500 px-2 py-0.5 text-xs font-semibold text-white">
-                Worker
+                Operative
               </span>
             </span>
             {/* In the IDENTITY row beside Sign out — deliberately not the row

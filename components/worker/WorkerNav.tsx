@@ -197,7 +197,7 @@ export function WorkerNav({
       <nav
         ref={scrollerRef}
         onScroll={measure}
-        aria-label="Worker dashboard sections"
+        aria-label="Operative dashboard sections"
         className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible"
       >
         {items.map((item) => {
