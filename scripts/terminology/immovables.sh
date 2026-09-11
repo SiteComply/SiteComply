@@ -8,7 +8,13 @@ set -uo pipefail
 cd /home/cc-dev-1/sitecomply
 BASE="${1:-HEAD}"
 fail=0
-body() { git diff -U0 "$BASE" | grep -E '^[-+]' | grep -vE '^(\+\+\+|---)'; }
+# PRODUCT CODE ONLY. The terminology tooling legitimately contains these words
+# as data — its carve-out list, its check patterns, its docstring — and an
+# earlier version of this guard flagged its own source as a route change.
+body() {
+  git diff -U0 "$BASE" -- app components services lib prisma \
+    | grep -E '^[-+]' | grep -vE '^(\+\+\+|---)'
+}
 
 check() {
   local label="$1" pattern="$2"
@@ -29,6 +35,6 @@ check "no code identifiers changed"   '\b(workerId|workerName|getWorkerByMobile|
 check "schema untouched"              'prisma/schema\.prisma'
 check "CSCS card names preserved"     'Skilled Worker|Experienced Worker'
 check "CDM threshold preserved"       '20\+ workers at once'
-git diff --name-only "$BASE" | grep -q 'prisma/schema.prisma' && { echo "  FAIL  schema file in the changed set"; fail=1; } || echo "  ok    schema file not in the changed set"
+git diff --name-only "$BASE" -- prisma/schema.prisma | grep -q . && { echo "  FAIL  schema file in the changed set"; fail=1; } || echo "  ok    schema file not in the changed set"
 [ "$fail" -eq 0 ] && echo "  — all immovables intact" || echo "  — IMMOVABLES VIOLATED"
 exit $fail
