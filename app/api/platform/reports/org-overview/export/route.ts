@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
   const scopeSites = viewer.sites.filter((s) => filters.siteIds.includes(s.id));
   const o = await getOrgOverview(scopeSites, filters.range);
   const csv = toCsv(
-    ['Site', 'Check-ins', 'Active workers', 'On site now', 'Compliance %'],
+    ['Site', 'Check-ins', 'Active operatives', 'On site now', 'Compliance %'],
     o.sitePerformance.map((s) => [
       s.siteName,
       s.checkIns,

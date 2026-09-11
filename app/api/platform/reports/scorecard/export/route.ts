@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     [
       'Site',
       'Check-ins',
-      'Active workers',
+      'Active operatives',
       'Contractors',
       'Compliance %',
       'Induction %',

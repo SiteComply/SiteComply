@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
   const rows = await getComplianceRows(filters.siteIds, filters.range);
   const csv = toCsv(
     [
-      'Worker',
+      'Operative',
       'Company',
       'Site',
       'Checked in',

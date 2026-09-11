@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
 
   const rows = await getCscsRows(filters.siteIds, filters.range);
   const csv = toCsv(
-    ['Worker', 'Company', 'CSCS card', 'Card number', 'Expiry', 'Status'],
+    ['Operative', 'Company', 'CSCS card', 'Card number', 'Expiry', 'Status'],
     rows.map((r) => [
       r.workerName,
       r.workerCompany,

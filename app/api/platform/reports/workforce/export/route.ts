@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
 
   const summary = await getWorkforceSummary(filters.siteIds, filters.range);
   const csv = toCsv(
-    ['Company', 'Unique workers', 'Check-ins'],
+    ['Company', 'Unique operatives', 'Check-ins'],
     summary.byCompany.map((c) => [c.company, c.workers, c.checkIns]),
   );
 

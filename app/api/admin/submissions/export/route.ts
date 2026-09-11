@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
   const headers = [
     'Site',
     'Job reference',
-    'Worker',
+    'Operative',
     'Company',
     'Mobile',
     'Checked in',
