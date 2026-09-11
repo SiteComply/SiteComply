@@ -1,9 +1,10 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import {
   CLOSED_PROJECT_WRITABLE_MODELS,
   ProjectClosedError,
   getClosedSiteIds,
   inProjectLifecycleWrite,
+  jobSiteIdFromArgs,
   siteIdFromData,
   siteIdFromWhere,
 } from '@/services/projectClosure/projectWritable';
@@ -32,6 +33,22 @@ const WRITE_OPERATIONS = new Set([
   'delete',
   'deleteMany',
 ]);
+
+/**
+ * Models that actually HAVE a jobSiteId column.
+ *
+ * The lookup below asks the model for its rows' `jobSiteId`. For a model that
+ * has no such column that query always fails — it was issued on every write to
+ * every one of those models, and Prisma logged the failure before the catch
+ * swallowed it. A wasted round trip and a stream of `prisma:error` lines that
+ * bury real ones. Read it off the schema once instead of finding out the hard
+ * way, every time.
+ */
+const MODELS_WITH_SITE_ID = new Set(
+  Prisma.dmmf.datamodel.models
+    .filter((m) => m.fields.some((f) => f.name === 'jobSiteId'))
+    .map((m) => m.name),
+);
 
 /** Write operations whose target rows must be looked up to find their site. */
 const NEEDS_LOOKUP = new Set([
@@ -69,15 +86,23 @@ function createPrismaClient() {
           if (closed.size === 0) return query(args);
 
           const a = (args ?? {}) as Record<string, unknown>;
-          let siteIds = [
-            ...siteIdFromData(a.data),
-            ...siteIdFromData(a.create),
-            ...siteIdFromWhere(a.where),
-          ];
+          let siteIds =
+            model === 'JobSite'
+              ? jobSiteIdFromArgs(a)
+              : [
+                  ...siteIdFromData(a.data),
+                  ...siteIdFromData(a.create),
+                  ...siteIdFromWhere(a.where),
+                ];
 
           // An update or delete that targets rows by id tells us nothing about
           // which project they belong to, so ask.
-          if (siteIds.length === 0 && NEEDS_LOOKUP.has(operation) && a.where) {
+          if (
+            siteIds.length === 0 &&
+            NEEDS_LOOKUP.has(operation) &&
+            a.where &&
+            MODELS_WITH_SITE_ID.has(model)
+          ) {
             try {
               const delegate = (
                 base as unknown as Record<

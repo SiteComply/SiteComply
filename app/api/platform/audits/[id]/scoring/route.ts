@@ -4,6 +4,7 @@ import {
   saveScoringConfig,
   type SaveScoringInput,
 } from '@/services/audits/auditScoringService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 /**
  * SC-014 — persist an audit's scoring configuration (method, options, section
@@ -11,7 +12,7 @@ import {
  * recalculate the score. Guarded by `audits:edit` + site scope inside the
  * service; a SIGNED_OFF audit is frozen.
  */
-export async function PUT(
+async function PUTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -73,3 +74,5 @@ export async function PUT(
 
   return NextResponse.json({ ok: true });
 }
+
+export const PUT = withClosedProjectHandling(PUTHandler);

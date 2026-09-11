@@ -4,6 +4,7 @@ import {
   canGenerateCloseOutPack,
   createPack,
 } from '@/services/closeOut/closeOutService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,7 @@ export const dynamic = 'force-dynamic';
  * against the caller's EFFECTIVE permissions, so a crafted request cannot make
  * a pack contain more than the person generating it may see.
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -68,3 +69,5 @@ export async function POST(
     { status },
   );
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

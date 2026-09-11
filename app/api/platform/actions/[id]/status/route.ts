@@ -4,6 +4,7 @@ import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { setActionStatus } from '@/services/actions/actionService';
 import { isActionStatus } from '@/services/actions/actionConstants';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic';
  * Move an action through its status workflow. Enforces the actions "edit"
  * permission and the Assigned-Sites boundary. Completing sets completedAt.
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -58,3 +59,5 @@ export async function POST(
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

@@ -5,6 +5,7 @@ import {
   setBulletinActive,
   deleteBulletin,
 } from '@/services/bulletins/bulletinService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic';
  * Archive/retract or re-activate a bulletin. Enforces the bulletins "edit"
  * permission and the Assigned-Sites boundary. Body: { active: boolean }.
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -63,7 +64,7 @@ export async function PATCH(
  * Permanently delete a bulletin (and its acknowledgements). Enforces the
  * bulletins "edit" permission and the Assigned-Sites boundary.
  */
-export async function DELETE(
+async function DELETEHandler(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -90,3 +91,6 @@ export async function DELETE(
   }
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);
+export const DELETE = withClosedProjectHandling(DELETEHandler);

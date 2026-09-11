@@ -4,6 +4,7 @@ import {
   saveSmsConfig,
   type SaveSmsConfigInput,
 } from '@/services/sms/smsConfigService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic';
  *   { activeProvider, settings: { [providerId]: { [field]: value } } }
  * Secret fields left blank keep their stored (encrypted) value.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const auth = requireAdminRole(ADMIN_WRITE_ROLES);
   if (!auth.ok) return auth.response;
   const admin = auth.admin;
@@ -42,3 +43,5 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

@@ -9,6 +9,7 @@ import {
   deleteSiteContact,
   type SiteContactInput,
 } from '@/services/sites/siteContactService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,7 +39,7 @@ async function requireEditor(): Promise<PlatformViewer | NextResponse> {
   return viewer;
 }
 
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { contactId: string } },
 ) {
@@ -78,7 +79,7 @@ export async function PATCH(
   return NextResponse.json({ ok: true, id: result.id });
 }
 
-export async function DELETE(
+async function DELETEHandler(
   _req: NextRequest,
   { params }: { params: { contactId: string } },
 ) {
@@ -94,3 +95,6 @@ export async function DELETE(
   }
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);
+export const DELETE = withClosedProjectHandling(DELETEHandler);

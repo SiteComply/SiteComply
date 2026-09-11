@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { SiteStatus } from '@prisma/client';
 import { requireAdminRole, ADMIN_WRITE_ROLES } from '@/lib/adminAuth';
 import { setSiteStatus, getSiteById } from '@/services/sites/adminSiteService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic';
  * Body: { status: "ACTIVE" | "ARCHIVED" }
  * Archives or restores a site. Archived sites disappear from worker selection.
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -49,3 +50,5 @@ export async function POST(
   await setSiteStatus(params.id, body.status);
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

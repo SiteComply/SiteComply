@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { setQuestionActiveForViewer } from '@/services/knowledgeChecks/bankAdminService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,7 +13,7 @@ export const dynamic = 'force-dynamic';
  * Withdraw (or restore) a knowledge-check question after a flag review. Scoped to
  * the viewer's sites; resolves any open flags on the question.
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { questionId: string } },
 ) {
@@ -60,3 +61,5 @@ export async function PATCH(
   }
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { createActionFromFinding } from '@/services/actions/actionService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic';
  * actions like any other path and is held to the same mandatory-assignee rule,
  * rather than being a back door for unassigned actions.
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { findingId: string } },
 ) {
@@ -72,3 +73,5 @@ export async function POST(
 
   return NextResponse.json({ ok: true, id: created.id });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

@@ -8,6 +8,7 @@ import {
   getAccessRequestById,
   approveAccessRequest,
 } from '@/services/accessRequests/accessRequestService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,7 +21,7 @@ export const dynamic = 'force-dynamic';
  * creates + activates the Platform User, moves the request to APPROVED and links
  * it to the new user, recording the approving admin. Admin only.
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -82,3 +83,5 @@ export async function POST(
 
   return NextResponse.json({ ok: true, userId: outcome.userId });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

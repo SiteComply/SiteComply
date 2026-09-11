@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { canManageAuthSettings } from '@/services/platformUsers/platformPermissions';
 import { savePlatformAuthSettings } from '@/services/auth/authConfigService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -23,7 +24,7 @@ export const dynamic = 'force-dynamic';
  * organisation policy. Passing an infrastructure field here does nothing,
  * because savePlatformAuthSettings only reads the keys it owns.
  */
-export async function PATCH(req: NextRequest) {
+async function PATCHHandler(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
     return NextResponse.json(
@@ -81,3 +82,5 @@ export async function PATCH(req: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);

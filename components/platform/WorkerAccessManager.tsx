@@ -161,9 +161,9 @@ export function WorkerAccessManager({
             Requirements before an operative can check in
           </h4>
           <p className="mb-3 text-xs text-ink-muted">
-            All off by default. Every worker must be invited to this project
+            All off by default. Every operative must be invited to this project
             before they can check in; these add further conditions on top, and a
-            worker is told exactly which ones they fail.
+            operative is told exactly which ones they fail.
           </p>
 
           {pendingReq ? (

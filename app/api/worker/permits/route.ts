@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getWorkerContext } from '@/services/workerDashboard/workerDashboardService';
 import { createPermit } from '@/services/permits/permitService';
 import type { PermitAnswers } from '@/services/permits/permitFlow';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,7 +13,7 @@ export const dynamic = 'force-dynamic';
  * open check-in (never taken from the request), so a permit can only ever be
  * raised against a site the worker is actually on.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const context = await getWorkerContext();
   if (!context) {
     return NextResponse.json(
@@ -62,3 +63,5 @@ export async function POST(req: NextRequest) {
   }
   return NextResponse.json(result);
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

@@ -5,6 +5,7 @@ import {
   saveSiteInformation,
   type SiteInformationInput,
 } from '@/services/sites/siteInformationService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,7 @@ export const dynamic = 'force-dynamic';
  * edit permission + site scope (site managers included). The site-map image is
  * handled separately by the sibling /site-map route (multipart).
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -58,3 +59,5 @@ export async function PATCH(
   }
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);

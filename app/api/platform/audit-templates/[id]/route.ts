@@ -7,6 +7,7 @@ import {
   deleteTemplate,
   type TemplateInput,
 } from '@/services/audits/auditTemplateService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,7 @@ export const dynamic = 'force-dynamic';
  * DELETE → delete a non-system template.
  * All restricted to AUDIT_TEMPLATE_MANAGE_ROLES.
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -65,7 +66,7 @@ export async function PATCH(
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(
+async function DELETEHandler(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -97,3 +98,6 @@ export async function DELETE(
   }
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);
+export const DELETE = withClosedProjectHandling(DELETEHandler);

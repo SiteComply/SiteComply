@@ -78,7 +78,7 @@ export function ManualCheckOutPanel({
           size="md"
           onClick={() => setOpen(true)}
         >
-          Manually check out worker
+          Manually check out operative
         </Button>
         {openSinceLabel ? (
           <p className="mt-1 text-xs text-ink-subtle">{openSinceLabel}</p>

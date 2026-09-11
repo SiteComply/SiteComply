@@ -8,6 +8,7 @@ import {
   type AuditMetaInput,
 } from '@/services/audits/auditService';
 import { canDeleteAudit } from '@/services/audits/auditConstants';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,7 @@ export const dynamic = 'force-dynamic';
  * "edit" permission and the Assigned-Sites boundary (existing + target site, and
  * every referenced document, must be in scope).
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -78,7 +79,7 @@ export async function PATCH(
  * Principal Contractor) — a deliberate rule distinct from the "edit" permission
  * — plus the Assigned-Sites boundary. Referenced documents are left intact.
  */
-export async function DELETE(
+async function DELETEHandler(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -106,3 +107,6 @@ export async function DELETE(
 
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);
+export const DELETE = withClosedProjectHandling(DELETEHandler);

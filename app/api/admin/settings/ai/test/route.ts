@@ -3,6 +3,7 @@ import { requireAdminRole, ADMIN_WRITE_ROLES } from '@/lib/adminAuth';
 import { buildAiProvider, AiError } from '@/services/ai';
 import { resolveTestSettings } from '@/services/ai/aiConfigService';
 import { getAiProviderDescriptor } from '@/services/ai/aiProviderCatalog';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic';
  * an admin can test before saving. Sends a tiny completion and returns the test
  * OUTCOME (ok true/false) with HTTP 200 when the test ran; 400/401 for bad requests.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const auth = requireAdminRole(ADMIN_WRITE_ROLES);
   if (!auth.ok) return auth.response;
 
@@ -70,3 +71,5 @@ export async function POST(req: NextRequest) {
     });
   }
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

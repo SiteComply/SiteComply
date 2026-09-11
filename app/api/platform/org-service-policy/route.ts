@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { setMandatoryPolicy } from '@/services/siteServices/siteConfigTemplateService';
 import { isSiteServiceKind } from '@/services/siteServices/siteServiceCatalog';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic';
  * Returns how many sites had the service switched off and were overridden, so
  * the UI can report the real effect rather than implying nothing changed.
  */
-export async function PATCH(req: NextRequest) {
+async function PATCHHandler(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
     return NextResponse.json(
@@ -72,3 +73,5 @@ export async function PATCH(req: NextRequest) {
     { status: result.reason === 'forbidden' ? 403 : 400 },
   );
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);

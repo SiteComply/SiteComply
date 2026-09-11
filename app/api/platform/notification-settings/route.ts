@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { canManageNotificationSettings } from '@/services/platformUsers/platformPermissions';
 import { savePlatformNotificationSettings } from '@/services/notifications/notificationConfigService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,7 +13,7 @@ export const dynamic = 'force-dynamic';
  * The page renders a Project Manager's controls disabled; that is a courtesy.
  * This is the permission.
  */
-export async function PATCH(req: NextRequest) {
+async function PATCHHandler(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
     return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
@@ -52,3 +53,5 @@ export async function PATCH(req: NextRequest) {
   }
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);

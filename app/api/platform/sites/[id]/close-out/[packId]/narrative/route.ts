@@ -5,6 +5,7 @@ import {
   clearCloseOutNarrative,
   NARRATIVE_MESSAGES,
 } from '@/services/closeOut/closeOutAi';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ export const dynamic = 'force-dynamic';
  * permission-filtered render, so it can never describe data the caller cannot
  * see.
  */
-export async function POST(
+async function POSTHandler(
   _req: NextRequest,
   { params }: { params: { id: string; packId: string } },
 ) {
@@ -61,7 +62,7 @@ export async function POST(
   );
 }
 
-export async function DELETE(
+async function DELETEHandler(
   _req: NextRequest,
   { params }: { params: { id: string; packId: string } },
 ) {
@@ -80,3 +81,6 @@ export async function DELETE(
         { status: 404 },
       );
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);
+export const DELETE = withClosedProjectHandling(DELETEHandler);

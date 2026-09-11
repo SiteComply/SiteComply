@@ -7,6 +7,7 @@ import {
   rejectPermit,
   closePermit,
 } from '@/services/permits/permitAdminService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,7 +21,7 @@ export const dynamic = 'force-dynamic';
  * Gated on the `permits` edit permission + site scope; approve/reject additionally
  * require the PERMIT_APPROVAL_ROLES allow-list (enforced in the service).
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -87,3 +88,5 @@ export async function PATCH(
     { status: 400 },
   );
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);

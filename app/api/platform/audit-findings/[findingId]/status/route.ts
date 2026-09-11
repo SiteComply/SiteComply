@@ -4,6 +4,7 @@ import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { setFindingStatus } from '@/services/audits/findingService';
 import { isFindingStatus } from '@/services/audits/findingConstants';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic';
  * Quick status change (e.g. close / reopen a finding). Enforces the audits
  * "edit" permission and the Assigned-Sites boundary.
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { findingId: string } },
 ) {
@@ -51,3 +52,5 @@ export async function POST(
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

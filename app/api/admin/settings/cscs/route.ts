@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminRole, ADMIN_WRITE_ROLES } from '@/lib/adminAuth';
 import { saveCscsConfig } from '@/services/cscs/cscsConfigService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,7 +13,7 @@ export const dynamic = 'force-dynamic';
  * is never returned by any read path; a blank key means "keep the stored one",
  * the same convention the SMS integration uses.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const auth = requireAdminRole(ADMIN_WRITE_ROLES);
   if (!auth.ok) return auth.response;
 
@@ -51,3 +52,5 @@ export async function POST(req: NextRequest) {
   }
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

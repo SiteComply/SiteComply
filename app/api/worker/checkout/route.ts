@@ -3,6 +3,7 @@ import { getWorkerSession } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { checkOut } from '@/services/submissions/submissionService';
 import { parseLocationFix } from '@/services/geo/geoValidationService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,7 +13,7 @@ export const dynamic = 'force-dynamic';
  * Body: { submissionId: string }
  * Marks the worker's own open check-in as checked out (sets checkedOutAt).
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const session = getWorkerSession();
   if (!session) {
     return NextResponse.json(
@@ -62,3 +63,5 @@ export async function POST(req: NextRequest) {
   }
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

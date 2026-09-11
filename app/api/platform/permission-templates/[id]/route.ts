@@ -6,6 +6,7 @@ import {
   setPermissionTemplateActive,
   deletePermissionTemplate,
 } from '@/services/platformUsers/permissionTemplateService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic';
  *
  * SC-022 Phase 2. Director / Project Manager only.
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -83,7 +84,7 @@ export async function PATCH(
   );
 }
 
-export async function DELETE(
+async function DELETEHandler(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -110,3 +111,6 @@ export async function DELETE(
     },
   );
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);
+export const DELETE = withClosedProjectHandling(DELETEHandler);

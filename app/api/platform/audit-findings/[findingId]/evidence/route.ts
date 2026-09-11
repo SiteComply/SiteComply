@@ -6,6 +6,7 @@ import {
   validateEvidenceFile,
   addFindingEvidence,
 } from '@/services/audits/findingEvidenceService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic';
  * the audits "edit" permission and the Assigned-Sites boundary (the finding's
  * audit must be in the viewer's scope). Streamed to the private blob container.
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { findingId: string } },
 ) {
@@ -84,3 +85,5 @@ export async function POST(
 
   return NextResponse.json({ ok: true, id: result.id });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

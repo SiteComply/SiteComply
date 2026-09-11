@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { revokeShare } from '@/services/closeOut/closeOutSharing';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic';
  * Revocation is the reason share tokens are stored at all: a stateless signed
  * token could not be withdrawn before its expiry.
  */
-export async function DELETE(
+async function DELETEHandler(
   _req: NextRequest,
   { params }: { params: { id: string; packId: string; shareId: string } },
 ) {
@@ -30,3 +31,5 @@ export async function DELETE(
         { status: 404 },
       );
 }
+
+export const DELETE = withClosedProjectHandling(DELETEHandler);

@@ -7,6 +7,7 @@ import {
   deleteAction,
   type ActionInput,
 } from '@/services/actions/actionService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic';
  * Update an action. Enforces the actions "edit" permission and the
  * Assigned-Sites boundary (existing + target site must be in scope).
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -100,7 +101,7 @@ export async function PATCH(
  * = editing) and the Assigned-Sites boundary (the action must be in scope). Any
  * audit finding it was raised from is left intact.
  */
-export async function DELETE(
+async function DELETEHandler(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -128,3 +129,6 @@ export async function DELETE(
 
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);
+export const DELETE = withClosedProjectHandling(DELETEHandler);

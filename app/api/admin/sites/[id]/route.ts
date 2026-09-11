@@ -7,6 +7,7 @@ import {
   countCheckedInWorkers,
   deleteSite,
 } from '@/services/sites/adminSiteService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,7 @@ export const dynamic = 'force-dynamic';
  * PUT /api/admin/sites/[id]
  * Updates a job site's details. Admin only.
  */
-export async function PUT(
+async function PUTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -57,7 +58,7 @@ export async function PUT(
  * Permanently deletes a job site and all of its history. Admin only. Refused
  * with 409 while any worker is still checked in to the site.
  */
-export async function DELETE(
+async function DELETEHandler(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -87,3 +88,6 @@ export async function DELETE(
   await deleteSite(params.id);
   return NextResponse.json({ ok: true });
 }
+
+export const PUT = withClosedProjectHandling(PUTHandler);
+export const DELETE = withClosedProjectHandling(DELETEHandler);

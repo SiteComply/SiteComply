@@ -8,6 +8,7 @@ import {
   createDocument,
   type DocumentMetaInput,
 } from '@/services/documents/documentService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,7 @@ export const dynamic = 'force-dynamic';
  * permission and the Assigned-Sites boundary (the chosen site must be in scope).
  * The file is streamed to private blob storage; the DB row records its metadata.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
     return NextResponse.json(
@@ -87,3 +88,5 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true, id: created.id });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

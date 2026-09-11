@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { SchedulerTrigger } from '@prisma/client';
 import { runScheduledGeneration } from '@/services/compliance/schedulerRunner';
 import { authoriseScheduler } from '@/lib/schedulerAuth';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,7 +28,7 @@ export const dynamic = 'force-dynamic';
  *    shows.
  */
 
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const auth = authoriseScheduler(req);
   if (auth === 'disabled') {
     return NextResponse.json(
@@ -56,3 +57,5 @@ export async function POST(req: NextRequest) {
     ...(result.error ? { error: result.error } : {}),
   });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

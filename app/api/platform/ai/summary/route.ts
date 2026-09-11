@@ -6,6 +6,7 @@ import {
   generateSummary,
   type SummaryReason,
 } from '@/services/ai/summaryService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -47,7 +48,7 @@ const MESSAGE: Record<SummaryReason, string> = {
   provider_error: 'The summary could not be generated right now. Please try again.',
 };
 
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
     return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
@@ -90,3 +91,5 @@ export async function POST(req: NextRequest) {
     generatedAt: result.generatedAt,
   });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

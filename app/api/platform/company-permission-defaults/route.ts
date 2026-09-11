@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { setCompanyDefault } from '@/services/platformUsers/permissionTemplateService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ export const dynamic = 'force-dynamic';
  * effect instead of implying nothing changed — and so a typo in a free-text
  * company name shows up as "0 users".
  */
-export async function PATCH(req: NextRequest) {
+async function PATCHHandler(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
     return NextResponse.json(
@@ -69,3 +70,5 @@ export async function PATCH(req: NextRequest) {
     { status: result.reason === 'forbidden' ? 403 : 400 },
   );
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);

@@ -6,6 +6,7 @@ import {
 } from '@/services/platformUsers/platformUserService';
 import { requestCode } from '@/services/auth/otpService';
 import { isPlatformOverrideAccount } from '@/services/auth/platformDevOverride';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,7 +30,7 @@ export const dynamic = 'force-dynamic';
  */
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   let body: { method?: string; value?: string };
   try {
     body = await req.json();
@@ -112,3 +113,5 @@ export async function POST(req: NextRequest) {
     resendInSeconds: sent.resendInSeconds,
   });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

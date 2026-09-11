@@ -15,6 +15,7 @@ import {
   auditPlatformOverride,
 } from '@/services/auth/platformDevOverride';
 import { verifyChallenge } from '@/services/auth/otpService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -34,7 +35,7 @@ export const dynamic = 'force-dynamic';
  * The former global `DEV_CODE = '123456'` bypass remains removed.
  */
 
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   let body: { method?: string; value?: string; code?: string };
   try {
     body = await req.json();
@@ -116,3 +117,5 @@ export async function POST(req: NextRequest) {
   );
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

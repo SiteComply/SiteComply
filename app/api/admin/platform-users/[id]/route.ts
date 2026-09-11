@@ -8,6 +8,7 @@ import {
   getPlatformUserById,
   type PlatformUserInput,
 } from '@/services/platformUsers/platformUserService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic';
  * PUT /api/admin/platform-users/[id]
  * Updates a Platform User's details, role, status and assigned sites.
  */
-export async function PUT(
+async function PUTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -73,7 +74,7 @@ export async function PUT(
  * DELETE /api/admin/platform-users/[id]
  * Permanently removes a Platform User.
  */
-export async function DELETE(
+async function DELETEHandler(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -91,3 +92,6 @@ export async function DELETE(
   await deletePlatformUser(params.id);
   return NextResponse.json({ ok: true });
 }
+
+export const PUT = withClosedProjectHandling(PUTHandler);
+export const DELETE = withClosedProjectHandling(DELETEHandler);

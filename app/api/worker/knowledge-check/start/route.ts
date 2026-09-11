@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getWorkerSession } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { startAttempt } from '@/services/knowledgeChecks/attemptService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic';
  * The worker is not yet checked in, so the site is taken from the body and the
  * worker is identified from their SMS session. Never returns correct answers.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const session = getWorkerSession();
   if (!session) {
     return NextResponse.json(
@@ -49,3 +50,5 @@ export async function POST(req: NextRequest) {
   const result = await startAttempt(worker.id, body.siteId);
   return NextResponse.json({ ok: true, ...result });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

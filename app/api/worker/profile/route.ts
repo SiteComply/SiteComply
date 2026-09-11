@@ -17,6 +17,7 @@ import {
   isAllowedCardImageType,
   CARD_IMAGE_MAX_BYTES,
 } from '@/services/cscs/cardImageStorage';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -80,7 +81,7 @@ const bad = (error: string, status = 400) =>
  * kept in private blob storage. Refreshes the session cookie with the workerId.
  * Requires a valid worker session from the SMS step.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const session = getWorkerSession();
   if (!session) {
     return bad('Your session has expired. Please verify again.', 401);
@@ -213,3 +214,5 @@ export async function POST(req: NextRequest) {
       : null,
   });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

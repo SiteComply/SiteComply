@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { addActionComment } from '@/services/actions/actionService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,7 +13,7 @@ export const dynamic = 'force-dynamic';
  * Add an update/comment to an action's activity timeline. Enforces the actions
  * "edit" permission and the Assigned-Sites boundary.
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -53,3 +54,5 @@ export async function POST(
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

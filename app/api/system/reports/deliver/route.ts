@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authoriseScheduler } from '@/lib/schedulerAuth';
 import { deliverPendingReports } from '@/services/reports/reportDelivery';
 import { mailerEnabled } from '@/services/reports/reportMailer';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ export const dynamic = 'force-dynamic';
  * Returns counts only. A report's contents, reporter and page never appear here,
  * so a leaked secret discloses nothing about what anyone has reported.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const auth = authoriseScheduler(req);
   if (auth === 'disabled') {
     return NextResponse.json({ ok: false, error: 'Scheduler is not configured.' }, { status: 503 });
@@ -36,3 +37,5 @@ export async function POST(req: NextRequest) {
   const result = await deliverPendingReports();
   return NextResponse.json({ ok: true, mail: 'enabled', ...result });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

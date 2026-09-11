@@ -164,7 +164,7 @@ export function KnowledgeCheckConfig({
       <p className="text-sm text-ink-muted">
         A short AI-generated quiz at the end of this site’s induction. Questions
         are generated from this site’s induction content and emergency
-        information; workers must answer all correctly to check in.
+        information; operatives must answer all correctly to check in.
       </p>
 
       {/* Settings */}

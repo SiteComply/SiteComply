@@ -6,6 +6,7 @@ import {
   DESCRIPTION_MAX,
 } from '@/services/reports/reportService';
 import { deliverInBackground } from '@/services/reports/reportDelivery';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,7 +29,7 @@ export const dynamic = 'force-dynamic';
  * not an impersonation. Without it the server guessed by cookie precedence, and
  * guessed wrong for anyone holding two sessions at once.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
@@ -116,3 +117,5 @@ function isReportType(v: string): v is IssueReportType {
 function isReportPortal(v: unknown): v is IssueReportPortal {
   return typeof v === 'string' && (Object.values(IssueReportPortal) as string[]).includes(v);
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

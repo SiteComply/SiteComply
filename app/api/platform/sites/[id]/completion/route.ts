@@ -7,6 +7,7 @@ import {
   canCloseProject,
   canReopenProject,
 } from '@/services/projectClosure/closureService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -47,7 +48,7 @@ export async function GET(
   });
 }
 
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -102,7 +103,7 @@ export async function POST(
   return NextResponse.json({ ok: false, error }, { status });
 }
 
-export async function DELETE(
+async function DELETEHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -148,3 +149,6 @@ export async function DELETE(
           : 'Project not found.';
   return NextResponse.json({ ok: false, error }, { status });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);
+export const DELETE = withClosedProjectHandling(DELETEHandler);

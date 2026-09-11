@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { saveAuditAsTemplate } from '@/services/audits/auditTemplateService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic';
  * Save an existing audit as a reusable organisation-level template. Requires the
  * audits "create" permission; the audit must be in the viewer's scope.
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -54,3 +55,5 @@ export async function POST(
   }
   return NextResponse.json({ ok: true, id: result.id });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

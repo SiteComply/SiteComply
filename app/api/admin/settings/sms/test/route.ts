@@ -6,6 +6,7 @@ import { resolveTestSettings } from '@/services/sms/smsConfigService';
 import { getSmsProviderDescriptor } from '@/services/sms/providerCatalog';
 import { prisma } from '@/lib/prisma';
 import { maskNumber } from '@/services/sms/smsSendService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ export const dynamic = 'force-dynamic';
  * an admin can test before saving. Returns the test OUTCOME (ok true/false) with
  * HTTP 200 when the test ran; 400/401 only for bad requests.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const auth = requireAdminRole(ADMIN_WRITE_ROLES);
   if (!auth.ok) return auth.response;
 
@@ -136,3 +137,5 @@ async function logTestSms(
     console.error('Failed to log test SMS', e);
   }
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

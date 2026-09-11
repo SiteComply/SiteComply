@@ -4,6 +4,7 @@ import { getWorkerByMobile } from '@/services/workers/workerService';
 import { expressCheckIn } from '@/services/induction/inductionValidityService';
 import { parseLocationFix } from '@/services/geo/geoValidationService';
 import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic';
  * (SC-006) — no wizard, no new knowledge check. Validity is re-derived
  * server-side, so this cannot be used to skip a required induction.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const session = getWorkerSession();
   if (!session) {
     return NextResponse.json(
@@ -78,3 +79,5 @@ export async function POST(req: NextRequest) {
   setActiveWorkerSiteCookie(body.siteId, workerSessionTtlSeconds);
   return NextResponse.json(result);
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

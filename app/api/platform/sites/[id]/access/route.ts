@@ -8,6 +8,7 @@ import {
   resetAccess,
   revokeSiteAccess,
 } from '@/services/platformUsers/contractorAccessService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,7 +29,7 @@ export const dynamic = 'force-dynamic';
  * 403 WITH its reason — those are deliberate rules a user should understand,
  * not failures to debug.
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -128,3 +129,5 @@ export async function PATCH(
     { status },
   );
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);

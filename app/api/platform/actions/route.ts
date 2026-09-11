@@ -6,6 +6,7 @@ import {
   createAction,
   type ActionInput,
 } from '@/services/actions/actionService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,7 @@ export const dynamic = 'force-dynamic';
  * Create an action. Enforces the actions "create" permission and the
  * Assigned-Sites boundary (the chosen site must be in scope).
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
     return NextResponse.json(
@@ -59,3 +60,5 @@ export async function POST(req: NextRequest) {
   }
   return NextResponse.json({ ok: true, id: created.id });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

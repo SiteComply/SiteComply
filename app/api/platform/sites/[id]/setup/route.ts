@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { saveSetupStep } from '@/services/sites/siteSetupService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +14,7 @@ export const dynamic = 'force-dynamic';
  * are Director-only; operational steps follow sites:edit, preserving the split
  * SC-008 established).
  */
-export async function PUT(
+async function PUTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -74,3 +75,5 @@ export async function PUT(
 
   return NextResponse.json({ ok: true });
 }
+
+export const PUT = withClosedProjectHandling(PUTHandler);

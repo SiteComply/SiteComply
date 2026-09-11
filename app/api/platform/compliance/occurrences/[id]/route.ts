@@ -4,6 +4,7 @@ import {
   startOccurrence,
   completeOccurrence,
 } from '@/services/compliance/occurrenceService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +16,7 @@ export const dynamic = 'force-dynamic';
  * becomes an ordinary audit, so findings, actions and compliance scoring need no
  * special cases.
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -68,3 +69,5 @@ export async function POST(
   }
   return NextResponse.json({ ok: true, auditId: result.auditId ?? null });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

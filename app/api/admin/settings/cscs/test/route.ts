@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminRole, ADMIN_WRITE_ROLES } from '@/lib/adminAuth';
 import { resolveCscsTestCredentials } from '@/services/cscs/cscsConfigService';
 import { testSmartCheckConnection } from '@/services/cscs/smartCheckConnectionTest';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,7 +23,7 @@ export const dynamic = 'force-dynamic';
  * Changes nothing. No configuration is written, no verification is recorded,
  * and no worker or card is involved.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const auth = requireAdminRole(ADMIN_WRITE_ROLES);
   if (!auth.ok) return auth.response;
 
@@ -47,3 +48,5 @@ export async function POST(req: NextRequest) {
   // outcome. Returned wholesale so the UI renders one shape for every case.
   return NextResponse.json({ ok: result.ok, result });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { deleteFindingEvidence } from '@/services/audits/findingEvidenceService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic';
  * Remove an evidence file (delete the blob + row). Enforces the audits "edit"
  * permission and the Assigned-Sites boundary.
  */
-export async function DELETE(
+async function DELETEHandler(
   _req: NextRequest,
   { params }: { params: { findingId: string; evidenceId: string } },
 ) {
@@ -32,3 +33,5 @@ export async function DELETE(
   }
   return NextResponse.json({ ok: true });
 }
+
+export const DELETE = withClosedProjectHandling(DELETEHandler);

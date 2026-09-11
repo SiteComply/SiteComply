@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWorkerContext } from '@/services/workerDashboard/workerDashboardService';
 import { cancelWorkerPermit } from '@/services/permits/permitService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic';
  * permit. Ownership is enforced in the service (the permit must belong to this
  * worker) and only while it is still cancellable.
  */
-export async function POST(
+async function POSTHandler(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -31,3 +32,5 @@ export async function POST(
   }
   return NextResponse.json(result);
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

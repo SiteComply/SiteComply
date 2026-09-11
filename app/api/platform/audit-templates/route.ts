@@ -5,6 +5,7 @@ import {
   createTemplate,
   type TemplateInput,
 } from '@/services/audits/auditTemplateService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,7 +14,7 @@ export const dynamic = 'force-dynamic';
  * POST /api/platform/audit-templates (SC-013) — create a new audit template.
  * Any audit-creating role may add to the shared library.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
     return NextResponse.json(
@@ -46,3 +47,5 @@ export async function POST(req: NextRequest) {
   }
   return NextResponse.json({ ok: true, id: result.id });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

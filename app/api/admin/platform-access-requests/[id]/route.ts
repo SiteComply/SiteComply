@@ -4,6 +4,7 @@ import {
   getAccessRequestById,
   deleteAccessRequest,
 } from '@/services/accessRequests/accessRequestService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic';
  * Approved/Rejected requests). Admin only. Any Platform User created from an
  * approval is left intact.
  */
-export async function DELETE(
+async function DELETEHandler(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -32,3 +33,5 @@ export async function DELETE(
   await deleteAccessRequest(params.id);
   return NextResponse.json({ ok: true });
 }
+
+export const DELETE = withClosedProjectHandling(DELETEHandler);

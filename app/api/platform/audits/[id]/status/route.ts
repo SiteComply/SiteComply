@@ -10,6 +10,7 @@ import {
   getAuditForViewer,
 } from '@/services/audits/auditService';
 import { isAuditStatus } from '@/services/audits/auditConstants';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,7 +21,7 @@ export const dynamic = 'force-dynamic';
  * Track an audit's status / sign it off. Enforces the audits "edit" permission
  * and the Assigned-Sites boundary. Moving to SIGNED_OFF records the signatory.
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -102,3 +103,5 @@ export async function POST(
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

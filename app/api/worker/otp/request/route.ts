@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requestCode } from '@/services/auth/otpService';
 import { normaliseUkMobile } from '@/lib/phone';
 import { setWorkerOtpMobileCookie } from '@/lib/session';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 // Uses Node crypto + Prisma, so force the Node.js runtime (not Edge).
 export const runtime = 'nodejs';
@@ -12,7 +13,7 @@ export const dynamic = 'force-dynamic';
  * Body: { mobile: string }  — a UK mobile in any common format.
  * Sends a one-time passcode and returns a masked destination + timings.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   let body: { mobile?: string };
   try {
     body = await req.json();
@@ -60,3 +61,5 @@ export async function POST(req: NextRequest) {
     resendInSeconds: result.resendInSeconds,
   });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

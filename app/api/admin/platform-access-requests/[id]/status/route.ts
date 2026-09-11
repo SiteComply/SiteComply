@@ -5,6 +5,7 @@ import {
   getAccessRequestById,
   setAccessRequestStatus,
 } from '@/services/accessRequests/accessRequestService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ const ALLOWED = new Set<string>(Object.values(AccessRequestStatus));
  * Approve / reject (or reopen) a Platform Access Request. Admin only. Does not
  * create a Platform User — that stays with the Platform Users admin flow.
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -52,3 +53,5 @@ export async function POST(
   await setAccessRequestStatus(params.id, body.status as AccessRequestStatus);
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

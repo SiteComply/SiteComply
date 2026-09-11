@@ -6,6 +6,7 @@ import {
   validateEvidenceFile,
   addActionEvidence,
 } from '@/services/actions/actionEvidenceService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ export const dynamic = 'force-dynamic';
  * be in the viewer's scope). The file is streamed to the private blob container;
  * the DB row records its metadata + uploader.
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -83,3 +84,5 @@ export async function POST(
 
   return NextResponse.json({ ok: true, id: result.id });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

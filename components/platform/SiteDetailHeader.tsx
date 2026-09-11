@@ -164,6 +164,26 @@ export async function SiteDetailHeader({
       }
     >
       <SiteDetailTabs siteId={site.id} tabs={tabs} active={active} />
+      {/* SC-025 — say it on EVERY tab, not just the overview.
+          A completed project's records are read-only, but only the overview
+          carried that notice: the other five tabs rendered their full set of
+          Save buttons, and a manager found out by pressing one. This header is
+          on all six, so it is the one place the state can be stated once. The
+          controls themselves are still shown rather than hidden — hiding them
+          would make the tab look empty rather than frozen — and the write is
+          refused with this same sentence if one is pressed. */}
+      {isProjectClosed(site.status as SiteStatusValue) && (
+        <p
+          role="status"
+          className="mt-3 rounded-lg border border-line bg-surface-sunken px-3 py-2 text-sm text-ink-muted"
+        >
+          <span className="font-semibold text-ink">
+            This project is completed.
+          </span>{' '}
+          Its records are read-only and preserved for audit. A Director can
+          reopen it if changes are needed.
+        </p>
+      )}
     </RecordHeader>
   );
 }

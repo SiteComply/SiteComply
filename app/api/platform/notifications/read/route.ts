@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { getPlatformNotifications } from '@/services/notifications/platformNotifications';
 import { setNotificationRead } from '@/services/notifications/notificationReadService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,7 +14,7 @@ export const dynamic = 'force-dynamic';
  * Only notifications the viewer can currently see — validated against their
  * derived set, which already applies module RBAC + Assigned-Sites scope.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
     return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
@@ -42,3 +43,5 @@ export async function POST(req: NextRequest) {
   await setNotificationRead(viewer.id, key, body.read !== false);
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

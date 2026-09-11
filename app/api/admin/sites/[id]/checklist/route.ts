@@ -5,6 +5,7 @@ import {
   validateChecklistItems,
   saveChecklist,
 } from '@/services/checklists/adminChecklistService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic';
  * Body: { items: ChecklistItemInput[] }
  * Saves the site's induction checklist, versioning it if needed. Admin only.
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -52,3 +53,5 @@ export async function POST(
   const result = await saveChecklist(params.id, validated.items);
   return NextResponse.json({ ok: true, ...result });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

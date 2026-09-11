@@ -7,6 +7,7 @@ import {
   clearPlatformCompanyLogo,
   type CompanyLogoKind,
 } from '@/services/company/companyConfigService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -51,7 +52,7 @@ async function gate(req: NextRequest) {
   return { viewer, kind };
 }
 
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const g = await gate(req);
   if ('err' in g) return g.err;
 
@@ -80,7 +81,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(req: NextRequest) {
+async function DELETEHandler(req: NextRequest) {
   const g = await gate(req);
   if ('err' in g) return g.err;
   await clearPlatformCompanyLogo(g.kind, {
@@ -89,3 +90,6 @@ export async function DELETE(req: NextRequest) {
   });
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);
+export const DELETE = withClosedProjectHandling(DELETEHandler);

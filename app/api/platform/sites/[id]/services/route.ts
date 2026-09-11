@@ -3,6 +3,7 @@ import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { setSiteServiceEnabled } from '@/services/siteServices/siteServiceAvailability';
 import { isSiteServiceKind } from '@/services/siteServices/siteServiceCatalog';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,7 +23,7 @@ export const dynamic = 'force-dynamic';
  * (active schedules), not malformed input, and the message names the schedules
  * so the manager can act on it.
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -96,3 +97,5 @@ export async function PATCH(
     { status },
   );
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);

@@ -6,6 +6,7 @@ import {
   createConfigTemplate,
   saveSiteAsConfigTemplate,
 } from '@/services/siteServices/siteConfigTemplateService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,7 +26,7 @@ function isCategory(v: unknown): v is SiteConfigTemplateCategory {
   );
 }
 
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
     return NextResponse.json(
@@ -91,3 +92,5 @@ export async function POST(req: NextRequest) {
     { status },
   );
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

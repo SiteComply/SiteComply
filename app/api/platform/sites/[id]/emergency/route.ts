@@ -5,6 +5,7 @@ import {
   saveSiteEmergency,
   type SiteEmergencyInput,
 } from '@/services/sites/siteInformationService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,7 +26,7 @@ export const dynamic = 'force-dynamic';
  * reference, status, archive and reactivate remain on the Director-only route
  * behind SITE_EDIT_ROLES, which is unchanged.
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -66,3 +67,5 @@ export async function PATCH(
 
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);

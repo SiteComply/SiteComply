@@ -12,6 +12,7 @@ import {
   setWorkerPanel,
   setSiteRequirement,
 } from '@/services/workerAccess/workerAssignmentService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -33,7 +34,7 @@ export const dynamic = 'force-dynamic';
  * Enforcement changes return 409 when blocked: refusing to switch it on while
  * workers would be locked out is a conflict with live state, not bad input.
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -204,3 +205,5 @@ export async function PATCH(
     { status },
   );
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);

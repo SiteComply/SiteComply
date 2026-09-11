@@ -6,6 +6,7 @@ import {
   invalidateInductions,
   saveSignatureRequired,
 } from '@/services/induction/inductionConfigService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,7 @@ export const dynamic = 'force-dynamic';
  * Induction validity (SC-006). Gated on the `sites` edit permission + site scope
  * (site managers included).
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -98,3 +99,5 @@ export async function PATCH(
     { status: 400 },
   );
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);

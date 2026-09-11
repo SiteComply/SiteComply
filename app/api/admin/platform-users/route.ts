@@ -6,6 +6,7 @@ import {
   createPlatformUser,
   type PlatformUserInput,
 } from '@/services/platformUsers/platformUserService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic';
  * POST /api/admin/platform-users
  * Adds a Platform User (defaults to PENDING approval). Admin only.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const auth = requireAdminRole(ADMIN_WRITE_ROLES);
   if (!auth.ok) return auth.response;
 
@@ -55,3 +56,5 @@ export async function POST(req: NextRequest) {
     throw e;
   }
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

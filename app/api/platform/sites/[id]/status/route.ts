@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { canEditSite } from '@/services/platformUsers/platformPermissions';
 import { setSiteStatusForDirector } from '@/services/sites/platformSiteService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic';
  * site-scoped (a site outside the viewer's scope is treated as not found).
  * Only the status changes; all site history is preserved.
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -79,3 +80,5 @@ export async function POST(
 
   return NextResponse.json({ ok: true, status: result.status });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

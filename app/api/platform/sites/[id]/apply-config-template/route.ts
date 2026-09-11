@@ -5,6 +5,7 @@ import {
   previewConfigTemplate,
   applyConfigTemplate,
 } from '@/services/siteServices/siteConfigTemplateService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,7 @@ export const dynamic = 'force-dynamic';
  * if the manager can see every change and every refusal first. Preview and apply
  * run the same resolution, so what is confirmed is what happens.
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -71,3 +72,5 @@ export async function POST(
     { status: r.reason === 'forbidden' ? 403 : 404 },
   );
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

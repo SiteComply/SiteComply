@@ -1142,32 +1142,11 @@ async function evaluateOne(
   siteId: string,
   requirement: AccessRequirement,
 ): Promise<boolean> {
-  const existing = await prisma.siteAccessRequirement.findUnique({
-    where: { jobSiteId_requirement: { jobSiteId: siteId, requirement } },
-    select: { enabled: true },
-  });
-  if (existing?.enabled) {
-    const unmet = await evaluateRequirements(workerId, siteId);
-    return unmet.some((u) => u.requirement === requirement);
-  }
-  // Not currently enabled: turn it on, measure, put it back. Wrapped so a
-  // failure cannot leave a requirement switched on that nobody chose.
-  try {
-    await prisma.siteAccessRequirement.upsert({
-      where: { jobSiteId_requirement: { jobSiteId: siteId, requirement } },
-      create: { jobSiteId: siteId, requirement, enabled: true },
-      update: { enabled: true },
-    });
-    const unmet = await evaluateRequirements(workerId, siteId);
-    return unmet.some((u) => u.requirement === requirement);
-  } finally {
-    await prisma.siteAccessRequirement
-      .update({
-        where: { jobSiteId_requirement: { jobSiteId: siteId, requirement } },
-        data: { enabled: existing?.enabled ?? false },
-      })
-      .catch(() => {});
-  }
+  // Ask the evaluator to judge this ONE requirement, in memory. This used to
+  // turn the requirement on in the database, measure, and turn it back off in a
+  // `finally` — during a page render. See evaluateRequirements' note.
+  const unmet = await evaluateRequirements(workerId, siteId, [requirement]);
+  return unmet.some((u) => u.requirement === requirement);
 }
 
 export type RequirementResult =

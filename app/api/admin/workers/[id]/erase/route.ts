@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminRole, ADMIN_WRITE_ROLES } from '@/lib/adminAuth';
 import { eraseWorkerPersonalData } from '@/services/workers/workerService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic';
  * Erases (anonymises) a worker's personal data to honour a UK GDPR erasure
  * request. Admin only.
  */
-export async function POST(
+async function POSTHandler(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -26,3 +27,5 @@ export async function POST(
   }
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

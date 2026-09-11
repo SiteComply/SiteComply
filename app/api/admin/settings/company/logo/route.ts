@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,10 +23,13 @@ const MOVED = NextResponse.json(
   { status: 409 },
 );
 
-export async function POST() {
+async function POSTHandler() {
   return MOVED.clone();
 }
 
-export async function DELETE() {
+async function DELETEHandler() {
   return MOVED.clone();
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);
+export const DELETE = withClosedProjectHandling(DELETEHandler);

@@ -5,6 +5,7 @@ import {
   createSiteForDirector,
   type PlatformSiteInput,
 } from '@/services/sites/platformSiteService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic';
  * Create a new job site from the Platform portal. Director-only; the service
  * seeds a default UK induction checklist so the site is immediately usable.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
     return NextResponse.json(
@@ -65,3 +66,5 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true, id: result.id });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

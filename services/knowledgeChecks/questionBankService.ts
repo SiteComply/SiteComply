@@ -203,7 +203,7 @@ const SYSTEM_PROMPT = [
   'NEVER ask about (not meaningful safety checks):',
   '- administrative trivia: the site name or reference, job number, or "which site',
   '  is this induction for";',
-  '- that an induction happened, or "which statement does the worker confirm";',
+  '- that an induction happened, or "which statement does the operative confirm";',
   '- whether something is or is not "listed"/included/missing;',
   '- the wording, structure, format, categories or help text of the induction,',
   '  checklist or briefing itself;',

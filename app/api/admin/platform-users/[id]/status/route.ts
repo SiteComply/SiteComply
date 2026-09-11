@@ -5,6 +5,7 @@ import {
   setPlatformUserStatus,
   getPlatformUserById,
 } from '@/services/platformUsers/platformUserService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,7 @@ const ALLOWED = new Set<string>(Object.values(PlatformUserStatus));
  * Body: { status: "PENDING" | "ACTIVE" | "DISABLED" }
  * Approve (-> ACTIVE), disable (-> DISABLED) or reset a Platform User.
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -51,3 +52,5 @@ export async function POST(
   await setPlatformUserStatus(params.id, body.status as PlatformUserStatus);
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

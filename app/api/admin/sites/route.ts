@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminRole, ADMIN_WRITE_ROLES } from '@/lib/adminAuth';
 import { validateSite, createSite } from '@/services/sites/adminSiteService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -9,7 +10,7 @@ export const dynamic = 'force-dynamic';
  * POST /api/admin/sites
  * Creates a job site (with a default UK induction checklist). Admin only.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const auth = requireAdminRole(ADMIN_WRITE_ROLES);
   if (!auth.ok) return auth.response;
   const admin = auth.admin;
@@ -35,3 +36,5 @@ export async function POST(req: NextRequest) {
   const site = await createSite(result.value, admin.adminId);
   return NextResponse.json({ ok: true, id: site.id });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

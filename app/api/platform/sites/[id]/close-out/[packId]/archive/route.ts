@@ -7,6 +7,7 @@ import {
   getStoredArchive,
 } from '@/services/closeOut/closeOutArchive';
 import { openDocumentBlobStream } from '@/services/documents/blobStorage';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -41,7 +42,7 @@ async function guard(packId: string) {
   return { viewer };
 }
 
-export async function POST(
+async function POSTHandler(
   _req: NextRequest,
   { params }: { params: { id: string; packId: string } },
 ) {
@@ -102,3 +103,5 @@ export async function GET(
     },
   });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

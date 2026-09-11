@@ -5,6 +5,7 @@ import {
   updateSiteForDirector,
   type PlatformSiteInput,
 } from '@/services/sites/platformSiteService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,7 @@ export const dynamic = 'force-dynamic';
  * from the Platform portal. Director-only, and enforces site-scoping: a site
  * outside the viewer's scope is treated as not found.
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -76,3 +77,5 @@ export async function PATCH(
 
   return NextResponse.json({ ok: true, id: result.id });
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);

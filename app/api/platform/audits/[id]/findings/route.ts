@@ -6,6 +6,7 @@ import {
   createFinding,
   type FindingInput,
 } from '@/services/audits/findingService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,7 @@ export const dynamic = 'force-dynamic';
  * Add a finding to an audit. Enforces the audits "edit" permission and the
  * Assigned-Sites boundary (the parent audit must be in the viewer's scope).
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -64,3 +65,5 @@ export async function POST(
 
   return NextResponse.json({ ok: true, id: created.id });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

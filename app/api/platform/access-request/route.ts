@@ -4,6 +4,7 @@ import {
   createAccessRequest,
   type AccessRequestInput,
 } from '@/services/accessRequests/accessRequestService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,7 +14,7 @@ export const dynamic = 'force-dynamic';
  * Submits a self-service Platform Access Request. Validates the fields and
  * prevents duplicates (existing Platform User or existing pending request).
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   let body: unknown;
   try {
     body = await req.json();
@@ -43,3 +44,5 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

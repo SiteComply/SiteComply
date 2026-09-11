@@ -72,6 +72,61 @@ def scan_strings(src):
     return spans
 
 
+def comment_spans(src):
+    """(start, end) for every // and /* */ comment, outside string literals.
+
+    scan_jsx pairs any '>' with the next '<', so a comment sitting between two
+    unrelated angle brackets lands inside a bogus "JSX text" region. The
+    punctuation test used to reject those by accident; once real prose stopped
+    being rejected, the tool started rewriting comment text. Comments are out of
+    scope for this migration, so exclude them explicitly rather than by luck.
+    """
+    out, i, n, state, start = [], 0, len(src), None, 0
+    while i < n:
+        c = src[i]
+        if state is None:
+            if src.startswith('//', i):
+                state, start = '//', i
+            elif src.startswith('/*', i):
+                state, start = '/*', i
+            elif c in '"\'`':
+                state = c
+        elif state == '//':
+            if c == '\n':
+                out.append((start, i))
+                state = None
+        elif state == '/*':
+            if src.startswith('*/', i):
+                out.append((start, i + 2))
+                state = None
+                i += 1
+        else:
+            if c == '\\':
+                i += 1
+            elif c == state:
+                state = None
+        i += 1
+    if state in ('//', '/*'):
+        out.append((start, n))
+    return out
+
+
+def outside(a, b, spans):
+    """[a,b) with every span removed, as the surviving sub-ranges."""
+    out, cur = [], a
+    for sa, sb in sorted(spans):
+        if sb <= cur or sa >= b:
+            continue
+        if sa > cur:
+            out.append((cur, min(sa, b)))
+        cur = max(cur, sb)
+        if cur >= b:
+            break
+    if cur < b:
+        out.append((cur, b))
+    return [(x, y) for x, y in out if y > x]
+
+
 def scan_jsx(src, str_spans):
     """Text between > and < lying outside any string."""
     def inside(pos):
@@ -199,6 +254,7 @@ def convert(text, jsx=True):
     success, which is the one failure this whole tool exists to avoid.
     """
     strs = scan_strings(text)
+    comments = comment_spans(text)
     straddle = []
     regions = [('str', a + 1, b) for a, b in strs]
     if jsx:
@@ -216,7 +272,11 @@ def convert(text, jsx=True):
                 if re.search(r'\b[Ww]orkers?\b', text[a:b]):
                     straddle.append(text[a:b])
                 continue
-            regions.append(('jsx', a, b))
+            # Comments are precisely delimited, so clipping them out is exact —
+            # unlike the '>'…'<' guess, which is why straddled STRINGS are only
+            # reported above rather than clipped.
+            for ca, cb in outside(a, b, comments):
+                regions.append(('jsx', ca, cb))
     regions.sort(key=lambda r: r[1])
 
     edits, review, out, cursor = [], [], [], 0

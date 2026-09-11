@@ -5,6 +5,7 @@ import {
   setScheduleActive,
   type ScheduleInput,
 } from '@/services/compliance/scheduleService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic';
  * requires audits create/edit, which Site Managers and Directors already hold, so
  * no RBAC matrix change was needed.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
     return NextResponse.json(
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, id: result.id });
 }
 
-export async function PATCH(req: NextRequest) {
+async function PATCHHandler(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
     return NextResponse.json(
@@ -91,3 +92,6 @@ export async function PATCH(req: NextRequest) {
   }
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);
+export const PATCH = withClosedProjectHandling(PATCHHandler);

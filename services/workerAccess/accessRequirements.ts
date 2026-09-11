@@ -94,11 +94,24 @@ export interface UnmetRequirement {
 export async function evaluateRequirements(
   workerId: string,
   siteId: string,
+  /**
+   * Evaluate as if exactly these requirements were enabled, ignoring what is
+   * stored. Used by the "who would this block?" preview, which previously got
+   * the same answer by switching the requirement ON in the database, measuring,
+   * and switching it back — a write performed during a page RENDER. That wrote
+   * to a completed project (crashing the roster with ProjectClosedError), raced
+   * any concurrent check-in against a requirement nobody had chosen, and left
+   * the requirement enabled for good if the process died mid-measurement.
+   */
+  enabledOverride?: readonly AccessRequirement[],
 ): Promise<UnmetRequirement[]> {
-  const enabled = await prisma.siteAccessRequirement.findMany({
-    where: { jobSiteId: siteId, enabled: true },
-    select: { requirement: true },
-  });
+  const enabled =
+    enabledOverride !== undefined
+      ? enabledOverride.map((requirement) => ({ requirement }))
+      : await prisma.siteAccessRequirement.findMany({
+          where: { jobSiteId: siteId, enabled: true },
+          select: { requirement: true },
+        });
   if (enabled.length === 0) return [];
 
   const [worker, priorHere] = await Promise.all([

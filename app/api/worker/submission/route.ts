@@ -6,6 +6,7 @@ import { createCheckIn } from '@/services/submissions/submissionService';
 import { parseLocationFix } from '@/services/geo/geoValidationService';
 import { parseSignatureInput } from '@/services/inductionSignature/signatureService';
 import type { InductionAnswers } from '@/services/checklists/inductionFlow';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -23,7 +24,7 @@ interface SubmissionBody {
  * Records a compliant site check-in after re-validating the induction
  * server-side. Returns the submission id and a human-friendly reference.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const session = getWorkerSession();
   if (!session) {
     return NextResponse.json(
@@ -79,3 +80,5 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json(result);
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

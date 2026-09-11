@@ -151,7 +151,7 @@ export default async function SubmissionDetailPage({
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-ink">Data protection</h2>
         <p className="text-sm text-ink-subtle">
-          Erase this worker’s personal data to honour a UK GDPR erasure request.
+          Erase this operative’s personal data to honour a UK GDPR erasure request.
           Their identifiers are anonymised; the anonymised compliance record is
           kept.
         </p>

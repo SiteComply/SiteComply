@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getWorkerSession } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { answerQuestion } from '@/services/knowledgeChecks/attemptService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,7 +13,7 @@ export const dynamic = 'force-dynamic';
  * Grades one answer server-side. Returns { correct } (+ explanation once correct)
  * but never the correct option id, so a wrong guess can't be turned into a pass.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const session = getWorkerSession();
   if (!session) {
     return NextResponse.json(
@@ -62,3 +63,5 @@ export async function POST(req: NextRequest) {
     explanation: result.explanation,
   });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

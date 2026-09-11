@@ -7,6 +7,7 @@ import {
   findValidOverride,
   parseLocationFix,
 } from '@/services/geo/geoValidationService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,7 +22,7 @@ export const dynamic = 'force-dynamic';
  * reports whether the site requires GPS and whether the worker has a manager
  * override (so the UI can offer to proceed).
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const session = getWorkerSession();
   if (!session) {
     return NextResponse.json(
@@ -77,3 +78,5 @@ export async function POST(req: NextRequest) {
       gps.unavailablePolicy === 'ALLOW_FLAGGED',
   });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

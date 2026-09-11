@@ -5,6 +5,7 @@ import {
   setSiteMap,
   removeSiteMap,
 } from '@/services/sites/siteInformationService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,7 +23,7 @@ function guard(viewer: Awaited<ReturnType<typeof getPlatformViewer>>) {
  * bytes are streamed back to workers only through the authenticated worker
  * route. Gated on `sites` edit + scope.
  */
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -77,7 +78,7 @@ export async function POST(
 }
 
 /** DELETE /api/platform/sites/[id]/site-map — remove the site-map image. */
-export async function DELETE(
+async function DELETEHandler(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -100,3 +101,6 @@ export async function DELETE(
   }
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);
+export const DELETE = withClosedProjectHandling(DELETEHandler);

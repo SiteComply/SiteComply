@@ -6,6 +6,7 @@ import {
   grantOverride,
   revokeOverride,
 } from '@/services/geo/geoConfigService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,7 +20,7 @@ export const dynamic = 'force-dynamic';
  * GPS check-in validation (SC-007). Gated on the `sites` edit permission + site
  * scope. Override reasons are mandatory (validated in the service).
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -139,3 +140,5 @@ export async function PATCH(
     { status: 400 },
   );
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);

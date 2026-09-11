@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { updatePanelVisibility } from '@/services/workerDashboard/dashboardConfigService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic';
  * `sites` "edit" permission — the capability site managers hold for their own
  * sites — plus the Assigned-Sites boundary, both re-checked in the service.
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -70,3 +71,5 @@ export async function PATCH(
 
   return NextResponse.json({ ok: true, visibility: result.visibility });
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { createShare, listShares } from '@/services/closeOut/closeOutSharing';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -31,7 +32,7 @@ export async function GET(
   return NextResponse.json({ ok: true, shares });
 }
 
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string; packId: string } },
 ) {
@@ -83,3 +84,5 @@ export async function POST(
     expiresAt: result.share.expiresAt.toISOString(),
   });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

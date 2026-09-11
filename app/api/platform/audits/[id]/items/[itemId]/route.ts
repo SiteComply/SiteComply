@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { setItemResult } from '@/services/audits/auditScoringService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 /**
  * SC-014 — record the auditor's answer to one checklist item (PASS / FAIL / NA,
@@ -8,7 +9,7 @@ import { setItemResult } from '@/services/audits/auditScoringService';
  * Points awarded are derived server-side from the item's configured points, so a
  * client can never award itself a score.
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { id: string; itemId: string } },
 ) {
@@ -67,3 +68,5 @@ export async function PATCH(
 
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);

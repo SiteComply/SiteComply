@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { canManageSiteConfigTemplates } from '@/services/platformUsers/platformPermissions';
 import { createPermissionTemplate } from '@/services/platformUsers/permissionTemplateService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic';
  * on every project it is applied to, so reshaping one is not something a single
  * site manager should do to everybody else.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const viewer = await getPlatformViewer();
   if (!viewer) {
     return NextResponse.json(
@@ -56,3 +57,5 @@ export async function POST(req: NextRequest) {
     { status: result.reason === 'forbidden' ? 403 : 400 },
   );
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getWorkerSession } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { acknowledgeBulletin } from '@/services/bulletins/bulletinService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic';
  * Records the authenticated worker's "I've read this" acknowledgement of a Daily
  * Bulletin (SC-002). Idempotent. Requires a valid worker session.
  */
-export async function POST(
+async function POSTHandler(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -41,3 +42,5 @@ export async function POST(
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

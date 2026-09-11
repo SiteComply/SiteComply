@@ -4,6 +4,7 @@ import {
   overrideCheckOut,
   type OverrideCheckOutFailure,
 } from '@/services/submissions/submissionService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -41,7 +42,7 @@ const MESSAGE: Record<OverrideCheckOutFailure, string> = {
     'That project has been completed and its records are read-only. Reopen the project to change attendance.',
 };
 
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -72,3 +73,5 @@ export async function POST(
   }
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

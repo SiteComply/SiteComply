@@ -8,6 +8,7 @@ import {
   deleteDocument,
   type DocumentMetaInput,
 } from '@/services/documents/documentService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,7 @@ export const dynamic = 'force-dynamic';
  * permission and the Assigned-Sites boundary (both the existing and target site
  * must be in scope). Body: { title, description, category, jobSiteId }.
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -63,7 +64,7 @@ export async function PATCH(
  * above the documents "edit" permission — Engineer can edit but not delete) plus
  * the Assigned-Sites boundary (the document must be in the viewer's scope).
  */
-export async function DELETE(
+async function DELETEHandler(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
@@ -88,3 +89,6 @@ export async function DELETE(
 
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);
+export const DELETE = withClosedProjectHandling(DELETEHandler);

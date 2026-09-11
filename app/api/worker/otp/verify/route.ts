@@ -9,6 +9,7 @@ import {
   getWorkerOtpMobile,
   clearWorkerOtpMobileCookie,
 } from '@/lib/session';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,7 +28,7 @@ export const dynamic = 'force-dynamic';
  * mobile, we return a `field: 'mobile'` error so the UI can send the worker back
  * to the number step instead of showing a phone error under the code box.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   let body: { mobile?: string; code?: string };
   try {
     body = await req.json();
@@ -84,3 +85,5 @@ export async function POST(req: NextRequest) {
     checkedIn,
   });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

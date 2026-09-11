@@ -3,6 +3,7 @@ import { getWorkerSession, setActiveWorkerSiteCookie } from '@/lib/session';
 import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { prisma } from '@/lib/prisma';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ export const dynamic = 'force-dynamic';
  * sets the (non-authoritative) active-site cookie; getWorkerContext re-validates
  * it on every request regardless.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const session = getWorkerSession();
   if (!session) {
     return NextResponse.json(
@@ -69,3 +70,5 @@ export async function POST(req: NextRequest) {
   setActiveWorkerSiteCookie(siteId, workerSessionTtlSeconds);
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

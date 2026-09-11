@@ -47,9 +47,11 @@ export const CLOSED_PROJECT_WRITABLE_MODELS = new Set<string>([
   // changes carry their own audit log.
   'SiteUserPermission',
   'PermissionChangeLog',
-  // Suspended by closure, restored by reopening.
-  'WorkerSiteAssignment',
-  'WorkerAssignmentEvent',
+  // NOT listed: WorkerSiteAssignment / WorkerAssignmentEvent. They were, on the
+  // grounds that closure suspends assignments and reopening restores them — but
+  // both of those run inside runProjectLifecycleWrite already, so the entries
+  // bought nothing and let everything else through: inviting an operative to a
+  // completed project returned 200 and created a live assignment.
   // Stopped by closure; a manager may turn schedules back on after reopening.
   'ComplianceSchedule',
   // Delivery logs are records of things that already happened.
@@ -71,7 +73,14 @@ export const CLOSED_PROJECT_WRITABLE_MODELS = new Set<string>([
 const lifecycleScope = new AsyncLocalStorage<true>();
 
 export function runProjectLifecycleWrite<T>(fn: () => Promise<T>): Promise<T> {
-  return lifecycleScope.run(true, fn);
+  // `run(true, fn)` restores the previous store the moment fn RETURNS, and a
+  // Prisma call is lazy — `prisma.x.update(...)` builds a promise that does not
+  // start until awaited. Handing that promise back meant the query ran after the
+  // scope had already closed, so the bypass silently did not apply. It happened
+  // to work for `$transaction([...])`, which is what closure and reopening use,
+  // and would have failed for any plain write a later caller passed — with no
+  // error to say why. Awaiting INSIDE the scope makes it hold for every shape.
+  return lifecycleScope.run(true, async () => await fn());
 }
 
 export function inProjectLifecycleWrite(): boolean {
@@ -148,6 +157,37 @@ export function siteIdFromData(data: unknown): string[] {
 
   return out;
 }
+
+/**
+ * Pull the site id out of a write against JobSite ITSELF.
+ *
+ * JobSite has no `jobSiteId` column — its own primary key is `id` — so the
+ * jobSiteId-based lookups below never matched it, and the read-only rule simply
+ * did not apply to the site record. Saving emergency information or GPS
+ * check-in settings on a completed project returned 200 and persisted. Two
+ * services checked completion by hand; the other five did not.
+ *
+ * Closure and reopening both set JobSite.status themselves, and both run inside
+ * runProjectLifecycleWrite, so they are unaffected.
+ */
+export function jobSiteIdFromArgs(args: unknown): string[] {
+  if (!args || typeof args !== 'object') return [];
+  const a = args as Record<string, unknown>;
+  const out: string[] = [];
+
+  const where = a.where as Record<string, unknown> | undefined;
+  if (where && typeof where === 'object') {
+    if (typeof where.id === 'string') out.push(where.id);
+    const nested = where.id as Record<string, unknown> | undefined;
+    if (nested && typeof nested === 'object' && Array.isArray(nested.in)) {
+      out.push(...nested.in.filter((v): v is string => typeof v === 'string'));
+    }
+  }
+  // `update` on a completed project is the case that matters; a `create` cannot
+  // name an already-completed site.
+  return out;
+}
+
 
 /** Pull a site id out of a `where` clause, when it names one directly. */
 export function siteIdFromWhere(where: unknown): string[] {

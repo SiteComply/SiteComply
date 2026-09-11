@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getWorkerSession } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { completeAttempt } from '@/services/knowledgeChecks/attemptService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,7 +13,7 @@ export const dynamic = 'force-dynamic';
  * Marks the attempt PASSED only when every sampled question's latest answer is
  * correct (re-checked server-side). Otherwise returns the still-incorrect ids.
  */
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const session = getWorkerSession();
   if (!session) {
     return NextResponse.json(
@@ -53,3 +54,5 @@ export async function POST(req: NextRequest) {
   }
   return NextResponse.json(result);
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);

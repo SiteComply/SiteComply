@@ -6,6 +6,7 @@ import {
   updateFinding,
   type FindingInput,
 } from '@/services/audits/findingService';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic';
  * audits "edit" permission and the Assigned-Sites boundary (the finding's audit
  * must be in the viewer's scope).
  */
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
   { params }: { params: { findingId: string } },
 ) {
@@ -50,3 +51,5 @@ export async function PATCH(
 
   return NextResponse.json({ ok: true, id: updated.id });
 }
+
+export const PATCH = withClosedProjectHandling(PATCHHandler);

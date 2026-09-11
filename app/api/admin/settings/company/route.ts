@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,7 @@ export const dynamic = 'force-dynamic';
  * route is kept rather than deleted so an older tab or a bookmarked form gets
  * this explanation instead of a 404 it cannot interpret.
  */
-export async function POST() {
+async function POSTHandler() {
   return NextResponse.json(
     {
       ok: false,
@@ -28,3 +29,5 @@ export async function POST() {
     { status: 409 },
   );
 }
+
+export const POST = withClosedProjectHandling(POSTHandler);
