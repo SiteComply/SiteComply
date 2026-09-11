@@ -23,7 +23,7 @@ export const FIXTURES: Record<string, SmartCheckPayload> = {
     status: 'VALID',
     scheme: 'CSCS',
     cardType: 'Blue - Skilled Worker',
-    holderName: 'A. Worker',
+    holderName: 'A. Operative',
     expiry: '2030-03-01',
     qualifications: [
       { title: 'NVQ Level 2 Bricklaying', detail: 'CITB' },

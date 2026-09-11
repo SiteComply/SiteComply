@@ -96,7 +96,7 @@ export const SUMMARY_TARGET_GUIDANCE: Record<string, string> = {
   COMPLIANCE_REPORT:
     'Lead with strong induction/acknowledgement completion and high PPE, site-rules, safe-working and GDPR-consent rates, then flag any site materially below the group compliance rate.',
   SCORECARD_REPORT:
-    'Lead with the best-performing sites and the highest compliance and induction rates, then compare against weaker sites and any with low active-worker or contractor coverage.',
+    'Lead with the best-performing sites and the highest compliance and induction rates, then compare against weaker sites and any with low active-operative or contractor coverage.',
   ORG_OVERVIEW_REPORT:
     'Give a board-level read: open with organisation-wide strengths (compliance and induction rates, a positive attendance trend), then note contractor concentration and the spread between best- and worst-performing sites.',
   AUDIT:

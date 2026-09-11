@@ -31,7 +31,7 @@ export function ErasePersonalData({
   async function erase() {
     if (
       !window.confirm(
-        'Erase this worker’s personal data? Their name, mobile and CSCS details ' +
+        'Erase this operative’s personal data? Their name, mobile and CSCS details ' +
           'will be anonymised across all records. This cannot be undone.',
       )
     ) {

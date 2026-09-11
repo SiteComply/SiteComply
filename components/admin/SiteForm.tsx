@@ -141,7 +141,7 @@ export function SiteForm({
           value={values.jobReference}
           onChange={(e) => set('jobReference', e.target.value)}
           error={errors.jobReference}
-          hint="Shown to workers, e.g. BNE-2026-014."
+          hint="Shown to operatives, e.g. BNE-2026-014."
         />
       </Section>
 

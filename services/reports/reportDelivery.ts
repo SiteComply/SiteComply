@@ -29,7 +29,7 @@ const TYPE_LABEL: Record<string, string> = {
 const PORTAL_LABEL: Record<string, string> = {
   PLATFORM: 'Platform',
   ADMIN: 'Admin Centre',
-  WORKER: 'Worker Portal',
+  WORKER: 'Operative Portal',
 };
 
 export function subjectFor(report: IssueReport): string {

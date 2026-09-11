@@ -72,7 +72,7 @@ export const SMS_PROVIDERS: SmsProviderDescriptor[] = [
     id: 'twilio',
     name: 'Twilio',
     description:
-      'Sends SMS via the Twilio REST API. Used for worker invitations, access workflows and sign-in codes.',
+      'Sends SMS via the Twilio REST API. Used for operative invitations, access workflows and sign-in codes.',
     fields: [
       {
         key: 'accountSid',

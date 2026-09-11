@@ -66,7 +66,7 @@ export const WORKER_DASHBOARD_PANELS: WorkerDashboardPanelMeta[] = [
     value: 'ACTIVE_PERMITS',
     label: 'Active permits',
     description:
-      'Let workers request Permits to Work and track their approval.',
+      'Let operatives request Permits to Work and track their approval.',
     // Real feature as of SC-009, but ships dark: a manager opts each site in.
     defaultEnabled: false,
   },
@@ -79,7 +79,7 @@ export const WORKER_DASHBOARD_PANELS: WorkerDashboardPanelMeta[] = [
   {
     value: 'SITE_DOCUMENTS',
     label: 'Site documents',
-    description: 'Other site paperwork workers may need to read.',
+    description: 'Other site paperwork operatives may need to read.',
     defaultEnabled: true,
   },
   {
@@ -104,7 +104,7 @@ export const WORKER_DASHBOARD_PANELS: WorkerDashboardPanelMeta[] = [
   {
     value: 'SITE_CONTACTS',
     label: 'Site contacts',
-    description: 'Named people and numbers a worker may need to call.',
+    description: 'Named people and numbers an operative may need to call.',
     defaultEnabled: true,
   },
   {
@@ -117,7 +117,7 @@ export const WORKER_DASHBOARD_PANELS: WorkerDashboardPanelMeta[] = [
     value: 'CHECK_OUT',
     label: 'Check-out button',
     description:
-      'Lets the worker end their attendance record. Always shown — a worker must be able to check out.',
+      'Lets the operative end their attendance record. Always shown — an operative must be able to check out.',
     defaultEnabled: true,
     locked: true,
   },

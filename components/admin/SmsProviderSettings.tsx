@@ -213,7 +213,7 @@ export function SmsProviderSettings({
               </span>
               <span className="block text-xs text-ink-muted">
                 {sendingEnabled
-                  ? 'Outbound SMS is on. Turning it off suppresses every message — including worker sign-in codes, which would stop workers signing in.'
+                  ? 'Outbound SMS is on. Turning it off suppresses every message — including operative sign-in codes, which would stop operatives signing in.'
                   : 'Outbound SMS is OFF. Sign-in codes and invitations are not being delivered. Attempts are still recorded in the SMS log.'}
               </span>
             </span>

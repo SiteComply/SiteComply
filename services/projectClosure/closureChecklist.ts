@@ -119,7 +119,7 @@ export async function buildClosureChecklist(
   const items: ChecklistItem[] = [
     {
       key: 'workers_on_site',
-      label: 'Workers still checked in',
+      label: 'Operatives still checked in',
       severity: 'BLOCK',
       count: workersOnSite,
       satisfied: workersOnSite === 0,

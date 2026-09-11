@@ -31,7 +31,7 @@ export const SITE_SERVICE_KIND_META: Record<
     title: 'Permits',
     singular: 'permit type',
     description:
-      'Which permits to work this site’s workers can request. Turning one off removes it from the worker’s permit picker.',
+      'Which permits to work this site’s operatives can request. Turning one off removes it from the operative’s permit picker.',
   },
   ACTIVITY_TYPE: {
     title: 'Inspections and checks',

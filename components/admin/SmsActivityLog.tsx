@@ -15,7 +15,7 @@ import type { SmsLogRow } from '@/services/sms/smsSendService';
 
 const PURPOSE_LABEL: Record<string, string> = {
   OTP: 'Sign-in code',
-  WORKER_INVITE: 'Worker invitation',
+  WORKER_INVITE: 'Operative invitation',
   TEST: 'Connectivity test',
   OTHER: 'Other',
 };

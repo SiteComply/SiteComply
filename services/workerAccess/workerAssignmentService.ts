@@ -451,14 +451,14 @@ export async function inviteWorker(
     return {
       ok: false,
       reason: 'invalid',
-      error: 'Enter the worker’s full name.',
+      error: 'Enter the operative’s full name.',
     };
   }
   if (company.length < 2) {
     return {
       ok: false,
       reason: 'invalid',
-      error: 'Enter the worker’s company.',
+      error: 'Enter the operative’s company.',
     };
   }
 
@@ -843,7 +843,7 @@ export async function transferWorker(
     return {
       ok: false,
       reason: 'forbidden',
-      error: 'You can only transfer workers to a site you manage.',
+      error: 'You can only transfer operatives to a site you manage.',
     };
   }
   if (fromSiteId === toSiteId) {

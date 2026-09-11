@@ -62,7 +62,7 @@ const CARDS = [
   {
     href: '/admin/submissions',
     title: 'Check-ins',
-    body: 'Search, filter and export check-in records by site, worker and date.',
+    body: 'Search, filter and export check-in records by site, operative and date.',
     cta: 'Browse check-ins',
   },
 ] as const;

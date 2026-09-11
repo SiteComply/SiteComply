@@ -40,7 +40,7 @@ export const ACCESS_REQUIREMENTS: RequirementMeta[] = [
     requirement: 'CSCS_VERIFIED',
     label: 'Verified CSCS card',
     description:
-      'The worker must have a CSCS card verified in SiteComply before they can check in.',
+      'The operative must have a CSCS card verified in SiteComply before they can check in.',
     blocksFirstTime: true,
   },
   {
@@ -54,21 +54,21 @@ export const ACCESS_REQUIREMENTS: RequirementMeta[] = [
     requirement: 'KNOWLEDGE_CHECK_PASSED',
     label: 'Knowledge check passed',
     description:
-      'The worker must have passed this site’s knowledge check. Never blocks a first induction — they have not had the chance yet.',
+      'The operative must have passed this site’s knowledge check. Never blocks a first induction — they have not had the chance yet.',
     blocksFirstTime: false,
   },
   {
     requirement: 'INDUCTION_VALID',
     label: 'Induction still valid',
     description:
-      'The worker’s induction for this site must still be within its validity period. Never blocks a first induction.',
+      'The operative’s induction for this site must still be within its validity period. Never blocks a first induction.',
     blocksFirstTime: false,
   },
   {
     requirement: 'SIGNATURE_ON_FILE',
     label: 'Signed induction declaration',
     description:
-      'The worker must have signed the induction declaration for this site. Never blocks a first induction.',
+      'The operative must have signed the induction declaration for this site. Never blocks a first induction.',
     blocksFirstTime: false,
   },
 ];
