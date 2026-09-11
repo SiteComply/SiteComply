@@ -126,7 +126,7 @@ export default async function ConfirmationPage({
             {/* SC-004: checking out isn't a dead end — the worker keeps access. */}
             <Link href="/worker" className="block">
               <Button size="lg" fullWidth>
-                Back to worker home
+                Back to operative home
               </Button>
             </Link>
           </>
