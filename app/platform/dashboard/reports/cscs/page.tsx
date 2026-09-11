@@ -84,7 +84,7 @@ export default async function CscsReportPage({
 
       <KpiCards
         items={[
-          { label: 'Workers', value: summary.totalWorkers },
+          { label: 'Operatives', value: summary.totalWorkers },
           { label: 'Valid cards', value: summary.valid },
           { label: 'Expired cards', value: summary.expired },
           { label: 'No card recorded', value: summary.none },
@@ -97,7 +97,7 @@ export default async function CscsReportPage({
         </div>
         {summary.byType.length === 0 ? (
           <p className="px-5 py-8 text-center text-sm text-ink-subtle">
-            No workers on your sites in this period.
+            No operatives on your sites in this period.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -125,7 +125,7 @@ export default async function CscsReportPage({
 
       {aggregate ? (
         <p className="mt-6 rounded-xl border border-line bg-surface px-4 py-4 text-sm text-ink-subtle">
-          Aggregate view — individual worker card details and export are not
+          Aggregate view — individual operative card details and export are not
           available for your role.
         </p>
       ) : (
@@ -140,7 +140,7 @@ export default async function CscsReportPage({
           </div>
           {rows.length === 0 ? (
             <p className="px-5 py-8 text-center text-sm text-ink-subtle">
-              No workers on your sites in this period.
+              No operatives on your sites in this period.
             </p>
           ) : (
             <div className="overflow-x-auto">

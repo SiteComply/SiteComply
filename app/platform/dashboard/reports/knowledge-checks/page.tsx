@@ -101,9 +101,9 @@ export default async function KnowledgeChecksReportPage({
             // FAILED state, because a worker retries until they pass — so any
             // pass rate reads 100% by construction and tells a manager nothing.
             // "Who completed it" is the question this report exists to answer.
-            label: 'Workers assessed',
+            label: 'Operatives assessed',
             value: summary.workersAssessed,
-            sub: 'distinct workers',
+            sub: 'distinct operatives',
           },
           {
             label: 'Skipped',
@@ -152,13 +152,13 @@ export default async function KnowledgeChecksReportPage({
 
       {aggregate ? (
         <p className="mt-6 rounded-xl border border-line bg-surface px-4 py-4 text-sm text-ink-subtle">
-          Aggregate view — worker-level detail and export are not available for
+          Aggregate view — operative-level detail and export are not available for
           your role.
         </p>
       ) : (
         <section className="mt-6 rounded-xl border border-line bg-surface shadow-card">
           <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
-            <h2 className="text-base font-semibold text-ink">Worker results</h2>
+            <h2 className="text-base font-semibold text-ink">Operative results</h2>
             {summary.passed > rows.length && (
               <span className="text-xs text-ink-subtle">
                 Showing {rows.length} of {summary.passed} — export CSV for all

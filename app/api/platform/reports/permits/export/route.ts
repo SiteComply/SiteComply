@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     [
       'Reference',
       'Type',
-      'Worker',
+      'Operative',
       'Company',
       'Site',
       'Site reference',

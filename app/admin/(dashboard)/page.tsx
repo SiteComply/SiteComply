@@ -62,7 +62,7 @@ const CARDS = [
   {
     href: '/admin/submissions',
     title: 'Check-ins',
-    body: 'Search, filter and export check-in records by site, worker and date.',
+    body: 'Search, filter and export check-in records by site, operative and date.',
     cta: 'Browse check-ins',
   },
 ] as const;
@@ -106,7 +106,7 @@ export default async function AdminDashboardPage() {
         <h1 className="text-2xl font-bold text-ink">Welcome, {firstName}</h1>
         <p className="text-ink-muted">
           This is your SiteComply admin dashboard. Get started by setting up a
-          job site, then workers can check in from their phones.
+          job site, then operatives can check in from their phones.
         </p>
       </header>
 

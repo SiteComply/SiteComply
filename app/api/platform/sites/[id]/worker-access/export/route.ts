@@ -58,7 +58,7 @@ export async function GET(
 
   const csv = toCsv(
     [
-      'Worker',
+      'Operative',
       'Company',
       'Mobile',
       'Status',
@@ -70,7 +70,7 @@ export async function GET(
       'Approved by',
       'Approved at',
       'Transferred from',
-      'Existing worker',
+      'Existing operative',
     ],
     data.rows.map((r) => [
       r.workerName,

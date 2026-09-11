@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
 
   const rows = await getOnSiteWorkers(filters.siteIds);
   const csv = toCsv(
-    ['Worker', 'Company', 'Site', 'Checked in'],
+    ['Operative', 'Company', 'Site', 'Checked in'],
     rows.map((r) => [
       r.workerName,
       r.workerCompany,

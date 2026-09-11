@@ -78,7 +78,7 @@ export const REPORT_TYPES: ReportType[] = [
     id: 'compliance',
     title: 'Compliance',
     description:
-      'Induction completion, and the safety declarations workers accepted.',
+      'Induction completion, and the safety declarations operatives accepted.',
     icon: 'shield',
     directorOnly: false,
     personalData: true,
@@ -109,7 +109,7 @@ export const REPORT_TYPES: ReportType[] = [
     id: 'cscs',
     title: 'CSCS / Competency',
     description:
-      'Worker card types and competencies, with expired cards flagged.',
+      'Operative card types and competencies, with expired cards flagged.',
     icon: 'doc',
     directorOnly: false,
     personalData: true,
@@ -141,7 +141,7 @@ export const REPORT_TYPES: ReportType[] = [
     id: 'knowledge-checks',
     title: 'Knowledge Checks',
     description:
-      'How workers scored on their induction questions, and which they flagged.',
+      'How operatives scored on their induction questions, and which they flagged.',
     icon: 'shield',
     directorOnly: false,
     personalData: true,

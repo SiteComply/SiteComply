@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
   const rows = await getKnowledgeCheckRows(filters.siteIds, filters.range);
   const csv = toCsv(
     [
-      'Worker',
+      'Operative',
       'Company',
       'Site',
       'Site reference',

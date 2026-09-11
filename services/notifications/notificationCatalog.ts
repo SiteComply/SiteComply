@@ -59,7 +59,7 @@ export const NOTIFICATION_TYPES: NotificationTypeDescriptor[] = [
     key: 'permit_awaiting',
     label: 'Permits awaiting approval',
     description:
-      'A worker has submitted a permit to work on one of your sites that is awaiting review or approval.',
+      'An operative has submitted a permit to work on one of your sites that is awaiting review or approval.',
     defaultEnabled: true,
     defaultChannels: { email: false, sms: false },
   },

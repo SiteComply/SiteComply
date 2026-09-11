@@ -141,7 +141,7 @@ export function GpsCheckInConfig({
 
   async function grant() {
     if (!ovWorker) {
-      toast.error('Choose a worker.');
+      toast.error('Choose an operative.');
       return;
     }
     if (ovReason.trim().length < 3) {
@@ -190,7 +190,7 @@ export function GpsCheckInConfig({
   return (
     <div className="space-y-4">
       <p className="text-sm text-ink-muted">
-        Require workers to be within a set distance of the site to check in. Off
+        Require operatives to be within a set distance of the site to check in. Off
         by default — set the site’s check-in point and turn it on.
       </p>
 
@@ -374,7 +374,7 @@ export function GpsCheckInConfig({
               value={ovWorker}
               onChange={(e) => setOvWorker(e.target.value)}
             >
-              <option value="">Select a worker…</option>
+              <option value="">Select an operative…</option>
               {workers.map((w) => (
                 <option key={w.workerId} value={w.workerId}>
                   {w.fullName} — {w.company}
@@ -383,7 +383,7 @@ export function GpsCheckInConfig({
             </select>
             <TextField
               label="Reason (required)"
-              placeholder="e.g. GPS not working on worker's phone — verified on site by phone"
+              placeholder="e.g. GPS not working on operative's phone — verified on site by phone"
               value={ovReason}
               onChange={(e) => setOvReason(e.target.value)}
             />
@@ -408,7 +408,7 @@ export function GpsCheckInConfig({
 
         {workers.length === 0 && (
           <p className="text-xs text-ink-subtle">
-            Overrides can be granted once workers have checked in to this site.
+            Overrides can be granted once operatives have checked in to this site.
           </p>
         )}
       </div>
@@ -416,7 +416,7 @@ export function GpsCheckInConfig({
       <ConfirmDialog
         open={revokeId !== null}
         title="Revoke this override?"
-        message="The worker will no longer be able to check in from off-site."
+        message="The operative will no longer be able to check in from off-site."
         confirmLabel={ovBusy ? 'Revoking…' : 'Revoke'}
         cancelLabel="Cancel"
         busy={ovBusy}

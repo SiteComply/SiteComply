@@ -109,16 +109,40 @@ def carved(s):
     return any(c in s for c in CARVE_OUT)
 
 
+# "a worker" becomes "a operative" without this. Applied after substitution so it
+# only ever fixes articles this tool itself created.
+ARTICLE = [
+    (re.compile(r'\ba (Operatives?)\b'), r'an \1'),
+    (re.compile(r'\bA (Operatives?)\b'), r'An \1'),
+    (re.compile(r'\ba (operatives?)\b'), r'an \1'),
+    (re.compile(r'\bA (operatives?)\b'), r'An \1'),
+]
+
+
 def sub_prose(s):
     for rx, rep in SUBS:
+        s = rx.sub(rep, s)
+    for rx, rep in ARTICLE:
         s = rx.sub(rep, s)
     return s
 
 
-def convert(text):
+def convert(text, jsx=True):
+    """
+    `jsx` must be False for plain .ts. scan_jsx pairs any '>' with the next '<',
+    which in TypeScript matches arrow functions and generics — and a bogus region
+    spanning a real string literal advanced the cursor straight past it. That
+    silently skipped every AI prompt in closeOutNarrative.ts while reporting
+    success, which is the one failure this whole tool exists to avoid.
+    """
     strs = scan_strings(text)
     regions = [('str', a + 1, b) for a, b in strs]
-    regions += [('jsx', a, b) for a, b in scan_jsx(text, strs)]
+    if jsx:
+        for a, b in scan_jsx(text, strs):
+            # Never let a JSX region straddle a string literal.
+            if any(not (b <= sa or a >= sb) for sa, sb in strs):
+                continue
+            regions.append(('jsx', a, b))
     regions.sort(key=lambda r: r[1])
 
     edits, review, out, cursor = [], [], [], 0
@@ -152,7 +176,7 @@ def main():
     total = 0
     for path in a.files:
         src = open(path, encoding='utf-8').read()
-        new, edits, review = convert(src)
+        new, edits, review = convert(src, jsx=path.endswith('.tsx'))
         if review:
             print(f'\n  {path} — NEEDS A DECISION (bare word, not auto-replaced):')
             for r in sorted(set(review)):

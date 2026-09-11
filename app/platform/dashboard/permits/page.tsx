@@ -68,7 +68,7 @@ export default async function PlatformPermitsPage({
     <PlatformShell>
       <PageHeader
         title="Permits to Work"
-        description="Permit requests raised by workers across your sites."
+        description="Permit requests raised by operatives across your sites."
         meta={
           <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
             {describeScope(viewer)}
@@ -121,7 +121,7 @@ export default async function PlatformPermitsPage({
               type="search"
               name="q"
               defaultValue={q}
-              placeholder="Reference, type or worker…"
+              placeholder="Reference, type or operative…"
               className="w-56 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
             />
           </label>

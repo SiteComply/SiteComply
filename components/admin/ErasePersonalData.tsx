@@ -23,7 +23,7 @@ export function ErasePersonalData({
   if (erased) {
     return (
       <p className="rounded-lg border border-line bg-surface-sunken px-3 py-2 text-sm text-ink-subtle">
-        This worker’s personal data has been erased.
+        This operative’s personal data has been erased.
       </p>
     );
   }
@@ -31,7 +31,7 @@ export function ErasePersonalData({
   async function erase() {
     if (
       !window.confirm(
-        'Erase this worker’s personal data? Their name, mobile and CSCS details ' +
+        'Erase this operative’s personal data? Their name, mobile and CSCS details ' +
           'will be anonymised across all records. This cannot be undone.',
       )
     ) {

@@ -175,7 +175,7 @@ async function workerReporter(): Promise<Reporter | null> {
     portal: IssueReportPortal.WORKER,
     ref: refFor(IssueReportPortal.WORKER, w.id),
     name: w.fullName,
-    role: 'Worker',
+    role: 'Operative',
     org: w.company,
     email: null,
   };

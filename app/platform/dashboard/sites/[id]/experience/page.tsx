@@ -53,7 +53,7 @@ export const dynamic = 'force-dynamic';
  * Daily Bulletins keeps a shorter first run, never an empty heading.
  */
 const SECTION_GROUP = {
-  seen: 'What workers see',
+  seen: 'What operatives see',
   induction: 'Induction & check-in',
   emergency: 'Emergency & contacts',
 } as const;
@@ -144,19 +144,19 @@ export default async function SiteExperiencePage({
     canViewBulletins && {
       key: 'bulletins',
       label: 'Daily Bulletins',
-      description: 'Notices and safety alerts shown to workers on this site.',
+      description: 'Notices and safety alerts shown to operatives on this site.',
       group: SECTION_GROUP.seen,
     },
     panelVisibility && {
       key: 'dashboard',
-      label: 'Worker dashboard',
-      description: 'What a worker sees after checking in to this site.',
+      label: 'Operative dashboard',
+      description: 'What an operative sees after checking in to this site.',
       group: SECTION_GROUP.seen,
     },
     siteInfo && {
       key: 'site-information',
       label: 'Site information',
-      description: 'The worker-facing Site information page.',
+      description: 'The operative-facing Site information page.',
       group: SECTION_GROUP.seen,
     },
     kcConfig &&
@@ -175,19 +175,19 @@ export default async function SiteExperiencePage({
     gpsConfig && {
       key: 'check-in-location',
       label: 'Check-in location',
-      description: 'Where a worker must be to check in.',
+      description: 'Where an operative must be to check in.',
       group: SECTION_GROUP.induction,
     },
     {
       key: 'contacts',
       label: 'Site contacts',
-      description: 'Named people and numbers a worker may need to call.',
+      description: 'Named people and numbers an operative may need to call.',
       group: SECTION_GROUP.emergency,
     },
     {
       key: 'emergency',
       label: 'Emergency information',
-      description: 'Shown to every worker on this site.',
+      description: 'Shown to every operative on this site.',
       group: SECTION_GROUP.emergency,
     },
   ].filter(Boolean) as WorkspaceSection[];
@@ -207,7 +207,7 @@ export default async function SiteExperiencePage({
         sections={sections}
         active={active}
         hrefFor={(key) => `${base}?section=${key}`}
-        navLabel="Worker experience settings"
+        navLabel="Operative experience settings"
       >
         {active === 'bulletins' && canViewBulletins && (
           <SiteBulletins

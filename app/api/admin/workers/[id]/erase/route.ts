@@ -20,7 +20,7 @@ export async function POST(
   const result = await eraseWorkerPersonalData(params.id);
   if (!result) {
     return NextResponse.json(
-      { ok: false, error: 'Worker not found.' },
+      { ok: false, error: 'Operative not found.' },
       { status: 404 },
     );
   }

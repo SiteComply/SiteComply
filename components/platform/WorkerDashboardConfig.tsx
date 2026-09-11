@@ -63,7 +63,7 @@ export function WorkerDashboardConfig({
   return (
     <div className="space-y-3">
       <p className="text-sm text-ink-muted">
-        Choose what workers see on their dashboard after checking into this
+        Choose what operatives see on their dashboard after checking into this
         site.
       </p>
 

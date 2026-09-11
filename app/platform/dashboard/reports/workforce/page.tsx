@@ -75,7 +75,7 @@ export default async function WorkforceReportPage({
       <KpiCards
         items={[
           { label: 'Companies', value: summary.companies },
-          { label: 'Unique workers', value: summary.uniqueWorkers },
+          { label: 'Unique operatives', value: summary.uniqueWorkers },
           { label: 'Check-ins (range)', value: summary.checkInsInRange },
           { label: 'Sites', value: summary.sites },
         ]}
@@ -98,7 +98,7 @@ export default async function WorkforceReportPage({
                     Company / subcontractor
                   </th>
                   <th className="px-5 py-2 text-right font-medium">
-                    Unique workers
+                    Unique operatives
                   </th>
                   <th className="px-5 py-2 text-right font-medium">
                     Check-ins

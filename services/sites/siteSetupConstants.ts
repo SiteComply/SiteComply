@@ -101,7 +101,7 @@ export const SETUP_STEPS: SetupStep[] = [
   {
     key: 'rules',
     title: 'Site rules',
-    description: 'The rules every worker agrees to at induction.',
+    description: 'The rules every operative agrees to at induction.',
     owner: 'SITE_MANAGER',
     cppRequired: true,
   },

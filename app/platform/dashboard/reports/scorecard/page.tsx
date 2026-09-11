@@ -93,7 +93,7 @@ export default async function ScorecardReportPage({
         items={[
           { label: 'Sites', value: scorecard.totals.sites },
           { label: 'Check-ins', value: scorecard.totals.checkIns },
-          { label: 'Active workers', value: scorecard.totals.activeWorkers },
+          { label: 'Active operatives', value: scorecard.totals.activeWorkers },
           {
             label: 'Compliance',
             value: percentLabel(scorecard.totals.compliancePct),
@@ -122,7 +122,7 @@ export default async function ScorecardReportPage({
                     Check-ins
                   </th>
                   <th className="px-5 py-2 text-right font-medium">
-                    Active workers
+                    Active operatives
                   </th>
                   <th className="px-5 py-2 text-right font-medium">
                     Contractors

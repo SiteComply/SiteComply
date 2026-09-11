@@ -239,10 +239,10 @@ export function ActionForm({
           {siteId && !peopleLoading && (
             <p className="mt-1 text-xs text-ink-subtle">
               {people.length === 0
-                ? 'No inducted workers or assigned users for this site yet.'
+                ? 'No inducted operatives or assigned users for this site yet.'
                 : peopleFallback
-                  ? 'No inducted workers yet — showing users assigned to this site.'
-                  : 'Workers inducted on the selected site.'}
+                  ? 'No inducted operatives yet — showing users assigned to this site.'
+                  : 'Operatives inducted on the selected site.'}
             </p>
           )}
           {mode === 'edit' && values.assignedTo && !values.assigneeId && (

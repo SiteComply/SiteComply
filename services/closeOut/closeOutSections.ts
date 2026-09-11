@@ -72,8 +72,8 @@ export const CLOSE_OUT_SECTIONS: CloseOutSectionMeta[] = [
   },
   {
     id: 'WORKER_RECORDS',
-    label: 'Worker Records',
-    description: 'Attendance, competencies and worker inductions',
+    label: 'Operative Records',
+    description: 'Attendance, competencies and operative inductions',
     module: 'checkins',
     icon: 'hardhat',
     defaultSelected: true,

@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
     : [];
 
   const header = [
-    'Worker',
+    'Operative',
     'Company',
     'Site',
     'Site reference',

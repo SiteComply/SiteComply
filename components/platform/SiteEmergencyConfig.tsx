@@ -107,7 +107,7 @@ export function SiteEmergencyConfig({
   return (
     <Panel title="Emergency information">
       <p className="-mt-1 mb-3 text-sm text-ink-subtle">
-        Shown to workers on their Emergency info page. Workers always see 999 and
+        Shown to operatives on their Emergency info page. Operatives always see 999 and
         site signage as a fallback, so this is the site-specific detail.
       </p>
 

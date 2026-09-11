@@ -158,7 +158,7 @@ export function WorkerAccessManager({
       {requirements.length > 0 && canManage ? (
         <div className="rounded-xl border border-line bg-surface p-4">
           <h4 className="text-sm font-bold text-ink">
-            Requirements before a worker can check in
+            Requirements before an operative can check in
           </h4>
           <p className="mb-3 text-xs text-ink-muted">
             All off by default. Every worker must be invited to this project
@@ -178,7 +178,7 @@ export function WorkerAccessManager({
                 </p>
               ) : (
                 <p className="mt-0.5 text-xs text-ink-muted">
-                  No worker on this project would be affected.
+                  No operative on this project would be affected.
                 </p>
               )}
               <div className="mt-2 flex gap-2">
@@ -231,7 +231,7 @@ export function WorkerAccessManager({
                   <p className="text-xs text-ink-muted">{q.description}</p>
                   <p className="mt-0.5 text-xs text-ink-subtle">
                     {q.blockedCount === 0
-                      ? 'All workers on this project meet this.'
+                      ? 'All operatives on this project meet this.'
                       : `${q.blockedCount} worker${q.blockedCount === 1 ? '' : 's'} on this project would not meet this: ${q.blockedNames.join(', ')}`}
                   </p>
                 </div>

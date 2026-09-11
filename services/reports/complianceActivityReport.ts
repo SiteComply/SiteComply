@@ -378,7 +378,7 @@ export async function getComplianceActivityRows(
         ? (r.assignedRole ?? 'Role')
         : r.assigneeKind === 'USER'
           ? (userName.get(r.assignedPlatformUserId ?? '') ?? 'Unknown user')
-          : (workerName.get(r.assignedWorkerId ?? '') ?? 'Unknown worker'),
+          : (workerName.get(r.assignedWorkerId ?? '') ?? 'Unknown operative'),
     overdue: r.status !== OccurrenceStatus.COMPLETED && r.dueDateLocal < today,
     escalatedAt: r.escalatedAt ? r.escalatedAt.toISOString() : null,
     escalatedToRole: r.escalatedToRole ?? null,

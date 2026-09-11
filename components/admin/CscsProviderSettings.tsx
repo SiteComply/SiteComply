@@ -149,7 +149,7 @@ export function CscsProviderSettings({
         <div>
           <h2 className="text-sm font-semibold text-ink">CSCS Smart Check</h2>
           <p className="mt-0.5 text-sm text-ink-subtle">
-            How worker card numbers are verified. Applies to every card captured
+            How operative card numbers are verified. Applies to every card captured
             during onboarding or profile updates.
           </p>
         </div>
@@ -282,7 +282,7 @@ export function CscsProviderSettings({
             <p className="mt-0.5 text-xs text-ink-subtle">
               Sends one request to the partner API using the credentials above,
               including any you have not saved yet. No card is verified, no
-              worker is involved and nothing is recorded against the CSCS
+              operative is involved and nothing is recorded against the CSCS
               report.
             </p>
             <button

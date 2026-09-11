@@ -545,7 +545,7 @@ async function renderSection(
         ...base,
         count: rows.length,
         rows: rows.map((r) => [
-          { label: 'Worker', value: r.worker.fullName },
+          { label: 'Operative', value: r.worker.fullName },
           { label: 'Company', value: r.worker.company },
           { label: 'CSCS', value: r.worker.cscsCardNumber ?? '—' },
           { label: 'Checked in', value: fmt(r.checkedInAt) },

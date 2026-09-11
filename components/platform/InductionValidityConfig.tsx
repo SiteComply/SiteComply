@@ -233,7 +233,7 @@ export function InductionValidityConfig({
             Require a digital signature
           </p>
           <p className="text-xs text-ink-subtle">
-            Workers accept a declaration and sign to complete their induction.
+            Operatives accept a declaration and sign to complete their induction.
             Off by default.
           </p>
         </div>
@@ -267,7 +267,7 @@ export function InductionValidityConfig({
           Invalidate previous inductions
         </p>
         <p className="text-xs text-ink-subtle">
-          After a significant site change, force every worker to complete the
+          After a significant site change, force every operative to complete the
           latest induction before their next check-in.
         </p>
         {initial.invalidatedAtLabel && (

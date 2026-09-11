@@ -71,10 +71,10 @@ export async function SiteDetailHeader({
   const canViewDocuments = permits(viewer.role, 'documents', 'view');
 
   const tabs: SiteTab[] = [{ key: 'overview', label: 'Overview' }];
-  if (canViewCheckins) tabs.push({ key: 'workers', label: 'Workers' });
+  if (canViewCheckins) tabs.push({ key: 'workers', label: 'Operatives' });
   // Worker Experience always shows (site contacts + bulletins are visible to
   // every platform role; management panels within are permission-gated).
-  tabs.push({ key: 'experience', label: 'Worker Experience' });
+  tabs.push({ key: 'experience', label: 'Operative Experience' });
   if (canViewCheckins || canViewAudits || canViewActions)
     tabs.push({ key: 'compliance', label: 'Compliance' });
   if (canViewDocuments) tabs.push({ key: 'documents', label: 'Documents' });

@@ -129,7 +129,7 @@ export function checkinOrderBy(sort: CheckinSort): CheckinOrderBy {
 
 /** Column headings, in table order, with the key each one sorts by. */
 export const CHECKIN_COLUMNS: { key: CheckinSortKey; label: string }[] = [
-  { key: 'worker', label: 'Worker' },
+  { key: 'worker', label: 'Operative' },
   { key: 'site', label: 'Site' },
   { key: 'status', label: 'Status' },
   { key: 'checkedIn', label: 'Checked in' },

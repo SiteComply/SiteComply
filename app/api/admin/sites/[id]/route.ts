@@ -78,7 +78,7 @@ export async function DELETE(
       {
         ok: false,
         error:
-          'Workers are currently checked in to this site. Please ensure all workers have checked out before deleting the site',
+          'Operatives are currently checked in to this site. Please ensure all operatives have checked out before deleting the site',
       },
       { status: 409 },
     );

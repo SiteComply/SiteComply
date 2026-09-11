@@ -355,7 +355,7 @@ export function ScheduleActivityForm({
             >
               <option value="ROLE">A role</option>
               <option value="USER">A specific platform user</option>
-              <option value="WORKER">A specific worker</option>
+              <option value="WORKER">A specific operative</option>
             </select>
           </div>
 

@@ -182,7 +182,7 @@ export async function createSchedule(
       );
       if (!resolved) {
         return invalid(
-          'That worker is not inducted on this site, so cannot be assigned activities there.',
+          'That operative is not inducted on this site, so cannot be assigned activities there.',
         );
       }
       assignedWorkerId = resolved.assignedWorkerId;
