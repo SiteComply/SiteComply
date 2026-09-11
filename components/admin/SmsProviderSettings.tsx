@@ -128,7 +128,7 @@ export function SmsProviderSettings({
       <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
         <h2 className="text-sm font-semibold text-ink">Active SMS provider</h2>
         <p className="mt-0.5 text-sm text-ink-subtle">
-          The gateway used to send worker verification codes. Changes take
+          The gateway used to send operative verification codes. Changes take
           effect immediately once saved.
         </p>
         <div className="mt-3 grid gap-2 sm:grid-cols-3">

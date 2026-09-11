@@ -98,7 +98,7 @@ export default async function IntegrationsPage({
           <div>
             <h2 className="text-lg font-bold text-ink">SMS</h2>
             <p className="text-sm text-ink-muted">
-              Provider used to send worker sign-in verification codes.
+              Provider used to send operative sign-in verification codes.
             </p>
           </div>
           <SmsProviderSettings

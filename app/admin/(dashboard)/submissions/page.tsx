@@ -84,7 +84,7 @@ export default async function SubmissionsPage({
           </select>
         </Field>
 
-        <Field label="Worker or company">
+        <Field label="Operative or company">
           <input
             name="q"
             defaultValue={filters.q ?? ''}

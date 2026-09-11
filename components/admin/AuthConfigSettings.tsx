@@ -139,7 +139,7 @@ export function AuthConfigSettings({
       <section className="rounded-xl border border-line bg-surface p-5 shadow-card">
         <h2 className="text-sm font-semibold text-ink">One-time passcodes (OTP)</h2>
         <p className="mt-0.5 text-sm text-ink-subtle">
-          Controls the verification codes workers receive when signing in.
+          Controls the verification codes operatives receive when signing in.
         </p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <NumberField
@@ -187,7 +187,7 @@ export function AuthConfigSettings({
           <span className="font-semibold text-ink">
             Platform Settings → Authentication &amp; access
           </span>
-          , which also covers worker sessions and site-access rules. Read-only
+          , which also covers operative sessions and site-access rules. Read-only
           here.
         </p>
       </section>
@@ -209,7 +209,7 @@ export function AuthConfigSettings({
             <span>
               <span className="block font-semibold text-ink">SMS one-time passcode</span>
               <span className="block text-xs text-ink-subtle">
-                Codes sent by text message. Disabling this stops worker SMS sign-in.
+                Codes sent by text message. Disabling this stops operative SMS sign-in.
               </span>
             </span>
           </label>
