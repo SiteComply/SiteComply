@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
  *
  * WHY THE BUTTON AND THE DIALOG LIVE TOGETHER
  *
- * They were previously split: a <Link href="?invite=1"> in the Workers-tab
+ * They were previously split: a <Link href="?invite=1"> in the Operatives-tab
  * toolbar, and the dialog inside WorkerAccessManager, which the page renders
  * inside the collapsed "Manage project access" <details>. That arrangement had
  * three independent faults, and clicking the button did nothing at all:
@@ -122,7 +122,7 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
         onClick={() => setOpen(true)}
         className="inline-flex shrink-0 items-center rounded-lg bg-safe-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm shadow-safe-600/20 hover:bg-safe-600"
       >
-        Invite Worker
+        Invite Operative
       </button>
 
       {open && mounted
@@ -143,7 +143,7 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
                       id="invite-dialog-title"
                       className="text-base font-bold text-ink"
                     >
-                      Invite a worker
+                      Invite an operative
                     </h2>
                     <p className="mt-0.5 text-xs text-ink-subtle">
                       They receive a text with a link to sign in, and appear on
@@ -189,7 +189,7 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
                     {sent.existing ? (
                       <div className="rounded-xl border border-line bg-surface-sunken px-4 py-3">
                         <p className="text-sm font-semibold text-ink">
-                          This worker was already on SiteComply
+                          This operative was already on SiteComply
                         </p>
                         <p className="mt-1 text-xs text-ink-muted">
                           Their existing details are used, not the ones you
@@ -199,7 +199,7 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
                             {sent.existing.company ? `, ${sent.existing.company}` : ''}
                           </span>
                           . This keeps their card verification and induction
-                          history intact. Ask the worker to correct their details
+                          history intact. Ask the operative to correct their details
                           when they sign in if they are wrong.
                         </p>
                       </div>

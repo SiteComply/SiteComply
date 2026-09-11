@@ -141,7 +141,7 @@ export default async function OccupancyReportPage({
 
       {aggregate ? (
         <p className="mt-6 rounded-xl border border-line bg-surface px-4 py-4 text-sm text-ink-subtle">
-          Aggregate view — the currently-on-site worker list and export are not
+          Aggregate view — the currently-on-site operative list and export are not
           available for your role.
         </p>
       ) : (
@@ -153,7 +153,7 @@ export default async function OccupancyReportPage({
           </div>
           {onSite.length === 0 ? (
             <p className="px-5 py-8 text-center text-sm text-ink-subtle">
-              No workers currently on site.
+              No operatives currently on site.
             </p>
           ) : (
             <div className="overflow-x-auto">

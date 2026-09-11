@@ -182,7 +182,7 @@ export default async function ComplianceReportPage({
 
       {aggregate ? (
         <p className="mt-6 rounded-xl border border-line bg-surface px-4 py-4 text-sm text-ink-subtle">
-          Aggregate view — worker-level detail and export are not available for
+          Aggregate view — operative-level detail and export are not available for
           your role.
         </p>
       ) : (

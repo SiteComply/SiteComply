@@ -170,7 +170,7 @@ export default async function WorkerDetailPage({
         </div>
 
         <div className="space-y-6">
-          <Section title="Worker information">
+          <Section title="Operative information">
             <dl className="space-y-3">
               <Detail label="Company" value={worker.company} />
               {canSeeMobile && <Detail label="Mobile" value={worker.mobile} />}

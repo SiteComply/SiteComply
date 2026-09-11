@@ -260,7 +260,7 @@ export default async function SiteWorkersPage({
             >
               <div className="min-w-0">
                 <span className="block text-sm font-semibold text-ink">
-                  Workers on this project
+                  Operatives on this project
                 </span>
                 {assignments.length > 0 ? (
                   <span className="block text-xs text-ink-subtle">
@@ -283,7 +283,7 @@ export default async function SiteWorkersPage({
             </div>
           ) : undefined
         }
-        railTitle="Worker"
+        railTitle="Operative"
         railEmpty="Select someone to see their site record."
         rail={
           selectedWorker && (
@@ -357,7 +357,7 @@ export default async function SiteWorkersPage({
                 href={`/platform/dashboard/workers/${selectedWorker.workerId}`}
                 className="mt-3 inline-block text-sm font-semibold text-brand-700 hover:underline"
               >
-                View worker record →
+                View operative record →
               </Link>
 
               {/* Suspend, reinstate, remove, role & dates, transfer — reached by
@@ -448,8 +448,8 @@ export default async function SiteWorkersPage({
               Project access settings
             </span>
             <span className="mt-0.5 block pl-5 text-xs font-normal text-ink-subtle">
-              What a worker must satisfy before they can check in, on top of
-              being invited to this project. Individual workers are managed by
+              What an operative must satisfy before they can check in, on top of
+              being invited to this project. Individual operatives are managed by
               selecting them in the list above.
             </span>
           </summary>

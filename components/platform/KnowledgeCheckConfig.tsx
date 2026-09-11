@@ -123,7 +123,7 @@ export function KnowledgeCheckConfig({
         toast.error(r.error ?? 'Could not approve.');
         return;
       }
-      toast.success('Questions published to workers.');
+      toast.success('Questions published to operatives.');
       router.refresh();
     } finally {
       setBusy(false);
@@ -203,7 +203,7 @@ export function KnowledgeCheckConfig({
         </div>
         <ToggleRow
           label="Require my approval before questions go live"
-          hint="When on, newly generated questions stay hidden from workers until you publish them."
+          hint="When on, newly generated questions stay hidden from operatives until you publish them."
           checked={cfg.requireManagerApproval}
           disabled={!canEdit || busy}
           onChange={(v) => setCfg((c) => ({ ...c, requireManagerApproval: v }))}
@@ -278,7 +278,7 @@ export function KnowledgeCheckConfig({
             </Button>
             {pendingApproval && (
               <Button onClick={approve} disabled={busy}>
-                Publish to workers
+                Publish to operatives
               </Button>
             )}
             {preview.questions.length > 0 && (

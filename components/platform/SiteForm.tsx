@@ -145,7 +145,7 @@ export function SiteForm({
             value={values.jobReference}
             onChange={(e) => set('jobReference', e.target.value)}
             error={errors.jobReference}
-            hint="Shown to workers, e.g. BNE-2026-014."
+            hint="Shown to operatives, e.g. BNE-2026-014."
           />
           <Select
             label="Status"
@@ -247,7 +247,7 @@ export function SiteForm({
           label="Nearest A&E"
           value={values.nearestHospital}
           onChange={(e) => set('nearestHospital', e.target.value)}
-          hint="e.g. City Hospital — 2.4 miles. Shown on the Worker Dashboard."
+          hint="e.g. City Hospital — 2.4 miles. Shown on the Operative Dashboard."
         />
       </Section>
 

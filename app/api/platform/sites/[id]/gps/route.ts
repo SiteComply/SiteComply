@@ -80,7 +80,7 @@ export async function PATCH(
   if (body.action === 'grantOverride') {
     if (!body.workerId) {
       return NextResponse.json(
-        { ok: false, error: 'No worker selected.' },
+        { ok: false, error: 'No operative selected.' },
         { status: 400 },
       );
     }

@@ -33,10 +33,10 @@ const STATUS: Record<OverrideCheckOutFailure, number> = {
 };
 
 const MESSAGE: Record<OverrideCheckOutFailure, string> = {
-  forbidden: 'Your role cannot check a worker out.',
+  forbidden: 'Your role cannot check an operative out.',
   reason_required: 'A reason is required.',
   not_found: 'That check-in is not available on your sites.',
-  already_out: 'That worker has already been checked out.',
+  already_out: 'That operative has already been checked out.',
   project_closed:
     'That project has been completed and its records are read-only. Reopen the project to change attendance.',
 };

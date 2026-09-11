@@ -46,7 +46,7 @@ export async function PATCH(
   }
   if (!canManageWorkerAccess(viewer.role)) {
     return NextResponse.json(
-      { ok: false, error: 'You cannot manage worker access for this site.' },
+      { ok: false, error: 'You cannot manage operative access for this site.' },
       { status: 403 },
     );
   }
@@ -200,7 +200,7 @@ export async function PATCH(
         ? 404
         : 400;
   return NextResponse.json(
-    { ok: false, error: result.error ?? 'Could not update worker access.' },
+    { ok: false, error: result.error ?? 'Could not update operative access.' },
     { status },
   );
 }

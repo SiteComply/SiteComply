@@ -124,15 +124,15 @@ export function AuthAccessSettings({
         hint="How people sign in to this organisation."
       >
         <Toggle
-          label="Worker SMS Login"
-          hint="Workers sign in with a one-time code sent by text. Turning this off stops codes being sent — workers cannot sign in until it is back on."
+          label="Operative SMS Login"
+          hint="Operatives sign in with a one-time code sent by text. Turning this off stops codes being sent — operatives cannot sign in until it is back on."
           checked={form.workerSmsLoginEnabled}
           disabled={!canEdit}
           onChange={(v) => set('workerSmsLoginEnabled', v)}
         />
         <Toggle
           label="Express check-in"
-          hint="Lets a worker with a still-valid induction check in without repeating the wizard. Turning it off requires the full check-in everywhere."
+          hint="Lets an operative with a still-valid induction check in without repeating the wizard. Turning it off requires the full check-in everywhere."
           checked={form.expressCheckInEnabled}
           disabled={!canEdit}
           onChange={(v) => set('expressCheckInEnabled', v)}
@@ -154,8 +154,8 @@ export function AuthAccessSettings({
           onChange={(v) => set('sessionTtlSeconds', v)}
         />
         <Duration
-          label="Worker session timeout"
-          hint="Applies to workers on site. Usually shorter — a worker session is a shared-device credential."
+          label="Operative session timeout"
+          hint="Applies to operatives on site. Usually shorter — an operative session is a shared-device credential."
           seconds={form.workerSessionTtlSeconds}
           min={settings.limits.workerSessionTtlSeconds.min}
           max={settings.limits.workerSessionTtlSeconds.max}
@@ -421,7 +421,7 @@ function DeliveryRow({ settings }: { settings: PlatformAuthSettingsView }) {
         label="SMS delivery"
         value="Switched off"
         tone="warn"
-        note="One-time codes are turned off in the Admin Centre, so worker SMS login cannot work whatever the setting above says."
+        note="One-time codes are turned off in the Admin Centre, so operative SMS login cannot work whatever the setting above says."
       />
     );
   }
@@ -431,7 +431,7 @@ function DeliveryRow({ settings }: { settings: PlatformAuthSettingsView }) {
         label="SMS delivery"
         value="Sending paused"
         tone="warn"
-        note="Outbound SMS is paused in the Admin Centre. Codes are recorded but never sent, so workers cannot sign in."
+        note="Outbound SMS is paused in the Admin Centre. Codes are recorded but never sent, so operatives cannot sign in."
       />
     );
   }
@@ -441,7 +441,7 @@ function DeliveryRow({ settings }: { settings: PlatformAuthSettingsView }) {
         label="SMS delivery"
         value="Not delivering"
         tone="warn"
-        note="No real text messages are being sent — the placeholder provider is active, which is intended for development only. Workers cannot receive a sign-in code. A real provider must be configured in the Admin Centre."
+        note="No real text messages are being sent — the placeholder provider is active, which is intended for development only. Operatives cannot receive a sign-in code. A real provider must be configured in the Admin Centre."
       />
     );
   }
@@ -459,7 +459,7 @@ function DeliveryRow({ settings }: { settings: PlatformAuthSettingsView }) {
     <ReadOnlyRow
       label="SMS delivery"
       value={d.providerName}
-      note="The provider currently sending sign-in codes. Managed in the Admin Centre — shown here because every worker login setting above depends on it."
+      note="The provider currently sending sign-in codes. Managed in the Admin Centre — shown here because every operative login setting above depends on it."
     />
   );
 }

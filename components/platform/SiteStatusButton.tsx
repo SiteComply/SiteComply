@@ -75,8 +75,8 @@ export function SiteStatusButton({
         title={archiving ? 'Archive this site?' : 'Reactivate this site?'}
         message={
           archiving
-            ? 'Workers will no longer see this site for check-in. All of its history — check-ins, reports, audits, actions and documents — is kept and stays available for reporting. You can reactivate it at any time.'
-            : 'This site becomes active again and available to workers for check-in. Its existing history is unchanged.'
+            ? 'Operatives will no longer see this site for check-in. All of its history — check-ins, reports, audits, actions and documents — is kept and stays available for reporting. You can reactivate it at any time.'
+            : 'This site becomes active again and available to operatives for check-in. Its existing history is unchanged.'
         }
         confirmLabel={
           busy ? 'Saving…' : archiving ? 'Archive site' : 'Reactivate site'

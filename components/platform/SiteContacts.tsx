@@ -103,7 +103,7 @@ export function SiteContacts({
     <div className="space-y-4">
       {contacts.length === 0 ? (
         <p className="text-sm text-ink-subtle">
-          No contacts added. Workers will see an empty Site Contacts panel.
+          No contacts added. Operatives will see an empty Site Contacts panel.
         </p>
       ) : (
         <ul className="divide-y divide-line rounded-lg border border-line">
@@ -193,7 +193,7 @@ export function SiteContacts({
       <ConfirmDialog
         open={deleteId !== null}
         title="Remove this contact?"
-        message="Workers will no longer see this contact on their dashboard."
+        message="Operatives will no longer see this contact on their dashboard."
         confirmLabel={rowBusy ? 'Removing…' : 'Remove'}
         cancelLabel="Cancel"
         busy={rowBusy !== null}

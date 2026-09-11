@@ -143,7 +143,7 @@ export default async function PlatformSubmissionsPage({
     <PlatformShell>
       <PageHeader
         title="Check-ins"
-        description="Worker site check-in and induction records across your sites."
+        description="Operative site check-in and induction records across your sites."
         meta={
           <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
             {describeScope(viewer)}
@@ -219,12 +219,12 @@ export default async function PlatformSubmissionsPage({
                   "this filter has no rows" rather than "there is no data". */}
               {siteId
                 ? status === 'on-site'
-                  ? 'No workers are currently on site at this site.'
+                  ? 'No operatives are currently on site at this site.'
                   : status === 'checked-out'
                     ? 'No checked-out check-ins for this site.'
                     : 'No check-ins for this site.'
                 : status === 'on-site'
-                  ? 'No workers are currently on site.'
+                  ? 'No operatives are currently on site.'
                   : status === 'checked-out'
                     ? 'No checked-out check-ins.'
                     : 'No check-ins to show.'}
@@ -320,7 +320,7 @@ export default async function PlatformSubmissionsPage({
                       href={`/platform/dashboard/workers/${selected.worker.id}`}
                       className="mt-3 inline-block text-sm font-semibold text-brand-700 hover:underline"
                     >
-                      View worker record →
+                      View operative record →
                     </Link>
                   </>
                 )

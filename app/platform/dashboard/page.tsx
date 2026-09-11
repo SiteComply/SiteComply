@@ -186,7 +186,7 @@ export default async function PlatformDashboardPage() {
   }
   if (canCheckins) {
     singleCards.push({
-      title: 'Workers On Site',
+      title: 'Operatives On Site',
       value: workersOnSite,
       sub: 'checked in right now',
       cta: 'View check-ins',

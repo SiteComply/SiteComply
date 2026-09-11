@@ -109,7 +109,7 @@ export default async function SiteOverviewPage({
                   {infoComplete.complete}/{infoComplete.total}
                 </div>
                 <div className="text-xs text-ink-subtle">
-                  Worker-facing sections
+                  Operative-facing sections
                 </div>
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-line">
                   <div

@@ -157,8 +157,8 @@ export function SiteInformationConfig({
   return (
     <div className="space-y-4">
       <p className="text-sm text-ink-muted">
-        The site information workers see on their Site information page. Updates
-        appear straight away — no need for workers to re-induct.
+        The site information operatives see on their Site information page. Updates
+        appear straight away — no need for operatives to re-induct.
       </p>
 
       {/* Completeness indicator */}
@@ -319,7 +319,7 @@ export function SiteInformationConfig({
       <ConfirmDialog
         open={confirmRemoveMap}
         title="Remove the site map?"
-        message="Workers will no longer see a site map until a new one is uploaded."
+        message="Operatives will no longer see a site map until a new one is uploaded."
         confirmLabel={mapBusy ? 'Removing…' : 'Remove'}
         cancelLabel="Cancel"
         busy={mapBusy}

@@ -717,7 +717,7 @@ function PeopleEditor({
         + Add person
       </button>
       <p className="text-xs text-ink-subtle">
-        The first listed first aider is also shown on the worker dashboard and
+        The first listed first aider is also shown on the operative dashboard and
         during induction.
       </p>
     </div>

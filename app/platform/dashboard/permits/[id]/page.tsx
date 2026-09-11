@@ -147,7 +147,7 @@ export default async function PlatformPermitDetailPage({
           <div className="space-y-6 lg:sticky lg:top-6">
             <Panel title="Summary">
               <dl className="space-y-3">
-                <Field label="Worker" value={workerName} />
+                <Field label="Operative" value={workerName} />
                 <Field label="Company" value={workerCompany} />
                 <Field label="Site" value={siteName} />
                 {/* When it was raised was on the register but nowhere on the

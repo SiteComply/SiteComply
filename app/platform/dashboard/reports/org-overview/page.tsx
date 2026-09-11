@@ -98,7 +98,7 @@ export default async function OrgOverviewReportPage({
       <KpiCards
         items={[
           { label: 'Total sites', value: o.totalSites },
-          { label: 'Active workers', value: o.activeWorkers },
+          { label: 'Active operatives', value: o.activeWorkers },
           {
             label: 'Check-ins',
             value: o.checkIns,

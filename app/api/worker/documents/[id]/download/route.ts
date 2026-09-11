@@ -36,7 +36,7 @@ export async function GET(
   const worker = await getWorkerByMobile(session.mobile);
   if (!worker) {
     return NextResponse.json(
-      { ok: false, error: 'Worker not found.' },
+      { ok: false, error: 'Operative not found.' },
       { status: 401 },
     );
   }

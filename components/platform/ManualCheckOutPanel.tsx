@@ -56,7 +56,7 @@ export function ManualCheckOutPanel({
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
-        toast.error(data.error ?? 'Could not check this worker out.');
+        toast.error(data.error ?? 'Could not check this operative out.');
         return;
       }
       toast.success(`${workerName} has been checked out.`);
@@ -112,7 +112,7 @@ export function ManualCheckOutPanel({
           onClick={submit}
           disabled={busy || reason.trim() === ''}
         >
-          {busy ? 'Checking out…' : 'Manually check out worker'}
+          {busy ? 'Checking out…' : 'Manually check out operative'}
         </Button>
         <button
           type="button"

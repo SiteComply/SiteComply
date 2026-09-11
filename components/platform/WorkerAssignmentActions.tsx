@@ -207,7 +207,7 @@ export function WorkerAssignmentActions({
             Save
           </button>
           <p className="text-xs text-ink-subtle">
-            Outside these dates the worker is refused at check-in and told when
+            Outside these dates the operative is refused at check-in and told when
             their access starts or ended. Leave both empty for unrestricted
             access. Access runs to the END of the “access to” day.
           </p>

@@ -385,10 +385,10 @@ export function AuditFindingsPanel({
                           {peopleLoading
                             ? 'Loading people…'
                             : people.length === 0
-                              ? 'No inducted workers or assigned users for this site yet.'
+                              ? 'No inducted operatives or assigned users for this site yet.'
                               : peopleFallback
-                                ? 'No inducted workers yet — showing users assigned to this site.'
-                                : 'Workers inducted on this site.'}
+                                ? 'No inducted operatives yet — showing users assigned to this site.'
+                                : 'Operatives inducted on this site.'}
                         </p>
                         <div className="flex flex-wrap items-center gap-2">
                           <select

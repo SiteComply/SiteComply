@@ -154,7 +154,7 @@ export function ProjectCompletionPanel({
                   />
                 </label>
                 <p className="mt-1 text-xs text-ink-subtle">
-                  Recorded against your name. Worker access suspended by the
+                  Recorded against your name. Operative access suspended by the
                   completion will be restored.
                 </p>
                 <div className="mt-2 flex gap-2">
@@ -206,7 +206,7 @@ export function ProjectCompletionPanel({
             Complete this project
           </h2>
           <p className="text-sm text-ink-muted">
-            Closes the project for good order: records become read-only, worker
+            Closes the project for good order: records become read-only, operative
             access is suspended, scheduled work stops and automated
             notifications end. Nothing is deleted, and a Director can reopen it
             if needed.
