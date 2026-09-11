@@ -119,7 +119,7 @@ export default async function PermitsReportPage({
                   <tr className="border-b border-line text-left text-ink-subtle">
                     <th className="px-5 py-2 font-medium">Reference</th>
                     <th className="px-5 py-2 font-medium">Type</th>
-                    <th className="px-5 py-2 font-medium">Worker</th>
+                    <th className="px-5 py-2 font-medium">Operative</th>
                     <th className="px-5 py-2 font-medium">Site</th>
                     <th className="px-5 py-2 font-medium">Status</th>
                     <th className="px-5 py-2 font-medium">Submitted</th>

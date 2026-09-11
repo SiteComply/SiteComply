@@ -384,7 +384,7 @@ export default async function SiteWorkersPage({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-ink-subtle">
-                  <th className="px-5 py-2.5 font-medium">Worker</th>
+                  <th className="px-5 py-2.5 font-medium">Operative</th>
                   <th className="px-5 py-2.5 font-medium">Company</th>
                   <th className="px-5 py-2.5 font-medium">State</th>
                   <th className="px-5 py-2.5 font-medium">Last check-in</th>

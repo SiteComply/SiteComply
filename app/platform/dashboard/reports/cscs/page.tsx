@@ -105,7 +105,7 @@ export default async function CscsReportPage({
               <thead>
                 <tr className="border-b border-line text-left text-ink-subtle">
                   <th className="px-5 py-2 font-medium">CSCS card</th>
-                  <th className="px-5 py-2 text-right font-medium">Workers</th>
+                  <th className="px-5 py-2 text-right font-medium">Operatives</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -131,7 +131,7 @@ export default async function CscsReportPage({
       ) : (
         <section className="mt-6 rounded-xl border border-line bg-surface shadow-card">
           <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
-            <h2 className="text-base font-semibold text-ink">Workers</h2>
+            <h2 className="text-base font-semibold text-ink">Operatives</h2>
             {summary.totalWorkers > rows.length && (
               <span className="text-xs text-ink-subtle">
                 Showing {rows.length} of {summary.totalWorkers} — export for all
@@ -147,7 +147,7 @@ export default async function CscsReportPage({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-line text-left text-ink-subtle">
-                    <th className="px-5 py-2 font-medium">Worker</th>
+                    <th className="px-5 py-2 font-medium">Operative</th>
                     <th className="px-5 py-2 font-medium">Company</th>
                     <th className="px-5 py-2 font-medium">CSCS card</th>
                     <th className="px-5 py-2 font-medium">Expiry</th>

@@ -174,7 +174,7 @@ export default async function KnowledgeChecksReportPage({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-line text-left text-ink-subtle">
-                    <th className="px-5 py-2 font-medium">Worker</th>
+                    <th className="px-5 py-2 font-medium">Operative</th>
                     <th className="px-5 py-2 font-medium">Company</th>
                     <th className="px-5 py-2 font-medium">Site</th>
                     <th className="px-5 py-2 font-medium">Completed</th>
