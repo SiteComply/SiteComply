@@ -14,6 +14,7 @@ import {
   type SiteInput,
   type FieldErrors,
 } from '@/services/sites/adminSiteService';
+import { DEFAULT_INDUCTION_VALIDITY_DAYS } from '@/services/induction/validityConstants';
 
 /**
  * Platform-side (Director) job-site creation.
@@ -86,6 +87,13 @@ export async function createSiteForDirector(
       status: parseStatus(input.status),
       createdByAdminId: attributor.id,
       checklists: defaultInductionChecklistSeed(),
+      // The platform induction-validity standard, written as a real value so it
+      // is visible and editable rather than an invisible default. Without a row
+      // here the site falls through to null, which means re-induct on EVERY
+      // check-in — the behaviour this standard exists to replace.
+      inductionConfig: {
+        create: { inductionValidityDays: DEFAULT_INDUCTION_VALIDITY_DAYS },
+      },
     },
     select: { id: true },
   });

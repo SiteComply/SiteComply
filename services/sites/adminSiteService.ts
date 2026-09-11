@@ -2,6 +2,7 @@ import { Prisma, SiteStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { normaliseUkPostcode } from '@/lib/postcode';
 import { UK_INDUCTION_TEMPLATE } from '@/services/checklists/ukInductionTemplate';
+import { DEFAULT_INDUCTION_VALIDITY_DAYS } from '@/services/induction/validityConstants';
 
 /**
  * Prisma nested-create for the default UK induction checklist (v1), seeded when
@@ -138,6 +139,11 @@ export async function createSite(value: ValidatedSite, adminId: string) {
       status: SiteStatus.ACTIVE,
       // Seed a default UK induction checklist so workers can induct immediately.
       checklists: defaultInductionChecklistSeed(),
+      // Same induction-validity standard as the platform path, so a site does not
+      // silently behave differently depending on where it was created.
+      inductionConfig: {
+        create: { inductionValidityDays: DEFAULT_INDUCTION_VALIDITY_DAYS },
+      },
     },
   });
 }

@@ -107,7 +107,16 @@ def is_code_like(s):
     # URLs; renaming it would break every bookmarked selection link.
     if ' ' not in t:
         return True
-    if re.search(r'[;={}()]', t):
+    # Two punctuation marks in this test fire on ordinary UI copy, not code:
+    # a parenthetical aside — "(including the knowledge check)" — and the
+    # semicolon that ends an HTML entity — "the worker&rsquo;s". Both were
+    # classifying real user-facing sentences as code and skipping them in
+    # silence. Remove those two shapes, then test what is left; `= ; { }` in
+    # the remainder still means code, so `const worker = submission.worker;`
+    # is still protected.
+    probe = re.sub(r'&(?:[A-Za-z]+|#[0-9]+);', '', t)
+    probe = re.sub(r'\([^()]*\)', '', probe)
+    if re.search(r'[;={}()]', probe):
         return True
     if ' ' not in t and re.fullmatch(r'[A-Za-z0-9_.\[\]$-]+', t):
         return True
@@ -147,11 +156,22 @@ def convert(text, jsx=True):
     success, which is the one failure this whole tool exists to avoid.
     """
     strs = scan_strings(text)
+    straddle = []
     regions = [('str', a + 1, b) for a, b in strs]
     if jsx:
         for a, b in scan_jsx(text, strs):
-            # Never let a JSX region straddle a string literal.
+            # A JSX region must never straddle a string literal — a bogus region
+            # spanning one advances the cursor straight past the string. But
+            # DROPPING it loses any prose in it, and `{' '}` (React's trailing
+            # space) sits mid-paragraph in ordinary copy, so whole paragraphs
+            # went unscanned while the tool reported success. Clipping the region
+            # to the gaps is NOT the fix either: scan_jsx pairs any '>' with the
+            # next '<', so the gaps include real code, and clipping renamed
+            # `const worker = submission.worker`. Report instead — a human reads
+            # the handful this finds; nothing is changed on a guess.
             if any(not (b <= sa or a >= sb) for sa, sb in strs):
+                if re.search(r'\b[Ww]orkers?\b', text[a:b]):
+                    straddle.append(text[a:b])
                 continue
             regions.append(('jsx', a, b))
     regions.sort(key=lambda r: r[1])
@@ -176,7 +196,7 @@ def convert(text, jsx=True):
             out.append(new_inner)
         cursor = b
     out.append(text[cursor:])
-    return ''.join(out), edits, review
+    return ''.join(out), edits, review, straddle
 
 
 def main():
@@ -187,7 +207,12 @@ def main():
     total = 0
     for path in a.files:
         src = open(path, encoding='utf-8').read()
-        new, edits, review = convert(src, jsx=path.endswith('.tsx'))
+        new, edits, review, straddle = convert(src, jsx=path.endswith('.tsx'))
+        if straddle:
+            print(f'\n  {path} — NOT SCANNED (text interrupted by a string, e.g. {{\' \'}}):')
+            for frag in straddle:
+                one = ' '.join(frag.split())
+                print(f'      ! {one[:150]}')
         if review:
             print(f'\n  {path} — NEEDS A DECISION (bare word, not auto-replaced):')
             for r in sorted(set(review)):

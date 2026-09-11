@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import {
+  DEFAULT_INDUCTION_VALIDITY_DAYS,
   VALIDITY_PRESETS,
   VALIDITY_MIN_DAYS,
   VALIDITY_MAX_DAYS,
@@ -52,10 +53,14 @@ export function InductionValidityConfig({
     initial.inductionValidityDays != null &&
       presetDays.includes(initial.inductionValidityDays)
       ? initial.inductionValidityDays
-      : VALIDITY_PRESETS[2].days, // default preset: 1 month
+      : // Pre-select the platform standard, not a position in the array — an
+        // inserted preset used to silently shift which one this picked.
+        DEFAULT_INDUCTION_VALIDITY_DAYS,
   );
   const [customDays, setCustomDays] = useState<number>(
-    initialMode === 'custom' ? (initial.inductionValidityDays as number) : 90,
+    initialMode === 'custom'
+      ? (initial.inductionValidityDays as number)
+      : DEFAULT_INDUCTION_VALIDITY_DAYS,
   );
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -150,8 +155,8 @@ export function InductionValidityConfig({
     <div className="space-y-4">
       <p className="text-sm text-ink-muted">
         Set how long a completed induction stays valid. Within the period,
-        workers who have already inducted check in without repeating it.
-        Currently:{' '}
+        operatives who have already inducted check in without repeating it.
+        The platform standard is 3 months. Currently:{' '}
         <span className="font-semibold text-ink">
           {validityLabel(initial.inductionValidityDays)}
         </span>
@@ -170,7 +175,7 @@ export function InductionValidityConfig({
           <span>
             <span className="font-semibold text-ink">Every check-in</span>{' '}
             <span className="text-ink-subtle">
-              — workers re-induct each time (default).
+              — operatives re-induct on every visit.
             </span>
           </span>
         </label>
@@ -294,7 +299,7 @@ export function InductionValidityConfig({
       <ConfirmDialog
         open={confirming}
         title="Invalidate previous inductions?"
-        message="Every worker will have to complete the latest induction (including the knowledge check) before they can check in to this site again. This cannot be undone."
+        message="Every operative will have to complete the latest induction (including the knowledge check) before they can check in to this site again. This cannot be undone."
         confirmLabel={busy ? 'Working…' : 'Invalidate'}
         cancelLabel="Cancel"
         busy={busy}
