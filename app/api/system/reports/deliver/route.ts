@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authoriseScheduler } from '@/lib/schedulerAuth';
 import { deliverPendingReports } from '@/services/reports/reportDelivery';
 import { mailerEnabled } from '@/services/reports/reportMailer';
+import { purgeOldErrors, RETENTION_DAYS } from '@/services/telemetry/errorLog';
 import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
@@ -27,15 +28,29 @@ async function POSTHandler(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 
+  // Error-log retention, folded into the hourly sweep that already exists: a
+  // separate timer would mean a new Function, a new app setting and a deploy of
+  // the scheduler app, for a delete that removes nothing 23 hours out of 24.
+  // Placed BEFORE the mail branch so retention still runs when mail is off —
+  // the two are unrelated, and tying them would quietly stop the purge.
+  // purgeOldErrors never throws, so housekeeping cannot fail delivery.
+  const purgedErrors = await purgeOldErrors(RETENTION_DAYS);
+
   // 200 with `mail: 'disabled'` rather than an error: before the app settings
   // are added this is the expected steady state, and an hourly failing timer
   // would train everyone to ignore it.
   if (!mailerEnabled()) {
-    return NextResponse.json({ ok: true, mail: 'disabled', considered: 0, sent: 0 });
+    return NextResponse.json({
+      ok: true,
+      mail: 'disabled',
+      considered: 0,
+      sent: 0,
+      purgedErrors,
+    });
   }
 
   const result = await deliverPendingReports();
-  return NextResponse.json({ ok: true, mail: 'enabled', ...result });
+  return NextResponse.json({ ok: true, mail: 'enabled', purgedErrors, ...result });
 }
 
 export const POST = withClosedProjectHandling(POSTHandler);

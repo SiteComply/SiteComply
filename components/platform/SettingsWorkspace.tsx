@@ -72,6 +72,13 @@ export const SETTINGS_AREAS: SettingsArea[] = [
     description:
       'How people sign in, how long sessions last, and who may reach a site.',
   },
+  {
+    key: 'errors',
+    label: 'Error log',
+    href: '/platform/dashboard/settings/errors',
+    description:
+      'Problems the system hit on its own, with the page, person and device.',
+  },
 ];
 
 export function SettingsWorkspace({

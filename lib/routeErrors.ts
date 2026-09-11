@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server';
 import { ProjectClosedError } from '@/services/projectClosure/projectWritable';
+import { recordError } from '@/services/telemetry/errorLog';
+import {
+  portalFromPath,
+  resolveActor,
+  currentBuildId,
+} from '@/services/telemetry/errorContext';
 
 /**
  * Turn a completed-project refusal into an answer instead of a crash.
@@ -29,12 +35,54 @@ export function withClosedProjectHandling<A extends unknown[], R>(
       return await handler(...args);
     } catch (err) {
       if (err instanceof ProjectClosedError) {
+        // A deliberate refusal, not a fault. Recording it would bury the real
+        // failures under a message the product means to send.
         return NextResponse.json(
           { ok: false, error: err.message, projectClosed: true },
           { status: 409 },
         );
       }
+
+      // Everything else is unexpected. Record it with who, where and which
+      // deploy, then re-throw so the response is exactly what it was before —
+      // this wrapper observes failures, it does not change them.
+      await captureRouteFailure(err, args);
       throw err;
     }
   };
+}
+
+/**
+ * Pull the request out of the handler's arguments and record the failure.
+ *
+ * Next hands a route handler `(request, context)`. The request is read
+ * defensively because this runs on a path that is already going wrong: nothing
+ * here may throw, or one failing route becomes a failing route plus a failing
+ * logger.
+ */
+async function captureRouteFailure(err: unknown, args: unknown[]): Promise<void> {
+  try {
+    const req = args[0] as
+      | { nextUrl?: { pathname?: string }; url?: string; method?: string; headers?: Headers }
+      | undefined;
+    const path = req?.nextUrl?.pathname ?? req?.url ?? null;
+    const portal = portalFromPath(path);
+    const actor = await resolveActor(portal);
+    const e = err as Error;
+    await recordError({
+      kind: 'SERVER_ROUTE',
+      portal,
+      name: e?.name ?? null,
+      message: e?.message ?? String(err),
+      stack: e?.stack ?? null,
+      route: path,
+      method: req?.method ?? null,
+      statusCode: 500,
+      buildId: currentBuildId(),
+      userAgent: req?.headers?.get?.('user-agent') ?? null,
+      ...actor,
+    });
+  } catch {
+    /* an error logger that throws is worse than no error logger */
+  }
 }

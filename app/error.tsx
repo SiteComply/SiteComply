@@ -7,6 +7,7 @@ import {
   BrandedErrorScreen,
   AlertTriangleIcon,
 } from '@/components/errors/BrandedErrorScreen';
+import { reportClientError } from '@/components/telemetry/reportClientError';
 
 /**
  * General application error boundary for unexpected failures anywhere below the
@@ -27,6 +28,17 @@ export default function AppError({
 }) {
   useEffect(() => {
     console.error('[SiteComply] Unhandled application error:', error);
+    // Owner Review Item 11 — the console is the user's browser, which is no use
+    // to anyone investigating later. Send it, with the digest: for a failure
+    // that began on the SERVER that digest is all React gives the client, and
+    // it is the key the server-side stack is logged under.
+    reportClientError({
+      kind: error.digest ? 'SERVER_RENDER' : 'CLIENT_RENDER',
+      name: error.name,
+      message: error.message,
+      stack: error.stack ?? null,
+      digest: error.digest ?? null,
+    });
   }, [error]);
 
   return (

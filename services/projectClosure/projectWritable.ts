@@ -56,6 +56,11 @@ export const CLOSED_PROJECT_WRITABLE_MODELS = new Set<string>([
   'ComplianceSchedule',
   // Delivery logs are records of things that already happened.
   'SmsMessageLog',
+  // Automatic error capture. Without this the logger would be blocked by the
+  // guard whenever the fault happened on a completed project — which is exactly
+  // the case that produced the crash this logging exists to investigate. It
+  // records what went wrong; it is not a change to the project's records.
+  'ErrorEvent',
 ]);
 
 /**

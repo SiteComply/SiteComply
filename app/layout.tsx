@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { appConfig } from '@/lib/config';
 import { ToastProvider } from '@/components/ui/Toast';
 import './globals.css';
+import { ErrorTelemetry } from '@/components/telemetry/ErrorTelemetry';
 
 export const metadata: Metadata = {
   metadataBase: new URL(appConfig.baseUrl),
@@ -30,6 +31,9 @@ export default function RootLayout({
     <html lang="en-GB">
       <body>
         <ToastProvider>{children}</ToastProvider>
+        {/* Owner Review Item 11 — catches the browser failures an error
+            boundary never sees: event handlers, timers, rejected promises. */}
+        <ErrorTelemetry />
       </body>
     </html>
   );

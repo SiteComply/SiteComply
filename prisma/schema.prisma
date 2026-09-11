@@ -3104,3 +3104,97 @@ model IssueReport {
   @@index([deliveryStatus])
   @@index([reporterRef, createdAt])
 }
+
+/// How an error reached us. Kept separate from the message because the capture
+/// path determines how much we can know: an API route failure carries a real
+/// stack, whereas a SERVER_RENDER failure reaches the browser as a digest only —
+/// Next redacts the message before it leaves the server.
+enum ErrorEventKind {
+  SERVER_ROUTE
+  SERVER_RENDER
+  CLIENT_RENDER
+  CLIENT_UNCAUGHT
+  CLIENT_REJECTION
+}
+
+/// Which portal the person was in. PUBLIC covers the pages reachable without a
+/// session — the marketing page and the operative check-in flow before sign-in.
+enum ErrorEventPortal {
+  PLATFORM
+  ADMIN
+  WORKER
+  PUBLIC
+  SYSTEM
+}
+
+/// Unexpected application errors, captured automatically.
+///
+/// Owner Review Item 11: a crash was reported that could not be investigated,
+/// because the only record was whatever the person happened to write down. Next
+/// logs server stacks to stdout keyed by `error.digest`, but App Service keeps
+/// roughly two days of that on local disk and client-side crashes never left the
+/// browser at all. This table is the durable, searchable record.
+///
+/// NOT an audit trail of user actions — those already exist per domain
+/// (SiteClosureEvent, PermissionChangeLog, WorkerAssignmentEvent). This is only
+/// for things that went wrong.
+model ErrorEvent {
+  id String @id @default(cuid())
+
+  /// Human-quotable, and the same shape as an issue report's reference so the
+  /// two read alike in a support conversation.
+  reference String @unique @default(dbgenerated("('SC-E-' || lpad(nextval('error_event_ref_seq'::regclass)::text, 5, '0'))"))
+
+  kind ErrorEventKind
+
+  /// Next's `error.digest` — the code printed on the crash screen the user saw,
+  /// and the key the server-side stack is logged under. This is what turns "it
+  /// crashed on Tuesday" into one row.
+  digest String?
+
+  name    String?
+  message String
+  /// Trimmed and capped. Absent for SERVER_RENDER: Next redacts it client-side.
+  stack   String?
+
+  /// Dedupe key over (kind, route/page, name, first stack frame). Repeated
+  /// occurrences increment `occurrences` instead of inserting, so one broken
+  /// page in a loop cannot fill the table.
+  fingerprint String
+
+  // --- who, from the session where there is one ---
+  portal   ErrorEventPortal
+  userRef  String?
+  userName String?
+  userRole String?
+  userOrg  String?
+
+  // --- where ---
+  /// PATH ONLY, like IssueReport.pagePath: query strings on these screens carry
+  /// operative names and date ranges, so they are stripped before storage.
+  pagePath   String?
+  pageTitle  String?
+  /// For a route failure: the pattern, e.g. /api/platform/sites/[id]/gps.
+  route      String?
+  method     String?
+  statusCode Int?
+  /// Which deploy this happened on — the first thing worth knowing.
+  buildId    String?
+
+  // --- device ---
+  userAgent      String?
+  browser        String?
+  os             String?
+  deviceType     String?
+  viewportWidth  Int?
+  viewportHeight Int?
+
+  occurrences Int      @default(1)
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  @@index([lastSeenAt])
+  @@index([fingerprint])
+  @@index([digest])
+  @@index([portal, lastSeenAt])
+}

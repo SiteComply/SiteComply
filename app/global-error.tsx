@@ -10,6 +10,7 @@ import {
 // The root layout has failed, so its stylesheet import no longer applies here —
 // re-import the design tokens and base styles this boundary renders with.
 import './globals.css';
+import { reportClientError } from '@/components/telemetry/reportClientError';
 
 /**
  * Last-resort boundary for errors thrown by the root layout itself. It replaces
@@ -26,6 +27,17 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     console.error('[SiteComply] Critical application error:', error);
+    // Owner Review Item 11 — the console is the user's browser, which is no use
+    // to anyone investigating later. Send it, with the digest: for a failure
+    // that began on the SERVER that digest is all React gives the client, and
+    // it is the key the server-side stack is logged under.
+    reportClientError({
+      kind: error.digest ? 'SERVER_RENDER' : 'CLIENT_RENDER',
+      name: error.name,
+      message: error.message,
+      stack: error.stack ?? null,
+      digest: error.digest ?? null,
+    });
   }, [error]);
 
   return (
