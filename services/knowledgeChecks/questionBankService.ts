@@ -263,7 +263,7 @@ function renderBriefing(corpus: InductionCorpus): string {
 
 function buildUserPrompt(corpus: InductionCorpus, target: number): string {
   return [
-    `Write up to ${target} multiple-choice questions that test whether a worker`,
+    `Write up to ${target} multiple-choice questions that test whether an operative`,
     'understood the briefing below. Use ONLY facts stated in it. Fewer,',
     'well-grounded questions are better than more — do not invent or pad.',
     '',

@@ -1003,7 +1003,7 @@ export async function setWorkerPanel(
     return {
       ok: false,
       reason: 'invalid',
-      error: `${meta.label} cannot be hidden — a worker must always be able to check out.`,
+      error: `${meta.label} cannot be hidden — an operative must always be able to check out.`,
     };
   }
 

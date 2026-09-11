@@ -96,6 +96,17 @@ def is_code_like(s):
         return True
     if t.startswith(('/', '@/', './', '../')):
         return True
+    # A template literal's ${...} holes are not evidence of code. Judging the
+    # WHOLE string meant every interpolated message was skipped — including an
+    # AI prompt and a report subtitle that reached production still saying
+    # "Workers". Test the prose around the holes instead.
+    t = re.sub(r'\$\{[^{}]*\}', '', t).strip()
+    if not t:
+        return True
+    # Prose has spaces. `worker:${workerId}` is a row key that appears in ?item=
+    # URLs; renaming it would break every bookmarked selection link.
+    if ' ' not in t:
+        return True
     if re.search(r'[;={}()]', t):
         return True
     if ' ' not in t and re.fullmatch(r'[A-Za-z0-9_.\[\]$-]+', t):

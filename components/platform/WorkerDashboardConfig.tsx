@@ -92,7 +92,7 @@ export function WorkerDashboardConfig({
                 type="button"
                 role="switch"
                 aria-checked={on}
-                aria-label={`${panel.label} on the worker dashboard`}
+                aria-label={`${panel.label} on the operative dashboard`}
                 disabled={disabled}
                 onClick={() => toggle(panel.value, !on)}
                 className={cn(

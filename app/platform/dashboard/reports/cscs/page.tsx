@@ -67,7 +67,7 @@ export default async function CscsReportPage({
     <PlatformShell>
       <ReportHeader
         title="CSCS / Competency"
-        description={`Workers on your sites ${filters.fromStr} to ${filters.toStr}, by CSCS card.`}
+        description={`Operatives on your sites ${filters.fromStr} to ${filters.toStr}, by CSCS card.`}
         scope={describeScope(viewer)}
         exportHref={
           canExport

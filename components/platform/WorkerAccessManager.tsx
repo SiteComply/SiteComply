@@ -232,7 +232,7 @@ export function WorkerAccessManager({
                   <p className="mt-0.5 text-xs text-ink-subtle">
                     {q.blockedCount === 0
                       ? 'All operatives on this project meet this.'
-                      : `${q.blockedCount} worker${q.blockedCount === 1 ? '' : 's'} on this project would not meet this: ${q.blockedNames.join(', ')}`}
+                      : `${q.blockedCount} operative${q.blockedCount === 1 ? '' : 's'} on this project would not meet this: ${q.blockedNames.join(', ')}`}
                   </p>
                 </div>
                 <button
