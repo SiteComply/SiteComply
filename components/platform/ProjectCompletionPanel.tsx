@@ -124,7 +124,7 @@ export function ProjectCompletionPanel({
         <h2 className="text-base font-bold text-ink">Project completed</h2>
         <p className="mt-1 text-sm text-ink-muted">
           This project&rsquo;s records are read-only and preserved for audit.
-          Worker access is suspended and scheduled work has stopped.
+          Operative access is suspended and scheduled work has stopped.
           {completedByName
             ? ` Completed by ${completedByName}${
                 completedAt

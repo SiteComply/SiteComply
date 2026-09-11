@@ -208,7 +208,7 @@ export function CscsProviderSettings({
               Verification enabled
             </span>
             <span className="block text-xs text-ink-subtle">
-              When off, no card is checked and the worker&rsquo;s typed details
+              When off, no card is checked and the operative&rsquo;s typed details
               stand. Distinct from a provider that is configured but failing.
             </span>
           </span>

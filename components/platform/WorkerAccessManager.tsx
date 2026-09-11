@@ -94,7 +94,7 @@ export function WorkerAccessManager({
       setPendingReq(null);
       setNotice(
         enabled
-          ? `${label} is now required. ${data.blockedAtEnable ?? 0} worker(s) did not meet it.`
+          ? `${label} is now required. ${data.blockedAtEnable ?? 0} operative(s) did not meet it.`
           : `${label} is no longer required.`,
       );
       router.refresh();
@@ -170,7 +170,7 @@ export function WorkerAccessManager({
             <div className="mb-3 rounded-lg border border-hivis-500/40 bg-hivis-500/10 px-3 py-2.5">
               <p className="text-sm font-semibold text-ink">
                 Turning on “{pendingReq.label}” will block {pendingReq.count}{' '}
-                worker{pendingReq.count === 1 ? '' : 's'} on this site
+                operative{pendingReq.count === 1 ? '' : 's'} on this site
               </p>
               {pendingReq.names.length > 0 ? (
                 <p className="mt-0.5 text-xs text-ink-muted">

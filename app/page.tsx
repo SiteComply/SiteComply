@@ -30,7 +30,7 @@ export default function HomePage() {
       <div className="grid gap-3">
         <Link href="/check-in" className="block">
           <Button size="lg" fullWidth>
-            I&apos;m a worker — start check-in
+            I&apos;m an operative — start check-in
           </Button>
         </Link>
         <Link href="/platform" className="block">

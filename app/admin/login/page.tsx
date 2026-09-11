@@ -64,7 +64,7 @@ export default function AdminLoginPage({
         )}
 
         <p className="text-xs text-ink-subtle">
-          Workers don’t sign in here — they check in from the{' '}
+          Operatives don’t sign in here — they check in from the{' '}
           <a href="/check-in" className="font-semibold text-brand-700">
             site check-in
           </a>{' '}

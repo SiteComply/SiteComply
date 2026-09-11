@@ -226,7 +226,7 @@ export function SiteInformationConfig({
         label="Emergency procedures"
         rows={3}
         maxLength={SITE_TEXT_MAX}
-        placeholder="What a worker should do in an emergency (alarm, evacuation, incident reporting)."
+        placeholder="What an operative should do in an emergency (alarm, evacuation, incident reporting)."
         value={emergencyProcedures}
         disabled={!canEdit || busy}
         onChange={(e) => setProcedures(e.target.value)}
@@ -283,7 +283,7 @@ export function SiteInformationConfig({
       {/* Emergency details — read-only (Option A) */}
       <div className="space-y-2 rounded-lg border border-line bg-surface-sunken p-3">
         <p className="text-sm font-semibold text-ink">
-          Emergency details (shown to workers)
+          Emergency details (shown to operatives)
         </p>
         {emergencyRows.length > 0 ? (
           <dl className="space-y-1.5">

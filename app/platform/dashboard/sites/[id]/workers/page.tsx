@@ -225,7 +225,7 @@ export default async function SiteWorkersPage({
       {expiring.length > 0 ? (
         <div className="mt-4 rounded-xl border border-hivis-500/40 bg-hivis-500/10 px-4 py-3">
           <p className="text-sm font-semibold text-ink">
-            {expiring.length} worker{expiring.length === 1 ? '' : 's'} lose access
+            {expiring.length} operative{expiring.length === 1 ? '' : 's'} lose access
             within 7 days
           </p>
           <p className="text-xs text-ink-muted">

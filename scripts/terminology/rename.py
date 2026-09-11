@@ -107,16 +107,14 @@ def is_code_like(s):
     # URLs; renaming it would break every bookmarked selection link.
     if ' ' not in t:
         return True
-    # Two punctuation marks in this test fire on ordinary UI copy, not code:
-    # a parenthetical aside — "(including the knowledge check)" — and the
-    # semicolon that ends an HTML entity — "the worker&rsquo;s". Both were
-    # classifying real user-facing sentences as code and skipping them in
-    # silence. Remove those two shapes, then test what is left; `= ; { }` in
-    # the remainder still means code, so `const worker = submission.worker;`
-    # is still protected.
-    probe = re.sub(r'&(?:[A-Za-z]+|#[0-9]+);', '', t)
-    probe = re.sub(r'\([^()]*\)', '', probe)
-    if re.search(r'[;={}()]', probe):
+    # Testing the WHOLE string for `[;={}()]` was the wrong tool and produced a
+    # silent miss every time UI copy used ordinary punctuation: a parenthetical
+    # aside "(including the knowledge check)", an HTML entity's semicolon
+    # "the worker&rsquo;s", and a plain prose semicolon "…information; workers
+    # must answer…" were all classified as code and skipped. Whether a string
+    # is prose is now decided per OCCURRENCE, in `renameable()` — the only
+    # question that actually matters is whether THIS "worker" is an identifier.
+    if re.search(r'[;={}()]', t) and not re.search(r'[a-z]{2}\s+[a-z]{2}', t):
         return True
     if ' ' not in t and re.fullmatch(r'[A-Za-z0-9_.\[\]$-]+', t):
         return True
@@ -139,12 +137,57 @@ ARTICLE = [
 ]
 
 
+# `{worker.company}` is a JSX expression and `${worker.company}` is a template
+# hole — both are CODE sitting inside a run of prose, and renaming either breaks
+# the page. Substitution ran over the whole run and rewrote `{worker.company}`
+# to `{operative.company}`. Mask the holes, substitute the prose between them,
+# then put the holes back byte-for-byte.
+HOLE = re.compile(r'\$?\{[^{}]*\}')
+
+# Everything that makes a given "worker" an IDENTIFIER rather than a word.
+# Decided from the characters either side of the match, because that is what
+# actually distinguishes `submission.worker` from "the worker's induction".
+BEFORE_CODE = re.compile(r"""
+      [.\w$/'"`-]$          # submission.worker, workerId, /worker/, 'worker-access'
+    | \b(?:const|let|var|function|class|interface|type|import|from|new|await)\s+$
+""", re.X)
+AFTER_CODE = re.compile(r"""
+    ^(?:
+      \.[A-Za-z_$]           # worker.id — but NOT "the worker." ending a sentence,
+                             # which this rule first read as property access
+    | [:(\[/\w$'"`-]         # worker:, worker(, /worker/, worker-access
+    | \s*=                    # worker = ...
+    )
+""", re.X)
+
+
+def renameable(text, start, end):
+    """Is the [start,end) occurrence of 'worker' a WORD, or an identifier?"""
+    before = text[max(0, start - 24):start]
+    after = text[end:end + 3]
+    if BEFORE_CODE.search(before):
+        return False
+    if AFTER_CODE.match(after):
+        return False
+    return True
+
+
 def sub_prose(s):
+    holes = []
+
+    def stash(m):
+        holes.append(m.group(0))
+        return f'\x00{len(holes) - 1}\x00'
+
+    s = HOLE.sub(stash, s)
     for rx, rep in SUBS:
-        s = rx.sub(rep, s)
+        s = rx.sub(
+            lambda m: rep if renameable(m.string, m.start(), m.end()) else m.group(0),
+            s,
+        )
     for rx, rep in ARTICLE:
         s = rx.sub(rep, s)
-    return s
+    return re.sub(r'\x00(\d+)\x00', lambda m: holes[int(m.group(1))], s)
 
 
 def convert(text, jsx=True):

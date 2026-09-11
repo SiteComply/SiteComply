@@ -315,7 +315,7 @@ export async function savePlatformAuthSettings(
   const worker = parseNumeric(
     'workerSessionTtlSeconds',
     input.workerSessionTtlSeconds,
-    'Worker session timeout (seconds)',
+    'Operative session timeout (seconds)',
   );
   if ('error' in session) errors.sessionTtlSeconds = session.error;
   if ('error' in worker) errors.workerSessionTtlSeconds = worker.error;

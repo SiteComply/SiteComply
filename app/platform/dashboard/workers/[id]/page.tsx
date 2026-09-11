@@ -92,7 +92,7 @@ export default async function WorkerDetailPage({
               <Gate label="GDPR consent" ok={complianceStatus.gdpr} />
             </dl>
             <p className="mt-3 text-xs text-ink-subtle">
-              Compliance reflects the worker&rsquo;s most recent check-in on
+              Compliance reflects the operative&rsquo;s most recent check-in on
               your sites.
             </p>
           </Section>

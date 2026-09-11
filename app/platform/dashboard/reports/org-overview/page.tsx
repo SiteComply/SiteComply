@@ -130,7 +130,7 @@ export default async function OrgOverviewReportPage({
             rows={o.topCompanies.map((c) => ({
               label: c.company,
               value: c.checkIns,
-              sub: `${c.workers} worker${c.workers === 1 ? '' : 's'}`,
+              sub: `${c.workers} operative${c.workers === 1 ? '' : 's'}`,
             }))}
           />
         </SectionCard>

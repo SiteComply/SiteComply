@@ -124,7 +124,7 @@ export default async function SiteOverviewPage({
           </div>
           {infoComplete && infoComplete.missing.length > 0 && (
             <p className="mt-3 text-xs text-ink-subtle">
-              Still to add on the Worker Experience tab:{' '}
+              Still to add on the Operative Experience tab:{' '}
               {infoComplete.missing.join(', ')}.
             </p>
           )}

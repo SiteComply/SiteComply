@@ -330,7 +330,7 @@ export function GpsCheckInConfig({
           Off-site check-in overrides
         </p>
         <p className="text-xs text-ink-subtle">
-          Authorise a worker to check in from outside the radius (e.g. a genuine
+          Authorise an operative to check in from outside the radius (e.g. a genuine
           GPS problem). A reason is required and recorded for audit.
         </p>
 

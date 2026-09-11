@@ -229,7 +229,7 @@ export function KnowledgeCheckConfig({
             className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
           >
             <option value="SKIP_FLAGGED">
-              Let the worker check in (recommended)
+              Let the operative check in (recommended)
             </option>
             <option value="BLOCK">Block check-in until ready</option>
           </select>
@@ -264,7 +264,7 @@ export function KnowledgeCheckConfig({
         {flaggedCount > 0 && (
           <p className="text-xs font-medium text-hivis-600">
             {flaggedCount} question{flaggedCount === 1 ? '' : 's'} flagged by
-            workers — review below.
+            operatives — review below.
           </p>
         )}
         {canEdit && (
