@@ -1,4 +1,4 @@
-import { SiteStatus } from '@prisma/client';
+import { SiteStatus, WorkerAssignmentStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { isRetiredInductionItem } from '@/services/checklists/inductionFlow';
 
@@ -9,10 +9,40 @@ import { isRetiredInductionItem } from '@/services/checklists/inductionFlow';
  * arrives in Stage 8; this service is the read side the worker journey depends on.
  */
 
-/** Active sites for the worker site-selection list (lightweight fields). */
-export function listActiveSitesForSelection() {
+/**
+ * Owner Review Item 17 — the sites an operative may choose from.
+ *
+ * Scoped to the projects this operative actually has a relationship with. It
+ * used to return EVERY active site, annotated with a "Not invited" badge, on the
+ * reasoning that hiding a site would leave someone who should have been invited
+ * staring at a list that silently omits it.
+ *
+ * That reasoning only covers the person who SHOULD be on the project. It ignores
+ * everyone else: every signed-in operative could read the name, job reference,
+ * town and postcode of every live project on the platform, including other
+ * customers'. On a multi-tenant product that is commercially sensitive
+ * information, and no operative needs it to check in.
+ *
+ * Filtered in the QUERY rather than in the page, so a site an operative has no
+ * relationship with is never loaded, never serialised, and never reaches the
+ * browser — not merely hidden once it is there.
+ *
+ * REMOVED is excluded: that access was deliberately ended. Every other state is
+ * kept, including suspended and out-of-window, because the operative IS on the
+ * project and the badge tells them what to ask their site manager for. That is
+ * the case the original comment was right about, and it is preserved.
+ */
+export function listSitesForWorkerSelection(workerId: string) {
   return prisma.jobSite.findMany({
-    where: { status: SiteStatus.ACTIVE },
+    where: {
+      status: SiteStatus.ACTIVE,
+      workerAssignments: {
+        some: {
+          workerId,
+          status: { not: WorkerAssignmentStatus.REMOVED },
+        },
+      },
+    },
     orderBy: { name: 'asc' },
     select: {
       id: true,

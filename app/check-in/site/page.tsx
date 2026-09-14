@@ -4,7 +4,7 @@ import { Steps } from '@/components/checkin/Steps';
 import { SiteSelector } from '@/components/checkin/SiteSelector';
 import { getWorkerSession } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
-import { listActiveSitesForSelection } from '@/services/sites/siteService';
+import { listSitesForWorkerSelection } from '@/services/sites/siteService';
 import { siteAccessHintsForWorker } from '@/services/workerAccess/workerAssignmentService';
 
 export const dynamic = 'force-dynamic';
@@ -20,12 +20,14 @@ export default async function CheckInSitePage() {
   const worker = await getWorkerByMobile(session.mobile);
   if (!worker) redirect('/check-in/details');
 
-  const sites = await listActiveSitesForSelection();
+  // Owner Review Item 17 — only the projects this operative is on. A site
+  // they have no relationship with is never fetched, so it cannot leak.
+  const sites = await listSitesForWorkerSelection(worker.id);
 
-  // A fixed number of queries for the whole list, so a worker can see which
-  // sites they can actually use before choosing one — rather than picking a
-  // site and being turned away on the next screen. Empty when nothing enforces
-  // access, in which case the list renders exactly as it always has.
+  // A fixed number of queries for the whole list, so an operative can see which
+  // of THEIR sites they can use right now — rather than picking one and being
+  // turned away on the next screen. The list is already scoped to their own
+  // projects; these hints explain the state of each.
   const access = await siteAccessHintsForWorker(worker.id, sites);
 
   return (

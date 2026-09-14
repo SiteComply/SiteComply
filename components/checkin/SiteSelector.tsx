@@ -29,13 +29,17 @@ const SELECTED_KEY = 'sitecomply.checkin.siteId';
  * site's induction. Search filters by name, job reference or town so big
  * contractors with many sites stay manageable on a phone.
  *
- * Sites the worker has no access to are SHOWN, not hidden, and stay tappable.
- * Hiding them would leave a worker who should have been invited staring at a
- * list that silently omits their site with nothing to act on; the label tells
- * them what to ask their site manager for. Tapping through still reaches the
- * site page, which runs the full check, states the reason in full and owns the
- * final word — the list carries a short label only, so the screen stays
- * scannable and the red is a chip rather than three paragraphs.
+ * The list is scoped upstream to the operative's OWN projects (Owner Review
+ * Item 17) — a project they have no relationship with is never fetched.
+ *
+ * Within that list, a site they cannot use RIGHT NOW is still shown and still
+ * tappable: awaiting approval, suspended, or outside its access window. Hiding
+ * those would leave someone who HAS been invited staring at a list that silently
+ * omits their site with nothing to act on; the label tells them what to ask
+ * their site manager for. Tapping through still reaches the site page, which
+ * runs the full check, states the reason in full and owns the final word — the
+ * list carries a short label only, so the screen stays scannable and the red is
+ * a chip rather than three paragraphs.
  *
  * Usable sites sort to the top, with a divider before the rest: a worker with
  * NO usable site then sees an empty top group, which is itself the message.
@@ -91,7 +95,11 @@ export function SiteSelector({ sites }: { sites: SelectableSite[] }) {
       {filtered.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface px-4 py-6 text-center text-ink-muted">
           {sites.length === 0
-            ? 'There are no active sites to check in to yet. Please speak to the site manager.'
+            ? // Owner Review Item 17 — the list is now scoped to this operative's
+              // own projects, so an empty list means "you are not on any project
+              // yet", NOT "the company has no sites". Saying the latter would
+              // send someone to the wrong question.
+              'You have not been invited to any projects yet. Your site manager needs to invite you before you can check in.'
             : 'No sites match your search.'}
         </p>
       ) : (
