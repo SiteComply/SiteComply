@@ -83,6 +83,80 @@ export function isRetiredInductionItem(item: {
   return isCscsCompetencyItem(item) || isToolboxTalkItem(item);
 }
 
+/**
+ * Owner Review Item 14 — grouping related acknowledgements onto one screen.
+ *
+ * The induction ran to EIGHT screens, six of which held a single tick on an
+ * otherwise empty phone viewport. Nothing is removed here: every acknowledgement
+ * is still made individually, still stored under its own checklist item id in
+ * `Submission.answers`, and still validated individually. What changes is how
+ * many times somebody presses Continue.
+ *
+ * Sections are matched on the SEEDED LABEL, the same mechanism SC-012 and SC-018
+ * already use for the retired questions above. That means:
+ *   - no schema change and no migration, so this ships to existing sites at once;
+ *   - a site that has edited a label, or added its own item, is untouched — the
+ *     item simply keeps its own screen, exactly as today. Grouping is opt-out by
+ *     construction rather than something that can surprise a customised site.
+ *
+ * Deliberately NOT adjacency-based, unlike the PPE run. In the seeded template
+ * the two themes interleave (briefing, briefing, work, briefing, work, …, work),
+ * so adjacency could not produce coherent sections. A section therefore collects
+ * its members wherever they appear, and the screen takes the position of the
+ * FIRST one, which keeps any custom items a site has added in sensible places
+ * around it.
+ *
+ * GDPR consent is deliberately absent from this list. It stays on its own screen:
+ * UK GDPR requires consent to be specific and unbundled, and putting it behind
+ * the same button as a safety declaration would weaken the basis for holding the
+ * data to save one tap.
+ */
+export interface InductionSection {
+  key: string;
+  heading: string;
+  intro: string;
+  /** Seeded labels belonging to this section, matched via normaliseLabel. */
+  labels: string[];
+}
+
+export const INDUCTION_SECTIONS: InductionSection[] = [
+  {
+    key: 'site-briefing',
+    heading: 'Your site briefing',
+    intro: 'Confirm what you have been told about this site.',
+    labels: [
+      'I have received and understood the site induction.',
+      'I have read and will follow the site rules and signage.',
+      'I know how to report a near miss and where to find the first aider and welfare facilities.',
+    ],
+  },
+  {
+    key: 'work-and-permits',
+    heading: 'Your work and permits',
+    intro: 'Confirm you understand the work you are about to do, and how to do it safely.',
+    labels: [
+      'I have read the Risk Assessments & Method Statements (RAMS) for my work.',
+      'I understand the permit to work system and will not start permit-controlled work without one.',
+      'I agree to work safely, follow the CDM 2015 duties relevant to me, and stop work if conditions become unsafe.',
+    ],
+  },
+];
+
+const SECTION_BY_LABEL = new Map<string, InductionSection>(
+  INDUCTION_SECTIONS.flatMap((section) =>
+    section.labels.map((label) => [normaliseLabel(label), section] as const),
+  ),
+);
+
+/** The section an item belongs to, or null if it keeps its own screen. */
+export function sectionFor(item: {
+  label: string;
+  type: string;
+}): InductionSection | null {
+  if (item.type !== 'ACKNOWLEDGEMENT') return null;
+  return SECTION_BY_LABEL.get(normaliseLabel(item.label)) ?? null;
+}
+
 export interface FlowItem {
   id: string;
   label: string;
@@ -93,6 +167,7 @@ export interface FlowItem {
 
 export type InductionStep =
   | { kind: 'acknowledgement'; item: FlowItem }
+  | { kind: 'section'; section: InductionSection; items: FlowItem[] }
   | { kind: 'yesno'; item: FlowItem }
   | { kind: 'ppe'; items: FlowItem[] }
   | { kind: 'gdpr' };
@@ -113,12 +188,42 @@ export function buildInductionSteps(items: FlowItem[]): InductionStep[] {
     }
   };
 
+  // Collect each section's members first. A section is NOT adjacency-based (see
+  // INDUCTION_SECTIONS), so its members have to be known before the first one is
+  // reached — that is where its single screen goes.
+  const members = new Map<string, FlowItem[]>();
+  for (const item of items) {
+    const section = sectionFor(item);
+    if (!section) continue;
+    const list = members.get(section.key);
+    if (list) list.push(item);
+    else members.set(section.key, [item]);
+  }
+  const placed = new Set<string>();
+
   for (const item of items) {
     if (item.type === 'PPE_CONFIRM') {
       ppeRun.push(item);
       continue;
     }
     flushPpe();
+
+    const section = sectionFor(item);
+    if (section) {
+      if (placed.has(section.key)) continue; // already on its own screen
+      placed.add(section.key);
+      const group = members.get(section.key) ?? [item];
+      // A section left with one member — because a site deleted the others —
+      // would render a section heading above a single tick. Fall back to the
+      // ordinary acknowledgement screen, which is what it now is.
+      if (group.length === 1) {
+        steps.push({ kind: 'acknowledgement', item: group[0]! });
+      } else {
+        steps.push({ kind: 'section', section, items: group });
+      }
+      continue;
+    }
+
     if (item.type === 'YES_NO') steps.push({ kind: 'yesno', item });
     else steps.push({ kind: 'acknowledgement', item });
   }
@@ -138,6 +243,12 @@ export function isStepComplete(
   switch (step.kind) {
     case 'acknowledgement':
       return !step.item.required || answers[step.item.id] === true;
+    case 'section':
+      // Every required member, individually — the same rule the PPE screen uses.
+      // Grouping changes the number of screens, never what has to be answered.
+      return step.items
+        .filter((i) => i.required)
+        .every((i) => answers[i.id] === true);
     case 'yesno': {
       const v = answers[step.item.id];
       return !step.item.required || v === 'yes' || v === 'no';

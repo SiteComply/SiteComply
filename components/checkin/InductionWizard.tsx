@@ -7,6 +7,7 @@ import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/cn';
 import {
   buildInductionSteps,
+  type InductionSection,
   isStepComplete,
   type FlowItem,
   type InductionAnswers,
@@ -333,6 +334,15 @@ export function InductionWizard({
           />
         )}
 
+        {step.kind === 'section' && (
+          <SectionStep
+            section={step.section}
+            items={step.items}
+            answers={answers}
+            onToggle={(id) => setAnswer(id, answers[id] === true ? false : true)}
+          />
+        )}
+
         {step.kind === 'yesno' && (
           <YesNoStep
             label={step.item.label}
@@ -377,7 +387,9 @@ export function InductionWizard({
               ? 'Please confirm all required PPE to continue.'
               : step.kind === 'gdpr'
                 ? 'Please give your consent to continue.'
-                : 'Please answer this to continue.'}
+                : step.kind === 'section'
+                  ? 'Please confirm each item to continue.'
+                  : 'Please answer this to continue.'}
           </p>
         )}
       </div>
@@ -498,6 +510,76 @@ function YesNoStep({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function SectionStep({
+  section,
+  items,
+  answers,
+  onToggle,
+}: {
+  section: InductionSection;
+  items: FlowItem[];
+  answers: InductionAnswers;
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <StepHeading>{section.heading}</StepHeading>
+      <p className="text-ink-muted">{section.intro}</p>
+      {/* Owner Review Item 14 — one row per acknowledgement, each still ticked
+          on its own. The row treatment is the PPE screen's, which has been a
+          grouped screen since it shipped; the difference is that an
+          acknowledgement carries help text, so each row has room for it. */}
+      <ul className="space-y-3">
+        {items.map((item) => {
+          const confirmed = answers[item.id] === true;
+          return (
+            <li key={item.id}>
+              <button
+                type="button"
+                onClick={() => onToggle(item.id)}
+                aria-pressed={confirmed}
+                className={cn(
+                  'touch-target flex w-full items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors',
+                  confirmed
+                    ? 'border-safe-600 bg-safe-50'
+                    : 'border-line bg-surface hover:border-brand-200',
+                )}
+              >
+                <span
+                  className={cn(
+                    'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-2 text-sm font-bold',
+                    confirmed
+                      ? 'border-safe-600 bg-safe-600 text-white'
+                      : 'border-ink-subtle text-transparent',
+                  )}
+                  aria-hidden="true"
+                >
+                  ✓
+                </span>
+                <span className="flex-1">
+                  <span className="block font-semibold text-ink">
+                    {item.label}
+                  </span>
+                  {item.helpText && (
+                    <span className="mt-1 block text-sm text-ink-muted">
+                      {item.helpText}
+                    </span>
+                  )}
+                </span>
+                {!item.required && (
+                  <span className="shrink-0 text-xs font-medium text-ink-subtle">
+                    Optional
+                  </span>
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
