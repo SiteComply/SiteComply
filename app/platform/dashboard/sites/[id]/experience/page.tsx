@@ -13,6 +13,11 @@ import { SiteContacts } from '@/components/platform/SiteContacts';
 import { WorkerDashboardConfig } from '@/components/platform/WorkerDashboardConfig';
 import { KnowledgeCheckConfig } from '@/components/platform/KnowledgeCheckConfig';
 import { InductionValidityConfig } from '@/components/platform/InductionValidityConfig';
+import { PpeRequirementsConfig } from '@/components/platform/PpeRequirementsConfig';
+import {
+  getSitePpeRequirements,
+  DEFAULT_PPE,
+} from '@/services/checklists/sitePpeService';
 import { GpsCheckInConfig } from '@/components/platform/GpsCheckInConfig';
 import { SiteInformationConfig } from '@/components/platform/SiteInformationConfig';
 import { formatDateTimeUK } from '@/lib/datetime';
@@ -95,6 +100,8 @@ export default async function SiteExperiencePage({
       }))
     : [];
 
+  const ppeItems = await getSitePpeRequirements(params.id);
+
   const [siteContacts, panelVisibility] = await Promise.all([
     listSiteContactsForViewer(viewer, params.id),
     getPanelVisibilityForViewer(viewer, params.id),
@@ -158,6 +165,16 @@ export default async function SiteExperiencePage({
       label: 'Site information',
       description: 'The operative-facing Site information page.',
       group: SECTION_GROUP.seen,
+    },
+    {
+      // Owner Review Item 15 — PPE was only editable in the Admin Centre's
+      // generic checklist builder, which a Platform user cannot reach. Listed
+      // first in this group: it is the most concrete thing a manager comes here
+      // to set, and the one they went looking for and could not find.
+      key: 'ppe',
+      label: 'PPE requirements',
+      description: 'The PPE operatives must confirm before they check in.',
+      group: SECTION_GROUP.induction,
     },
     kcConfig &&
       kcPreview && {
@@ -260,6 +277,23 @@ export default async function SiteExperiencePage({
             completeness={siteInfo.completeness}
           />
         )}
+
+        {active === 'ppe' && (
+
+          <PpeRequirementsConfig
+
+            siteId={params.id}
+
+            initial={ppeItems}
+
+            defaults={DEFAULT_PPE}
+
+            canEdit={canConfigureDashboard}
+
+          />
+
+        )}
+
 
         {active === 'knowledge-check' && kcConfig && kcPreview && (
           <KnowledgeCheckConfig
