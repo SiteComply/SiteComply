@@ -132,6 +132,10 @@ export function CscsProviderSettings({
   // which is what the description beneath the select should explain.
   const selected = config.providers.find((p) => p.id === activeProvider);
 
+  // The Smart Check descriptor, regardless of what the dropdown currently says.
+  // Proving its credentials must not require selecting it.
+  const smartCheck = config.providers.find((p) => p.supportsTest);
+
   // `live` follows the SAVED configuration — what is actually verifying cards
   // right now. config.activeProvider is the resolved runtime provider
   // (database, then environment, then the platform default).
@@ -144,10 +148,17 @@ export function CscsProviderSettings({
   // report what runs, never what someone is part-way through choosing.
   const live = config.providers.find((p) => p.id === config.activeProvider);
 
-  // A stored key counts: the field is blank when a key is already held, and
+  // A stored secret counts: the field is blank when one is already held, and
   // "blank means keep the stored one" is the convention the API honours.
+  //
+  // All four, because V2.6 signs in BEFORE it looks up a card. The button used
+  // to enable on the URL and key alone — a leftover from the one-step protocol —
+  // so it invited a press that could only come back "nothing to test yet".
   const canTest =
-    apiUrl.trim() !== '' && (apiKey.trim() !== '' || config.apiKeySet);
+    apiUrl.trim() !== '' &&
+    (apiKey.trim() !== '' || config.apiKeySet) &&
+    username.trim() !== '' &&
+    (password.trim() !== '' || config.passwordSet);
 
   return (
     <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
@@ -308,21 +319,37 @@ export function CscsProviderSettings({
         </fieldset>
 
         {/* Test connection.
-            Only for a provider that actually connects to something — the mock
-            never leaves the process, so a test there could only ever report a
-            success that means nothing.
+            Shown whenever the Smart Check credentials are on screen, NOT only
+            when Smart Check is the provider under the cursor.
+
+            It used to follow the dropdown, which made the one workflow an admin
+            actually needs impossible to find: you cannot safely enable a live
+            provider in order to prove its credentials, and you should not have
+            to. The only route to the button was selecting Smart Check without
+            saving — undiscoverable, and one stray click from enabling a
+            provider that is not ready.
+
+            The service was always built for this: resolveCscsTestCredentials
+            merges typed values over stored ones precisely so an admin can
+            enter, prove, then enable. Testing sends one request and changes
+            nothing.
 
             Placed between the credentials and Save on purpose: that is the
-            order the workflow runs in, because the save path refuses to select
-            Smart Check until the credentials exist. */}
-        {selected?.supportsTest ? (
+            order the workflow runs in. */}
+        {smartCheck?.supportsTest ? (
           <div className="border-t border-line pt-4">
             <h3 className="text-sm font-medium text-ink">Test connection</h3>
             <p className="mt-0.5 text-xs text-ink-subtle">
               Sends one request to the partner API using the credentials above,
               including any you have not saved yet. No card is verified, no
               operative is involved and nothing is recorded against the CSCS
-              report.
+                report.{' '}
+                {live?.id !== smartCheck?.id ? (
+                  <span className="font-medium text-ink">
+                    This does not change which provider is live —{' '}
+                    {live?.name ?? 'the current provider'} stays in use.
+                  </span>
+                ) : null}
             </p>
             <button
               type="button"
@@ -334,7 +361,7 @@ export function CscsProviderSettings({
             </button>
             {!canTest && canManage ? (
               <span className="mt-2 block text-xs text-ink-subtle">
-                Enter the API URL and key first.
+                Enter the API URL, key, username and password first.
               </span>
             ) : null}
 
