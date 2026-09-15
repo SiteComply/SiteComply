@@ -241,7 +241,7 @@ export function CscsProviderSettings({
               <input
                 type="url"
                 value={apiUrl}
-                placeholder="https://api.cscssmartcheck.co.uk"
+                placeholder="https://cardcheckerprod.cscsonline.uk.com/smarttech/v2"
                 disabled={!canManage || busy}
                 onChange={(e) => setApiUrl(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink disabled:opacity-60"

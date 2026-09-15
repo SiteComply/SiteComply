@@ -61,7 +61,17 @@ const TIMEOUT_MS = 15_000;
  * is the only change made to this file; no existing logic is altered.
  */
 export const REQUEST_SHAPE = {
-  /** Appended to the configured base URL. */
+  /**
+   * Appended to the configured base URL.
+   *
+   * STILL A GUESS, and the documented base URL now shows it is wrong: that URL
+   * is
+   *   https://cardcheckerprod.cscsonline.uk.com/smarttech/v2
+   * which already carries a version segment, so this would produce
+   *   .../smarttech/v2/v1/card/verify
+   * Two version numbers in one path is not a real endpoint. The card-validation
+   * path is the outstanding item — see docs/CSCS-CUTOVER.md.
+   */
   path: '/v1/card/verify',
   method: 'POST' as const,
   /** Request body field names. */
