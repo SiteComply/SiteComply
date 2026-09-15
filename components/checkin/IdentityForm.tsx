@@ -38,9 +38,12 @@ const DRAFT_KEY = 'sitecomply.checkin.identity';
 export function IdentityForm({
   initial,
   recognised,
+  verificationLive,
 }: {
   initial: IdentityInitial;
   recognised: boolean;
+  /** Whether a real CSCS check will actually run on save. */
+  verificationLive: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -311,8 +314,13 @@ export function IdentityForm({
                   <span aria-hidden="true">📷</span> Upload or photograph card
                 </button>
               )}
+              {/* CSCS cutover Phase 1 — this promised a Smart Check to every
+                  operative, including while the mock provider was active and
+                  checking nothing. */}
               <p className="text-xs text-ink-subtle">
-                We’ll verify your card against the CSCS Smart Check service.
+                {verificationLive
+                  ? 'We’ll verify your card against the CSCS Smart Check service.'
+                  : 'Your card details are recorded with your check-in. Automatic CSCS checking is not switched on yet.'}
               </p>
             </div>
 
@@ -328,25 +336,35 @@ export function IdentityForm({
   );
 }
 
-/** Shows the CSCS Smart Check outcome after a save. */
+/** Shows the card-check outcome after a save. */
 function VerificationBanner({
   verification,
 }: {
   verification: VerificationView;
 }) {
   const ok = verification.verified;
+  // UNVERIFIED means "no check was run", which is not the same as a card that
+  // failed one. An amber "not verified" for it reads as a problem with the
+  // operative's card when the only thing missing is the integration.
+  const notChecked = !ok && verification.status === 'UNVERIFIED';
   return (
     <div
       className={
         'rounded-xl border px-4 py-3 text-sm ' +
         (ok
           ? 'border-safe-500/40 bg-safe-50 text-ink'
-          : 'border-hivis-400/50 bg-hivis-400/15 text-ink')
+          : notChecked
+            ? 'border-line bg-surface-sunken text-ink'
+            : 'border-hivis-400/50 bg-hivis-400/15 text-ink')
       }
       role="status"
     >
       <p className="font-semibold">
-        {ok ? '✓ Card verified' : '⚠ Card not verified'}
+        {ok
+          ? '✓ Card verified'
+          : notChecked
+            ? 'Card details recorded'
+            : '⚠ Card not verified'}
         {verification.scheme ? ` · ${verification.scheme}` : ''}
       </p>
       <p className="mt-0.5 text-ink-muted">{verification.message}</p>

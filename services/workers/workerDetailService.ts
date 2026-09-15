@@ -49,6 +49,12 @@ export interface WorkerDetail {
     cscsVerifiedAt: Date | null;
     cscsHolderName: string | null;
     cscsQualifications: { title: string; detail?: string }[];
+    /**
+     * Which provider produced the CSCS fields above, or null if no check has
+     * run. 'mock' means a TEST provider produced them — not a CSCS
+     * verification, whatever cscsVerificationStatus says.
+     */
+    verifiedByProvider: string | null;
     createdAt: Date;
   };
   complianceStatus: {
@@ -89,9 +95,24 @@ export async function getWorkerDetailForViewer(
       cscsHolderName: true,
       cscsQualifications: true,
       createdAt: true,
+      // CSCS cutover Phase 1 — WHICH provider produced the stored result. The
+      // Worker row does not record it, so the screen said "Smart Check" over a
+      // result the mock invented. Only the log knows, so ask the log.
+      cscsVerifications: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: { provider: true },
+      },
     },
   });
   if (!worker) return null;
+
+  /**
+   * The provider behind the CSCS fields on this record, or null when no check
+   * has ever run. 'mock' means a TEST provider produced it and it is not a
+   * CSCS verification, whatever the status says.
+   */
+  const verifiedByProvider = worker.cscsVerifications[0]?.provider ?? null;
 
   // Normalise the stored competency JSON into a typed list for the view.
   const qualifications = Array.isArray(worker.cscsQualifications)
@@ -156,7 +177,7 @@ export async function getWorkerDetailForViewer(
     : null;
 
   return {
-    worker: { ...worker, cscsQualifications: qualifications },
+    worker: { ...worker, cscsQualifications: qualifications, verifiedByProvider },
     complianceStatus: {
       latestStatus: latest.status,
       ppe: latest.ppeConfirmed,

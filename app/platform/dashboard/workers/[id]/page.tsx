@@ -195,8 +195,13 @@ export default async function WorkerDetailPage({
               )}
               {worker.cscsVerificationStatus && (
                 <div>
+                  {/* CSCS cutover Phase 1 — this said "Smart Check" over
+                      whatever the mock invented. Name the provider that
+                      actually produced the result. */}
                   <dt className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
-                    Smart Check
+                    {worker.verifiedByProvider === 'mock'
+                      ? 'Card check (test provider)'
+                      : 'Smart Check'}
                   </dt>
                   <dd className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-ink">
                     <StatusPill
@@ -208,6 +213,11 @@ export default async function WorkerDetailPage({
                     {worker.cscsScheme && (
                       <span className="text-ink-muted">
                         {worker.cscsScheme}
+                      </span>
+                    )}
+                    {worker.verifiedByProvider === 'mock' && (
+                      <span className="text-xs font-medium text-hivis-700">
+                        Not a CSCS verification
                       </span>
                     )}
                     {worker.cscsVerifiedAt && (

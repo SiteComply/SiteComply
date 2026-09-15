@@ -8,10 +8,27 @@ import {
 } from './CscsProvider';
 
 /**
- * Development-only CSCS Smart Check provider. Instead of calling the real Smart
- * Check service it returns a deterministic result derived from the supplied card
- * number, so the SC-001 verification flow is fully exercisable locally without a
- * Smart Check partnership. Never selected in production.
+ * Development CSCS provider. Instead of calling the real Smart Check service it
+ * returns a deterministic result derived from the supplied card number, so the
+ * SC-001 verification flow is fully exercisable locally without a Smart Check
+ * partnership.
+ *
+ * ── IT MUST NOT FABRICATE IN PRODUCTION (CSCS cutover, Phase 1) ─────────────
+ *
+ * The comment here used to read "Never selected in production". It was not true:
+ * `CscsConfig.activeProvider` defaults to "mock", so production ran this, marked
+ * real people's cards `cscsVerified = true`, invented a scheme, invented an
+ * expiry of today + 3 years and invented competency records — then told the
+ * operative "Card verified against the CSCS Smart Check service."
+ *
+ * Nothing had been verified. A competency gate satisfied by an invented number
+ * is worse than no gate, because it produces a record asserting a check was
+ * done.
+ *
+ * So the claim is now true BY CONSTRUCTION rather than by intention: in
+ * production this returns UNVERIFIED and writes nothing derived. Locally it
+ * still behaves fully, so the journey stays testable — and even there it never
+ * claims the result came from CSCS.
  *
  * Deterministic rules (for predictable testing):
  *   - empty / unusable number         → UNVERIFIED
@@ -27,6 +44,20 @@ export class MockCscsProvider implements CscsProvider {
   async verifyCard(input: CscsVerifyInput): Promise<CscsVerificationResult> {
     const checkedAt = new Date();
     const number = normaliseCscsCardNumber(input.cardNumber ?? '');
+
+    // Deliberately no env escape hatch. An override for "just this once" is how
+    // a mock ends up verifying cards in production again.
+    if (mockIsInert()) {
+      return {
+        providerName: this.name,
+        checkedAt,
+        scheme: null,
+        status: 'UNVERIFIED',
+        verified: false,
+        message:
+          'Card details recorded. Automatic CSCS checking is not switched on yet, so this card has not been verified.',
+      };
+    }
 
     const base = {
       providerName: this.name,
@@ -49,7 +80,7 @@ export class MockCscsProvider implements CscsProvider {
         ...base,
         status: 'NOT_FOUND',
         verified: false,
-        message: 'No matching card found on the CSCS Smart Check service.',
+        message: 'Test check: no matching card. Not a real CSCS verification.',
       };
     }
 
@@ -59,7 +90,7 @@ export class MockCscsProvider implements CscsProvider {
         status: 'REVOKED',
         verified: false,
         holderName: input.holderName ?? null,
-        message: 'This card has been revoked by the issuing scheme.',
+        message: 'Test check: revoked. Not a real CSCS verification.',
       };
     }
 
@@ -74,7 +105,7 @@ export class MockCscsProvider implements CscsProvider {
         cardType,
         expiry,
         holderName: input.holderName ?? null,
-        message: 'This card was found but has expired.',
+        message: 'Test check: expired. Not a real CSCS verification.',
       };
     }
 
@@ -86,7 +117,7 @@ export class MockCscsProvider implements CscsProvider {
       expiry,
       holderName: input.holderName ?? null,
       qualifications: mockQualifications(cardType),
-      message: 'Card verified against the CSCS Smart Check service.',
+      message: 'Test check passed. Not a real CSCS verification.',
     };
   }
 }
@@ -124,4 +155,15 @@ function mockQualifications(cardType: CscsCardType): CscsQualification[] {
     },
     { title: `${grade[cardType]} competency`, detail: 'Confirmed by scheme' },
   ];
+}
+
+/**
+ * True when the mock must not produce a verification result.
+ *
+ * Exported so the decision is one greppable predicate rather than an
+ * `process.env` check buried in a branch, and so a test can assert the rule
+ * rather than the environment.
+ */
+export function mockIsInert(): boolean {
+  return process.env.NODE_ENV === 'production';
 }

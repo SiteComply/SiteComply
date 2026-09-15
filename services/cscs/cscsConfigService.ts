@@ -233,3 +233,22 @@ export async function saveCscsConfig(
   });
   return { ok: true };
 }
+
+/**
+ * Is card verification actually going to happen?
+ *
+ * ONE predicate, because several surfaces make a promise about it and they must
+ * not disagree. The check-in screen told every operative "We'll verify your card
+ * against the CSCS Smart Check service" while the mock provider was active and
+ * verifying nothing, which is the claim the CSCS cutover Phase 1 exists to
+ * remove.
+ *
+ * True only when verification is switched on AND a real provider is selected.
+ * The mock is not a real provider, whatever it returns.
+ */
+export async function cscsVerificationIsLive(): Promise<boolean> {
+  const runtime = await getCscsRuntimeConfig();
+  if (!runtime.verificationEnabled) return false;
+  if (runtime.providerId === 'mock') return false;
+  return Boolean(runtime.apiUrl && runtime.apiKey);
+}

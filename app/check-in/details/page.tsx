@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/layout/AppShell';
 import { Steps } from '@/components/checkin/Steps';
 import { IdentityForm } from '@/components/checkin/IdentityForm';
+import { cscsVerificationIsLive } from '@/services/cscs/cscsConfigService';
 import { getWorkerSession } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { getWorkerContext } from '@/services/workerDashboard/workerDashboardService';
@@ -26,6 +27,7 @@ export default async function CheckInDetailsPage() {
   if (await getWorkerContext()) redirect('/worker/dashboard');
 
   const worker = await getWorkerByMobile(session.mobile);
+  const verificationLive = await cscsVerificationIsLive();
   const recognised = Boolean(worker);
 
   return (
@@ -38,8 +40,11 @@ export default async function CheckInDetailsPage() {
         </p>
       </header>
 
+      {/* CSCS cutover Phase 1 — the screen must not promise a check that is
+          not going to happen, so the form is told whether one will. */}
       <IdentityForm
         recognised={recognised}
+        verificationLive={verificationLive}
         initial={{
           fullName: worker?.fullName ?? '',
           company: worker?.company ?? '',
