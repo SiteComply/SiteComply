@@ -407,7 +407,15 @@ export function classifySignInFailure(
       // HTTP 200, so a 200 with no token may mean the credentials were refused,
       // not that the field names moved. The title no longer asserts which.
       title: 'Smart Check answered, but the integration found no token.',
-      detail: `${message}${trace}`,
+      // WHICH SHAPE GOT THROUGH is the finding here. The probe stops on
+      // no-token, so this verdict can come from either candidate, and without
+      // saying which we would have run the experiment and thrown away half the
+      // result.
+      detail: `${message}${
+        failure?.fieldShape
+          ? ` This was the response to a body of {${failure.fieldShape.replace(' / ', ', ')}}.`
+          : ''
+      }${probed}${trace}`,
     };
   }
 

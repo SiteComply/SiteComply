@@ -394,6 +394,41 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
     ok('  the shape reaches the admin', /security/.test(v.detail ?? ''), v.detail);
   }
 
+  // ── 17. a payload nested as a STRING ───────────────────────────────────
+  // Masked flat this reads <string, N chars> — indistinguishable from a token,
+  // and the fields inside would never be seen.
+  {
+    const inner = JSON.stringify({ idToken: 'z'.repeat(600), userName: 'jsmith' });
+    const env = { responseCode: '200', responseData: inner };
+    const shape = shapeSummary(env);
+    ok('a stringified payload is recognised as JSON', /<json string, \d+ chars>/.test(shape), shape);
+    ok('  and its fields are described', /idToken: <string, 600 chars>/.test(shape), shape);
+    ok('  while its values stay masked', !shape.includes('z'.repeat(40)), shape.slice(0, 100));
+    ok('  and a non-envelope value inside is masked too', !/jsmith/.test(shape), shape);
+    ok('a token inside a stringified payload is located',
+      tokenLikePaths(env).some((p2) => p2.startsWith('responseData.idToken')), tokenLikePaths(env));
+    ok('a string that only looks like JSON falls back to the mask',
+      /<string, 9 chars>/.test(shapeSummary({ a: '{not json' })), shapeSummary({ a: '{not json' }));
+    ok('a plain string is untouched by the JSON path',
+      /<string, 5 chars>/.test(shapeSummary({ a: 'hello' })), shapeSummary({ a: 'hello' }));
+  }
+
+  // ── 18. the no-token verdict says WHICH body shape produced it ─────────
+  {
+    const e = new SmartCheckAuthError('no token here', {
+      kind: 'no-token', status: 200, fieldShape: 'userName / password',
+    });
+    const v = classifySignInFailure(e, HOST);
+    ok('the verdict names the body shape that got through', /\{userName, password\}/.test(v.detail ?? ''), v.detail);
+
+    const e2 = new SmartCheckAuthError('no token here', {
+      kind: 'no-token', status: 200, fieldShape: 'username / password',
+    });
+    ok('  and distinguishes the lowercase one',
+      /\{username, password\}/.test(classifySignInFailure(e2, HOST).detail ?? ''),
+      classifySignInFailure(e2, HOST).detail);
+  }
+
   server.closeAllConnections();
   await new Promise<void>((r) => server.close(() => r()));
   console.log(`\n  ${pass} passed, ${fail} failed`);

@@ -314,6 +314,20 @@ export function describeShape(v: unknown, depth = 0, key = ''): string {
     if (SAFE_VALUE_FIELDS.has(key)) {
       return JSON.stringify(redact(v).slice(0, 120));
     }
+    /*
+     * A payload nested as a STRING is a real and easy-to-miss shape — plenty of
+     * Java and AWS services return `responseData` as stringified JSON. Masked
+     * flat it reads as <string, 812 chars>, indistinguishable from a token, and
+     * the fields inside it would never be seen. Described, the renaming or
+     * renesting is obvious at a glance. The inner values stay masked.
+     */
+    if (depth < SHAPE_MAX_DEPTH && /^\s*[[{]/.test(v)) {
+      try {
+        return `<json string, ${v.length} chars> ${describeShape(JSON.parse(v), depth + 1, key)}`;
+      } catch {
+        /* not JSON after all; fall through to the plain mask */
+      }
+    }
     return `<string, ${v.length} chars>`;
   }
   if (typeof v === 'number' || typeof v === 'boolean') {
@@ -337,9 +351,16 @@ export function shapeSummary(v: unknown): string {
  * authenticates and then fails the card call as "bad credentials".
  */
 export function tokenLikePaths(v: unknown, path = '', depth = 0): string[] {
-  if (depth >= SHAPE_MAX_DEPTH || !v || typeof v !== 'object' || Array.isArray(v)) {
-    return [];
+  if (depth >= SHAPE_MAX_DEPTH) return [];
+  // Look inside a stringified payload, for the same reason describeShape does.
+  if (typeof v === 'string' && /^\s*[[{]/.test(v)) {
+    try {
+      return tokenLikePaths(JSON.parse(v), path, depth + 1);
+    } catch {
+      return [];
+    }
   }
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return [];
   const out: string[] = [];
   for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
     const here = path ? `${path}.${k}` : k;
