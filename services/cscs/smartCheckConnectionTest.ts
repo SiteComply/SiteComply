@@ -1,11 +1,15 @@
 import { REQUEST_SHAPE } from './smartCheckProvider';
+import { AUTH_SHAPE } from './smartCheckAuth';
 import {
   getSmartCheckToken,
   authHeaders,
   clearSmartCheckTokens,
   SmartCheckAuthError,
   bodySnippet,
+  authenticate,
+  CANDIDATE_FIELD_SHAPES,
 } from './smartCheckAuth';
+import type { SmartCheckCredentials } from './smartCheckAuth';
 
 /**
  * SC-036 — CSCS Smart Check connection test.
@@ -205,13 +209,32 @@ export async function testSmartCheckConnection(credentials: {
    * guessing which of four credentials was wrong.
    */
   const creds = { apiUrl, apiKey, username, password };
-  let token: string;
-  try {
-    clearSmartCheckTokens();
-    token = await getSmartCheckToken(creds, { forceRefresh: true });
-  } catch (e) {
-    return done(classifySignInFailure(e, target.host));
+
+  /*
+   * An empty 2xx is the one failure that says "the service ran and did not
+   * understand the request", so it is the one worth re-asking differently.
+   * Each candidate shape is another credential submission against a partner
+   * whose lockout policy we do not know, so the loop stops on ANY other
+   * outcome — rejected credentials, a 404, a transport failure — because for
+   * those the body field names are not the question.
+   *
+   * THE PROBE LIVES HERE AND NOT IN THE PROVIDER. Verification has to be
+   * deterministic; a live path that quietly tried several shapes would hide a
+   * contract change rather than report it. This reports, and the answer gets
+   * written into AUTH_SHAPE.fields by hand.
+   */
+  clearSmartCheckTokens();
+  const { token, acceptedShape, error, tried } = await signInWithCandidateShapes(creds);
+
+  if (token === null) {
+    return done(classifySignInFailure(error, target.host, tried));
   }
+
+  /* A shape other than the first worked. That is the finding, not a footnote. */
+  const shapeNote =
+    acceptedShape && acceptedShape !== CANDIDATE_FIELD_SHAPES[0]?.label
+      ? ` Sign-in succeeded with the body field names "${acceptedShape}", NOT the "${CANDIDATE_FIELD_SHAPES[0]?.label}" the integration sends today — AUTH_SHAPE.fields needs updating to match.`
+      : '';
 
   /* STAGE 2 — ask about a card, with the token from stage 1. */
   const controller = new AbortController();
@@ -251,7 +274,53 @@ export async function testSmartCheckConnection(credentials: {
   }
 
   const bodyText = await res.text().catch(() => '');
-  return done(classifySmartCheckResponse(res.status, bodyText, target.host));
+  const verdict = classifySmartCheckResponse(res.status, bodyText, target.host);
+  return done({ ...verdict, detail: `${verdict.detail}${shapeNote}` });
+}
+
+/**
+ * Sign in, trying each candidate body shape until one is accepted.
+ *
+ * SEPARATED FROM THE TRANSPORT for the same reason classifySmartCheckResponse
+ * is: the host guard refuses loopback, so a stub server cannot reach the real
+ * entry point, and this loop — when to try again and when to stop — would
+ * otherwise be covered only by reading it. `authFn` is injectable purely so a
+ * test can drive every path without a socket.
+ *
+ * THE STOPPING RULE IS THE WHOLE POINT. Only an empty or unparseable 2xx means
+ * "the service ran and did not understand the request". Rejected credentials, a
+ * 404 or a transport failure all say the field names are not the question, and
+ * retrying those would submit the credentials again for no information — which
+ * matters against a partner whose lockout policy is unknown.
+ */
+export async function signInWithCandidateShapes(
+  creds: SmartCheckCredentials,
+  authFn: (
+    c: SmartCheckCredentials,
+    f: { username: string; password: string },
+  ) => Promise<{ token: string }> = authenticate,
+): Promise<{
+  token: string | null;
+  acceptedShape: string | null;
+  error: unknown;
+  tried: string[];
+}> {
+  let error: unknown = null;
+  const tried: string[] = [];
+
+  for (const candidate of CANDIDATE_FIELD_SHAPES) {
+    tried.push(candidate.label);
+    try {
+      const { token } = await authFn(creds, candidate.fields);
+      return { token, acceptedShape: candidate.label, error: null, tried };
+    } catch (e) {
+      error = e;
+      const kind = e instanceof SmartCheckAuthError ? e.failure.kind : 'unknown';
+      if (kind !== 'unreadable') break;
+    }
+  }
+
+  return { token: null, acceptedShape: null, error, tried };
 }
 
 /**
@@ -279,6 +348,8 @@ export async function testSmartCheckConnection(credentials: {
 export function classifySignInFailure(
   e: unknown,
   host: string,
+  /** Field-name shapes attempted, when the empty-2xx probe ran. */
+  tried: string[] = [],
 ): Omit<CscsConnectionTestResult, 'durationMs'> {
   const message = e instanceof Error ? e.message : 'Sign-in failed.';
   const failure = e instanceof SmartCheckAuthError ? e.failure : undefined;
@@ -303,6 +374,27 @@ export function classifySignInFailure(
       ? `${lead} The service replied: ${failure.bodySnippet}`
       : lead;
 
+  /*
+   * The AWS identifiers matter more than anything we can conclude from here:
+   * they are what CSCS support can trace a single request by. x-amzn-errortype
+   * additionally says whether the API gateway answered or the service behind it
+   * did — "refused at the door" versus "ran and returned nothing".
+   */
+  const headers = failure?.responseHeaders;
+  const trace = headers
+    ? ` Response headers: ${Object.entries(headers)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join('; ')}.`
+    : '';
+  /** What we sent, so it can be compared against the documentation directly. */
+  const sent = failure?.fieldShape
+    ? ` We sent POST ${AUTH_SHAPE.path} with headers content-type, accept, x-api-key and user-agent, and a JSON body of {${failure.fieldShape.replace(' / ', ', ')}}.`
+    : '';
+  const probed =
+    tried.length > 1
+      ? ` Body field names tried, in order: ${tried.join(', ')} — all refused the same way.`
+      : '';
+
   if (kind === 'no-token') {
     return {
       outcome: 'SIGN_IN_NO_TOKEN',
@@ -323,9 +415,9 @@ export function classifySignInFailure(
       severity: 'error',
       stage: 'sign-in',
       title: 'Smart Check rejected the credentials.',
-      detail: withBody(
+      detail: `${withBody(
         `The username, password or API key was not accepted by /authenticate${facts ? ` (${facts})` : ''}. Check all three against the partner documentation, including for leading or trailing spaces.`,
-      ),
+      )}${trace}`,
     };
   }
 
@@ -338,9 +430,9 @@ export function classifySignInFailure(
       stage: 'sign-in',
       // The host is NOT blamed. It answered, and quickly.
       title: `${host} answered the sign-in, but not with JSON.`,
-      detail: withBody(
-        `The connection, the address and the TLS handshake are all fine — the service replied${facts ? ` with ${facts}` : ''} and the body could not be parsed. An empty body here usually means /authenticate did not accept the request as formed, most often the field names or the API key, rather than that the username or password is wrong.`,
-      ),
+      detail: `${withBody(
+        `The connection, the address and the TLS handshake are all fine — the service replied${facts ? ` with ${facts}` : ''} and the body could not be parsed. An empty body here means /authenticate ran and did not accept the request as formed — the field names, an unexpected header, or a missing field — rather than that the username or password is wrong.`,
+      )}${sent}${probed}${trace}`,
     };
   }
 
@@ -352,9 +444,9 @@ export function classifySignInFailure(
       severity: 'error',
       stage: 'sign-in',
       title: `Smart Check refused the sign-in${failure?.status ? ` with HTTP ${failure.status}` : ''}.`,
-      detail: withBody(
+      detail: `${withBody(
         `The host was reached and answered${facts ? ` (${facts})` : ''}. A 404 means the sign-in path is wrong for this base URL; a 5xx means the partner service is having trouble.`,
-      ),
+      )}${sent}${trace}`,
     };
   }
 

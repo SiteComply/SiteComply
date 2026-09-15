@@ -22,7 +22,11 @@ import {
   bodySnippet,
   clearSmartCheckTokens,
 } from '../services/cscs/smartCheckAuth';
-import { classifySignInFailure } from '../services/cscs/smartCheckConnectionTest';
+import {
+  classifySignInFailure,
+  signInWithCandidateShapes,
+} from '../services/cscs/smartCheckConnectionTest';
+import { CANDIDATE_FIELD_SHAPES, AUTH_SHAPE, keptHeaders } from '../services/cscs/smartCheckAuth';
 
 let pass = 0;
 let fail = 0;
@@ -206,6 +210,124 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
     // The key is short and unredactable by pattern, so assert the rule we CAN
     // keep: nothing we send is added to the message by us.
     ok('the credentials are not added to the verdict by us', !/stub-password|stub-user/.test(`${v.title} ${v.detail}`), v.detail);
+  }
+
+  // ── 12. the request we put on the wire ──────────────────────────────────
+  // Captured from the stub, not read off AUTH_SHAPE: undici adds headers of its
+  // own, and reading the constants would miss them.
+  {
+    const sent: { headers: Record<string, string>; body: string }[] = [];
+    const rec = createServer((req, res) => {
+      const cs: Buffer[] = [];
+      req.on('data', (c) => cs.push(c));
+      req.on('end', () => {
+        sent.push({
+          headers: req.headers as Record<string, string>,
+          body: Buffer.concat(cs).toString(),
+        });
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end('{"responseData":{"idToken":"t"}}');
+      });
+    });
+    await new Promise<void>((r) => rec.listen(0, '127.0.0.1', r));
+    const p = (rec.address() as AddressInfo).port;
+    clearSmartCheckTokens();
+    await authenticate(creds(`http://127.0.0.1:${p}`));
+    const req = sent[0]!;
+
+    ok('we identify ourselves, not as "node"', req.headers['user-agent'] === AUTH_SHAPE.userAgent, req.headers['user-agent']);
+    ok('the api key rides on x-api-key', req.headers['x-api-key'] === 'stub-key', Object.keys(req.headers));
+    ok('content-type is application/json', req.headers['content-type'] === 'application/json');
+    ok('the body is the documented two fields and nothing else',
+      JSON.stringify(Object.keys(JSON.parse(req.body)).sort()) === '["password","username"]', req.body);
+
+    // The live path must ALWAYS send AUTH_SHAPE.fields — the probe is the
+    // connection test's business and must never leak into verification.
+    ok('authenticate() with no override uses AUTH_SHAPE.fields',
+      JSON.parse(req.body)[AUTH_SHAPE.fields.username] === 'stub-user', req.body);
+
+    // …and an override really does change them.
+    sent.length = 0;
+    clearSmartCheckTokens();
+    await authenticate(creds(`http://127.0.0.1:${p}`), { username: 'userName', password: 'password' });
+    ok('an override changes the field name', 'userName' in JSON.parse(sent[0]!.body), sent[0]!.body);
+
+    rec.closeAllConnections();
+    await new Promise<void>((r) => rec.close(() => r()));
+  }
+
+  // ── 13. the candidate-shape probe: when it retries, and when it must not ─
+  {
+    const empty200 = new SmartCheckAuthError('empty', { kind: 'unreadable', status: 200, bodyBytes: 0 });
+    const refused = new SmartCheckAuthError('no', { kind: 'rejected', status: 403 });
+    const gone = new SmartCheckAuthError('nope', { kind: 'transport' });
+
+    let calls: string[] = [];
+    const fake = (results: (unknown | { token: string })[]) => {
+      let i = 0;
+      return async (_c: unknown, f: { username: string; password: string }) => {
+        calls.push(f.username);
+        const r = results[i++];
+        if (r instanceof Error) throw r;
+        return r as { token: string };
+      };
+    };
+    const C = creds('http://x');
+
+    calls = [];
+    let r = await signInWithCandidateShapes(C, fake([empty200, { token: 'tok' }]) as never);
+    ok('an empty 2xx makes it try the next shape', calls.length === 2, calls);
+    ok('  and it reports which shape was accepted', r.acceptedShape === CANDIDATE_FIELD_SHAPES[1]!.label, r.acceptedShape);
+    ok('  returning the token', r.token === 'tok', r.token);
+
+    calls = [];
+    r = await signInWithCandidateShapes(C, fake([refused]) as never);
+    ok('rejected credentials do NOT trigger a second submission', calls.length === 1, calls);
+    ok('  and the error is carried out', r.error === refused);
+
+    calls = [];
+    r = await signInWithCandidateShapes(C, fake([gone]) as never);
+    ok('a transport failure does NOT trigger a second submission', calls.length === 1, calls);
+
+    calls = [];
+    r = await signInWithCandidateShapes(C, fake([{ token: 'first' }]) as never);
+    ok('a first-shape success sends exactly one request', calls.length === 1, calls);
+    ok('  and names the current shape', r.acceptedShape === CANDIDATE_FIELD_SHAPES[0]!.label, r.acceptedShape);
+
+    calls = [];
+    r = await signInWithCandidateShapes(C, fake([empty200, empty200]) as never);
+    ok('every shape failing stops at the list length', calls.length === CANDIDATE_FIELD_SHAPES.length, calls);
+    ok('  the probe is capped at two — a partner lockout is a real risk', CANDIDATE_FIELD_SHAPES.length === 2, CANDIDATE_FIELD_SHAPES.length);
+    const v = classifySignInFailure(r.error, HOST, r.tried);
+    ok('  the verdict lists what was tried', /Body field names tried, in order/.test(v.detail ?? ''), v.detail);
+  }
+
+  // ── 14. response headers: allow-list, and they reach the admin ──────────
+  {
+    const h = new Headers({
+      'x-amzn-requestid': 'abc-123',
+      'x-amzn-errortype': 'ForbiddenException',
+      'content-length': '0',
+      'set-cookie': 'session=secret',
+      'x-secret-thing': 'nope',
+    });
+    const kept = keptHeaders(h)!;
+    ok('the AWS request id is kept (CSCS can trace it)', kept['x-amzn-requestid'] === 'abc-123', kept);
+    ok('the AWS error type is kept', kept['x-amzn-errortype'] === 'ForbiddenException', kept);
+    ok('an unlisted header is dropped', !('x-secret-thing' in kept), kept);
+    ok('set-cookie is dropped', !('set-cookie' in kept), kept);
+    ok('no headers at all yields undefined', keptHeaders(new Headers()) === undefined);
+
+    const e = new SmartCheckAuthError('x', {
+      kind: 'unreadable', status: 200, bodyBytes: 0,
+      contentType: 'application/json', responseHeaders: kept,
+      fieldShape: 'username / password',
+    });
+    const v = classifySignInFailure(e, HOST);
+    ok('the request id reaches the admin', /abc-123/.test(v.detail ?? ''), v.detail);
+    ok('the request we sent is echoed back', /POST \/authenticate/.test(v.detail ?? ''), v.detail);
+    ok('  including the body field names', /username, password/.test(v.detail ?? ''), v.detail);
+    ok('  and the headers we set', /x-api-key/.test(v.detail ?? ''), v.detail);
   }
 
   server.closeAllConnections();

@@ -41,8 +41,24 @@ export const AUTH_SHAPE = {
   method: 'POST' as const,
   /** The API key header. V2.6 uses x-api-key, not Authorization. */
   apiKeyHeader: 'x-api-key',
-  /** Request body field names. */
+  /**
+   * Request body field names.
+   *
+   * UNCONFIRMED against V2.6. The documented RESPONSE uses `userName` with a
+   * capital N, so lowercase here is an assumption, and a wrong field name is a
+   * live candidate for the empty HTTP 200 the service returns: the request gets
+   * past the gateway, the backend parses it, finds no credentials where it
+   * expects them and answers with nothing. See CANDIDATE_FIELD_SHAPES.
+   */
   fields: { username: 'username', password: 'password' },
+  /**
+   * Who we say we are.
+   *
+   * Node's fetch sends `user-agent: node` when nothing is set. An unidentified
+   * agent is both poor manners toward a partner and a plausible trigger for bot
+   * mitigation, and it gives CSCS support nothing to search their logs for.
+   */
+  userAgent: 'SiteComply/1.0 (+https://sitecomply.co.uk)',
   /** The documented wrapper. V2.6 returns everything under `responseData`. */
   responseWrappers: ['responseData'],
   /**
@@ -88,6 +104,29 @@ export const AUTH_SHAPE = {
    */
   sendApiKeyWithToken: true,
 };
+
+/**
+ * Body shapes to try when the service answers 2xx with nothing.
+ *
+ * FOR THE CONNECTION TEST ONLY. The live verification path uses AUTH_SHAPE and
+ * nothing else — it must be deterministic, and a provider that quietly tries
+ * several shapes would hide a contract change instead of reporting it.
+ *
+ * This is not guessing: the test REPORTS which shape the service accepted, and
+ * the answer then gets written into AUTH_SHAPE.fields deliberately. The first
+ * entry is what we send today, so a run that succeeds on entry one proves the
+ * current shape is right.
+ *
+ * Kept to two because each entry is another credential submission against a
+ * partner whose lockout policy we do not know.
+ */
+export const CANDIDATE_FIELD_SHAPES: {
+  label: string;
+  fields: { username: string; password: string };
+}[] = [
+  { label: 'username / password', fields: { username: 'username', password: 'password' } },
+  { label: 'userName / password', fields: { username: 'userName', password: 'password' } },
+];
 
 /** Refresh this long before the stated expiry, so a call never races it. */
 const EXPIRY_SAFETY_MARGIN_MS = 60_000;
@@ -141,6 +180,18 @@ export interface SmartCheckAuthFailure {
   bodySnippet?: string;
   /** undici's error code on a transport failure (ENOTFOUND, ECONNREFUSED…). */
   code?: string;
+  /**
+   * A handful of response headers, by name.
+   *
+   * `x-amzn-requestid` and `x-amz-apigw-id` are the identifiers CSCS support
+   * can trace a single request by — worth more than any amount of guessing
+   * from this side. `x-amzn-errortype` says whether the ANSWER came from the
+   * API gateway or from the service behind it, which is the difference between
+   * "our credentials were refused" and "the service ran and returned nothing".
+   */
+  responseHeaders?: Record<string, string>;
+  /** Which body field names produced this result. */
+  fieldShape?: string;
   /** True when the request was aborted by our own timeout. */
   timedOut?: boolean;
 }
@@ -172,6 +223,33 @@ export class SmartCheckAuthError extends CscsVerifyError {
  * body — one containing a token — arriving in a shape we did not expect.
  */
 const MAX_SNIPPET = 300;
+
+/**
+ * Response headers an admin may see.
+ *
+ * An ALLOW-LIST, not a block-list. A partner can set any header it likes,
+ * including ones that echo a credential, so the safe default is to keep
+ * nothing and name the exceptions.
+ */
+const KEEP_HEADERS = [
+  'content-length',
+  'content-encoding',
+  'x-amzn-requestid',
+  'x-amzn-errortype',
+  'x-amz-apigw-id',
+  'x-cache',
+  'server',
+  'via',
+];
+
+export function keptHeaders(h: Headers): Record<string, string> | undefined {
+  const out: Record<string, string> = {};
+  for (const name of KEEP_HEADERS) {
+    const v = h.get(name);
+    if (v) out[name] = v.slice(0, 120);
+  }
+  return Object.keys(out).length ? out : undefined;
+}
 
 export function bodySnippet(text: string): string | undefined {
   const collapsed = text.replace(/\s+/g, ' ').trim();
@@ -251,6 +329,12 @@ function expiryFrom(payload: Record<string, unknown>, now: number): number {
 /** Exchange credentials for a token. No caching: see getSmartCheckToken. */
 export async function authenticate(
   creds: SmartCheckCredentials,
+  /**
+   * Override the body field names. Used ONLY by the connection test, which
+   * probes candidate shapes when the service answers 2xx with nothing. The live
+   * path never passes this, so it always sends AUTH_SHAPE.fields.
+   */
+  fields: { username: string; password: string } = AUTH_SHAPE.fields,
 ): Promise<{ token: string; expiresAt: number }> {
   const target = new URL(
     `${creds.apiUrl.replace(/\/+$/, '')}${AUTH_SHAPE.path}`,
@@ -266,10 +350,12 @@ export async function authenticate(
         'content-type': 'application/json',
         accept: 'application/json',
         [AUTH_SHAPE.apiKeyHeader]: creds.apiKey,
+        // Node's fetch otherwise sends `user-agent: node`.
+        'user-agent': AUTH_SHAPE.userAgent,
       },
       body: JSON.stringify({
-        [AUTH_SHAPE.fields.username]: creds.username,
-        [AUTH_SHAPE.fields.password]: creds.password,
+        [fields.username]: creds.username,
+        [fields.password]: creds.password,
       }),
       signal: controller.signal,
     });
@@ -291,7 +377,7 @@ export async function authenticate(
       aborted
         ? `Smart Check did not answer within ${TIMEOUT_MS / 1000} seconds (${target.host}).`
         : `Could not reach ${target.host} to sign in to Smart Check${code ? ` (${code})` : ''}.`,
-      { kind: 'transport', code, timedOut: aborted },
+      { kind: 'transport', code, timedOut: aborted, fieldShape: `${fields.username} / ${fields.password}` },
       e,
       true,
     );
@@ -317,6 +403,8 @@ export async function authenticate(
     contentType,
     bodyBytes: Buffer.byteLength(rawBody),
     bodySnippet: bodySnippet(rawBody),
+    responseHeaders: keptHeaders(res.headers),
+    fieldShape: `${fields.username} / ${fields.password}`,
   };
 
   if (res.status === 401 || res.status === 403) {
