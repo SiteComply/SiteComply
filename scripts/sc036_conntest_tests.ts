@@ -62,7 +62,11 @@ for (const s of [401, 403]) {
 const nf = classifySmartCheckResponse(404, '', H);
 check('404 → CARD_NOT_FOUND', nf.outcome === 'CARD_NOT_FOUND', nf.outcome);
 check('404 is a WARNING, not a pass and not a failure', nf.severity === 'warning' && !nf.ok, `${nf.severity}/ok=${nf.ok}`);
-check('404 states both readings', /matched no record/i.test(nf.detail) && /not the one CSCS publish/i.test(nf.detail));
+check('404 states both readings', /matched no record/i.test(nf.detail) && /not the path CSCS publish/i.test(nf.detail), nf.detail);
+// The first live attempt's most valuable output is that sign-in worked; a
+// warning-coloured card must not read as "nothing works".
+check('404 leads with the fact that sign-in succeeded', /Signed in successfully/i.test(nf.title), nf.title);
+check('404 says the credentials are confirmed', /credentials are correct/i.test(nf.detail));
 
 const rl = classifySmartCheckResponse(429, '', H);
 check('429 → RATE_LIMITED / warning', rl.outcome === 'RATE_LIMITED' && rl.severity === 'warning', rl.outcome);

@@ -73,6 +73,15 @@ export const REQUEST_SHAPE = {
    * path is the outstanding item — see docs/CSCS-CUTOVER.md.
    */
   path: '/v1/card/verify',
+  /**
+   * Whether `path` above is CONFIRMED against the documentation.
+   *
+   * False, and it matters: a 404 from the card stage means "no such card" if the
+   * path is right and "no such endpoint" if it is not. Reporting the first when
+   * the second is true would read as a clean pass. Until this is true, the
+   * connection test says which it cannot distinguish.
+   */
+  pathConfirmed: false,
   method: 'POST' as const,
   /** Request body field names. */
   fields: { cardNumber: 'cardNumber', scheme: 'scheme' },

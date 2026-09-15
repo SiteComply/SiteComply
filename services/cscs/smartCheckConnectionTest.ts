@@ -320,9 +320,14 @@ export function classifySmartCheckResponse(
       ok: false,
       severity: 'warning',
       httpStatus: status,
-      title: `${host} answered, but the result is inconclusive.`,
-      detail:
-        'A 404 means either that the test card number matched no record — which would mean the integration is working — or that the request path is not the one CSCS publish. Confirm the path with the partner documentation before enabling verification.',
+      // Reaching this point means stage 1 PASSED, and that is the most valuable
+      // thing a first live attempt can establish. Lead with it: otherwise a
+      // warning-coloured card reads as "nothing works" when in fact the base
+      // URL and all four credentials have just been proven.
+      title: `Signed in successfully. ${host} answered the card call, but inconclusively.`,
+      detail: REQUEST_SHAPE.pathConfirmed
+        ? 'A 404 means the test card number matched no record, which is the expected answer for an unknown card.'
+        : 'Authentication worked, so the base URL and all four credentials are correct. The 404 is ambiguous only because the card-validation path is not yet confirmed: it means either that the card matched no record, or that this is not the path CSCS publish. Confirm the path, then run this again.',
     };
   }
 
