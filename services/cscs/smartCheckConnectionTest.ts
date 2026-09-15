@@ -402,8 +402,12 @@ export function classifySignInFailure(
       ok: false,
       severity: 'error',
       stage: 'sign-in',
-      title: 'Signed in, but no token came back.',
-      detail: `${message} The expected field names are listed in AUTH_SHAPE and need confirming against the partner documentation.`,
+      // "Signed in" was too generous. A partner that wraps its answer in
+      // responseCode / errorCode reports application-level failures INSIDE an
+      // HTTP 200, so a 200 with no token may mean the credentials were refused,
+      // not that the field names moved. The title no longer asserts which.
+      title: 'Smart Check answered, but the integration found no token.',
+      detail: `${message}${trace}`,
     };
   }
 

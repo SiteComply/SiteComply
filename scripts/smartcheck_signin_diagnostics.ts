@@ -26,7 +26,14 @@ import {
   classifySignInFailure,
   signInWithCandidateShapes,
 } from '../services/cscs/smartCheckConnectionTest';
-import { CANDIDATE_FIELD_SHAPES, AUTH_SHAPE, keptHeaders } from '../services/cscs/smartCheckAuth';
+import {
+  CANDIDATE_FIELD_SHAPES,
+  AUTH_SHAPE,
+  keptHeaders,
+  describeShape,
+  shapeSummary,
+  tokenLikePaths,
+} from '../services/cscs/smartCheckAuth';
 
 let pass = 0;
 let fail = 0;
@@ -328,6 +335,63 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
     ok('the request we sent is echoed back', /POST \/authenticate/.test(v.detail ?? ''), v.detail);
     ok('  including the body field names', /username, password/.test(v.detail ?? ''), v.detail);
     ok('  and the headers we set', /x-api-key/.test(v.detail ?? ''), v.detail);
+  }
+
+  // ── 15. the response SHAPE: structure shown, values masked ─────────────
+  // The envelope the owner reported: responseMethod, responseMessage,
+  // responseData, responseCode, errorCode — an application-level outcome
+  // wrapped inside an HTTP 200.
+  {
+    const JWT = 'eyJ' + 'a'.repeat(800);
+    const envelope = {
+      responseMethod: 'authenticate',
+      responseMessage: 'Invalid credentials for bob@example.com',
+      responseCode: '401',
+      errorCode: 'AUTH_001',
+      responseData: { security: { idToken: JWT, accessToken: 'b'.repeat(700) }, userName: 'jsmith' },
+    };
+    const shape = shapeSummary(envelope);
+
+    ok('the token value is never printed', !shape.includes(JWT.slice(0, 40)), shape.slice(0, 120));
+    ok('  it is described by type and length instead', /idToken: <string, 803 chars>/.test(shape), shape);
+    ok('the envelope message IS shown — it is the diagnosis', /Invalid credentials/.test(shape), shape);
+    ok('  but a person in it is still redacted', !shape.includes('bob@example.com'), shape);
+    ok('the response code is shown', /responseCode: "401"/.test(shape), shape);
+    ok('the error code is shown', /errorCode: "AUTH_001"/.test(shape), shape);
+    ok('a non-envelope string is masked, not shown', !/jsmith/.test(shape), shape);
+    ok('nesting is preserved', /responseData: \{security: \{/.test(shape), shape);
+
+    const paths = tokenLikePaths(envelope);
+    ok('a renamed/renested token is located', paths.some((p) => p.startsWith('responseData.security.idToken')), paths);
+    ok('  with its length, not its value', /803 chars/.test(paths.join('|')), paths);
+    ok('  and the second one too', paths.some((p) => p.includes('accessToken')), paths);
+    ok('an empty responseData reports as null', /responseData: null/.test(shapeSummary({ responseData: null })));
+    ok('no token-like field yields no paths', tokenLikePaths({ responseData: { a: 1 } }).length === 0);
+    ok('depth is bounded', describeShape({ a: { b: { c: { d: { e: { f: { g: 1 } } } } } } }).includes('<object>'));
+    ok('the summary is capped', shapeSummary({ big: Object.fromEntries(Array.from({ length: 200 }, (_, i) => [`k${i}`, 'x'])) }).length <= 901);
+  }
+
+  // ── 16. that shape reaches the admin, end to end ───────────────────────
+  {
+    reply = {
+      status: 200,
+      body: JSON.stringify({
+        responseMethod: 'authenticate',
+        responseMessage: 'Success',
+        responseCode: '200',
+        errorCode: null,
+        responseData: { security: { idToken: 'x'.repeat(500) } },
+      }),
+    };
+    const e = await signInFailure(base);
+    ok('a token nested elsewhere still fails loudly', e.failure.kind === 'no-token', e.failure.kind);
+    ok('  the message locates it', /responseData\.security\.idToken/.test(e.message), e.message);
+    ok('  and prints the masked shape', /responseMethod: "authenticate"/.test(e.message), e.message);
+    ok('  the failure carries the shape as data too', /responseData/.test(e.failure.responseShape ?? ''), e.failure.responseShape);
+
+    const v = classifySignInFailure(e, HOST);
+    ok('  the verdict no longer claims we signed in', !/^Signed in/.test(v.title), v.title);
+    ok('  the shape reaches the admin', /security/.test(v.detail ?? ''), v.detail);
   }
 
   server.closeAllConnections();

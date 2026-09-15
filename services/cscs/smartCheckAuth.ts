@@ -192,6 +192,8 @@ export interface SmartCheckAuthFailure {
   responseHeaders?: Record<string, string>;
   /** Which body field names produced this result. */
   fieldShape?: string;
+  /** The parsed response rendered as structure, with values masked. */
+  responseShape?: string;
   /** True when the request was aborted by our own timeout. */
   timedOut?: boolean;
 }
@@ -249,6 +251,106 @@ export function keptHeaders(h: Headers): Record<string, string> | undefined {
     if (v) out[name] = v.slice(0, 120);
   }
   return Object.keys(out).length ? out : undefined;
+}
+
+/**
+ * Envelope fields whose VALUES are safe to show, and are the diagnosis.
+ *
+ * A partner that wraps its answer in responseCode / responseMessage / errorCode
+ * is reporting application-level outcomes INSIDE an HTTP 200 — "invalid
+ * credentials" and "success" arrive with the same status line. Masking those
+ * values would hide the only sentence that says which happened.
+ *
+ * Everything not on this list is reduced to its type and size. The list holds
+ * no field that could carry a credential, and the values still pass through
+ * redact() in case a message quotes a user.
+ */
+const SAFE_VALUE_FIELDS = new Set([
+  'responseCode',
+  'responseMessage',
+  'responseMethod',
+  'errorCode',
+  'errorMessage',
+  'status',
+  'statusCode',
+  'message',
+  'error',
+  'success',
+]);
+
+const SHAPE_MAX_DEPTH = 6;
+const SHAPE_MAX_KEYS = 40;
+const SHAPE_MAX_CHARS = 900;
+
+/**
+ * Render a parsed response as its STRUCTURE, with values masked.
+ *
+ * Keys at every depth, because "no token was found" is unanswerable without
+ * knowing what the response actually contained and where. Strings become
+ * <string, N chars> — enough to recognise a 900-character JWT from a 3-letter
+ * status code without printing either.
+ */
+export function describeShape(v: unknown, depth = 0, key = ''): string {
+  if (v === null) return 'null';
+  if (v === undefined) return 'undefined';
+  if (Array.isArray(v)) {
+    if (depth >= SHAPE_MAX_DEPTH) return `<array, ${v.length} items>`;
+    return v.length === 0
+      ? '[]'
+      : `[${describeShape(v[0], depth + 1, key)}${v.length > 1 ? `, …${v.length - 1} more` : ''}]`;
+  }
+  if (typeof v === 'object') {
+    if (depth >= SHAPE_MAX_DEPTH) return '<object>';
+    const keys = Object.keys(v as Record<string, unknown>);
+    const shown = keys.slice(0, SHAPE_MAX_KEYS);
+    const body = shown
+      .map((k) => `${k}: ${describeShape((v as Record<string, unknown>)[k], depth + 1, k)}`)
+      .join(', ');
+    const more = keys.length > shown.length ? `, …${keys.length - shown.length} more` : '';
+    return `{${body}${more}}`;
+  }
+  if (typeof v === 'string') {
+    // The envelope's own words, or the shape of the value. Never both.
+    if (SAFE_VALUE_FIELDS.has(key)) {
+      return JSON.stringify(redact(v).slice(0, 120));
+    }
+    return `<string, ${v.length} chars>`;
+  }
+  if (typeof v === 'number' || typeof v === 'boolean') {
+    return SAFE_VALUE_FIELDS.has(key) ? String(v) : `<${typeof v}>`;
+  }
+  return `<${typeof v}>`;
+}
+
+/** describeShape, capped for a message an admin reads on one screen. */
+export function shapeSummary(v: unknown): string {
+  const text = describeShape(v);
+  return text.length > SHAPE_MAX_CHARS ? `${text.slice(0, SHAPE_MAX_CHARS)}…` : text;
+}
+
+/**
+ * Every path whose KEY looks like it could hold a token.
+ *
+ * Reports, never adopts. If the partner renamed idToken, this says exactly
+ * where it went and AUTH_SHAPE.tokenFields gets corrected by hand — picking one
+ * automatically would be the accessToken mistake again, where the wrong token
+ * authenticates and then fails the card call as "bad credentials".
+ */
+export function tokenLikePaths(v: unknown, path = '', depth = 0): string[] {
+  if (depth >= SHAPE_MAX_DEPTH || !v || typeof v !== 'object' || Array.isArray(v)) {
+    return [];
+  }
+  const out: string[] = [];
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    const here = path ? `${path}.${k}` : k;
+    if (/token|jwt|bearer|credential|session/i.test(k)) {
+      out.push(
+        typeof val === 'string' ? `${here} (string, ${val.length} chars)` : `${here} (${val === null ? 'null' : typeof val})`,
+      );
+    }
+    out.push(...tokenLikePaths(val, here, depth + 1));
+  }
+  return out;
 }
 
 export function bodySnippet(text: string): string | undefined {
@@ -448,9 +550,17 @@ export async function authenticate(
     //
     // The TOP-LEVEL KEYS are named, not the values. Which fields came back is
     // the answer to "is the request shape wrong", and none of them is a secret.
+    const found = tokenLikePaths(payload);
     throw new SmartCheckAuthError(
-      `Smart Check signed in but no token was found in the response. Expected one of: ${AUTH_SHAPE.tokenFields.join(', ')}. The response carried: ${Object.keys(payload).join(', ') || '(no fields)'}.`,
-      { kind: 'no-token', ...evidence, bodySnippet: undefined },
+      [
+        `Smart Check answered HTTP ${res.status} but no token was found where the integration looks.`,
+        `It looks for ${AUTH_SHAPE.tokenFields.join(' or ')} at the top level and inside ${AUTH_SHAPE.responseWrappers.join(', ')}.`,
+        found.length
+          ? `Token-like fields ARE present at: ${found.join('; ')}.`
+          : 'No field anywhere in the response has a token-like name.',
+        `Response shape (values masked): ${shapeSummary(payload)}`,
+      ].join(' '),
+      { kind: 'no-token', ...evidence, bodySnippet: undefined, responseShape: shapeSummary(payload) },
       undefined,
       false,
     );
