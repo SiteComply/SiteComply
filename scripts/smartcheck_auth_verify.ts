@@ -96,7 +96,17 @@ const fresh = (over: Partial<StubState> = {}): StubState => ({
   lastAuthHeaders: {},
   lastCardHeaders: {},
   authStatus: 200,
-  authBody: { token: 'tok-abc', expiresIn: 3600 },
+  // The CONFIRMED V2.6 /authenticate success body. Both tokens present, wrapped
+  // in responseData, and no expiry field of any kind.
+  authBody: {
+    responseData: {
+      userName: 'partner',
+      userId: 'u-1',
+      idToken: 'ID-TOKEN',
+      accessToken: 'ACCESS-TOKEN',
+      itPartner: 'sitecomply',
+    },
+  },
   cardStatus: 200,
   cardBody: { status: 'VALID', expiry: '2030-01-01' },
   expireFirstCard: false,
@@ -120,7 +130,7 @@ async function main() {
         `x-api-key=${state.lastAuthHeaders[AUTH_SHAPE.apiKeyHeader]}`);
     chk('username and password go in the body',
         state.lastAuthBody?.username === 'USER' && state.lastAuthBody?.password === 'PASS');
-    chk('the token comes back', token === 'tok-abc', token);
+    chk('the token comes back', token === 'ID-TOKEN', token);
     shut(server);
   }
 
@@ -142,7 +152,11 @@ async function main() {
 
   console.log('\n[3] An expired token is not reused');
   {
-    const state = fresh({ authBody: { token: 'short', expiresIn: 1 } });
+    // V2.6 documents no expiry field, but the code still honours one if it ever
+    // appears — so this is a hypothetical response, in the confirmed wrapper.
+    const state = fresh({
+      authBody: { responseData: { idToken: 'short', expiresIn: 1 } },
+    });
     const { server, url } = await stub(state);
     clearSmartCheckTokens();
     const creds = { apiUrl: url, apiKey: 'K', username: 'U', password: 'P' };
@@ -251,7 +265,7 @@ async function main() {
       cardTypeHint: null, expiryHint: null,
     } as never);
     const sent = state.lastCardHeaders['authorization'] ?? '';
-    chk('Authorization carries the bearer token', sent === 'Bearer tok-abc', sent);
+    chk('Authorization carries the bearer token', sent === 'Bearer ID-TOKEN', sent);
     chk('the API key is sent alongside it',
         state.lastCardHeaders[AUTH_SHAPE.apiKeyHeader] === 'K',
         'AUTH_SHAPE.sendApiKeyWithToken — confirm against the documentation');
@@ -260,7 +274,59 @@ async function main() {
     shut(server);
   }
 
-  console.log('\n[10] Without all four credentials it refuses to run');
+  console.log('\n[10] The CONFIRMED V2.6 response shape');
+  {
+    const state = fresh();
+    const { server, url } = await stub(state);
+    clearSmartCheckTokens();
+    const { token } = await authenticate({
+      apiUrl: url, apiKey: 'K', username: 'U', password: 'P',
+    });
+    chk('the token is read from inside responseData', token === 'ID-TOKEN', token);
+    chk('it picks idToken, NOT accessToken', token !== 'ACCESS-TOKEN',
+        'the card endpoint names idToken; an earlier ordering picked accessToken');
+    chk('accessToken is never used as a fallback',
+        !AUTH_SHAPE.tokenFields.includes('accessToken'),
+        AUTH_SHAPE.tokenFields.join(', '));
+    shut(server);
+  }
+
+  console.log('\n[11] No expiry field is documented, so a short life is assumed');
+  {
+    const state = fresh();
+    const { server, url } = await stub(state);
+    clearSmartCheckTokens();
+    const creds = { apiUrl: url, apiKey: 'K', username: 'U', password: 'P' };
+    const { expiresAt } = await authenticate(creds);
+    const minutes = (expiresAt - Date.now()) / 60000;
+    chk('a token with no stated expiry is cached briefly, not forever',
+        minutes > 0 && minutes <= 10, `${minutes.toFixed(1)} minutes`);
+    chk('and it is still cached within that window',
+        (await getSmartCheckToken(creds)) === 'ID-TOKEN' && state.authCalls === 2,
+        `${state.authCalls} sign-ins`);
+    shut(server);
+  }
+
+  console.log('\n[12] If idToken disappears it fails loudly, not quietly');
+  {
+    const state = fresh({
+      authBody: { responseData: { accessToken: 'ONLY-ACCESS', userId: 'u' } },
+    });
+    const { server, url } = await stub(state);
+    clearSmartCheckTokens();
+    let message = '';
+    try {
+      await authenticate({ apiUrl: url, apiKey: 'K', username: 'U', password: 'P' });
+    } catch (e) { message = (e as Error).message; }
+    chk('a response with only accessToken is refused',
+        /no token was found/i.test(message), message);
+    chk('it does not silently send accessToken instead',
+        !message.includes('ONLY-ACCESS'),
+        'a contract change should fail, not be papered over');
+    shut(server);
+  }
+
+  console.log('\n[13] Without all four credentials it refuses to run');
   {
     let message = '';
     try {

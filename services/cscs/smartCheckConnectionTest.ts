@@ -296,14 +296,17 @@ export function classifySmartCheckResponse(
 ): Omit<CscsConnectionTestResult, 'durationMs'> {
   if (status === 401 || status === 403) {
     return {
-      outcome: 'UNAUTHORISED',
+      outcome: 'SIGN_IN_OK_CARD_FAILED',
       stage: 'card-check' as const,
       ok: false,
       severity: 'error',
       httpStatus: status,
-      title: 'The service was reached, but rejected the API key.',
+      // Sign-in already SUCCEEDED to get here, so the credentials are fine and
+      // saying "check the key" would send the reader down the wrong path. Name
+      // the things that are actually still unconfirmed.
+      title: 'Signed in successfully, but the card endpoint refused the token.',
       detail:
-        'The endpoint is correct and reachable. Check the key was copied in full and is active for this environment.',
+        'The credentials are correct — authentication passed. What is still unconfirmed is how the token should be presented: whether the Authorization header wants a bare token or the "Bearer " prefix, and whether x-api-key must be sent alongside it. Both are single values in AUTH_SHAPE.',
     };
   }
 

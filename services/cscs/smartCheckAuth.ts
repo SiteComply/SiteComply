@@ -12,13 +12,14 @@ import { CscsVerifyError } from './CscsProvider';
  * reportDelivery: transport concerns should not be tangled with what a card
  * verification means.
  *
- * WHAT IS KNOWN, AND WHAT IS NOT
+ * WHAT IS KNOWN, AND WHAT IS NOT (as at 2026-09-15)
  *
- *   KNOWN      the protocol shape: credentials in, token out, token used on the
- *              next call. Everything in this file implements that.
- *   NOT KNOWN  the exact response field names and the token header. They live
- *              in AUTH_SHAPE below and NOWHERE else, so confirming them against
- *              the partner documentation is an edit to one object.
+ *   KNOWN      the protocol, the base URL, and the /authenticate response:
+ *              `responseData` wrapping userName, userId, idToken, accessToken
+ *              and itPartner, with NO expiry field of any kind.
+ *   NOT KNOWN  whether the Authorization header wants a bare token or a
+ *              "Bearer " prefix, and whether x-api-key travels with it. Both
+ *              live in AUTH_SHAPE and nowhere else.
  *
  * Nothing here guesses silently: if the response does not carry a recognisable
  * token the call FAILS with a clear message rather than proceeding with
@@ -28,10 +29,10 @@ import { CscsVerifyError } from './CscsProvider';
 /**
  * The one place the partner's authentication contract is encoded.
  *
- * `tokenFields` and `expiryFields` are lists because the documentation names one
- * of them and this code should not fail on a synonym — the same tolerance
- * smartCheckMapper already uses for card responses. Once the real names are
- * confirmed, cut each list down to the single correct value.
+ * CONFIRMED against V2.6 (2026-09-15). The lists that used to hedge across
+ * synonyms have been cut to the documented values, because a hedge is only
+ * useful while the answer is unknown — after that it is a way to silently pick
+ * the wrong one.
  */
 export const AUTH_SHAPE = {
   /** Appended to the configured base URL. */
@@ -41,13 +42,41 @@ export const AUTH_SHAPE = {
   apiKeyHeader: 'x-api-key',
   /** Request body field names. */
   fields: { username: 'username', password: 'password' },
-  /** Response fields that may carry the token. */
-  tokenFields: ['token', 'accessToken', 'access_token', 'idToken', 'jwt'],
-  /** Response fields that may carry a lifetime in SECONDS. */
+  /** The documented wrapper. V2.6 returns everything under `responseData`. */
+  responseWrappers: ['responseData'],
+  /**
+   * The token the CARD endpoint wants: `idToken`.
+   *
+   * V2.6 returns BOTH `idToken` and `accessToken`, and the card endpoint's
+   * documentation names idToken. This list is deliberately one entry: an
+   * earlier version tried accessToken first, which would have authenticated
+   * successfully and then failed the card call with 401 — reported as "Smart
+   * Check rejected our credentials" while the credentials were perfectly fine.
+   *
+   * Do NOT add accessToken as a fallback. If idToken ever stops being present
+   * that is a contract change worth failing loudly on, not one to paper over by
+   * quietly sending the other token.
+   */
+  tokenFields: ['idToken'],
+  /**
+   * V2.6 documents NO expiry field — not expiresIn, expiresAt, ttl or
+   * tokenType. The lists stay only so an undocumented field would still be
+   * honoured if one appears. With none present, the assumed lifetime below
+   * applies and the 401-retry in the provider is what actually handles a stale
+   * token. That is the primary staleness mechanism here, not a safety net.
+   */
   expiryFields: ['expiresIn', 'expires_in', 'ttl'],
-  /** Response fields that may carry an absolute expiry instant. */
   expiryAtFields: ['expiresAt', 'expires_at', 'expiry'],
-  /** How the token is presented on subsequent calls. */
+  /**
+   * How the token is presented on subsequent calls.
+   *
+   * The documentation says the Authorization header "should contain the token
+   * returned by authentication", which does not say whether it wants a bare
+   * token or the conventional `Bearer ` scheme. Bearer is the common reading
+   * and is the default here; if the card call returns 401 after a SUCCESSFUL
+   * sign-in, this prefix is the first thing to try emptying. The connection
+   * test says so in its own words when that happens.
+   */
   tokenHeader: 'Authorization',
   tokenPrefix: 'Bearer ',
   /**
@@ -101,8 +130,8 @@ function pick(payload: Record<string, unknown>, names: string[]): unknown {
   for (const n of names) {
     if (payload[n] !== undefined && payload[n] !== null) return payload[n];
   }
-  // Some APIs nest the token under a wrapper.
-  for (const wrapper of ['data', 'result', 'auth']) {
+  // V2.6 nests everything under `responseData`.
+  for (const wrapper of AUTH_SHAPE.responseWrappers) {
     const inner = payload[wrapper];
     if (inner && typeof inner === 'object') {
       for (const n of names) {
