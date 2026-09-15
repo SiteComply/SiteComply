@@ -13,7 +13,7 @@
 import { readFileSync } from 'fs';
 import {
   CSCS_SCHEMES,
-  SCHEME_LIST_COMPLETE,
+  SCHEME_LIST_EXHAUSTIVE,
   schemesAreUsable,
   schemeById,
   isKnownScheme,
@@ -70,9 +70,28 @@ const read = (p: string) => readFileSync(p, 'utf8');
 
 // ── the scheme list: honest about being incomplete ────────────────────────
 {
-  ok('the scheme list is NOT yet marked complete', SCHEME_LIST_COMPLETE === false);
-  ok('  so it is not offered to operatives yet', schemesAreUsable() === false);
-  ok('the one confirmed id is present', CSCS_SCHEMES.some((s) => s.id === 'C4T'), CSCS_SCHEMES);
+  // Supplied as "at a minimum", so usable is true while exhaustive stays false.
+  // Those are different questions and conflating them would either hide a
+  // working picker or claim a completeness nobody stated.
+  ok('the list is not claimed to be exhaustive', SCHEME_LIST_EXHAUSTIVE === false);
+  ok('  but it IS usable — seventeen is a real choice', schemesAreUsable() === true);
+  ok('all seventeen supplied schemes are present', CSCS_SCHEMES.length === 17, CSCS_SCHEMES.length);
+  // Transcribed, not remembered. A single wrong character fails silently.
+  const SUPPLIED: [string, string][] = [
+    ['C4T', 'CSCS'], ['OUQ', 'JIB PMES'], ['Z2T', 'ECITB ACE'], ['9ZA', 'BESA'],
+    ['ROT', 'IPAF'], ['R7S', 'PASMA'], ['HEZ', 'EUSR'], ['P5Y', 'NPORS'],
+    ['4UC', 'Lantra TTM'], ['JHW', 'AMI'], ['U19', 'ALLMI'], ['MRD', 'TICA'],
+    ['WKN', 'ACAD'], ['62O', 'GEA'], ['WP8', 'ICATS'], ['3W0', 'CSR'],
+    ['LO7', 'ADSA DHF'],
+  ];
+  ok('every id and name matches what was supplied, character for character',
+    SUPPLIED.every(([id, name], i) => CSCS_SCHEMES[i]?.id === id && CSCS_SCHEMES[i]?.name === name),
+    CSCS_SCHEMES);
+  ok('  in the order supplied', CSCS_SCHEMES[0]?.id === 'C4T' && CSCS_SCHEMES[16]?.id === 'LO7');
+  ok('the O/0 pairs are preserved distinctly',
+    schemeById('62O')?.name === 'GEA' && schemeById('3W0')?.name === 'CSR' &&
+    schemeById('620') === undefined && schemeById('3WO') === undefined,
+    'letter O and digit zero confused');
   ok('every entry has an id and a display name',
     CSCS_SCHEMES.every((s) => s.id.trim() && s.name.trim()), CSCS_SCHEMES);
   ok('ids are unique', new Set(CSCS_SCHEMES.map((s) => s.id)).size === CSCS_SCHEMES.length);
@@ -81,8 +100,8 @@ const read = (p: string) => readFileSync(p, 'utf8');
   ok('  and is not treated as known', isKnownScheme('NOPE') === false);
   ok('a blank id is not known', isKnownScheme('') === false && isKnownScheme(null) === false);
   // The flag and the list must agree, or "complete" becomes a lie left behind.
-  ok('the completeness flag is consistent with the list',
-    SCHEME_LIST_COMPLETE ? CSCS_SCHEMES.length > 1 : true, CSCS_SCHEMES.length);
+  ok('usability follows the list, not a hand-maintained flag',
+    schemesAreUsable() === CSCS_SCHEMES.length > 1);
 }
 
 // ── capture: asked, never derived ─────────────────────────────────────────
@@ -96,7 +115,9 @@ const read = (p: string) => readFileSync(p, 'utf8');
   ok('the scheme picker is a SELECT, not a text box',
     form.includes('id="cscsSchemeId"') && form.includes('<select'), 'not a select');
   ok('  populated from the one registry', form.includes('CSCS_SCHEMES.map'));
-  ok('  and hidden until the list is complete', form.includes('schemesAreUsable()'));
+  ok('  and gated on the list being usable', form.includes('schemesAreUsable()'));
+  ok('  with a way out for a scheme that is not listed',
+    /not listed/i.test(form), 'no guidance for an absent scheme');
   ok('both fields are submitted', form.includes("fd.append('surname'") && form.includes("fd.append('cscsSchemeId'"));
 }
 

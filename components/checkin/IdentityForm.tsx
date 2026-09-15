@@ -6,7 +6,11 @@ import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { useToast } from '@/components/ui/Toast';
 import { CSCS_CARD_OPTIONS } from '@/lib/cscs';
-import { CSCS_SCHEMES, schemesAreUsable } from '@/services/cscs/schemes';
+import {
+  CSCS_SCHEMES,
+  schemesAreUsable,
+  SCHEME_LIST_EXHAUSTIVE,
+} from '@/services/cscs/schemes';
 
 export interface IdentityInitial {
   fullName: string;
@@ -308,7 +312,13 @@ export function IdentityForm({
                 </select>
                 <p className="text-xs text-ink-subtle">
                   The scheme that issued your card. Needed to check it against
-                  CSCS.
+                  CSCS.{' '}
+                  {!SCHEME_LIST_EXHAUSTIVE && (
+                    <>
+                      If yours is not listed, leave this blank — your card is
+                      still recorded, it just will not be checked automatically.
+                    </>
+                  )}
                 </p>
               </div>
             ) : null}

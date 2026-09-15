@@ -4,21 +4,22 @@
  * ONE PLACE. The onboarding picker, the admin editor and the lookup all read
  * this, so a scheme exists once or not at all.
  *
- * ──────────────────────────────────────────────────────────────────────────
- * THIS LIST IS INCOMPLETE AND IS NOT READY FOR OPERATIVES.
- *
- * Smart Check covers a few dozen partner schemes. Exactly one id is confirmed:
- * C4T, which appears on the Test Cards / Data page. The rest have to come from
- * CSCS's own documentation, and they are NOT guessable — a scheme id is an
- * externally defined identifier, and inventing one produces a lookup that fails
+ * TRANSCRIBED EXACTLY AS SUPPLIED. These ids are externally defined identifiers
+ * issued by CSCS, and the names are the schemes' own. Neither is ours to tidy,
+ * abbreviate or re-case: a single wrong character produces a lookup that fails
  * and an operative told their valid card was not found.
  *
- * `SCHEME_LIST_COMPLETE` is false until the documented list is in. While it is
- * false the picker says so rather than presenting a one-item menu as if it were
- * the whole choice. Flip it in the same commit that adds the schemes, never
- * before — schemesAreUsable() is what the UI asks, and a test holds the flag to
- * matching the list's actual state.
- * ──────────────────────────────────────────────────────────────────────────
+ * LETTER O VERSUS DIGIT ZERO. Both appear in this list — 62O and LO7 carry the
+ * letter, 3W0 carries the digit — and the two are indistinguishable in most
+ * sans-serif type. A single confusion here fails silently: the lookup returns
+ * "not found" and the worker is told a valid card was not recognised. If any of
+ * OUQ, ROT, 62O, 3W0 or LO7 was mis-transcribed at any point in the chain, this
+ * is the line to check first.
+ *
+ * ORDER IS THE ORDER SUPPLIED, not alphabetical. It may encode prevalence —
+ * CSCS itself is first, and covers the large majority of UK construction — and
+ * reordering someone else's list on a guess is not an improvement. Sorting is a
+ * one-line change if it reads better on a phone.
  */
 
 export interface CscsScheme {
@@ -28,29 +29,46 @@ export interface CscsScheme {
   name: string;
 }
 
-/**
- * Confirmed schemes, in the order they should appear.
- *
- * Add entries here from the documentation. Keep the names exactly as CSCS spell
- * them: these are third-party scheme names, not our labels to tidy up.
- */
 export const CSCS_SCHEMES: CscsScheme[] = [
-  // Confirmed from the Smart Check Test Cards / Data page (2026-09-15).
-  { id: 'C4T', name: 'C4T' },
+  { id: 'C4T', name: 'CSCS' },
+  { id: 'OUQ', name: 'JIB PMES' },
+  { id: 'Z2T', name: 'ECITB ACE' },
+  { id: '9ZA', name: 'BESA' },
+  { id: 'ROT', name: 'IPAF' },
+  { id: 'R7S', name: 'PASMA' },
+  { id: 'HEZ', name: 'EUSR' },
+  { id: 'P5Y', name: 'NPORS' },
+  { id: '4UC', name: 'Lantra TTM' },
+  { id: 'JHW', name: 'AMI' },
+  { id: 'U19', name: 'ALLMI' },
+  { id: 'MRD', name: 'TICA' },
+  { id: 'WKN', name: 'ACAD' },
+  { id: '62O', name: 'GEA' },
+  { id: 'WP8', name: 'ICATS' },
+  { id: '3W0', name: 'CSR' },
+  { id: 'LO7', name: 'ADSA DHF' },
 ];
 
 /**
- * Whether the list above is the full documented set.
+ * Whether the list above is the FULL documented set.
  *
- * FALSE. One id of a few dozen. A picker offering one option implies the others
- * do not exist, which would send an ECS or CPCS holder looking for a scheme that
- * is missing only because we have not typed it in yet.
+ * False: it was supplied as "at a minimum", so more schemes may exist. That does
+ * not stop the picker working — seventeen is a real choice where one was not —
+ * but it does mean a worker may hold a card whose scheme is absent, and the form
+ * has to say what to do about that rather than leave them stuck on a required
+ * field with no correct answer.
  */
-export const SCHEME_LIST_COMPLETE = false;
+export const SCHEME_LIST_EXHAUSTIVE = false;
 
-/** Whether a scheme can be asked of an operative yet. */
+/**
+ * Whether a scheme can be asked of an operative.
+ *
+ * Distinct from exhaustive on purpose. A single-entry menu implies the others do
+ * not exist and is worse than no menu; a list of seventeen is worth offering
+ * even while more may be missing.
+ */
 export function schemesAreUsable(): boolean {
-  return SCHEME_LIST_COMPLETE && CSCS_SCHEMES.length > 0;
+  return CSCS_SCHEMES.length > 1;
 }
 
 /** Look one up. Returns undefined for an id we do not know. */
