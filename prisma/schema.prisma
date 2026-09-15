@@ -1627,10 +1627,16 @@ model CscsConfig {
   /// details stand — distinct from a provider that is configured but failing.
   verificationEnabled Boolean @default(true)
 
-  /// Smart Check partner credentials. apiKey is ENCRYPTED at rest and never
-  /// returned to any client.
-  smartCheckApiUrl String?
-  smartCheckApiKey String?
+  /// Smart Check partner credentials. Smart Check V2.6 authenticates with
+  /// username + password + x-api-key against POST /authenticate to obtain a
+  /// token, and only then validates a card — so all four are required, not just
+  /// a URL and a key.
+  ///
+  /// apiKey and password are ENCRYPTED at rest and never returned to any client.
+  smartCheckApiUrl   String?
+  smartCheckApiKey   String?
+  smartCheckUsername String?
+  smartCheckPassword String?
 
   updatedByAdminId String?
   updatedByName    String?

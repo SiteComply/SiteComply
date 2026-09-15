@@ -11,7 +11,8 @@ export const dynamic = 'force-dynamic';
  * POST /api/admin/settings/cscs/test
  *
  * Run a CSCS Smart Check connection test. Admin write roles only.
- * Body: { smartCheckApiUrl?, smartCheckApiKey? } — form values merged over the
+ * Body: { smartCheckApiUrl?, smartCheckApiKey?, smartCheckUsername?,
+ *         smartCheckPassword? } — form values merged over the
  * stored config, so the test works BEFORE anything is saved (a blank key means
  * "use the stored one", the same convention as the save path).
  *
@@ -27,7 +28,12 @@ async function POSTHandler(req: NextRequest) {
   const auth = requireAdminRole(ADMIN_WRITE_ROLES);
   if (!auth.ok) return auth.response;
 
-  let body: { smartCheckApiUrl?: string; smartCheckApiKey?: string };
+  let body: {
+    smartCheckApiUrl?: string;
+    smartCheckApiKey?: string;
+    smartCheckUsername?: string;
+    smartCheckPassword?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -40,6 +46,8 @@ async function POSTHandler(req: NextRequest) {
   const credentials = await resolveCscsTestCredentials({
     smartCheckApiUrl: body.smartCheckApiUrl,
     smartCheckApiKey: body.smartCheckApiKey,
+    smartCheckUsername: body.smartCheckUsername,
+    smartCheckPassword: body.smartCheckPassword,
   });
 
   const result = await testSmartCheckConnection(credentials);

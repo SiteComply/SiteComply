@@ -101,7 +101,10 @@ async function main() {
   eq('camelCase: VALID', a.status, 'VALID');
   eq('camelCase: verified', a.verified, true);
   eq('camelCase: grade', a.cardType, CscsCardType.BLUE_SKILLED);
-  eq('camelCase: holder', a.holderName, 'A. Worker');
+  // The fixture's holder name was renamed by the Worker -> Operative migration
+  // (smartCheckFixtures.ts); this expectation was not, and nothing ran this
+  // suite to notice. It is sample data, so matching the fixture is correct.
+  eq('camelCase: holder', a.holderName, 'A. Operative');
   eq('camelCase: quals', a.qualifications?.length, 2);
 
   const b = mapSmartCheckResponse(FIXTURES.validManagerSnakeNested!, 'smartcheck', now);

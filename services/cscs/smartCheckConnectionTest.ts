@@ -1,4 +1,9 @@
 import { REQUEST_SHAPE } from './smartCheckProvider';
+import {
+  getSmartCheckToken,
+  authHeaders,
+  clearSmartCheckTokens,
+} from './smartCheckAuth';
 
 /**
  * SC-036 — CSCS Smart Check connection test.
@@ -60,7 +65,13 @@ export type CscsConnectionOutcome =
   | 'UNREADABLE_RESPONSE'
   | 'UNREACHABLE'
   | 'BLOCKED_URL'
-  | 'NOT_CONFIGURED';
+  | 'NOT_CONFIGURED'
+  /** Signed in, but the card endpoint then refused. Distinct from SIGN_IN_*. */
+  | 'SIGN_IN_OK_CARD_FAILED'
+  /** The credentials were rejected by /authenticate. */
+  | 'SIGN_IN_REJECTED'
+  /** Signed in, but no token could be found in the response. */
+  | 'SIGN_IN_NO_TOKEN';
 
 export interface CscsConnectionTestResult {
   outcome: CscsConnectionOutcome;
@@ -73,6 +84,12 @@ export interface CscsConnectionTestResult {
   severity: 'success' | 'warning' | 'error';
   /** One line, safe to display. Never contains the API key. */
   title: string;
+  /**
+   * Which half of V2.6 the result came from. Without this, "unauthorised" could
+   * mean the credentials are wrong OR that sign-in worked and the card endpoint
+   * refused — two different afternoons of debugging.
+   */
+  stage?: 'sign-in' | 'card-check';
   /** What it means and what to do next. */
   detail: string;
   httpStatus?: number;
@@ -115,6 +132,8 @@ function isBlockedHost(hostname: string): boolean {
 export async function testSmartCheckConnection(credentials: {
   apiUrl: string;
   apiKey: string;
+  username: string;
+  password: string;
 }): Promise<CscsConnectionTestResult> {
   const started = Date.now();
   const done = (
@@ -123,15 +142,17 @@ export async function testSmartCheckConnection(credentials: {
 
   const apiUrl = (credentials.apiUrl ?? '').trim();
   const apiKey = (credentials.apiKey ?? '').trim();
+  const username = (credentials.username ?? '').trim();
+  const password = (credentials.password ?? '').trim();
 
-  if (!apiUrl || !apiKey) {
+  if (!apiUrl || !apiKey || !username || !password) {
     return done({
       outcome: 'NOT_CONFIGURED',
       ok: false,
       severity: 'error',
       title: 'Nothing to test yet.',
       detail:
-        'Enter the partner API URL and key above, then run the test. Neither value needs to be saved first.',
+        'Enter the partner API URL, API key, username and password above, then run the test. None of them needs to be saved first.',
     });
   }
 
@@ -170,6 +191,56 @@ export async function testSmartCheckConnection(credentials: {
     });
   }
 
+  /*
+   * STAGE 1 — sign in.
+   *
+   * V2.6 will not answer a card question without a token, so testing the card
+   * endpoint alone could only ever report "unauthorised" and leave the admin
+   * guessing which of four credentials was wrong.
+   */
+  const creds = { apiUrl, apiKey, username, password };
+  let token: string;
+  try {
+    clearSmartCheckTokens();
+    token = await getSmartCheckToken(creds, { forceRefresh: true });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Sign-in failed.';
+    if (/no token was found/i.test(message)) {
+      return done({
+        outcome: 'SIGN_IN_NO_TOKEN',
+        ok: false,
+        severity: 'error',
+        stage: 'sign-in',
+        title: 'Signed in, but no token came back.',
+        detail:
+          'Smart Check accepted the credentials but the response did not contain a token under any name we recognise. The expected field names are listed in AUTH_SHAPE and need confirming against the partner documentation.',
+      });
+    }
+    if (/rejected the username/i.test(message)) {
+      return done({
+        outcome: 'SIGN_IN_REJECTED',
+        ok: false,
+        severity: 'error',
+        stage: 'sign-in',
+        title: 'Smart Check rejected the credentials.',
+        detail:
+          'The username, password or API key was not accepted by /authenticate. Check all three against the partner documentation.',
+      });
+    }
+    // Name the host. A typo in the base URL is the most likely cause, and a
+    // message that omits it makes the admin go looking for a network problem.
+    return done({
+      outcome: 'UNREACHABLE',
+      ok: false,
+      severity: 'error',
+      stage: 'sign-in',
+      title: `Could not reach ${target.host} to sign in to Smart Check.`,
+      detail:
+        'Check the base URL is exactly as issued by CSCS, and that the host is reachable from the internet.',
+    });
+  }
+
+  /* STAGE 2 — ask about a card, with the token from stage 1. */
   const controller = new AbortController();
   const abort = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -179,9 +250,7 @@ export async function testSmartCheckConnection(credentials: {
       method: REQUEST_SHAPE.method,
       headers: {
         // Built per request and never logged, exactly as the live path does.
-        [REQUEST_SHAPE.authHeader]: `${REQUEST_SHAPE.authPrefix}${apiKey}`,
-        'content-type': 'application/json',
-        accept: 'application/json',
+        ...authHeaders(creds, token),
       },
       body: JSON.stringify({
         [REQUEST_SHAPE.fields.cardNumber]: PROBE_CARD_NUMBER,
@@ -228,6 +297,7 @@ export function classifySmartCheckResponse(
   if (status === 401 || status === 403) {
     return {
       outcome: 'UNAUTHORISED',
+      stage: 'card-check' as const,
       ok: false,
       severity: 'error',
       httpStatus: status,
@@ -243,6 +313,7 @@ export function classifySmartCheckResponse(
     // unpublished contract means it may equally be the wrong path.
     return {
       outcome: 'CARD_NOT_FOUND',
+      stage: 'card-check' as const,
       ok: false,
       severity: 'warning',
       httpStatus: status,
@@ -255,6 +326,7 @@ export function classifySmartCheckResponse(
   if (status === 429) {
     return {
       outcome: 'RATE_LIMITED',
+      stage: 'card-check' as const,
       ok: false,
       severity: 'warning',
       httpStatus: status,
@@ -266,6 +338,7 @@ export function classifySmartCheckResponse(
   if (status >= 500) {
     return {
       outcome: 'SERVICE_ERROR',
+      stage: 'card-check' as const,
       ok: false,
       severity: 'error',
       httpStatus: status,
@@ -278,6 +351,7 @@ export function classifySmartCheckResponse(
   if (status >= 400) {
     return {
       outcome: 'REQUEST_REJECTED',
+      stage: 'card-check' as const,
       ok: false,
       severity: 'error',
       httpStatus: status,
@@ -297,6 +371,7 @@ export function classifySmartCheckResponse(
   if (!parsed || typeof parsed !== 'object') {
     return {
       outcome: 'UNREADABLE_RESPONSE',
+      stage: 'card-check' as const,
       ok: false,
       severity: 'warning',
       httpStatus: status,
@@ -308,6 +383,7 @@ export function classifySmartCheckResponse(
 
   return {
     outcome: 'OK',
+    stage: 'card-check' as const,
     ok: true,
     severity: 'success',
     httpStatus: status,

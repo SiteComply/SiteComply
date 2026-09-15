@@ -85,17 +85,17 @@ check(
 console.log('\n[3] Pre-flight guards (no request is made)');
 
 (async () => {
-  const noCreds = await testSmartCheckConnection({ apiUrl: '', apiKey: '' });
+  const noCreds = await testSmartCheckConnection({ apiUrl: '', apiKey: '', username: '', password: '' });
   check('missing both → NOT_CONFIGURED', noCreds.outcome === 'NOT_CONFIGURED', noCreds.outcome);
-  const noKey = await testSmartCheckConnection({ apiUrl: 'https://api.example.co.uk', apiKey: '' });
+  const noKey = await testSmartCheckConnection({ apiUrl: 'https://api.example.co.uk', apiKey: '', username: 'u', password: 'p' });
   check('missing key → NOT_CONFIGURED', noKey.outcome === 'NOT_CONFIGURED', noKey.outcome);
-  const noUrl = await testSmartCheckConnection({ apiUrl: '', apiKey: 'k' });
+  const noUrl = await testSmartCheckConnection({ apiUrl: '', apiKey: 'k', username: 'u', password: 'p' });
   check('missing url → NOT_CONFIGURED', noUrl.outcome === 'NOT_CONFIGURED', noUrl.outcome);
 
-  const http = await testSmartCheckConnection({ apiUrl: 'http://api.example.co.uk', apiKey: 'k' });
+  const http = await testSmartCheckConnection({ apiUrl: 'http://api.example.co.uk', apiKey: 'k', username: 'u', password: 'p' });
   check('http:// refused', http.outcome === 'BLOCKED_URL' && /https/i.test(http.title), http.outcome);
 
-  const junk = await testSmartCheckConnection({ apiUrl: 'not a url', apiKey: 'k' });
+  const junk = await testSmartCheckConnection({ apiUrl: 'not a url', apiKey: 'k', username: 'u', password: 'p' });
   check('malformed url refused', junk.outcome === 'BLOCKED_URL', junk.outcome);
 
   const blocked = [
@@ -109,7 +109,7 @@ console.log('\n[3] Pre-flight guards (no request is made)');
     'https://something.internal',
   ];
   for (const u of blocked) {
-    const r = await testSmartCheckConnection({ apiUrl: u, apiKey: 'k' });
+    const r = await testSmartCheckConnection({ apiUrl: u, apiKey: 'k', username: 'u', password: 'p' });
     check(`SSRF guard blocks ${u}`, r.outcome === 'BLOCKED_URL', r.outcome);
   }
 
@@ -118,6 +118,8 @@ console.log('\n[3] Pre-flight guards (no request is made)');
   const allowedShape = await testSmartCheckConnection({
     apiUrl: 'https://172.32.0.1',
     apiKey: 'k',
+    username: 'u',
+    password: 'p',
   });
   check(
     '172.32.x is public and is NOT blocked (guard is not over-broad)',
@@ -129,6 +131,8 @@ console.log('\n[3] Pre-flight guards (no request is made)');
   const dead = await testSmartCheckConnection({
     apiUrl: 'https://cscs-connection-test.invalid',
     apiKey: 'k',
+    username: 'u',
+    password: 'p',
   });
   check('non-resolving host → UNREACHABLE / error', dead.outcome === 'UNREACHABLE' && !dead.ok, dead.outcome);
   check('names the host so the admin can see the typo', dead.title.includes('cscs-connection-test.invalid'), dead.title);

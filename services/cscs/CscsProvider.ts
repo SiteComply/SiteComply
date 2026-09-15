@@ -74,6 +74,14 @@ export class CscsVerifyError extends Error {
   constructor(
     message: string,
     readonly cause?: unknown,
+    /**
+     * Whether trying again could plausibly succeed — a timeout, a 429, a 5xx.
+     * False for a refusal that will repeat, such as rejected credentials.
+     * Added for V2.6 authentication, where "we could not sign in" and "the card
+     * was rejected" need to be told apart; without it they looked identical and
+     * sent you hunting for the wrong problem.
+     */
+    readonly retryable: boolean = false,
   ) {
     super(message);
     this.name = 'CscsVerifyError';

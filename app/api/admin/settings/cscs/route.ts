@@ -40,6 +40,8 @@ async function POSTHandler(req: NextRequest) {
           : undefined,
       smartCheckApiUrl: str(body.smartCheckApiUrl),
       smartCheckApiKey: str(body.smartCheckApiKey),
+      smartCheckUsername: str(body.smartCheckUsername),
+      smartCheckPassword: str(body.smartCheckPassword),
     },
     { adminId: auth.admin.adminId, name: auth.admin.name },
   );

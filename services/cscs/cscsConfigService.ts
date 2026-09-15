@@ -51,6 +51,9 @@ export interface CscsRuntimeConfig {
   verificationEnabled: boolean;
   apiUrl: string | null;
   apiKey: string | null;
+  /** V2.6 signs in with username + password + apiKey before validating a card. */
+  username: string | null;
+  password: string | null;
   /** Where the provider choice came from, for the settings screen. */
   source: 'database' | 'environment' | 'default';
 }
@@ -86,6 +89,11 @@ export async function getCscsRuntimeConfig(): Promise<CscsRuntimeConfig> {
     apiKey: row?.smartCheckApiKey
       ? decryptSecret(row.smartCheckApiKey)
       : (process.env.CSCS_SMARTCHECK_API_KEY ?? null),
+    username:
+      row?.smartCheckUsername ?? process.env.CSCS_SMARTCHECK_USERNAME ?? null,
+    password: row?.smartCheckPassword
+      ? decryptSecret(row.smartCheckPassword)
+      : (process.env.CSCS_SMARTCHECK_PASSWORD ?? null),
     source,
   };
 }
@@ -100,6 +108,9 @@ export interface CscsConfigView {
   smartCheckApiUrl: string;
   /** Whether a key is stored. The key itself NEVER leaves the server. */
   apiKeySet: boolean;
+  smartCheckUsername: string;
+  /** Whether a password is stored. It NEVER leaves the server. */
+  passwordSet: boolean;
   source: CscsRuntimeConfig['source'];
   /** True when the active provider needs credentials it does not have. */
   needsCredentials: boolean;
@@ -119,9 +130,15 @@ export async function getCscsConfigForAdmin(): Promise<CscsConfigView> {
     verificationEnabled: runtime.verificationEnabled,
     smartCheckApiUrl: row?.smartCheckApiUrl ?? '',
     apiKeySet: !!row?.smartCheckApiKey || !!process.env.CSCS_SMARTCHECK_API_KEY,
+    smartCheckUsername: row?.smartCheckUsername ?? '',
+    passwordSet:
+      !!row?.smartCheckPassword || !!process.env.CSCS_SMARTCHECK_PASSWORD,
     source: runtime.source,
+    // V2.6 needs ALL FOUR. Checking only url+key would let Smart Check be
+    // selected with no way to sign in, which fails at the first check-in
+    // rather than here where it can be corrected.
     needsCredentials:
-      !!descriptor?.requiresCredentials && !(runtime.apiUrl && runtime.apiKey),
+      !!descriptor?.requiresCredentials && !smartCheckCredentialsComplete(runtime),
     providers: CSCS_PROVIDERS,
     configured: !!row,
     updatedByName: row?.updatedByName ?? null,
@@ -144,13 +161,39 @@ export async function getCscsConfigForAdmin(): Promise<CscsConfigView> {
 export async function resolveCscsTestCredentials(form: {
   smartCheckApiUrl?: string;
   smartCheckApiKey?: string;
-}): Promise<{ apiUrl: string; apiKey: string }> {
+  smartCheckUsername?: string;
+  smartCheckPassword?: string;
+}): Promise<{
+  apiUrl: string;
+  apiKey: string;
+  username: string;
+  password: string;
+}> {
   const runtime = await getCscsRuntimeConfig();
   const typed = (v?: string) => (v ?? '').trim();
   return {
     apiUrl: typed(form.smartCheckApiUrl) || (runtime.apiUrl ?? ''),
     apiKey: typed(form.smartCheckApiKey) || (runtime.apiKey ?? ''),
+    username: typed(form.smartCheckUsername) || (runtime.username ?? ''),
+    password: typed(form.smartCheckPassword) || (runtime.password ?? ''),
   };
+}
+
+/**
+ * Are all four V2.6 credentials present?
+ *
+ * ONE predicate, used by the admin view, the save guard and the provider, so
+ * "configured" cannot mean three different things in three places.
+ */
+export function smartCheckCredentialsComplete(runtime: {
+  apiUrl: string | null;
+  apiKey: string | null;
+  username: string | null;
+  password: string | null;
+}): boolean {
+  return Boolean(
+    runtime.apiUrl && runtime.apiKey && runtime.username && runtime.password,
+  );
 }
 
 export interface SaveCscsConfigInput {
@@ -159,6 +202,9 @@ export interface SaveCscsConfigInput {
   smartCheckApiUrl?: string;
   /** Blank means KEEP the stored key — the same convention as the SMS store. */
   smartCheckApiKey?: string;
+  smartCheckUsername?: string;
+  /** Blank means KEEP the stored password. Same convention as the key. */
+  smartCheckPassword?: string;
 }
 
 export async function saveCscsConfig(
@@ -201,15 +247,33 @@ export async function saveCscsConfig(
     ? encryptSecret(apiKeyRaw)
     : (row?.smartCheckApiKey ?? null);
 
+  const username = text(input.smartCheckUsername);
+  const usernameStored =
+    input.smartCheckUsername !== undefined
+      ? username || row?.smartCheckUsername || null
+      : (row?.smartCheckUsername ?? null);
+
+  // Encrypted at rest like the key. A partner password in plaintext would be
+  // the one credential a database dump hands over directly.
+  const passwordRaw = text(input.smartCheckPassword);
+  const passwordStored = passwordRaw
+    ? encryptSecret(passwordRaw)
+    : (row?.smartCheckPassword ?? null);
+
   // REFUSE TO SELECT A PROVIDER THAT CANNOT RUN. Saving "smartcheck" without
   // credentials would produce a screen claiming verification is live while
   // every check fails — the placeholder-setting problem in another shape.
   if (activeProvider === 'smartcheck') {
     const effectiveUrl = apiUrl || row?.smartCheckApiUrl || process.env.CSCS_SMARTCHECK_API_URL;
     const effectiveKey = keyStored || process.env.CSCS_SMARTCHECK_API_KEY;
-    if (!effectiveUrl || !effectiveKey) {
+    // V2.6 signs in before it validates, so a URL and key alone cannot run a
+    // single check. Refusing here beats a screen that claims verification is
+    // live while every check-in fails to authenticate.
+    const effectiveUser = usernameStored || process.env.CSCS_SMARTCHECK_USERNAME;
+    const effectivePass = passwordStored || process.env.CSCS_SMARTCHECK_PASSWORD;
+    if (!effectiveUrl || !effectiveKey || !effectiveUser || !effectivePass) {
       errors.activeProvider =
-        'CSCS Smart Check needs a partner API URL and key before it can be selected.';
+        'CSCS Smart Check needs an API URL, API key, username and password before it can be selected.';
     }
   }
 
@@ -222,6 +286,8 @@ export async function saveCscsConfig(
     verificationEnabled: input.verificationEnabled,
     smartCheckApiUrl: apiUrl || row?.smartCheckApiUrl || null,
     smartCheckApiKey: keyStored,
+    smartCheckUsername: usernameStored,
+    smartCheckPassword: passwordStored,
     updatedByAdminId: admin.adminId,
     updatedByName: admin.name,
   };

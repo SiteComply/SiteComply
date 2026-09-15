@@ -31,6 +31,8 @@ export function CscsProviderSettings({
   );
   const [apiUrl, setApiUrl] = useState(config.smartCheckApiUrl);
   const [apiKey, setApiKey] = useState('');
+  const [username, setUsername] = useState(config.smartCheckUsername);
+  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -62,6 +64,8 @@ export function CscsProviderSettings({
         body: JSON.stringify({
           smartCheckApiUrl: apiUrl,
           smartCheckApiKey: apiKey, // blank → the stored key is used
+          smartCheckUsername: username,
+          smartCheckPassword: password, // blank → the stored password is used
         }),
       });
       const data = await res.json().catch(() => null);
@@ -101,6 +105,8 @@ export function CscsProviderSettings({
           verificationEnabled,
           smartCheckApiUrl: apiUrl,
           smartCheckApiKey: apiKey,
+          smartCheckUsername: username,
+          smartCheckPassword: password,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -265,6 +271,39 @@ export function CscsProviderSettings({
                 className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink disabled:opacity-60"
               />
             </label>
+              {/* SC-001 Phase 2 — V2.6 signs in with username + password +
+                  x-api-key against POST /authenticate before it will answer a
+                  card question, so a URL and key alone cannot run a check. */}
+              <label className="block">
+                <span className="text-sm font-medium text-ink">Username</span>
+                <input
+                  type="text"
+                  value={username}
+                  autoComplete="off"
+                  disabled={!canManage || busy}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink disabled:opacity-60"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-ink">
+                  Password{' '}
+                  {config.passwordSet ? (
+                    <span className="font-normal text-ink-subtle">
+                      &mdash; stored. Leave blank to keep it.
+                    </span>
+                  ) : null}
+                </span>
+                <input
+                  type="password"
+                  value={password}
+                  autoComplete="new-password"
+                  placeholder={config.passwordSet ? '********' : ''}
+                  disabled={!canManage || busy}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink disabled:opacity-60"
+                />
+              </label>
           </div>
         </fieldset>
 

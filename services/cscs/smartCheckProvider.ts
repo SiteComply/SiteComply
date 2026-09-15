@@ -5,6 +5,12 @@ import {
   CscsVerifyError,
 } from './CscsProvider';
 import { mapSmartCheckResponse, type SmartCheckPayload } from './smartCheckMapper';
+import {
+  getSmartCheckToken,
+  authHeaders,
+  clearSmartCheckTokens,
+  type SmartCheckCredentials,
+} from './smartCheckAuth';
 
 /**
  * Official CSCS Smart Check provider (SC-001).
@@ -58,9 +64,6 @@ export const REQUEST_SHAPE = {
   /** Appended to the configured base URL. */
   path: '/v1/card/verify',
   method: 'POST' as const,
-  /** Header carrying the API key. */
-  authHeader: 'Authorization',
-  authPrefix: 'Bearer ',
   /** Request body field names. */
   fields: { cardNumber: 'cardNumber', scheme: 'scheme' },
 };
@@ -68,6 +71,8 @@ export const REQUEST_SHAPE = {
 export interface SmartCheckSettings {
   apiUrl?: string;
   apiKey?: string;
+  username?: string;
+  password?: string;
 }
 
 export class SmartCheckCscsProvider implements CscsProvider {
@@ -83,36 +88,55 @@ export class SmartCheckCscsProvider implements CscsProvider {
    * Refuse rather than pretend. A provider with no endpoint cannot verify
    * anything, and the honest outcome is a check that did not happen.
    */
-  private assertConfigured(): { apiUrl: string; apiKey: string } {
+  private assertConfigured(): SmartCheckCredentials {
     const apiUrl = this.setting('apiUrl', 'CSCS_SMARTCHECK_API_URL');
     const apiKey = this.setting('apiKey', 'CSCS_SMARTCHECK_API_KEY');
-    if (!apiUrl || !apiKey) {
+    const username = this.setting('username', 'CSCS_SMARTCHECK_USERNAME');
+    const password = this.setting('password', 'CSCS_SMARTCHECK_PASSWORD');
+    // All four: V2.6 signs in before it validates, so three of them cannot run
+    // a single check.
+    if (!apiUrl || !apiKey || !username || !password) {
       throw new CscsVerifyError(
-        'CSCS Smart Check is not configured. Add the partner API URL and key in Admin → Settings → Integrations.',
+        'CSCS Smart Check is not configured. Add the partner API URL, API key, username and password in Admin → Settings → Integrations.',
       );
     }
-    return { apiUrl, apiKey };
+    return { apiUrl, apiKey, username, password };
   }
 
   async verifyCard(input: CscsVerifyInput): Promise<CscsVerificationResult> {
-    const { apiUrl, apiKey } = this.assertConfigured();
+    const creds = this.assertConfigured();
     const checkedAt = new Date();
 
+    /**
+     * V2.6 is sign-in-then-validate. A token can expire between being cached
+     * and being used, so a 401 on the card call earns exactly ONE forced
+     * re-authentication and retry. Exactly one: a refresh loop against a
+     * partner API is how an account gets suspended.
+     */
+    let res = await this.callValidate(creds, input, false);
+    if (res.status === 401 || res.status === 403) {
+      clearSmartCheckTokens();
+      res = await this.callValidate(creds, input, true);
+    }
+    return this.readValidateResponse(res, checkedAt);
+  }
+
+  /** One authenticated card-validation request. */
+  private async callValidate(
+    creds: SmartCheckCredentials,
+    input: CscsVerifyInput,
+    forceRefresh: boolean,
+  ): Promise<Response> {
+    const token = await getSmartCheckToken(creds, { forceRefresh });
     const controller = new AbortController();
     const abort = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
-    let res: Response;
     try {
-      res = await fetch(
-        `${apiUrl.replace(/\/+$/, '')}${REQUEST_SHAPE.path}`,
+      return await fetch(
+        `${creds.apiUrl.replace(/\/+$/, '')}${REQUEST_SHAPE.path}`,
         {
           method: REQUEST_SHAPE.method,
-          headers: {
-            // Built per request and never logged.
-            [REQUEST_SHAPE.authHeader]: `${REQUEST_SHAPE.authPrefix}${apiKey}`,
-            'content-type': 'application/json',
-            accept: 'application/json',
-          },
+          // Built per request and never logged.
+          headers: authHeaders(creds, token),
           body: JSON.stringify({
             [REQUEST_SHAPE.fields.cardNumber]: input.cardNumber,
             ...(input.scheme
@@ -124,22 +148,36 @@ export class SmartCheckCscsProvider implements CscsProvider {
       );
     } catch (e) {
       // Network failure or timeout. Deliberately generic: this string can reach
-      // a worker's screen and must never carry the endpoint or the key.
+      // an operative's screen and must never carry the endpoint or a credential.
       throw new CscsVerifyError(
         'Could not reach the CSCS Smart Check service.',
         e,
+        true,
       );
     } finally {
       clearTimeout(abort);
     }
+  }
 
-    // A 404 from a lookup endpoint is a legitimate ANSWER — no such card —
-    // not a transport failure, so it maps rather than throws.
+  /** Turn a validate response into a result, or throw. */
+  private async readValidateResponse(
+    res: Response,
+    checkedAt: Date,
+  ): Promise<CscsVerificationResult> {
+    // A 404 from a lookup endpoint is a legitimate ANSWER — no such card — not
+    // a transport failure, so it maps rather than throws.
     if (res.status === 404) {
-      return mapSmartCheckResponse(
-        { status: 'NOT_FOUND' },
-        this.name,
-        checkedAt,
+      return mapSmartCheckResponse({ status: 'NOT_FOUND' }, this.name, checkedAt);
+    }
+
+    // After the single retry above, a 401/403 here means the credentials are
+    // wrong, not that a token went stale. Say which, or the next person spends
+    // an afternoon on the wrong problem.
+    if (res.status === 401 || res.status === 403) {
+      throw new CscsVerifyError(
+        'CSCS Smart Check rejected our credentials.',
+        undefined,
+        false,
       );
     }
 
@@ -148,6 +186,8 @@ export class SmartCheckCscsProvider implements CscsProvider {
       // verification error body may echo the submitted card number.
       throw new CscsVerifyError(
         `CSCS Smart Check returned HTTP ${res.status}.`,
+        undefined,
+        res.status === 429 || res.status >= 500,
       );
     }
 
@@ -157,6 +197,8 @@ export class SmartCheckCscsProvider implements CscsProvider {
     if (!payload || typeof payload !== 'object') {
       throw new CscsVerifyError(
         'CSCS Smart Check returned an unreadable response.',
+        undefined,
+        true,
       );
     }
 
