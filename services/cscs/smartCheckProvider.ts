@@ -64,27 +64,48 @@ export const REQUEST_SHAPE = {
   /**
    * Appended to the configured base URL.
    *
-   * STILL A GUESS, and the documented base URL now shows it is wrong: that URL
-   * is
-   *   https://cardcheckerprod.cscsonline.uk.com/smarttech/v2
-   * which already carries a version segment, so this would produce
-   *   .../smarttech/v2/v1/card/verify
-   * Two version numbers in one path is not a real endpoint. The card-validation
-   * path is the outstanding item — see docs/CSCS-CUTOVER.md.
+   * CONFIRMED against V2.6 (2026-09-15): the card validation endpoint is
+   * POST /card. The previous value, `/v1/card/verify`, appears nowhere in the
+   * documentation — it was a guess made before the base URL was known, and
+   * appended to that base it produced .../smarttech/v2/v1/card/verify, a URL
+   * with two version segments. It is also why the card stage returned 403: this
+   * gateway answers an unmatched route with 403 and an empty body, which is
+   * indistinguishable from a refused token.
    */
-  path: '/v1/card/verify',
+  path: '/card',
   /**
    * Whether `path` above is CONFIRMED against the documentation.
    *
-   * False, and it matters: a 404 from the card stage means "no such card" if the
-   * path is right and "no such endpoint" if it is not. Reporting the first when
-   * the second is true would read as a clean pass. Until this is true, the
-   * connection test says which it cannot distinguish.
+   * True since 2026-09-15. It matters because a 404 from the card stage means
+   * "no such card" if the path is right and "no such endpoint" if it is not.
+   * With this true the connection test may read a 404 as a card result.
    */
-  pathConfirmed: false,
+  pathConfirmed: true,
   method: 'POST' as const,
-  /** Request body field names. */
-  fields: { cardNumber: 'cardNumber', scheme: 'scheme' },
+  /**
+   * Request body field names.
+   *
+   * V2.6 identifies a card by SCHEME ID + SURNAME + REGISTRATION NUMBER, not by
+   * a single card number — confirmed by the documented endpoint and by the Test
+   * Cards page, whose records are given in exactly those three parts (e.g.
+   * scheme C4T, surname Zhang, registration 14660726).
+   *
+   * That is a different question from the one this integration was built to ask.
+   * The old shape sent `{cardNumber}` alone, which no amount of correcting the
+   * path would have made work.
+   *
+   * THE CASING IS NOT YET CONFIRMED. camelCase is the assumption, on the
+   * strength of `userName` in the sign-in body and `responseData` in its reply.
+   * If the card call fails on field names, this is the line to change — and the
+   * connection test reports the response so it can be seen rather than guessed.
+   */
+  fields: {
+    schemeId: 'schemeId',
+    surname: 'surname',
+    registrationNumber: 'registrationNumber',
+  },
+  /** Whether `fields` above is confirmed. Casing only; the three parts are. */
+  fieldsConfirmed: false,
 };
 
 export interface SmartCheckSettings {
@@ -92,6 +113,41 @@ export interface SmartCheckSettings {
   apiKey?: string;
   username?: string;
   password?: string;
+}
+
+/**
+ * The three parts V2.6 identifies a card by.
+ *
+ * REFUSES rather than improvises. Sending a lookup without a surname or a
+ * scheme id would come back as "not found", and "not found" reaching an
+ * operative at a site gate reads as a rejected card — a competent worker turned
+ * away by our own incomplete request. A refusal that names what is missing is
+ * the honest failure.
+ */
+export function cardRequestBody(input: CscsVerifyInput): Record<string, string> {
+  const registrationNumber = (input.cardNumber ?? '').trim();
+  const surname = (input.surname ?? '').trim();
+  const schemeId = (input.schemeId ?? '').trim();
+
+  const missing = [
+    registrationNumber ? null : 'registration number',
+    surname ? null : 'surname',
+    schemeId ? null : 'scheme ID',
+  ].filter(Boolean);
+
+  if (missing.length) {
+    throw new CscsVerifyError(
+      `CSCS Smart Check needs the ${missing.join(', ')} to look a card up, and ${missing.length > 1 ? 'they are' : 'it is'} not held for this worker.`,
+      undefined,
+      false,
+    );
+  }
+
+  return {
+    [REQUEST_SHAPE.fields.schemeId]: schemeId,
+    [REQUEST_SHAPE.fields.surname]: surname,
+    [REQUEST_SHAPE.fields.registrationNumber]: registrationNumber,
+  };
 }
 
 export class SmartCheckCscsProvider implements CscsProvider {
@@ -146,6 +202,16 @@ export class SmartCheckCscsProvider implements CscsProvider {
     input: CscsVerifyInput,
     forceRefresh: boolean,
   ): Promise<Response> {
+      // BUILT BEFORE THE TRY, deliberately.
+      //
+      // cardRequestBody throws when the worker's details are incomplete, and
+      // inside the try that refusal was caught by the network handler below and
+      // rewrapped as "Could not reach the CSCS Smart Check service" — a missing
+      // surname reported as an outage. Same class of mistake as the sign-in
+      // classifier's catch-all, and worth keeping the two apart rather than
+      // trusting a catch to tell them apart.
+      const body = JSON.stringify(cardRequestBody(input));
+
     const token = await getSmartCheckToken(creds, { forceRefresh });
     const controller = new AbortController();
     const abort = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -156,16 +222,14 @@ export class SmartCheckCscsProvider implements CscsProvider {
           method: REQUEST_SHAPE.method,
           // Built per request and never logged.
           headers: authHeaders(creds, token),
-          body: JSON.stringify({
-            [REQUEST_SHAPE.fields.cardNumber]: input.cardNumber,
-            ...(input.scheme
-              ? { [REQUEST_SHAPE.fields.scheme]: input.scheme }
-              : {}),
-          }),
+          body,
           signal: controller.signal,
         },
       );
     } catch (e) {
+        // Anything that is already a considered verdict passes through. Only a
+        // genuine transport failure becomes "could not reach".
+        if (e instanceof CscsVerifyError) throw e;
       // Network failure or timeout. Deliberately generic: this string can reach
       // an operative's screen and must never carry the endpoint or a credential.
       throw new CscsVerifyError(

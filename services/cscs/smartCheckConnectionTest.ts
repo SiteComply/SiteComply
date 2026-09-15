@@ -6,6 +6,7 @@ import {
   clearSmartCheckTokens,
   SmartCheckAuthError,
   bodySnippet,
+  shapeSummary,
   authenticate,
   CANDIDATE_FIELD_SHAPES,
   CANDIDATE_AUTH_PRESENTATIONS,
@@ -54,14 +55,24 @@ import type { SmartCheckCredentials } from './smartCheckAuth';
 const TIMEOUT_MS = 10_000;
 
 /**
- * The card number the probe submits.
+ * The card the probe asks about.
  *
- * Synthetic and all-zero: it carries no personal data and belongs to no
- * worker. It is not expected to match any record — and if it somehow did, the
- * conclusion would be unchanged, because the test asks whether the service
- * answered, not what it answered.
+ * CSCS's own published test record, from the Test Cards / Data page — synthetic
+ * data provided for integration testing, belonging to no worker and carried in
+ * no compliance figure.
+ *
+ * It replaces an all-zero card number, which could only ever have proved that
+ * the service answered. V2.6 identifies a card by scheme ID + surname +
+ * registration number, and a made-up triple would come back "not found" whether
+ * the mapping was right or wrong. A documented record that SHOULD resolve turns
+ * the test from "did it answer" into "did it answer correctly", which is the
+ * question worth asking before this goes anywhere near a site gate.
  */
-const PROBE_CARD_NUMBER = '00000000';
+const PROBE_CARD = {
+  schemeId: 'C4T',
+  surname: 'Zhang',
+  registrationNumber: '14660726',
+};
 
 export type CscsConnectionOutcome =
   | 'OK'
@@ -264,7 +275,9 @@ export async function testSmartCheckConnection(credentials: {
         // Built per request and never logged, exactly as the live path does.
         headers: authHeaders(creds, token, p),
         body: JSON.stringify({
-          [REQUEST_SHAPE.fields.cardNumber]: PROBE_CARD_NUMBER,
+          [REQUEST_SHAPE.fields.schemeId]: PROBE_CARD.schemeId,
+          [REQUEST_SHAPE.fields.surname]: PROBE_CARD.surname,
+          [REQUEST_SHAPE.fields.registrationNumber]: PROBE_CARD.registrationNumber,
         }),
         signal: controller.signal,
       });
@@ -549,7 +562,7 @@ export function classifySmartCheckResponse(
       detail:
         `Authentication passed, so the credentials and the sign-in request are correct.` +
         (REQUEST_SHAPE.pathConfirmed
-          ? ''
+          ? ` The card path "${REQUEST_SHAPE.path}" is the documented one, so this is no longer a wrong-endpoint 403. On this gateway that leaves the API key not being authorised for this endpoint — a usage-plan or subscription setting CSCS control — or the token not being accepted for card lookups. The presentations below distinguish those: all four refused identically points at the key's authorisation, not at the header format.`
           : ` The card path is NOT confirmed: "${REQUEST_SHAPE.path}" appended to the configured base gives a URL with two version segments, and this gateway returns 403 with an empty body for a route that does not exist — the same answer a refused token gives. The documented card-validation path is the missing piece.`) +
         (allRefused
           ? ' Every way of presenting the token was refused identically, which is what an unmatched route looks like and is not what a single wrong header format looks like.'
@@ -575,7 +588,7 @@ export function classifySmartCheckResponse(
       // URL and all four credentials have just been proven.
       title: `Signed in successfully. ${host} answered the card call, but inconclusively.`,
       detail: REQUEST_SHAPE.pathConfirmed
-        ? 'A 404 means the test card number matched no record, which is the expected answer for an unknown card.'
+        ? `Authentication passed, so the base URL and all four credentials are correct. A 404 means no record matched — but the probe asks about a DOCUMENTED test card (scheme ${PROBE_CARD.schemeId}, ${PROBE_CARD.surname}, ${PROBE_CARD.registrationNumber}), which should resolve. That points at the request field names rather than at the card.${bodySnippet(bodyText) ? ` The service replied: ${bodySnippet(bodyText)}` : ''}${attempts}${trace}`
         : 'Authentication worked, so the base URL and all four credentials are correct. The 404 is ambiguous only because the card-validation path is not yet confirmed: it means either that the card matched no record, or that this is not the path CSCS publish. Confirm the path, then run this again.',
     };
   }
@@ -613,8 +626,13 @@ export function classifySmartCheckResponse(
       severity: 'error',
       httpStatus: status,
       title: `The service was reached, but rejected the request (HTTP ${status}).`,
+      // The card path is confirmed now, so a 4xx here points at the BODY — and
+      // the field-name casing is the part still unconfirmed.
       detail:
-        'The host and key are reachable, so this usually means the request format differs from the published partner contract. Confirm the endpoint path and request fields with CSCS.',
+        `The host, the credentials and the card path are all working, so this points at the request body. The three parts V2.6 identifies a card by are confirmed; their JSON field names are not — the integration sends ${Object.values(REQUEST_SHAPE.fields).join(', ')}.` +
+        (bodySnippet(bodyText) ? ` The service replied: ${bodySnippet(bodyText)}` : '') +
+        attempts +
+        trace,
     };
   }
 
@@ -642,16 +660,29 @@ export function classifySmartCheckResponse(
     };
   }
 
+  /*
+   * A readable answer is where the RESPONSE mapping gets settled.
+   *
+   * Still deliberately short of "verified": a 2xx proves the exchange happened,
+   * not that we understood it. But printing the structure means the field names
+   * can be read off one test run instead of guessed at over several — the same
+   * move that settled the sign-in body, and the reason the probe now asks about
+   * a documented test record rather than an all-zero number.
+   */
   return {
     outcome: 'OK',
     stage: 'card-check' as const,
     ok: true,
     severity: 'success',
     httpStatus: status,
-    title: `Connected to ${host} and the API key was accepted.`,
-    // Deliberately stops short of "verified". See the header comment: a 2xx
-    // proves the exchange happened, not that the fields were understood.
+    title: `Connected to ${host}, signed in, and the card call was answered.`,
     detail:
-      'The service accepted the request and returned a readable response. Confirm the card fields against the partner documentation before relying on verification results.',
+      `The service accepted the request and returned a readable response for the documented test card (scheme ${PROBE_CARD.schemeId}, ${PROBE_CARD.surname}, ${PROBE_CARD.registrationNumber}).` +
+      (REQUEST_SHAPE.fieldsConfirmed
+        ? ''
+        : ' The card request field NAMES are not yet confirmed, so a reply does not by itself prove the lookup was understood — check the response below actually describes that card.') +
+      ` Response shape (values masked): ${shapeSummary(parsed)}` +
+      attempts +
+      trace,
   };
 }

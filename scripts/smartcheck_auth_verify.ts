@@ -196,7 +196,7 @@ async function main() {
       apiUrl: url, apiKey: 'K', username: 'U', password: 'P',
     });
     const result = await provider.verifyCard({
-      cardNumber: '12345678', holderName: null, scheme: null,
+      cardNumber: '12345678', surname: 'Zhang', schemeId: 'C4T', holderName: null, scheme: null,
       cardTypeHint: null, expiryHint: null,
     } as never);
     chk('the card call is retried after a 401', state.cardCalls === 2, `${state.cardCalls} card calls`);
@@ -216,7 +216,7 @@ async function main() {
     let message = '';
     try {
       await provider.verifyCard({
-        cardNumber: '12345678', holderName: null, scheme: null,
+        cardNumber: '12345678', surname: 'Zhang', schemeId: 'C4T', holderName: null, scheme: null,
         cardTypeHint: null, expiryHint: null,
       } as never);
     } catch (e) {
@@ -268,7 +268,7 @@ async function main() {
     const creds = { apiUrl: url, apiKey: 'K', username: 'U', password: 'P' };
     const provider = new SmartCheckCscsProvider(creds);
     await provider.verifyCard({
-      cardNumber: '12345678', holderName: null, scheme: null,
+      cardNumber: '12345678', surname: 'Zhang', schemeId: 'C4T', holderName: null, scheme: null,
       cardTypeHint: null, expiryHint: null,
     } as never);
     const sent = state.lastCardHeaders['authorization'] ?? '';
@@ -364,7 +364,7 @@ async function main() {
     let message = '';
     try {
       await new SmartCheckCscsProvider({ apiUrl: 'https://x', apiKey: 'K' }).verifyCard({
-        cardNumber: '1', holderName: null, scheme: null,
+        cardNumber: '1', surname: 'Zhang', schemeId: 'C4T', holderName: null, scheme: null,
         cardTypeHint: null, expiryHint: null,
       } as never);
     } catch (e) { message = (e as Error).message; }

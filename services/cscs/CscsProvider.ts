@@ -33,6 +33,20 @@ export interface CscsVerifyInput {
   /** Scheme hint where known (e.g. "ECS", "CSCS"). Optional. */
   scheme?: string | null;
   /**
+   * V2.6 identifies a card by SCHEME ID + SURNAME + REGISTRATION NUMBER, not by
+   * a card number alone. Both of these are optional on the interface so nothing
+   * that already calls verifyCard breaks, and the Smart Check provider refuses
+   * clearly when they are absent rather than sending a request it knows is
+   * incomplete — a malformed lookup would come back as "card not found" and read
+   * to an operative at a site gate as a rejected card.
+   *
+   * Neither is captured at onboarding today. See docs/CSCS-CUTOVER.md.
+   */
+  /** Scheme identifier as issued by CSCS, e.g. "C4T". NOT the scheme name. */
+  schemeId?: string | null;
+  /** Family name as held by the scheme. */
+  surname?: string | null;
+  /**
    * Details the worker typed, used by the mock to produce believable output and
    * ignored by the real Smart Check provider (which returns the scheme's own
    * record of truth).

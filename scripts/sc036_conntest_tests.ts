@@ -27,7 +27,16 @@ const ok200 = classifySmartCheckResponse(200, '{"status":"NOT_FOUND"}', H);
 check('200 + JSON → OK / success', ok200.outcome === 'OK' && ok200.ok && ok200.severity === 'success', ok200.outcome);
 check(
   '200 does NOT claim the card contract is confirmed',
-  !/verified|confirmed integration/i.test(ok200.title) && /Confirm the card fields/i.test(ok200.detail),
+  // The PATH is confirmed now; the field NAMES are not, and a readable reply
+  // does not prove the lookup was understood. The claim must stop there.
+  !/verified|confirmed integration/i.test(ok200.title) &&
+    /field NAMES are not yet confirmed/i.test(ok200.detail),
+  ok200.detail,
+);
+check(
+  '200 prints the response shape so the mapping can be read off it',
+  /Response shape \(values masked\)/i.test(ok200.detail),
+  ok200.detail,
 );
 
 const html = classifySmartCheckResponse(200, '<html>hello</html>', H);
@@ -62,11 +71,18 @@ for (const s of [401, 403]) {
 const nf = classifySmartCheckResponse(404, '', H);
 check('404 → CARD_NOT_FOUND', nf.outcome === 'CARD_NOT_FOUND', nf.outcome);
 check('404 is a WARNING, not a pass and not a failure', nf.severity === 'warning' && !nf.ok, `${nf.severity}/ok=${nf.ok}`);
-check('404 states both readings', /matched no record/i.test(nf.detail) && /not the path CSCS publish/i.test(nf.detail), nf.detail);
+// Was "states both readings", from when the path was a guess. The path is
+// confirmed now, so a 404 for a DOCUMENTED test card is no longer ambiguous
+// between "wrong endpoint" and "unknown card" — it points at the field names.
+check('404 on a documented test card points at the field names',
+  /no record matched/i.test(nf.detail) && /DOCUMENTED test card/i.test(nf.detail) &&
+    /request field names/i.test(nf.detail), nf.detail);
+check('404 no longer offers the stale wrong-path reading',
+  !/not the path CSCS publish/i.test(nf.detail), nf.detail);
 // The first live attempt's most valuable output is that sign-in worked; a
 // warning-coloured card must not read as "nothing works".
 check('404 leads with the fact that sign-in succeeded', /Signed in successfully/i.test(nf.title), nf.title);
-check('404 says the credentials are confirmed', /credentials are correct/i.test(nf.detail));
+check('404 says the credentials are confirmed', /credentials are correct/i.test(nf.detail), nf.detail);
 
 const rl = classifySmartCheckResponse(429, '', H);
 check('429 → RATE_LIMITED / warning', rl.outcome === 'RATE_LIMITED' && rl.severity === 'warning', rl.outcome);
@@ -75,7 +91,10 @@ const br = classifySmartCheckResponse(400, '', H);
 check('400 → REQUEST_REJECTED / error', br.outcome === 'REQUEST_REJECTED' && r0(br), br.outcome);
 const teapot = classifySmartCheckResponse(418, '', H);
 check('other 4xx → REQUEST_REJECTED', teapot.outcome === 'REQUEST_REJECTED', teapot.outcome);
-check('4xx points at the contract, not the credentials', /request format differs/i.test(br.detail));
+check('4xx points at the request body, not the credentials',
+  /points at the request body/i.test(br.detail) && !/credentials are (wrong|incorrect)/i.test(br.detail),
+  br.detail);
+check('4xx names the field names it is sending', /schemeId, surname, registrationNumber/.test(br.detail), br.detail);
 
 for (const s of [500, 502, 503]) {
   const r = classifySmartCheckResponse(s, '', H);

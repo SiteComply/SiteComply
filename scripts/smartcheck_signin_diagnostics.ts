@@ -14,6 +14,7 @@
  * A test that only did (2) would pass against an authenticate() that captured
  * nothing.
  */
+import { readFileSync } from 'fs';
 import { createServer, Server } from 'http';
 import type { AddressInfo } from 'net';
 import {
@@ -28,7 +29,7 @@ import {
   classifySmartCheckResponse,
 } from '../services/cscs/smartCheckConnectionTest';
 import { CANDIDATE_AUTH_PRESENTATIONS, authHeaders } from '../services/cscs/smartCheckAuth';
-import { REQUEST_SHAPE } from '../services/cscs/smartCheckProvider';
+import { REQUEST_SHAPE, cardRequestBody } from '../services/cscs/smartCheckProvider';
 import {
   CANDIDATE_FIELD_SHAPES,
   AUTH_SHAPE,
@@ -449,8 +450,14 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
     ok('a card 403 still reports sign-in as successful', /Authentication passed/.test(v.detail), v.detail);
     ok('  it does NOT name the header format as the blocker',
       !/whether the Authorization header wants a bare token/.test(v.detail), v.detail);
-    ok('  it names the unconfirmed path instead', /card path is NOT confirmed/.test(v.detail), v.detail);
-    ok('  it explains that this gateway 403s a missing route', /route that does not exist/.test(v.detail), v.detail);
+    // These two asserted the pre-/card state, when the path was a guess and the
+    // 403 was most likely an unmatched route. The path is documented now, so the
+    // verdict must name what is ACTUALLY left rather than repeat a solved doubt.
+    ok('  it states the path is the documented one', /is the documented one/.test(v.detail), v.detail);
+    ok('  it no longer calls the path unconfirmed', !/card path is NOT confirmed/.test(v.detail), v.detail);
+    ok('  it names the key\'s authorisation as the remaining cause',
+      /authorised for this endpoint/.test(v.detail), v.detail);
+    ok('  and still does not blame the credentials', /Authentication passed/.test(v.detail), v.detail);
     ok('  it reports every presentation tried', tried.every((t) => v.detail.includes(t)), v.detail);
     ok('  and draws the conclusion from all four failing', /is not what a single wrong header format looks like/.test(v.detail), v.detail);
     ok('  the AWS request id is carried', /req-9/.test(v.detail), v.detail);
@@ -481,10 +488,67 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
     ok('the card call identifies itself too', live['user-agent'] === AUTH_SHAPE.userAgent, live['user-agent']);
   }
 
-  // ── 21. the card path is still flagged as unconfirmed ──────────────────
+  // ── 21. the documented card endpoint ───────────────────────────────────
   {
-    ok('REQUEST_SHAPE.pathConfirmed is still false — nothing has confirmed it',
-      REQUEST_SHAPE.pathConfirmed === false, REQUEST_SHAPE.pathConfirmed);
+    ok('the card path is the documented /card', REQUEST_SHAPE.path === '/card', REQUEST_SHAPE.path);
+    ok('  the legacy guess is gone', !/v1\/card\/verify/.test(REQUEST_SHAPE.path), REQUEST_SHAPE.path);
+    ok('  and it is marked confirmed', REQUEST_SHAPE.pathConfirmed === true);
+    ok('  appended to the /v2 base it gives one version segment',
+      (('https://h/smarttech/v2' + REQUEST_SHAPE.path).match(/\/v\d+/g) ?? []).length === 1,
+      'https://h/smarttech/v2' + REQUEST_SHAPE.path);
+
+    // The three parts are confirmed; their casing is not, and the code must
+    // still say so or a wrong mapping would wear a confirmed badge.
+    ok('the request is built from the three documented parts',
+      JSON.stringify(Object.keys(REQUEST_SHAPE.fields).sort()) ===
+        '["registrationNumber","schemeId","surname"]', REQUEST_SHAPE.fields);
+    ok('  cardNumber is no longer a request field',
+      !Object.keys(REQUEST_SHAPE.fields).includes('cardNumber'), REQUEST_SHAPE.fields);
+    ok('  the casing is still flagged unconfirmed', REQUEST_SHAPE.fieldsConfirmed === false);
+  }
+
+  // ── 22. an incomplete lookup is REFUSED, never improvised ──────────────
+  // A lookup missing a surname comes back "not found", and "not found" at a site
+  // gate reads as a rejected card. Refusing names the real problem.
+  {
+    const full = { cardNumber: '14660726', surname: 'Zhang', schemeId: 'C4T' };
+    const body = cardRequestBody(full);
+    ok('a complete input builds the documented three fields',
+      body[REQUEST_SHAPE.fields.registrationNumber] === '14660726' &&
+      body[REQUEST_SHAPE.fields.surname] === 'Zhang' &&
+      body[REQUEST_SHAPE.fields.schemeId] === 'C4T', body);
+    ok('  and nothing else', Object.keys(body).length === 3, body);
+
+    const cases: [string, Record<string, unknown>, RegExp][] = [
+      ['no surname', { cardNumber: '1', schemeId: 'C4T' }, /surname/],
+      ['no scheme id', { cardNumber: '1', surname: 'Z' }, /scheme ID/],
+      ['no card number', { cardNumber: '', surname: 'Z', schemeId: 'C4T' }, /registration number/],
+      ['none of them', { cardNumber: '' }, /registration number, surname, scheme ID/],
+    ];
+    for (const [label, input, expect] of cases) {
+      let msg = '';
+      try { cardRequestBody(input as never); } catch (e) { msg = (e as Error).message; }
+      ok(`${label} → refused, naming what is missing`, expect.test(msg), msg || '(did not throw)');
+    }
+    // Whitespace must not pass for a value.
+    let blank = '';
+    try { cardRequestBody({ cardNumber: '1', surname: '   ', schemeId: 'C4T' } as never); }
+    catch (e) { blank = (e as Error).message; }
+    ok('a whitespace-only surname does not count as present', /surname/.test(blank), blank || '(did not throw)');
+  }
+
+  // ── 23. an incomplete lookup must not be reported as an outage ─────────
+  // The refusal is built before the fetch's try block; inside it, the network
+  // handler caught it and rewrapped a missing surname as "could not reach".
+  {
+    const src = readFileSync('services/cscs/smartCheckProvider.ts', 'utf8');
+    const fn = src.slice(src.indexOf('private async callValidate('));
+    const bodyBuilt = fn.indexOf('cardRequestBody(input)');
+    const tryAt = fn.indexOf('try {');
+    ok('the card body is built BEFORE the try block', bodyBuilt < tryAt && bodyBuilt !== -1,
+      `body@${bodyBuilt} try@${tryAt}`);
+    ok('and a considered verdict is not rewrapped as a network error',
+      /if \(e instanceof CscsVerifyError\) throw e;/.test(fn), 'guard missing');
   }
 
   server.closeAllConnections();
