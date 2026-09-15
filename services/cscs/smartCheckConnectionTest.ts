@@ -1,4 +1,4 @@
-import { REQUEST_SHAPE } from './smartCheckProvider';
+import { REQUEST_SHAPE, CANDIDATE_SCAN_TYPES } from './smartCheckProvider';
 import { AUTH_SHAPE } from './smartCheckAuth';
 import {
   getSmartCheckToken,
@@ -7,6 +7,7 @@ import {
   SmartCheckAuthError,
   bodySnippet,
   shapeSummary,
+  envelopeMessage,
   authenticate,
   CANDIDATE_FIELD_SHAPES,
   CANDIDATE_AUTH_PRESENTATIONS,
@@ -267,6 +268,16 @@ export async function testSmartCheckConnection(credentials: {
    */
   let res: Response;
   const presentationsTried: string[] = [];
+  const scanTypesTried: string[] = [];
+  let acceptedScanType: string | null = null;
+
+  /** The probe's body, with one scan type substituted in. */
+  const probeBody = (scanType: string) => ({
+    [REQUEST_SHAPE.fields.schemeId]: PROBE_CARD.schemeId,
+    [REQUEST_SHAPE.fields.surname]: PROBE_CARD.surname,
+    [REQUEST_SHAPE.fields.registrationNumber]: PROBE_CARD.registrationNumber,
+    [REQUEST_SHAPE.fields.scanType]: scanType,
+  });
   try {
     let attempt: Response | null = null;
     for (const p of CANDIDATE_AUTH_PRESENTATIONS) {
@@ -274,15 +285,45 @@ export async function testSmartCheckConnection(credentials: {
         method: REQUEST_SHAPE.method,
         // Built per request and never logged, exactly as the live path does.
         headers: authHeaders(creds, token, p),
-        body: JSON.stringify({
-          [REQUEST_SHAPE.fields.schemeId]: PROBE_CARD.schemeId,
-          [REQUEST_SHAPE.fields.surname]: PROBE_CARD.surname,
-          [REQUEST_SHAPE.fields.registrationNumber]: PROBE_CARD.registrationNumber,
-        }),
+        body: JSON.stringify(probeBody(REQUEST_SHAPE.scanType)),
         signal: controller.signal,
       });
       presentationsTried.push(`${p.label} → ${attempt.status}`);
       if (attempt.status !== 401 && attempt.status !== 403) break;
+    }
+
+    /*
+     * The service NAMES what it objects to, so keep asking until it stops
+     * objecting to the same thing. One run then answers several questions
+     * instead of one, which matters when each round trip costs a redeploy and
+     * someone else's afternoon.
+     *
+     * Only the scan TYPE varies here — the value, not the field name. If every
+     * candidate draws the same complaint, the field name is what is wrong, and
+     * the report says so rather than leaving it to be inferred.
+     */
+    if (attempt && attempt.status >= 400 && attempt.status < 500) {
+      const firstBody = await attempt.clone().text().catch(() => '');
+      if (/scan\s*type/i.test(firstBody)) {
+        scanTypesTried.push(`${REQUEST_SHAPE.scanType} → ${attempt.status} ${envelopeMessage(firstBody) ?? ''}`.trim());
+        for (const candidate of CANDIDATE_SCAN_TYPES) {
+          if (candidate === REQUEST_SHAPE.scanType) continue;
+          const next = await fetch(target.toString(), {
+            method: REQUEST_SHAPE.method,
+            headers: authHeaders(creds, token),
+            body: JSON.stringify(probeBody(candidate)),
+            signal: controller.signal,
+          });
+          const text = await next.clone().text().catch(() => '');
+          scanTypesTried.push(`${candidate} → ${next.status} ${envelopeMessage(text) ?? ''}`.trim());
+          if (!/scan\s*type/i.test(text)) {
+            // The complaint moved on. Whatever it says now is the real news.
+            attempt = next;
+            acceptedScanType = candidate;
+            break;
+          }
+        }
+      }
     }
     res = attempt as Response;
   } catch (e) {
@@ -310,7 +351,12 @@ export async function testSmartCheckConnection(credentials: {
     res.status,
     bodyText,
     target.host,
-    { tried: presentationsTried, headers: keptHeaders(res.headers) },
+    {
+      tried: presentationsTried,
+      headers: keptHeaders(res.headers),
+      scanTypes: scanTypesTried,
+      acceptedScanType,
+    },
   );
   return done({ ...verdict, detail: `${verdict.detail}${shapeNote}` });
 }
@@ -524,7 +570,12 @@ export function classifySmartCheckResponse(
   status: number,
   bodyText: string,
   host: string,
-  probe: { tried?: string[]; headers?: Record<string, string> } = {},
+  probe: {
+    tried?: string[];
+    headers?: Record<string, string>;
+    scanTypes?: string[];
+    acceptedScanType?: string | null;
+  } = {},
 ): Omit<CscsConnectionTestResult, 'durationMs'> {
   const trace = probe.headers
     ? ` Response headers: ${Object.entries(probe.headers)
@@ -533,6 +584,21 @@ export function classifySmartCheckResponse(
     : '';
   const attempts = probe.tried?.length
     ? ` Token presentations tried: ${probe.tried.join('; ')}.`
+    : '';
+
+  /*
+   * The scan-type walk, verbatim. Each line is the service's own words about
+   * one attempt, which is worth more than any verdict drawn from the status.
+   *
+   * Whether the FIELD NAME or the VALUE is wrong is the distinction to draw,
+   * and it is drawable: the same complaint every time means the service never
+   * saw a scan type at all.
+   */
+  const scans = probe.scanTypes?.length
+    ? ` Scan types tried: ${probe.scanTypes.join('; ')}.` +
+      (probe.acceptedScanType
+        ? ` The service stopped objecting at "${probe.acceptedScanType}" — set REQUEST_SHAPE.scanType to it.`
+        : ` Every candidate drew the same complaint, so "${REQUEST_SHAPE.fields.scanType}" is most likely the wrong FIELD NAME rather than the wrong value.`)
     : '';
 
   if (status === 401 || status === 403) {
@@ -630,7 +696,12 @@ export function classifySmartCheckResponse(
       // the field-name casing is the part still unconfirmed.
       detail:
         `The host, the credentials and the card path are all working, so this points at the request body. The three parts V2.6 identifies a card by are confirmed; their JSON field names are not — the integration sends ${Object.values(REQUEST_SHAPE.fields).join(', ')}.` +
-        (bodySnippet(bodyText) ? ` The service replied: ${bodySnippet(bodyText)}` : '') +
+        (envelopeMessage(bodyText)
+          ? ` The service said — ${envelopeMessage(bodyText)}.`
+          : bodySnippet(bodyText)
+            ? ` The service replied: ${bodySnippet(bodyText)}`
+            : '') +
+        scans +
         attempts +
         trace,
     };
@@ -682,6 +753,7 @@ export function classifySmartCheckResponse(
         ? ''
         : ' The card request field NAMES are not yet confirmed, so a reply does not by itself prove the lookup was understood — check the response below actually describes that card.') +
       ` Response shape (values masked): ${shapeSummary(parsed)}` +
+      scans +
       attempts +
       trace,
   };

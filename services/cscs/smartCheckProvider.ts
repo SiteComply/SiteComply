@@ -103,10 +103,46 @@ export const REQUEST_SHAPE = {
     schemeId: 'schemeId',
     surname: 'surname',
     registrationNumber: 'registrationNumber',
+    scanType: 'scanType',
   },
-  /** Whether `fields` above is confirmed. Casing only; the three parts are. */
+  /** Whether `fields` above is confirmed. Casing only; the parts themselves are. */
   fieldsConfirmed: false,
+  /**
+   * How the card details reached us.
+   *
+   * REQUIRED — the service answered HTTP 400 "Scan type is required", which also
+   * told us something valuable: it was reading our body, so the path, the
+   * credentials and the token are all correct and only the mapping is left.
+   *
+   * THE VALUE IS NOT CONFIRMED. SiteComply takes card details by keyed entry,
+   * never by scanning a QR code or reading an NFC chip, so a manual value is the
+   * right MEANING; the spelling the service expects is a guess. The connection
+   * test probes the candidates and reports which the service accepts, rather
+   * than this line quietly being wrong in production.
+   */
+  scanType: 'MANUAL',
+  scanTypeConfirmed: false,
 };
+
+/**
+ * Spellings of "entered by hand" to try.
+ *
+ * Probed by the CONNECTION TEST only, and safe to probe: no credentials are
+ * submitted, the card asked about is CSCS's own published test record, and a
+ * lookup is a read. The live path sends REQUEST_SHAPE.scanType and nothing else.
+ *
+ * The distinction the probe is really drawing: if every candidate still comes
+ * back "Scan type is required", the FIELD NAME is wrong. If the message changes
+ * to something about an invalid value, the field name is right and the value is
+ * wrong — and the service usually names what it wanted.
+ */
+export const CANDIDATE_SCAN_TYPES = [
+  'MANUAL',
+  'Manual',
+  'MANUAL_ENTRY',
+  'KEYED',
+  'MANUALENTRY',
+];
 
 export interface SmartCheckSettings {
   apiUrl?: string;
@@ -124,7 +160,11 @@ export interface SmartCheckSettings {
  * away by our own incomplete request. A refusal that names what is missing is
  * the honest failure.
  */
-export function cardRequestBody(input: CscsVerifyInput): Record<string, string> {
+export function cardRequestBody(
+  input: CscsVerifyInput,
+  /** Override the scan type. Connection-test probe only. */
+  scanType?: string,
+): Record<string, string> {
   const registrationNumber = (input.cardNumber ?? '').trim();
   const surname = (input.surname ?? '').trim();
   const schemeId = (input.schemeId ?? '').trim();
@@ -147,6 +187,10 @@ export function cardRequestBody(input: CscsVerifyInput): Record<string, string> 
     [REQUEST_SHAPE.fields.schemeId]: schemeId,
     [REQUEST_SHAPE.fields.surname]: surname,
     [REQUEST_SHAPE.fields.registrationNumber]: registrationNumber,
+    // Not derived from the input: SiteComply has no scanner. Every lookup it
+    // makes is keyed entry, so this is a property of the integration rather
+    // than of the worker.
+    [REQUEST_SHAPE.fields.scanType]: scanType ?? REQUEST_SHAPE.scanType,
   };
 }
 

@@ -366,6 +366,35 @@ export function describeShape(v: unknown, depth = 0, key = ''): string {
   return `<${typeof v}>`;
 }
 
+/**
+ * The partner's own explanation, pulled out of its envelope.
+ *
+ * This service reports validation failures in `responseMessage` — "Scan type is
+ * required" was worth more than any inference we could have drawn from the 400
+ * alone. Surfacing it verbatim turns each attempt into a statement of what is
+ * still missing, so one run can answer several questions instead of one.
+ *
+ * Only the allow-listed envelope fields, and still redacted.
+ */
+export function envelopeMessage(bodyText: string): string | undefined {
+  if (!bodyText) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(bodyText);
+  } catch {
+    return undefined;
+  }
+  if (!parsed || typeof parsed !== 'object') return undefined;
+  const row = parsed as Record<string, unknown>;
+  const parts: string[] = [];
+  for (const k of ['responseMessage', 'errorMessage', 'message', 'errorCode', 'responseCode']) {
+    const v = row[k];
+    if (typeof v === 'string' && v.trim()) parts.push(`${k}: ${redact(v).slice(0, 160)}`);
+    else if (typeof v === 'number') parts.push(`${k}: ${v}`);
+  }
+  return parts.length ? parts.join(', ') : undefined;
+}
+
 /** describeShape, capped for a message an admin reads on one screen. */
 export function shapeSummary(v: unknown): string {
   const text = describeShape(v);

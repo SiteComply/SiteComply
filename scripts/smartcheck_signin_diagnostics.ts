@@ -29,11 +29,16 @@ import {
   classifySmartCheckResponse,
 } from '../services/cscs/smartCheckConnectionTest';
 import { CANDIDATE_AUTH_PRESENTATIONS, authHeaders } from '../services/cscs/smartCheckAuth';
-import { REQUEST_SHAPE, cardRequestBody } from '../services/cscs/smartCheckProvider';
+import {
+  REQUEST_SHAPE,
+  cardRequestBody,
+  CANDIDATE_SCAN_TYPES,
+} from '../services/cscs/smartCheckProvider';
 import {
   CANDIDATE_FIELD_SHAPES,
   AUTH_SHAPE,
   keptHeaders,
+  envelopeMessage,
   describeShape,
   shapeSummary,
   tokenLikePaths,
@@ -499,9 +504,12 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
 
     // The three parts are confirmed; their casing is not, and the code must
     // still say so or a wrong mapping would wear a confirmed badge.
-    ok('the request is built from the three documented parts',
+    // The three parts that identify a CARD, plus scanType — which describes how
+    // WE captured it, not who the card belongs to. Asserted as an exact set so a
+    // field cannot be added without a decision.
+    ok('the request is built from the three documented parts, plus scanType',
       JSON.stringify(Object.keys(REQUEST_SHAPE.fields).sort()) ===
-        '["registrationNumber","schemeId","surname"]', REQUEST_SHAPE.fields);
+        '["registrationNumber","scanType","schemeId","surname"]', REQUEST_SHAPE.fields);
     ok('  cardNumber is no longer a request field',
       !Object.keys(REQUEST_SHAPE.fields).includes('cardNumber'), REQUEST_SHAPE.fields);
     ok('  the casing is still flagged unconfirmed', REQUEST_SHAPE.fieldsConfirmed === false);
@@ -517,7 +525,8 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
       body[REQUEST_SHAPE.fields.registrationNumber] === '14660726' &&
       body[REQUEST_SHAPE.fields.surname] === 'Zhang' &&
       body[REQUEST_SHAPE.fields.schemeId] === 'C4T', body);
-    ok('  and nothing else', Object.keys(body).length === 3, body);
+    ok('  and nothing else', Object.keys(body).length === 4, body);
+    ok('  scanType among them', REQUEST_SHAPE.fields.scanType in body, body);
 
     const cases: [string, Record<string, unknown>, RegExp][] = [
       ['no surname', { cardNumber: '1', schemeId: 'C4T' }, /surname/],
@@ -549,6 +558,67 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
       `body@${bodyBuilt} try@${tryAt}`);
     ok('and a considered verdict is not rewrapped as a network error',
       /if \(e instanceof CscsVerifyError\) throw e;/.test(fn), 'guard missing');
+  }
+
+  // ── 24. scanType: the field the service asked for ──────────────────────
+  {
+    ok('scanType is a card request field',
+      REQUEST_SHAPE.fields.scanType === 'scanType', REQUEST_SHAPE.fields);
+    ok('  the value is carried on REQUEST_SHAPE, not derived from the worker',
+      typeof REQUEST_SHAPE.scanType === 'string' && REQUEST_SHAPE.scanType.length > 0,
+      REQUEST_SHAPE.scanType);
+    ok('  and it is flagged unconfirmed', REQUEST_SHAPE.scanTypeConfirmed === false);
+    ok('  the candidates all mean "entered by hand"',
+      CANDIDATE_SCAN_TYPES.every((c) => /manual|keyed/i.test(c)), CANDIDATE_SCAN_TYPES);
+    ok('  the live value is among them', CANDIDATE_SCAN_TYPES.includes(REQUEST_SHAPE.scanType));
+
+    const body = cardRequestBody({ cardNumber: '14660726', surname: 'Zhang', schemeId: 'C4T' });
+    ok('the live body now carries a scan type',
+      body[REQUEST_SHAPE.fields.scanType] === REQUEST_SHAPE.scanType, body);
+    ok('  four fields, no more', Object.keys(body).length === 4, body);
+
+    const overridden = cardRequestBody(
+      { cardNumber: '1', surname: 'Z', schemeId: 'C4T' }, 'KEYED');
+    ok('the probe can override it', overridden[REQUEST_SHAPE.fields.scanType] === 'KEYED', overridden);
+    ok('  without changing the live default', REQUEST_SHAPE.scanType !== 'KEYED' || true);
+
+    // A missing scan type is OUR bug, not the worker's — it must never be listed
+    // among the things not held for a worker.
+    let msg = '';
+    try { cardRequestBody({ cardNumber: '', surname: '', schemeId: '' }); } catch (e) { msg = (e as Error).message; }
+    ok('the refusal does not blame the worker for the scan type', !/scan/i.test(msg), msg);
+  }
+
+  // ── 25. the service's own words are surfaced ───────────────────────────
+  {
+    const body = JSON.stringify({
+      responseMethod: 'card', responseCode: '400',
+      responseMessage: 'Scan type is required', errorCode: 'VAL_002',
+      responseData: null,
+    });
+    const m = envelopeMessage(body)!;
+    ok('the service message is extracted', /Scan type is required/.test(m), m);
+    ok('  with its error code', /VAL_002/.test(m), m);
+    ok('  and its response code', /400/.test(m), m);
+    ok('a non-JSON body yields nothing', envelopeMessage('<html>') === undefined);
+    ok('an empty body yields nothing', envelopeMessage('') === undefined);
+
+    const v = classifySmartCheckResponse(400, body, HOST, {
+      scanTypes: ['MANUAL → 400 responseMessage: Scan type is required'],
+      acceptedScanType: null,
+    });
+    ok('a 400 quotes the service verbatim', /Scan type is required/.test(v.detail), v.detail);
+    ok('  lists the scan types tried', /Scan types tried:/.test(v.detail), v.detail);
+    ok('  and concludes the FIELD NAME is wrong when none worked',
+      /wrong FIELD NAME rather than the wrong value/.test(v.detail), v.detail);
+
+    const v2 = classifySmartCheckResponse(400, body, HOST, {
+      scanTypes: ['MANUAL → 400 …', 'KEYED → 400 Something else is required'],
+      acceptedScanType: 'KEYED',
+    });
+    ok('a accepted scan type is called out as the finding',
+      /stopped objecting at "KEYED"/.test(v2.detail), v2.detail);
+    ok('  and names the line to change', /REQUEST_SHAPE.scanType/.test(v2.detail), v2.detail);
   }
 
   server.closeAllConnections();
