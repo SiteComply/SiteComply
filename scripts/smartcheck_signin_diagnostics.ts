@@ -33,6 +33,7 @@ import {
   REQUEST_SHAPE,
   cardRequestBody,
   CANDIDATE_SCAN_TYPES,
+  SCAN_TYPE_SENTINEL,
 } from '../services/cscs/smartCheckProvider';
 import {
   CANDIDATE_FIELD_SHAPES,
@@ -609,15 +610,18 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
     });
     ok('a 400 quotes the service verbatim', /Scan type is required/.test(v.detail), v.detail);
     ok('  lists the scan types tried', /Scan types tried:/.test(v.detail), v.detail);
-    ok('  and concludes the FIELD NAME is wrong when none worked',
-      /wrong FIELD NAME rather than the wrong value/.test(v.detail), v.detail);
+    // Was "concludes the FIELD NAME is wrong". That conclusion was only sound
+    // while the field was never reaching validation; the sentinel now answers
+    // the same question with evidence instead of inference.
+    ok('  states plainly that nothing was accepted',
+      /No candidate was accepted/.test(v.detail), v.detail);
 
     const v2 = classifySmartCheckResponse(400, body, HOST, {
       scanTypes: ['MANUAL → 400 …', 'KEYED → 400 Something else is required'],
       acceptedScanType: 'KEYED',
     });
-    ok('a accepted scan type is called out as the finding',
-      /stopped objecting at "KEYED"/.test(v2.detail), v2.detail);
+    ok('an accepted scan type is called out as the finding',
+      /accepted "KEYED"/.test(v2.detail), v2.detail);
     ok('  and names the line to change', /REQUEST_SHAPE.scanType/.test(v2.detail), v2.detail);
   }
 
@@ -641,6 +645,31 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
       !/not caused by anything this integration changed/.test(differed.detail), differed.detail);
     ok('  quoting the control\'s own message',
       /Scan type is required/.test(differed.detail), differed.detail);
+
+    // ── the sentinel: the experiment that separates the two explanations ──
+    const validated = classifySmartCheckResponse(403, '', HOST, {
+      scanTypes: ['MANUAL → 403', 'NOT_A_REAL_SCAN_TYPE (deliberately invalid) → 400'],
+      sentinelStatus: 400,
+    });
+    ok('nonsense drawing a 400 means the field IS read',
+      /field name is right and the service IS reading the value/.test(validated.detail), validated.detail);
+    ok('  so a 403 for a real value is a permission question for CSCS',
+      /which scan types this key is entitled to use/.test(validated.detail), validated.detail);
+
+    const presenceIsEnough = classifySmartCheckResponse(403, '', HOST, {
+      scanTypes: ['MANUAL → 403', 'NOT_A_REAL_SCAN_TYPE (deliberately invalid) → 403'],
+      sentinelStatus: 403,
+    });
+    ok('nonsense ALSO drawing 403 means the value is not the story',
+      /does not depend on WHAT the field contains/.test(presenceIsEnough.detail), presenceIsEnough.detail);
+    ok('  and it does not then blame the value',
+      !/entitled to use/.test(presenceIsEnough.detail), presenceIsEnough.detail);
+
+    const noSentinel = classifySmartCheckResponse(403, '', HOST, {
+      scanTypes: ['MANUAL → 403'],
+    });
+    ok('with no sentinel run, neither conclusion is drawn',
+      !/deliberately invalid/.test(noSentinel.detail), noSentinel.detail);
 
     const none = classifySmartCheckResponse(403, '', HOST, { tried: ['x → 403'] });
     ok('with no control run, nothing is claimed either way',
@@ -666,6 +695,34 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
       ['schemeId', 'surname', 'registrationNumber'].every((f) => body.includes(`fields.${f}`)), body);
     ok('  and NOT scanType — that is the variable being isolated',
       !body.includes('fields.scanType'), body);
+  }
+
+  // ── 26c. the walk must fire even when the service says nothing ─────────
+  // The original trigger required the reply to mention "scan type". Supplying
+  // scanType returns 403 with an EMPTY body, so the walk never ran and MANUAL
+  // was the only value ever tried against the live service.
+  {
+    const src = readFileSync('services/cscs/smartCheckConnectionTest.ts', 'utf8');
+    const walk = src.slice(src.indexOf('WALK THE SCAN TYPES ON ANY 4xx'), src.indexOf('THE CONTROL.'));
+    ok('the walk triggers on any 4xx',
+      /attempt\.status >= 400 && attempt\.status < 500/.test(walk), 'trigger missing');
+    ok('  not on the reply mentioning "scan type"',
+      !/if \(\/scan\\s\*type\/i\.test\(firstBody\)\)/.test(walk), 'body-text trigger still there');
+    // Not just "the name appears in the block" — it appears in the adoption
+    // guard too, so that passed even with the sentinel removed from the loop.
+    // Assert it is in the ITERABLE.
+    ok('the sentinel is in the list the walk iterates',
+      /for \(const candidate of \[SCAN_TYPE_SENTINEL, \.\.\.CANDIDATE_SCAN_TYPES\]\)/.test(walk),
+      'sentinel not in the loop iterable');
+    ok('  and is never adopted as a real value',
+      /never adopt the sentinel/.test(walk) && /sentinelStatus = next\.status;[\s\S]{0,60}continue;/.test(walk),
+      'sentinel could be adopted');
+    ok('a candidate is only adopted when it stops failing',
+      /if \(next\.status < 400\) \{/.test(walk), 'adoption rule missing');
+    ok('the sentinel is not in the live candidate list',
+      !CANDIDATE_SCAN_TYPES.includes(SCAN_TYPE_SENTINEL), CANDIDATE_SCAN_TYPES);
+    ok('  and could not be mistaken for a real value',
+      /NOT_A_REAL/.test(SCAN_TYPE_SENTINEL), SCAN_TYPE_SENTINEL);
   }
 
   // ── 27. one timeout per request, not one across all of them ────────────

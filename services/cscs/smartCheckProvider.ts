@@ -136,6 +136,18 @@ export const REQUEST_SHAPE = {
  * to something about an invalid value, the field name is right and the value is
  * wrong — and the service usually names what it wanted.
  */
+/**
+ * A scan type that cannot possibly be valid.
+ *
+ * Sent by the connection test to find out whether the field is VALIDATED at all.
+ * If nonsense draws a 400 the field name is right and the service is reading the
+ * value; if nonsense draws the same 403 as a real value, the value is not what
+ * the 403 is about.
+ *
+ * Never sent by the live path, and never adopted whatever it returns.
+ */
+export const SCAN_TYPE_SENTINEL = 'NOT_A_REAL_SCAN_TYPE';
+
 export const CANDIDATE_SCAN_TYPES = [
   'MANUAL',
   'Manual',

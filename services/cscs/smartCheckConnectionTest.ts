@@ -1,4 +1,8 @@
-import { REQUEST_SHAPE, CANDIDATE_SCAN_TYPES } from './smartCheckProvider';
+import {
+  REQUEST_SHAPE,
+  CANDIDATE_SCAN_TYPES,
+  SCAN_TYPE_SENTINEL,
+} from './smartCheckProvider';
 import { AUTH_SHAPE } from './smartCheckAuth';
 import {
   getSmartCheckToken,
@@ -293,6 +297,8 @@ export async function testSmartCheckConnection(credentials: {
   let acceptedScanType: string | null = null;
   /** What the pre-scanType body returns now. See THE CONTROL below. */
   let controlResult: string | null = null;
+  /** What a deliberately invalid scan type returns. See THE SENTINEL. */
+  let sentinelStatus: number | null = null;
 
   /** The probe's body, with one scan type substituted in. */
   const probeBody = (scanType: string) => ({
@@ -313,37 +319,63 @@ export async function testSmartCheckConnection(credentials: {
       if (attempt.status !== 401 && attempt.status !== 403) break;
     }
 
-    /*
-     * The service NAMES what it objects to, so keep asking until it stops
-     * objecting to the same thing. One run then answers several questions
-     * instead of one, which matters when each round trip costs a redeploy and
-     * someone else's afternoon.
-     *
-     * Only the scan TYPE varies here — the value, not the field name. If every
-     * candidate draws the same complaint, the field name is what is wrong, and
-     * the report says so rather than leaving it to be inferred.
-     */
-    if (attempt && attempt.status >= 400 && attempt.status < 500) {
-      const firstBody = await attempt.clone().text().catch(() => '');
-      if (/scan\s*type/i.test(firstBody)) {
-        scanTypesTried.push(`${REQUEST_SHAPE.scanType} → ${attempt.status} ${envelopeMessage(firstBody) ?? ''}`.trim());
-        for (const candidate of CANDIDATE_SCAN_TYPES) {
+      /*
+       * WALK THE SCAN TYPES ON ANY 4xx.
+       *
+       * This used to fire only when the reply mentioned "scan type", which read
+       * well and was useless: supplying scanType returns 403 with an EMPTY body,
+       * so the walk never ran and MANUAL is the only value ever tried. A trigger
+       * that depends on the service explaining itself cannot help in the case
+       * where it does not.
+       *
+       * Safe to be exhaustive: no credentials, CSCS's own published test record,
+       * and a lookup is a read.
+       */
+      if (attempt && attempt.status >= 400 && attempt.status < 500) {
+        const firstBody = await attempt.clone().text().catch(() => '');
+        scanTypesTried.push(
+          `${REQUEST_SHAPE.scanType} → ${attempt.status} ${envelopeMessage(firstBody) ?? '(no message)'}`.trim(),
+        );
+
+        /*
+         * THE SENTINEL, tried first and deliberately nonsense.
+         *
+         * It separates the two explanations for "supplying scanType turns a 400
+         * into a 403", which reading the spec cannot separate:
+         *
+         *   sentinel -> 400  the field IS validated and the name is right, so a
+         *                    403 for MANUAL means that value is understood and
+         *                    not permitted — a capability question for CSCS, and
+         *                    a precise one.
+         *   sentinel -> 403  merely PRESENTING the field gives 403 whatever it
+         *                    contains, so the value is not the story.
+         */
+        for (const candidate of [SCAN_TYPE_SENTINEL, ...CANDIDATE_SCAN_TYPES]) {
           if (candidate === REQUEST_SHAPE.scanType) continue;
           const next = await cardFetch(
             probeBody(candidate),
             authHeaders(creds, token),
           );
           const text = await next.clone().text().catch(() => '');
-          scanTypesTried.push(`${candidate} → ${next.status} ${envelopeMessage(text) ?? ''}`.trim());
-          if (!/scan\s*type/i.test(text)) {
-            // The complaint moved on. Whatever it says now is the real news.
+          const label =
+            candidate === SCAN_TYPE_SENTINEL
+              ? `${candidate} (deliberately invalid)`
+              : candidate;
+          scanTypesTried.push(
+            `${label} → ${next.status} ${envelopeMessage(text) ?? '(no message)'}`.trim(),
+          );
+          if (candidate === SCAN_TYPE_SENTINEL) {
+            sentinelStatus = next.status;
+            continue; // never adopt the sentinel, whatever it returns
+          }
+          if (next.status < 400) {
             attempt = next;
             acceptedScanType = candidate;
             break;
           }
         }
       }
-    }
+
     /*
      * THE CONTROL.
      *
@@ -408,6 +440,7 @@ export async function testSmartCheckConnection(credentials: {
       scanTypes: scanTypesTried,
       acceptedScanType,
       controlResult,
+      sentinelStatus,
     },
   );
   return done({ ...verdict, detail: `${verdict.detail}${shapeNote}` });
@@ -628,6 +661,7 @@ export function classifySmartCheckResponse(
     scanTypes?: string[];
     acceptedScanType?: string | null;
     controlResult?: string | null;
+    sentinelStatus?: number | null;
   } = {},
 ): Omit<CscsConnectionTestResult, 'durationMs'> {
   const trace = probe.headers
@@ -661,11 +695,29 @@ export function classifySmartCheckResponse(
         : ' It was NOT refused the same way, so the refusal follows from the request this integration now sends, not from an authorisation on the CSCS side.')
     : '';
 
+  /*
+   * The sentinel's verdict, stated rather than left to be inferred.
+   *
+   * A deliberately invalid scan type is the only thing that separates "this
+   * value is not permitted" from "presenting this field at all is the problem",
+   * and those two lead to completely different next steps: one is a question for
+   * CSCS about what the key is entitled to, the other is ours to fix.
+   */
+  const sentinel =
+    probe.sentinelStatus == null
+      ? ''
+      : probe.sentinelStatus >= 400 && probe.sentinelStatus < 403
+        ? ` A deliberately invalid scan type returned ${probe.sentinelStatus}, so the field name is right and the service IS reading the value. A 403 for a real value therefore means that value is understood and not permitted — worth asking CSCS which scan types this key is entitled to use.`
+        : probe.sentinelStatus === 403
+          ? ` A deliberately invalid scan type returned 403 as well, so the refusal does not depend on WHAT the field contains — merely supplying it is enough. The value is not the story.`
+          : ` A deliberately invalid scan type returned ${probe.sentinelStatus}.`;
+
   const scans = probe.scanTypes?.length
     ? ` Scan types tried: ${probe.scanTypes.join('; ')}.` +
       (probe.acceptedScanType
-        ? ` The service stopped objecting at "${probe.acceptedScanType}" — set REQUEST_SHAPE.scanType to it.`
-        : ` Every candidate drew the same complaint, so "${REQUEST_SHAPE.fields.scanType}" is most likely the wrong FIELD NAME rather than the wrong value.`)
+        ? ` The service accepted "${probe.acceptedScanType}" — set REQUEST_SHAPE.scanType to it.`
+        : ' No candidate was accepted.') +
+      sentinel
     : '';
 
   if (status === 401 || status === 403) {
