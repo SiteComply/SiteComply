@@ -235,8 +235,10 @@ export async function testSmartCheckConnection(credentials: {
       severity: 'error',
       stage: 'sign-in',
       title: `Could not reach ${target.host} to sign in to Smart Check.`,
-      detail:
-        'Check the base URL is exactly as issued by CSCS, and that the host is reachable from the internet.',
+      // Carry the underlying reason. A generic sentence here is what made a
+      // real failure undiagnosable: it discarded the one string that said
+      // whether this was DNS, TLS, a refused connection or a timeout.
+      detail: `${message} Check the base URL is exactly as issued by CSCS, and that the host is reachable from the internet.`,
     });
   }
 

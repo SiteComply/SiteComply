@@ -326,7 +326,33 @@ async function main() {
     shut(server);
   }
 
-  console.log('\n[13] Without all four credentials it refuses to run');
+  console.log('\n[13] A timeout is reported as a timeout, not as unreachable');
+  {
+    // A server that accepts the connection and never answers. Before this, the
+    // 15s abort surfaced as "could not reach", indistinguishable from the host
+    // being down — which is exactly what happened on the first live attempt.
+    const slow = createServer(() => { /* never responds */ });
+    await new Promise<void>((r) => slow.listen(0, '127.0.0.1', () => r()));
+    const a = slow.address();
+    const port = typeof a === 'object' && a ? a.port : 0;
+    clearSmartCheckTokens();
+    let message = '';
+    const started = Date.now();
+    try {
+      await authenticate({
+        apiUrl: `http://127.0.0.1:${port}`, apiKey: 'K', username: 'U', password: 'P',
+      });
+    } catch (e) { message = (e as Error).message; }
+    const waited = (Date.now() - started) / 1000;
+    chk('it says the service did not answer in time',
+        /did not answer within/i.test(message), message);
+    chk('it does NOT claim the host was unreachable',
+        !/could not reach/i.test(message));
+    chk('and it waited the full timeout first', waited >= 29, `${waited.toFixed(0)}s`);
+    shut(slow);
+  }
+
+  console.log('\n[14] Without all four credentials it refuses to run');
   {
     let message = '';
     try {

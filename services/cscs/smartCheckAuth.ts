@@ -92,7 +92,15 @@ export const AUTH_SHAPE = {
 const EXPIRY_SAFETY_MARGIN_MS = 60_000;
 /** A token with no stated lifetime is assumed good for this long. */
 const ASSUMED_LIFETIME_MS = 10 * 60_000;
-const TIMEOUT_MS = 15_000;
+/**
+ * Sign-in gets longer than a card lookup.
+ *
+ * 15s was inherited from the card call. A first authentication against a
+ * partner API has no warm connection and may do real work, and an abort at 15s
+ * surfaces as "could not reach" — indistinguishable from the host being down.
+ * Better to wait than to misreport.
+ */
+const TIMEOUT_MS = 30_000;
 
 export interface SmartCheckCredentials {
   apiUrl: string;
@@ -183,11 +191,22 @@ export async function authenticate(
       }),
       signal: controller.signal,
     });
-  } catch {
-    // The host, never the credentials: this message can reach a log.
+  } catch (e) {
+    // SAY WHAT ACTUALLY HAPPENED. "Could not reach" covered a timeout, a DNS
+    // failure and a TLS failure alike, so a 15-second abort read as the host
+    // being unreachable when it was answering in under a second.
+    //
+    // The host and the error code, never the credentials: undici's messages
+    // carry the URL, not the headers or body, so this is safe to log and to
+    // show an admin.
+    const err = e as { name?: string; message?: string; cause?: { code?: string } };
+    const code = err?.cause?.code;
+    const aborted = err?.name === 'AbortError' || code === 'UND_ERR_ABORTED';
     throw new CscsVerifyError(
-      `Could not reach ${target.host} to sign in to Smart Check.`,
-      undefined,
+      aborted
+        ? `Smart Check did not answer within ${TIMEOUT_MS / 1000} seconds (${target.host}).`
+        : `Could not reach ${target.host} to sign in to Smart Check${code ? ` (${code})` : ''}.`,
+      e,
       true,
     );
   } finally {
