@@ -67,6 +67,9 @@ async function main() {
       /Automatic CSCS checking is not switched on yet/.test(form));
   chk('"not checked" is not shown as a failure',
       /notChecked[\s\S]{0,200}Card details recorded/.test(form));
+  chk('the button does not promise a check either',
+      /hasCardNumber && verificationLive[\s\S]{0,60}Verify card & continue/.test(form),
+      'the label said "Verify card & continue" regardless');
 
   console.log('\n[5] A manager can tell a test result from a real one');
   const page = read('app/platform/dashboard/workers/[id]/page.tsx');

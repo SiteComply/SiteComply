@@ -168,7 +168,9 @@ export function IdentityForm({
     ? 'Saving…'
     : saved
       ? 'Continue to site selection'
-      : hasCardNumber
+      : // CSCS cutover Phase 1 — "Verify card" is a promise too. Do not make it
+        // when no verification is going to run.
+        hasCardNumber && verificationLive
         ? 'Verify card & continue'
         : 'Continue to site selection';
 
