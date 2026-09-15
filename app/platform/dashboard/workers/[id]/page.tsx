@@ -12,6 +12,7 @@ import {
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { getWorkerDetailForViewer } from '@/services/workers/workerDetailService';
 import { CSCS_CARD_LABELS, cscsVerificationLabel } from '@/lib/cscs';
+import { schemeById } from '@/services/cscs/schemes';
 import { ManualCheckOutNote } from '@/components/platform/ManualCheckOutNote';
 
 export const dynamic = 'force-dynamic';
@@ -185,6 +186,35 @@ export default async function WorkerDetailPage({
               {worker.cscsCardNumber && (
                 <Detail label="CSCS number" value={worker.cscsCardNumber} />
               )}
+              {/* What a Smart Check needs, and whether we have it.
+                    Shown only for a worker who HAS a card, because that is the
+                    only case where the absence matters. States the consequence
+                    rather than leaving an admin to work out why a card that
+                    looks fine is never verified. */}
+              {worker.cscsCardNumber && (
+                <>
+                  <Detail
+                    label="Surname"
+                    value={worker.surname ?? 'Not provided'}
+                  />
+                  <Detail
+                    label="Card scheme"
+                    value={
+                      schemeById(worker.cscsSchemeId)?.name ??
+                      worker.cscsSchemeId ??
+                      'Not provided'
+                    }
+                  />
+                  {(!worker.surname || !worker.cscsSchemeId) && (
+                    <div className="rounded-lg bg-surface-sunken px-3 py-2 text-xs text-ink-muted">
+                      CSCS Smart Check needs the scheme, surname and card number
+                      together. This card cannot be checked until the operative
+                      supplies the missing details — they are asked on their
+                      next check-in.
+                    </div>
+                  )}
+                </>
+              )}
               {worker.cscsExpiry && (
                 <Detail
                   label="CSCS expiry"
@@ -216,7 +246,7 @@ export default async function WorkerDetailPage({
                       </span>
                     )}
                     {worker.verifiedByProvider === 'mock' && (
-                      <span className="text-xs font-medium text-hivis-700">
+                      <span className="text-hivis-700 text-xs font-medium">
                         Not a CSCS verification
                       </span>
                     )}

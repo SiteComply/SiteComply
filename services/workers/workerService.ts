@@ -13,8 +13,12 @@ import type { CscsQualification } from '@/services/cscs';
 
 export interface WorkerProfileInput {
   fullName: string;
+  /** Family name, captured separately. Never derived from fullName. */
+  surname?: string | null;
   company: string;
   cscsCardNumber?: string | null;
+  /** Smart Check scheme id, chosen from a list. Never free text. */
+  cscsSchemeId?: string | null;
   cscsCardType?: CscsCardType | null;
   cscsExpiry?: Date | null;
   /** CSCS Smart Check verification outcome (SC-001), where a check was run. */
@@ -42,6 +46,7 @@ export async function upsertWorkerProfile(
   input: WorkerProfileInput,
 ) {
   const fullName = input.fullName.trim();
+  const surname = input.surname?.trim() || null;
   const company = input.company.trim();
 
   // JSON competency list: store the array, or clear to a real DB NULL.
@@ -67,9 +72,11 @@ export async function upsertWorkerProfile(
   const data: Prisma.WorkerUncheckedCreateInput = {
     mobile,
     fullName,
+    surname,
     company,
     cscsCardNumber: input.cscsCardNumber?.trim() || null,
     cscsCardType: input.cscsCardType ?? null,
+    cscsSchemeId: input.cscsSchemeId?.trim() || null,
     cscsExpiry: input.cscsExpiry ?? null,
     ...verification,
   };
@@ -79,9 +86,11 @@ export async function upsertWorkerProfile(
     create: data,
     update: {
       fullName,
+      surname,
       company,
       cscsCardNumber: data.cscsCardNumber,
       cscsCardType: data.cscsCardType,
+      cscsSchemeId: data.cscsSchemeId,
       cscsExpiry: data.cscsExpiry,
       ...verification,
     },
@@ -112,10 +121,16 @@ export async function eraseWorkerPersonalData(workerId: string) {
     where: { id: workerId },
     data: {
       fullName: 'Erased (UK GDPR)',
+      // A surname is a personal identifier in its own right. Erasure that
+      // left it behind would defeat the purpose of anonymising fullName.
+      surname: null,
       company: 'Erased',
       mobile: `erased:${workerId}`,
       cscsCardNumber: null,
       cscsCardType: null,
+      // Not personal, but it describes a card that has been erased and would
+      // be misleading left attached to an anonymised row.
+      cscsSchemeId: null,
       cscsExpiry: null,
       cscsScheme: null,
       cscsVerified: false,

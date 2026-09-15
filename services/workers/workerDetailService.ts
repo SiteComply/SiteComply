@@ -37,10 +37,15 @@ export interface WorkerDetail {
   worker: {
     id: string;
     fullName: string;
+    /** Family name, captured separately. Never derived from fullName. */
+    surname: string | null;
     company: string;
     mobile: string;
     cscsCardNumber: string | null;
     cscsCardType: CscsCardType | null;
+    /** Smart Check scheme id chosen at capture — an INPUT to the lookup,
+          distinct from cscsScheme below, which is what the check returned. */
+    cscsSchemeId: string | null;
     cscsExpiry: Date | null;
     // CSCS Smart Check verification (SC-001).
     cscsScheme: string | null;
@@ -83,10 +88,12 @@ export async function getWorkerDetailForViewer(
     select: {
       id: true,
       fullName: true,
+      surname: true,
       company: true,
       mobile: true,
       cscsCardNumber: true,
       cscsCardType: true,
+      cscsSchemeId: true,
       cscsExpiry: true,
       cscsScheme: true,
       cscsVerified: true,
@@ -177,7 +184,11 @@ export async function getWorkerDetailForViewer(
     : null;
 
   return {
-    worker: { ...worker, cscsQualifications: qualifications, verifiedByProvider },
+    worker: {
+      ...worker,
+      cscsQualifications: qualifications,
+      verifiedByProvider,
+    },
     complianceStatus: {
       latestStatus: latest.status,
       ppe: latest.ppeConfirmed,
@@ -187,7 +198,11 @@ export async function getWorkerDetailForViewer(
       cscsValid,
     },
     currentSite: onSite
-      ? { siteId: onSite.jobSite.id, siteName: onSite.jobSite.name, checkedInAt: onSite.checkedInAt }
+      ? {
+          siteId: onSite.jobSite.id,
+          siteName: onSite.jobSite.name,
+          checkedInAt: onSite.checkedInAt,
+        }
       : null,
     totalCheckIns: subs.length,
     history,

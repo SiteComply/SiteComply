@@ -18,15 +18,20 @@ import {
   CARD_IMAGE_MAX_BYTES,
 } from '@/services/cscs/cardImageStorage';
 import { withClosedProjectHandling } from '@/lib/routeErrors';
+import { isKnownScheme } from '@/services/cscs/schemes';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 interface ProfileFields {
   fullName: string;
+  /** Family name, captured separately. Never derived from fullName. */
+  surname: string;
   company: string;
   cscsCardNumber: string;
   cscsCardType: string;
+  /** Smart Check scheme id, chosen from CSCS_SCHEMES. Never free text. */
+  cscsSchemeId: string;
   cscsExpiry: string; // ISO date (YYYY-MM-DD) from the date input
 }
 
@@ -45,9 +50,11 @@ async function readBody(
       return {
         fields: {
           fullName: str('fullName'),
+          surname: str('surname'),
           company: str('company'),
           cscsCardNumber: str('cscsCardNumber'),
           cscsCardType: str('cscsCardType'),
+          cscsSchemeId: str('cscsSchemeId'),
           cscsExpiry: str('cscsExpiry'),
         },
         image,
@@ -57,9 +64,11 @@ async function readBody(
     return {
       fields: {
         fullName: (json.fullName ?? '').trim(),
+        surname: (json.surname ?? '').trim(),
         company: (json.company ?? '').trim(),
         cscsCardNumber: (json.cscsCardNumber ?? '').trim(),
         cscsCardType: (json.cscsCardType ?? '').trim(),
+        cscsSchemeId: (json.cscsSchemeId ?? '').trim(),
         cscsExpiry: (json.cscsExpiry ?? '').trim(),
       },
       image: null,
@@ -131,6 +140,16 @@ async function POSTHandler(req: NextRequest) {
     }
   }
 
+  /*
+   * The scheme id is only ever one we published in the picker.
+   *
+   * An id that is not in CSCS_SCHEMES is dropped rather than sent: a made-up
+   * scheme produces a lookup that fails, and a failed lookup shown to an
+   * operative reads as a rejected card. Silently ignoring it leaves the worker
+   * unverified, which is the honest outcome for a value we do not recognise.
+   */
+  const schemeId = isKnownScheme(fields.cscsSchemeId) ? fields.cscsSchemeId : '';
+
   // Verify against CSCS Smart Check when we have a usable card number.
   let verification: CscsVerificationResult | null = null;
   if (cardNumber) {
@@ -140,6 +159,12 @@ async function POSTHandler(req: NextRequest) {
     // record has to be auditable even when it created the worker.
     verification = await verifyCscsCard({
       cardNumber,
+      // V2.6 looks a card up by scheme + surname + registration number. Both are
+      // passed through as given: the provider refuses an incomplete lookup
+      // rather than improvising one, which is what keeps a missing surname from
+      // being reported to an operative as a rejected card.
+      surname: fields.surname?.trim() || null,
+      schemeId: schemeId || null,
       holderName: fields.fullName,
       cardTypeHint: cscsCardType,
       expiryHint: cscsExpiry,
@@ -157,8 +182,10 @@ async function POSTHandler(req: NextRequest) {
 
   const worker = await upsertWorkerProfile(session.mobile, {
     fullName: fields.fullName,
+    surname: fields.surname?.trim() || null,
     company: fields.company,
     cscsCardNumber: cardNumber,
+    cscsSchemeId: schemeId || null,
     cscsCardType: resolvedCardType,
     cscsExpiry: resolvedExpiry,
     cscsScheme: verification?.scheme ?? null,

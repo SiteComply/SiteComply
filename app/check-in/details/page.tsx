@@ -47,9 +47,14 @@ export default async function CheckInDetailsPage() {
         verificationLive={verificationLive}
         initial={{
           fullName: worker?.fullName ?? '',
+          // Empty for a returning worker who predates the field. NOT derived
+          // from fullName: they are asked once, and stay unverified until they
+          // answer — the owner's choice over guessing or backfilling.
+          surname: worker?.surname ?? '',
           company: worker?.company ?? '',
           cscsCardNumber: worker?.cscsCardNumber ?? '',
           cscsCardType: worker?.cscsCardType ?? '',
+          cscsSchemeId: worker?.cscsSchemeId ?? '',
           cscsExpiry: toDateInputValue(worker?.cscsExpiry ?? null),
         }}
       />

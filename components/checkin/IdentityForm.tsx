@@ -6,12 +6,17 @@ import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { useToast } from '@/components/ui/Toast';
 import { CSCS_CARD_OPTIONS } from '@/lib/cscs';
+import { CSCS_SCHEMES, schemesAreUsable } from '@/services/cscs/schemes';
 
 export interface IdentityInitial {
   fullName: string;
+  /** Family name, captured separately. Never derived from fullName. */
+  surname: string;
   company: string;
   cscsCardNumber: string;
   cscsCardType: string;
+  /** Smart Check scheme id, chosen from CSCS_SCHEMES. Never free text. */
+  cscsSchemeId: string;
   cscsExpiry: string; // yyyy-mm-dd or ''
 }
 
@@ -129,9 +134,11 @@ export function IdentityForm({
     try {
       const fd = new FormData();
       fd.append('fullName', form.fullName);
+      fd.append('surname', form.surname);
       fd.append('company', form.company);
       fd.append('cscsCardNumber', form.cscsCardNumber);
       fd.append('cscsCardType', form.cscsCardType);
+      fd.append('cscsSchemeId', form.cscsSchemeId);
       fd.append('cscsExpiry', form.cscsExpiry);
       if (cardImage) fd.append('cscsCardImage', cardImage);
 
@@ -199,6 +206,21 @@ export function IdentityForm({
         onChange={(e) => update('fullName', e.target.value)}
       />
 
+      {/* Surname, ASKED rather than derived.
+            CSCS Smart Check looks a card up by scheme + surname + registration
+            number. "The last word of the full name" is wrong for compound
+            surnames and for names written family-name-first, and a wrong surname
+            comes back "not found" — which at a site gate reads as a rejected
+            card. One extra field beats turning a competent worker away. */}
+      <TextField
+        label="Surname"
+        autoComplete="family-name"
+        autoCapitalize="words"
+        placeholder="Your family name, as it appears on your card"
+        value={form.surname}
+        onChange={(e) => update('surname', e.target.value)}
+      />
+
       <TextField
         label="Company"
         autoComplete="organization"
@@ -257,6 +279,40 @@ export function IdentityForm({
                 ))}
               </select>
             </div>
+            {/* Card scheme.
+                Only offered once the documented scheme list is in: a picker with
+                one entry implies the others do not exist, and would send an ECS
+                or CPCS holder looking for a scheme that is missing only because
+                we have not typed it in yet. Until then the card is still
+                captured and simply stays unverified — see schemes.ts. */}
+            {schemesAreUsable() ? (
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="cscsSchemeId"
+                  className="block text-sm font-semibold text-ink"
+                >
+                  Card scheme
+                </label>
+                <select
+                  id="cscsSchemeId"
+                  className="touch-target w-full rounded-xl border border-line bg-surface px-4 py-3 text-lg text-ink"
+                  value={form.cscsSchemeId}
+                  onChange={(e) => update('cscsSchemeId', e.target.value)}
+                >
+                  <option value="">Select card scheme…</option>
+                  {CSCS_SCHEMES.map((scheme) => (
+                    <option key={scheme.id} value={scheme.id}>
+                      {scheme.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-ink-subtle">
+                  The scheme that issued your card. Needed to check it against
+                  CSCS.
+                </p>
+              </div>
+            ) : null}
+
             <TextField
               label="Expiry date"
               type="date"

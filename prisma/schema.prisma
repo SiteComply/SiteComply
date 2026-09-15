@@ -295,11 +295,25 @@ enum GpsUnavailablePolicy {
 model Worker {
   id             String        @id @default(cuid())
   fullName       String
+  /// Family name as held by the card scheme, captured separately.
+  ///
+  /// NOT derived from fullName. CSCS Smart Check identifies a card by scheme +
+  /// surname + registration number, and "the last word of the full name" is
+  /// wrong for compound surnames and for names written family-name-first — a
+  /// wrong surname returns "not found", which at a site gate reads as a rejected
+  /// card. Nullable and never backfilled: a worker without one stays unverified
+  /// until they supply it, which is honest, where a guess would not be.
+  surname        String?
   company        String
   mobile         String        @unique // E.164, normalised from a UK 07… number
   // Optional CSCS/ECS card details, captured where relevant.
   cscsCardNumber String?
   cscsCardType   CscsCardType?
+  /// Smart Check scheme identifier, e.g. "C4T". Chosen from a list, never typed.
+  ///
+  /// Distinct from cscsScheme below, which is what the VERIFIED record says the
+  /// scheme is. This one is an input to the lookup; that one is an output of it.
+  cscsSchemeId   String?
   cscsExpiry     DateTime? // Stored as date (UTC midnight); displayed DD/MM/YYYY
 
   // CSCS Smart Check verification (SC-001). When a card number is captured it is
