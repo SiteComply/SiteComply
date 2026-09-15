@@ -163,6 +163,26 @@ Check will later verify.
 - [ ] **Confirm migration `20260814090000_cscs_smartcheck_readiness` is applied**
       (see the wider migration reconciliation in `docs/AUTH-OVERRIDE-CUTOVER.md` §5).
 
+### Phase 2 — deployment ORDER (read this first)
+
+The V2.6 credential columns must reach the database **before** the code that
+names them. Prisma lists every column explicitly in its SELECTs, so:
+
+| | |
+| --- | --- |
+| Old build + new columns | **safe** — the old client never names them |
+| New build + old columns | **breaks** — `The column CscsConfig.smartCheckUsername does not exist` |
+
+`getCscsRuntimeConfig()` is read on the operative check-in path, so deploying
+first would break card submission in production, not merely the admin screen.
+
+1. Apply `~/cscs_v26.sql` (precheck / verify / rollback alongside it). Safe while
+   the current build is running.
+2. Then deploy.
+
+Rollback is only safe in the window **after** the migration and **before** the
+deploy; once the new build is live it names those columns.
+
 ### Phase 2 — when Smart Check is connected
 
 - [ ] **Obtain Smart Check partner credentials** from CSCS (the material external
