@@ -621,6 +621,73 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
     ok('  and names the line to change', /REQUEST_SHAPE.scanType/.test(v2.detail), v2.detail);
   }
 
+  // ── 26. the control request: is the 403 ours or theirs? ────────────────
+  {
+    const refusedToo = classifySmartCheckResponse(403, '', HOST, {
+      tried: CANDIDATE_AUTH_PRESENTATIONS.map((p) => `${p.label} → 403`),
+      controlResult: '403',
+    });
+    ok('a control that is ALSO refused clears the integration',
+      /not caused by anything this integration changed/.test(refusedToo.detail), refusedToo.detail);
+    ok('  and says what the control was', /WITHOUT scanType returned 403/.test(refusedToo.detail), refusedToo.detail);
+
+    const differed = classifySmartCheckResponse(403, '', HOST, {
+      tried: ['Bearer <token> + x-api-key → 403'],
+      controlResult: '400 responseMessage: Scan type is required',
+    });
+    ok('a control that behaves DIFFERENTLY points back at our request',
+      /follows from the request this integration now sends/.test(differed.detail), differed.detail);
+    ok('  and does not blame CSCS authorisation',
+      !/not caused by anything this integration changed/.test(differed.detail), differed.detail);
+    ok('  quoting the control\'s own message',
+      /Scan type is required/.test(differed.detail), differed.detail);
+
+    const none = classifySmartCheckResponse(403, '', HOST, { tried: ['x → 403'] });
+    ok('with no control run, nothing is claimed either way',
+      !/CONTROL/.test(none.detail), none.detail);
+  }
+
+  // ── 26b. the control must actually BE sent, and BE a control ───────────
+  // Mutation testing found both of these missing: every assertion above fed
+  // classifySmartCheckResponse a controlResult by hand, so deleting the code
+  // that produces one changed nothing. The wiring needs its own guard.
+  {
+    const src = readFileSync('services/cscs/smartCheckConnectionTest.ts', 'utf8');
+    const block = src.slice(src.indexOf('THE CONTROL.'), src.indexOf('res = attempt as Response;'));
+    ok('the control is sent when the card call is refused',
+      /attempt\.status === 401 \|\| attempt\.status === 403/.test(block), 'gate missing');
+    ok('  and it goes through the timeout helper', /await cardFetch\(/.test(block), 'not using cardFetch');
+    ok('  and its result is recorded', /controlResult = /.test(block), 'never recorded');
+
+    // The control exists to isolate ONE variable. If it sends scanType it is
+    // not a control, it is a second identical request.
+    const body = block.slice(block.indexOf('cardFetch('), block.indexOf('authHeaders'));
+    ok('the control body carries the three identifying fields',
+      ['schemeId', 'surname', 'registrationNumber'].every((f) => body.includes(`fields.${f}`)), body);
+    ok('  and NOT scanType — that is the variable being isolated',
+      !body.includes('fields.scanType'), body);
+  }
+
+  // ── 27. one timeout per request, not one across all of them ────────────
+  {
+    const src = readFileSync('services/cscs/smartCheckConnectionTest.ts', 'utf8');
+    const stage2 = src.slice(src.indexOf('STAGE 2 — ask about a card'));
+    ok('the card fetches go through a per-request helper',
+      /const cardFetch = async \(/.test(stage2), 'helper missing');
+    ok('  which arms its own controller', /cardFetch = async[\s\S]{0,400}new AbortController\(\)/.test(stage2));
+    ok('  and clears it', /cardFetch = async[\s\S]{0,700}clearTimeout\(abort\)/.test(stage2));
+    // The helper contains the only raw fetch; every call site must go through
+    // it, or that call site has no timeout of its own.
+    const rawFetches = (stage2.match(/await fetch\(target\.toString\(\)/g) ?? []).length;
+    ok('exactly one raw fetch in the card stage — the helper\'s own',
+      rawFetches === 1, `${rawFetches} raw fetches`);
+    const helperBody = stage2.slice(stage2.indexOf('const cardFetch = async ('), stage2.indexOf('  };', stage2.indexOf('const cardFetch = async (')));
+    ok('  and it is inside the helper', /await fetch\(target\.toString\(\)/.test(helperBody));
+    ok('every card call site uses the helper',
+      (stage2.match(/await cardFetch\(/g) ?? []).length >= 3,
+      `${(stage2.match(/await cardFetch\(/g) ?? []).length} call sites`);
+  }
+
   server.closeAllConnections();
   await new Promise<void>((r) => server.close(() => r()));
   console.log(`\n  ${pass} passed, ${fail} failed`);

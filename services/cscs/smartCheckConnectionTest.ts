@@ -251,8 +251,29 @@ export async function testSmartCheckConnection(credentials: {
       : '';
 
   /* STAGE 2 — ask about a card, with the token from stage 1. */
-  const controller = new AbortController();
-  const abort = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  /*
+   * A timeout PER REQUEST, not one shared across all of them.
+   *
+   * A single AbortController armed once covered what is now up to ten calls, so
+   * the budget for one request was spent by the ones before it and a later probe
+   * would abort partway through a run that was otherwise working. It would have
+   * surfaced as an intermittent "could not reach" that moved around depending on
+   * how many candidates a run got through.
+   */
+  const cardFetch = async (body: unknown, headers: Record<string, string>) => {
+    const controller = new AbortController();
+    const abort = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      return await fetch(target.toString(), {
+        method: REQUEST_SHAPE.method,
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(abort);
+    }
+  };
 
   /*
    * Try each way of presenting the token until one is not refused.
@@ -270,6 +291,8 @@ export async function testSmartCheckConnection(credentials: {
   const presentationsTried: string[] = [];
   const scanTypesTried: string[] = [];
   let acceptedScanType: string | null = null;
+  /** What the pre-scanType body returns now. See THE CONTROL below. */
+  let controlResult: string | null = null;
 
   /** The probe's body, with one scan type substituted in. */
   const probeBody = (scanType: string) => ({
@@ -281,13 +304,11 @@ export async function testSmartCheckConnection(credentials: {
   try {
     let attempt: Response | null = null;
     for (const p of CANDIDATE_AUTH_PRESENTATIONS) {
-      attempt = await fetch(target.toString(), {
-        method: REQUEST_SHAPE.method,
-        // Built per request and never logged, exactly as the live path does.
-        headers: authHeaders(creds, token, p),
-        body: JSON.stringify(probeBody(REQUEST_SHAPE.scanType)),
-        signal: controller.signal,
-      });
+      // Built per request and never logged, exactly as the live path does.
+      attempt = await cardFetch(
+        probeBody(REQUEST_SHAPE.scanType),
+        authHeaders(creds, token, p),
+      );
       presentationsTried.push(`${p.label} → ${attempt.status}`);
       if (attempt.status !== 401 && attempt.status !== 403) break;
     }
@@ -308,12 +329,10 @@ export async function testSmartCheckConnection(credentials: {
         scanTypesTried.push(`${REQUEST_SHAPE.scanType} → ${attempt.status} ${envelopeMessage(firstBody) ?? ''}`.trim());
         for (const candidate of CANDIDATE_SCAN_TYPES) {
           if (candidate === REQUEST_SHAPE.scanType) continue;
-          const next = await fetch(target.toString(), {
-            method: REQUEST_SHAPE.method,
-            headers: authHeaders(creds, token),
-            body: JSON.stringify(probeBody(candidate)),
-            signal: controller.signal,
-          });
+          const next = await cardFetch(
+            probeBody(candidate),
+            authHeaders(creds, token),
+          );
           const text = await next.clone().text().catch(() => '');
           scanTypesTried.push(`${candidate} → ${next.status} ${envelopeMessage(text) ?? ''}`.trim());
           if (!/scan\s*type/i.test(text)) {
@@ -325,6 +344,40 @@ export async function testSmartCheckConnection(credentials: {
         }
       }
     }
+    /*
+     * THE CONTROL.
+     *
+     * The run before this one sent three fields and got HTTP 400 "Scan type is
+     * required" — the service reading our body. Adding scanType, this run gets
+     * 403 on every presentation. Those two facts cannot both be explained by a
+     * CSCS-side permission: a permission does not un-grant itself between two
+     * runs and then object to a field name in between.
+     *
+     * So re-send the EXACT body that produced the 400, once, and report what
+     * comes back. It is the difference between "our change caused this" and
+     * "something on their side changed", and it is not a question worth settling
+     * by argument when one request settles it.
+     *
+     * Only when the card call was refused: there is nothing to control for when
+     * it was not.
+     */
+    if (attempt && (attempt.status === 401 || attempt.status === 403)) {
+      const control = await cardFetch(
+        {
+          [REQUEST_SHAPE.fields.schemeId]: PROBE_CARD.schemeId,
+          [REQUEST_SHAPE.fields.surname]: PROBE_CARD.surname,
+          [REQUEST_SHAPE.fields.registrationNumber]: PROBE_CARD.registrationNumber,
+        },
+        authHeaders(creds, token),
+      ).catch(() => null);
+      if (control) {
+        const text = await control.text().catch(() => '');
+        controlResult = `${control.status}${
+          envelopeMessage(text) ? ` ${envelopeMessage(text)}` : ''
+        }`;
+      }
+    }
+
     res = attempt as Response;
   } catch (e) {
     const timedOut = e instanceof Error && e.name === 'AbortError';
@@ -342,8 +395,6 @@ export async function testSmartCheckConnection(credentials: {
         ? 'The service accepted the connection but did not answer in time. Check the URL with CSCS, or try again.'
         : 'The address could not be resolved or refused the connection. Check the API URL for typos.',
     });
-  } finally {
-    clearTimeout(abort);
   }
 
   const bodyText = await res.text().catch(() => '');
@@ -356,6 +407,7 @@ export async function testSmartCheckConnection(credentials: {
       headers: keptHeaders(res.headers),
       scanTypes: scanTypesTried,
       acceptedScanType,
+      controlResult,
     },
   );
   return done({ ...verdict, detail: `${verdict.detail}${shapeNote}` });
@@ -575,6 +627,7 @@ export function classifySmartCheckResponse(
     headers?: Record<string, string>;
     scanTypes?: string[];
     acceptedScanType?: string | null;
+    controlResult?: string | null;
   } = {},
 ): Omit<CscsConnectionTestResult, 'durationMs'> {
   const trace = probe.headers
@@ -594,6 +647,20 @@ export function classifySmartCheckResponse(
    * and it is drawable: the same complaint every time means the service never
    * saw a scan type at all.
    */
+  /*
+   * The control's verdict, stated rather than implied.
+   *
+   * A different answer to the old body means the difference is OURS. The same
+   * answer means it is not, and that is the point at which "ask CSCS" becomes
+   * the right advice rather than a guess.
+   */
+  const control = probe.controlResult
+    ? ` CONTROL — the same request WITHOUT ${REQUEST_SHAPE.fields.scanType} returned ${probe.controlResult}.` +
+      (/^40[13]/.test(probe.controlResult)
+        ? ' It was refused the same way, so the refusal is not caused by anything this integration changed — the request that previously reached body validation no longer does.'
+        : ' It was NOT refused the same way, so the refusal follows from the request this integration now sends, not from an authorisation on the CSCS side.')
+    : '';
+
   const scans = probe.scanTypes?.length
     ? ` Scan types tried: ${probe.scanTypes.join('; ')}.` +
       (probe.acceptedScanType
@@ -631,8 +698,10 @@ export function classifySmartCheckResponse(
           ? ` The card path "${REQUEST_SHAPE.path}" is the documented one, so this is no longer a wrong-endpoint 403. On this gateway that leaves the API key not being authorised for this endpoint — a usage-plan or subscription setting CSCS control — or the token not being accepted for card lookups. The presentations below distinguish those: all four refused identically points at the key's authorisation, not at the header format.`
           : ` The card path is NOT confirmed: "${REQUEST_SHAPE.path}" appended to the configured base gives a URL with two version segments, and this gateway returns 403 with an empty body for a route that does not exist — the same answer a refused token gives. The documented card-validation path is the missing piece.`) +
         (allRefused
-          ? ' Every way of presenting the token was refused identically, which is what an unmatched route looks like and is not what a single wrong header format looks like.'
+          ? ' Every way of presenting the token was refused identically, which is not what a single wrong header format looks like.'
           : '') +
+        control +
+        scans +
         attempts +
         trace,
     };
