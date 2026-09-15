@@ -3,6 +3,8 @@ import {
   getSmartCheckToken,
   authHeaders,
   clearSmartCheckTokens,
+  SmartCheckAuthError,
+  bodySnippet,
 } from './smartCheckAuth';
 
 /**
@@ -71,7 +73,11 @@ export type CscsConnectionOutcome =
   /** The credentials were rejected by /authenticate. */
   | 'SIGN_IN_REJECTED'
   /** Signed in, but no token could be found in the response. */
-  | 'SIGN_IN_NO_TOKEN';
+  | 'SIGN_IN_NO_TOKEN'
+  /** The service answered the sign-in with a non-2xx that was not 401/403. */
+  | 'SIGN_IN_HTTP_ERROR'
+  /** The service answered 2xx, but the body would not parse as JSON. */
+  | 'SIGN_IN_UNREADABLE';
 
 export interface CscsConnectionTestResult {
   outcome: CscsConnectionOutcome;
@@ -204,42 +210,7 @@ export async function testSmartCheckConnection(credentials: {
     clearSmartCheckTokens();
     token = await getSmartCheckToken(creds, { forceRefresh: true });
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'Sign-in failed.';
-    if (/no token was found/i.test(message)) {
-      return done({
-        outcome: 'SIGN_IN_NO_TOKEN',
-        ok: false,
-        severity: 'error',
-        stage: 'sign-in',
-        title: 'Signed in, but no token came back.',
-        detail:
-          'Smart Check accepted the credentials but the response did not contain a token under any name we recognise. The expected field names are listed in AUTH_SHAPE and need confirming against the partner documentation.',
-      });
-    }
-    if (/rejected the username/i.test(message)) {
-      return done({
-        outcome: 'SIGN_IN_REJECTED',
-        ok: false,
-        severity: 'error',
-        stage: 'sign-in',
-        title: 'Smart Check rejected the credentials.',
-        detail:
-          'The username, password or API key was not accepted by /authenticate. Check all three against the partner documentation.',
-      });
-    }
-    // Name the host. A typo in the base URL is the most likely cause, and a
-    // message that omits it makes the admin go looking for a network problem.
-    return done({
-      outcome: 'UNREACHABLE',
-      ok: false,
-      severity: 'error',
-      stage: 'sign-in',
-      title: `Could not reach ${target.host} to sign in to Smart Check.`,
-      // Carry the underlying reason. A generic sentence here is what made a
-      // real failure undiagnosable: it discarded the one string that said
-      // whether this was DNS, TLS, a refused connection or a timeout.
-      detail: `${message} Check the base URL is exactly as issued by CSCS, and that the host is reachable from the internet.`,
-    });
+    return done(classifySignInFailure(e, target.host));
   }
 
   /* STAGE 2 — ask about a card, with the token from stage 1. */
@@ -281,6 +252,123 @@ export async function testSmartCheckConnection(credentials: {
 
   const bodyText = await res.text().catch(() => '');
   return done(classifySmartCheckResponse(res.status, bodyText, target.host));
+}
+
+/**
+ * Turn a sign-in failure into a verdict — from the failure's OWN account of
+ * itself, not from its prose.
+ *
+ * THE BUG THIS REPLACES. The previous version matched two regular expressions
+ * against the message and sent everything else to UNREACHABLE, titled
+ * "Could not reach {host}". So a real, fast answer from the partner —
+ * HTTP 200 with a body that was not JSON — was reported as a host that could
+ * not be reached, with an 80ms round trip sitting right next to it saying
+ * otherwise. Two rounds of diagnosis went hunting for a network fault and
+ * outbound IP allow-listing, neither of which existed.
+ *
+ * A catch-all is fine. A catch-all that names a specific, wrong cause is not.
+ * Only `kind: 'transport'` means the host was not reached; every other kind
+ * means it answered, and the verdict says which.
+ *
+ * WHAT IS SHOWN. Status, declared content type, body length and a short
+ * redacted excerpt. That is the evidence an admin needs to tell "my URL is
+ * wrong" from "my credentials are wrong" from "our request shape is wrong",
+ * and none of it is a secret — bodySnippet() strips tokens, long values and
+ * personal data before it gets here.
+ */
+export function classifySignInFailure(
+  e: unknown,
+  host: string,
+): Omit<CscsConnectionTestResult, 'durationMs'> {
+  const message = e instanceof Error ? e.message : 'Sign-in failed.';
+  const failure = e instanceof SmartCheckAuthError ? e.failure : undefined;
+
+  // An error that is not ours carries no kind. Treat it as transport — the only
+  // honest reading of "something threw and we do not know what" — but say so
+  // rather than asserting the host is unreachable.
+  const kind = failure?.kind ?? 'unknown';
+
+  /** "HTTP 200, 0 bytes, application/json" — the facts, in one clause. */
+  const facts = failure
+    ? [
+        failure.status !== undefined ? `HTTP ${failure.status}` : null,
+        failure.bodyBytes !== undefined ? `${failure.bodyBytes} bytes` : null,
+        failure.contentType ?? null,
+      ]
+        .filter(Boolean)
+        .join(', ')
+    : '';
+  const withBody = (lead: string) =>
+    failure?.bodySnippet
+      ? `${lead} The service replied: ${failure.bodySnippet}`
+      : lead;
+
+  if (kind === 'no-token') {
+    return {
+      outcome: 'SIGN_IN_NO_TOKEN',
+      httpStatus: failure?.status,
+      ok: false,
+      severity: 'error',
+      stage: 'sign-in',
+      title: 'Signed in, but no token came back.',
+      detail: `${message} The expected field names are listed in AUTH_SHAPE and need confirming against the partner documentation.`,
+    };
+  }
+
+  if (kind === 'rejected') {
+    return {
+      outcome: 'SIGN_IN_REJECTED',
+      httpStatus: failure?.status,
+      ok: false,
+      severity: 'error',
+      stage: 'sign-in',
+      title: 'Smart Check rejected the credentials.',
+      detail: withBody(
+        `The username, password or API key was not accepted by /authenticate${facts ? ` (${facts})` : ''}. Check all three against the partner documentation, including for leading or trailing spaces.`,
+      ),
+    };
+  }
+
+  if (kind === 'unreadable') {
+    return {
+      outcome: 'SIGN_IN_UNREADABLE',
+      httpStatus: failure?.status,
+      ok: false,
+      severity: 'error',
+      stage: 'sign-in',
+      // The host is NOT blamed. It answered, and quickly.
+      title: `${host} answered the sign-in, but not with JSON.`,
+      detail: withBody(
+        `The connection, the address and the TLS handshake are all fine — the service replied${facts ? ` with ${facts}` : ''} and the body could not be parsed. An empty body here usually means /authenticate did not accept the request as formed, most often the field names or the API key, rather than that the username or password is wrong.`,
+      ),
+    };
+  }
+
+  if (kind === 'http') {
+    return {
+      outcome: 'SIGN_IN_HTTP_ERROR',
+      httpStatus: failure?.status,
+      ok: false,
+      severity: 'error',
+      stage: 'sign-in',
+      title: `Smart Check refused the sign-in${failure?.status ? ` with HTTP ${failure.status}` : ''}.`,
+      detail: withBody(
+        `The host was reached and answered${facts ? ` (${facts})` : ''}. A 404 means the sign-in path is wrong for this base URL; a 5xx means the partner service is having trouble.`,
+      ),
+    };
+  }
+
+  // Genuinely no answer: DNS, TLS, a refused connection, or our own timeout.
+  return {
+    outcome: 'UNREACHABLE',
+    ok: false,
+    severity: 'error',
+    stage: 'sign-in',
+    title: failure?.timedOut
+      ? `No response from ${host} in time.`
+      : `Could not reach ${host} to sign in to Smart Check.`,
+    detail: `${message} Check the base URL is exactly as issued by CSCS, and that the host is reachable from the internet.`,
+  };
 }
 
 /**
@@ -386,8 +474,12 @@ export function classifySmartCheckResponse(
       severity: 'warning',
       httpStatus: status,
       title: `${host} answered, but the response could not be read.`,
-      detail:
-        'The connection and credentials are working. The reply was not the JSON object the integration expects, so verification would not yet produce a usable result.',
+      // Show the reply, for the same reason the sign-in stage now does: an
+      // admin cannot act on "could not be read" but can act on "0 bytes" or on
+      // an error envelope quoting a field name.
+      detail: `The connection and credentials are working. The reply was not the JSON object the integration expects (${bodyText.length} bytes), so verification would not yet produce a usable result.${
+        bodySnippet(bodyText) ? ` The service replied: ${bodySnippet(bodyText)}` : ''
+      }`,
     };
   }
 

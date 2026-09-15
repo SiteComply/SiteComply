@@ -1,4 +1,5 @@
 import { CscsVerifyError } from './CscsProvider';
+import { redact } from '@/services/telemetry/errorLog';
 
 /**
  * Smart Check V2.6 authentication (SC-001 Phase 2).
@@ -102,6 +103,87 @@ const ASSUMED_LIFETIME_MS = 10 * 60_000;
  */
 const TIMEOUT_MS = 30_000;
 
+/**
+ * WHY THE SIGN-IN FAILED, as data rather than as a sentence.
+ *
+ * The connection test used to work out what had happened by running regular
+ * expressions over the message text, and anything it did not recognise fell into
+ * "could not reach the host". So "signed in but the body was not JSON" — which
+ * PROVES the host was reached and answered — was reported as an unreachable
+ * host, and two rounds of diagnosis went looking for a network fault that did
+ * not exist.
+ *
+ * A classifier that reads prose is a classifier that silently misfiles the case
+ * nobody thought of. This is the kind, explicitly.
+ *
+ *   transport   no HTTP response at all — DNS, TLS, refused, timeout.
+ *   rejected    401/403. The credentials were seen and refused.
+ *   http        any other non-2xx. The service answered; it said no.
+ *   unreadable  2xx whose body would not parse as JSON.
+ *   no-token    parsed fine, but carried no token we recognise.
+ */
+export type SmartCheckAuthFailureKind =
+  | 'transport'
+  | 'rejected'
+  | 'http'
+  | 'unreadable'
+  | 'no-token';
+
+export interface SmartCheckAuthFailure {
+  kind: SmartCheckAuthFailureKind;
+  /** HTTP status, when there was a response. */
+  status?: number;
+  /** Declared content type, which is often the giveaway on an unreadable body. */
+  contentType?: string;
+  /** Length of the body in bytes. Zero is a real and informative answer. */
+  bodyBytes?: number;
+  /** A short, redacted excerpt. Never the whole body, never a token. */
+  bodySnippet?: string;
+  /** undici's error code on a transport failure (ENOTFOUND, ECONNREFUSED…). */
+  code?: string;
+  /** True when the request was aborted by our own timeout. */
+  timedOut?: boolean;
+}
+
+/**
+ * A sign-in failure that knows what it was.
+ *
+ * Still a CscsVerifyError, so every existing catch — the provider's included —
+ * behaves exactly as before. The extra field is additive.
+ */
+export class SmartCheckAuthError extends CscsVerifyError {
+  constructor(
+    message: string,
+    readonly failure: SmartCheckAuthFailure,
+    cause?: unknown,
+    retryable = false,
+  ) {
+    super(message, cause, retryable);
+    this.name = 'SmartCheckAuthError';
+  }
+}
+
+/**
+ * How much of a response body may be shown to an admin.
+ *
+ * Enough to recognise an AWS error envelope or an HTML error page; far too
+ * little to be a useful copy of anything. Redacted with the same rules the error
+ * log uses, because a 2xx body that failed to parse could still be a SUCCESS
+ * body — one containing a token — arriving in a shape we did not expect.
+ */
+const MAX_SNIPPET = 300;
+
+export function bodySnippet(text: string): string | undefined {
+  const collapsed = text.replace(/\s+/g, ' ').trim();
+  if (!collapsed) return undefined;
+  const safe = redact(collapsed)
+    // Redact anything long enough to be a credential even if it is not shaped
+    // like one of redact()'s known patterns. A 40-character run in an
+    // unparseable body is far more likely to be a secret than a useful clue.
+    .replace(/[A-Za-z0-9._\-+/=]{40,}/g, '[long value]');
+  return safe.length > MAX_SNIPPET ? `${safe.slice(0, MAX_SNIPPET)}…` : safe;
+}
+
 export interface SmartCheckCredentials {
   apiUrl: string;
   apiKey: string;
@@ -199,13 +281,17 @@ export async function authenticate(
     // The host and the error code, never the credentials: undici's messages
     // carry the URL, not the headers or body, so this is safe to log and to
     // show an admin.
+    //
+    // This is the ONLY branch that means the host was not reached. Everything
+    // below here had an answer.
     const err = e as { name?: string; message?: string; cause?: { code?: string } };
     const code = err?.cause?.code;
     const aborted = err?.name === 'AbortError' || code === 'UND_ERR_ABORTED';
-    throw new CscsVerifyError(
+    throw new SmartCheckAuthError(
       aborted
         ? `Smart Check did not answer within ${TIMEOUT_MS / 1000} seconds (${target.host}).`
         : `Could not reach ${target.host} to sign in to Smart Check${code ? ` (${code})` : ''}.`,
+      { kind: 'transport', code, timedOut: aborted },
       e,
       true,
     );
@@ -213,28 +299,55 @@ export async function authenticate(
     clearTimeout(abort);
   }
 
+  /*
+   * Read the body ONCE, as text, before deciding anything.
+   *
+   * res.json() discards the bytes on failure, so the old code could say "the
+   * response was unreadable" and then had nothing to show for it — which is
+   * precisely the case where the body is the whole diagnosis. The status,
+   * the declared content type and its LENGTH are all evidence: this partner
+   * answers some requests with an empty body and `content-type:
+   * application/json` set anyway, and an empty body is exactly what makes
+   * JSON.parse fail.
+   */
+  const contentType = res.headers.get('content-type') ?? undefined;
+  const rawBody = await res.text().catch(() => '');
+  const evidence = {
+    status: res.status,
+    contentType,
+    bodyBytes: Buffer.byteLength(rawBody),
+    bodySnippet: bodySnippet(rawBody),
+  };
+
   if (res.status === 401 || res.status === 403) {
-    throw new CscsVerifyError(
+    throw new SmartCheckAuthError(
       'Smart Check rejected the username, password or API key.',
+      { kind: 'rejected', ...evidence },
       undefined,
       false,
     );
   }
   if (!res.ok) {
-    throw new CscsVerifyError(
+    throw new SmartCheckAuthError(
       `Smart Check sign-in returned HTTP ${res.status}.`,
+      { kind: 'http', ...evidence },
       undefined,
       res.status === 429 || res.status >= 500,
     );
   }
 
-  const payload = (await res.json().catch(() => null)) as Record<
-    string,
-    unknown
-  > | null;
-  if (!payload) {
-    throw new CscsVerifyError(
-      'Smart Check sign-in returned an unreadable response.',
+  let payload: Record<string, unknown> | null = null;
+  try {
+    payload = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : null;
+  } catch {
+    payload = null;
+  }
+  if (!payload || typeof payload !== 'object') {
+    throw new SmartCheckAuthError(
+      // The status is IN the message now. "Unreadable" on its own reads like a
+      // network fault; "HTTP 200 with an empty body" reads like what it is.
+      `Smart Check answered HTTP ${res.status} but the body was not JSON (${evidence.bodyBytes} bytes${contentType ? `, ${contentType}` : ''}).`,
+      { kind: 'unreadable', ...evidence },
       undefined,
       true,
     );
@@ -244,8 +357,12 @@ export async function authenticate(
   if (typeof token !== 'string' || !token) {
     // Do NOT proceed with an undefined token. It would fail later as a 401 on
     // the card call and read as a credentials problem rather than a shape one.
-    throw new CscsVerifyError(
-      `Smart Check signed in but no token was found in the response. Expected one of: ${AUTH_SHAPE.tokenFields.join(', ')}.`,
+    //
+    // The TOP-LEVEL KEYS are named, not the values. Which fields came back is
+    // the answer to "is the request shape wrong", and none of them is a secret.
+    throw new SmartCheckAuthError(
+      `Smart Check signed in but no token was found in the response. Expected one of: ${AUTH_SHAPE.tokenFields.join(', ')}. The response carried: ${Object.keys(payload).join(', ') || '(no fields)'}.`,
+      { kind: 'no-token', ...evidence, bodySnippet: undefined },
       undefined,
       false,
     );
