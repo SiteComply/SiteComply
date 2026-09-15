@@ -25,7 +25,10 @@ import {
 import {
   classifySignInFailure,
   signInWithCandidateShapes,
+  classifySmartCheckResponse,
 } from '../services/cscs/smartCheckConnectionTest';
+import { CANDIDATE_AUTH_PRESENTATIONS, authHeaders } from '../services/cscs/smartCheckAuth';
+import { REQUEST_SHAPE } from '../services/cscs/smartCheckProvider';
 import {
   CANDIDATE_FIELD_SHAPES,
   AUTH_SHAPE,
@@ -245,8 +248,13 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
     ok('we identify ourselves, not as "node"', req.headers['user-agent'] === AUTH_SHAPE.userAgent, req.headers['user-agent']);
     ok('the api key rides on x-api-key', req.headers['x-api-key'] === 'stub-key', Object.keys(req.headers));
     ok('content-type is application/json', req.headers['content-type'] === 'application/json');
-    ok('the body is the documented two fields and nothing else',
-      JSON.stringify(Object.keys(JSON.parse(req.body)).sort()) === '["password","username"]', req.body);
+    // Asserted against AUTH_SHAPE, not against a literal: the casing is the thing
+    // that was wrong, so hard-coding it here would just re-freeze the old bug.
+    ok('the body is exactly the two fields AUTH_SHAPE names',
+      JSON.stringify(Object.keys(JSON.parse(req.body)).sort()) ===
+        JSON.stringify([AUTH_SHAPE.fields.password, AUTH_SHAPE.fields.username].sort()), req.body);
+    ok('  and the live shape is the capital-N one the service accepted',
+      AUTH_SHAPE.fields.username === 'userName', AUTH_SHAPE.fields.username);
 
     // The live path must ALWAYS send AUTH_SHAPE.fields — the probe is the
     // connection test's business and must never leak into verification.
@@ -427,6 +435,56 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
     ok('  and distinguishes the lowercase one',
       /\{username, password\}/.test(classifySignInFailure(e2, HOST).detail ?? ''),
       classifySignInFailure(e2, HOST).detail);
+  }
+
+  // ── 19. the card-stage 403 must not assert a cause it cannot tell apart ─
+  // Measured against the live gateway: a nonsense path under the same base
+  // returns 403 with an empty body — identical to a refused token.
+  {
+    const tried = CANDIDATE_AUTH_PRESENTATIONS.map((p) => `${p.label} → 403`);
+    const v = classifySmartCheckResponse(403, '', HOST, {
+      tried,
+      headers: { 'x-amzn-requestid': 'req-9' },
+    });
+    ok('a card 403 still reports sign-in as successful', /Authentication passed/.test(v.detail), v.detail);
+    ok('  it does NOT name the header format as the blocker',
+      !/whether the Authorization header wants a bare token/.test(v.detail), v.detail);
+    ok('  it names the unconfirmed path instead', /card path is NOT confirmed/.test(v.detail), v.detail);
+    ok('  it explains that this gateway 403s a missing route', /route that does not exist/.test(v.detail), v.detail);
+    ok('  it reports every presentation tried', tried.every((t) => v.detail.includes(t)), v.detail);
+    ok('  and draws the conclusion from all four failing', /is not what a single wrong header format looks like/.test(v.detail), v.detail);
+    ok('  the AWS request id is carried', /req-9/.test(v.detail), v.detail);
+    ok('  the stage is card-check', v.stage === 'card-check', v.stage);
+  }
+
+  // ── 20. the four token presentations ───────────────────────────────────
+  {
+    ok('all four combinations are covered', CANDIDATE_AUTH_PRESENTATIONS.length === 4, CANDIDATE_AUTH_PRESENTATIONS.length);
+    const labels = CANDIDATE_AUTH_PRESENTATIONS.map((p) => `${p.prefix}|${p.sendApiKey}`);
+    ok('  they are distinct', new Set(labels).size === 4, labels);
+    ok('  the first is what AUTH_SHAPE sends today',
+      CANDIDATE_AUTH_PRESENTATIONS[0]!.prefix === AUTH_SHAPE.tokenPrefix &&
+        CANDIDATE_AUTH_PRESENTATIONS[0]!.sendApiKey === AUTH_SHAPE.sendApiKeyWithToken,
+      CANDIDATE_AUTH_PRESENTATIONS[0]);
+
+    const C = creds('https://x');
+    const bearer = authHeaders(C, 'TOK', CANDIDATE_AUTH_PRESENTATIONS[0]!);
+    ok('Bearer form sets the scheme', bearer[AUTH_SHAPE.tokenHeader] === 'Bearer TOK', bearer);
+    ok('  and includes the key', bearer[AUTH_SHAPE.apiKeyHeader] === 'stub-key', bearer);
+
+    const bare = authHeaders(C, 'TOK', { prefix: '', sendApiKey: false });
+    ok('bare form sends the token alone', bare[AUTH_SHAPE.tokenHeader] === 'TOK', bare);
+    ok('  and omits the key entirely', !(AUTH_SHAPE.apiKeyHeader in bare), bare);
+
+    const live = authHeaders(C, 'TOK');
+    ok('with no override it uses AUTH_SHAPE', live[AUTH_SHAPE.tokenHeader] === `${AUTH_SHAPE.tokenPrefix}TOK`, live);
+    ok('the card call identifies itself too', live['user-agent'] === AUTH_SHAPE.userAgent, live['user-agent']);
+  }
+
+  // ── 21. the card path is still flagged as unconfirmed ──────────────────
+  {
+    ok('REQUEST_SHAPE.pathConfirmed is still false — nothing has confirmed it',
+      REQUEST_SHAPE.pathConfirmed === false, REQUEST_SHAPE.pathConfirmed);
   }
 
   server.closeAllConnections();

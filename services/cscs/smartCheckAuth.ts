@@ -44,13 +44,17 @@ export const AUTH_SHAPE = {
   /**
    * Request body field names.
    *
-   * UNCONFIRMED against V2.6. The documented RESPONSE uses `userName` with a
-   * capital N, so lowercase here is an assumption, and a wrong field name is a
-   * live candidate for the empty HTTP 200 the service returns: the request gets
-   * past the gateway, the backend parses it, finds no credentials where it
-   * expects them and answers with nothing. See CANDIDATE_FIELD_SHAPES.
+   * CONFIRMED EMPIRICALLY 2026-09-15: `userName` with a capital N, matching the
+   * casing the response uses. Lowercase `username` produced HTTP 200 with a
+   * zero-length body — the request cleared the gateway, the backend parsed it,
+   * found no credentials where it expected them, and answered with nothing.
+   *
+   * The connection test's candidate probe established this against the live
+   * service and REPORTED it; this line is the deliberate change that followed,
+   * so the live verification path sends the same shape the test proved. Leaving
+   * it lowercase would have meant a test that passes and check-ins that fail.
    */
-  fields: { username: 'username', password: 'password' },
+  fields: { username: 'userName', password: 'password' },
   /**
    * Who we say we are.
    *
@@ -124,8 +128,34 @@ export const CANDIDATE_FIELD_SHAPES: {
   label: string;
   fields: { username: string; password: string };
 }[] = [
-  { label: 'username / password', fields: { username: 'username', password: 'password' } },
+  // First is what AUTH_SHAPE sends, so a run that succeeds here proves the live
+  // shape is right. Since 2026-09-15 that is userName, which the probe itself
+  // established.
   { label: 'userName / password', fields: { username: 'userName', password: 'password' } },
+  { label: 'username / password', fields: { username: 'username', password: 'password' } },
+];
+
+/**
+ * Ways the token can be presented to the card endpoint.
+ *
+ * Two unknowns, so four combinations: bare token versus the "Bearer " scheme,
+ * and whether x-api-key travels alongside. The first entry is what AUTH_SHAPE
+ * sends today, so a run that succeeds there proves the live settings are right.
+ *
+ * SAFE TO PROBE, unlike the sign-in shapes. These carry no credentials — only a
+ * token already obtained — and ask about a synthetic all-zero card number, so a
+ * failed attempt costs nothing and cannot lock an account out. That is why this
+ * list is exhaustive where CANDIDATE_FIELD_SHAPES was capped at two.
+ */
+export const CANDIDATE_AUTH_PRESENTATIONS: {
+  label: string;
+  prefix: string;
+  sendApiKey: boolean;
+}[] = [
+  { label: 'Bearer <token> + x-api-key', prefix: 'Bearer ', sendApiKey: true },
+  { label: 'bare <token> + x-api-key', prefix: '', sendApiKey: true },
+  { label: 'Bearer <token>, no x-api-key', prefix: 'Bearer ', sendApiKey: false },
+  { label: 'bare <token>, no x-api-key', prefix: '', sendApiKey: false },
 ];
 
 /** Refresh this long before the stated expiry, so a call never races it. */
@@ -633,13 +663,22 @@ export async function getSmartCheckToken(
 export function authHeaders(
   creds: SmartCheckCredentials,
   token: string,
+  /**
+   * Override how the token is presented. Used ONLY by the connection test's
+   * probe; the live path passes nothing and always sends AUTH_SHAPE's settings.
+   */
+  presentation: { prefix: string; sendApiKey: boolean } = {
+    prefix: AUTH_SHAPE.tokenPrefix,
+    sendApiKey: AUTH_SHAPE.sendApiKeyWithToken,
+  },
 ): Record<string, string> {
   const headers: Record<string, string> = {
     'content-type': 'application/json',
     accept: 'application/json',
-    [AUTH_SHAPE.tokenHeader]: `${AUTH_SHAPE.tokenPrefix}${token}`,
+    [AUTH_SHAPE.tokenHeader]: `${presentation.prefix}${token}`,
+    'user-agent': AUTH_SHAPE.userAgent,
   };
-  if (AUTH_SHAPE.sendApiKeyWithToken) {
+  if (presentation.sendApiKey) {
     headers[AUTH_SHAPE.apiKeyHeader] = creds.apiKey;
   }
   return headers;

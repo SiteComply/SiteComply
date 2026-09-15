@@ -128,8 +128,15 @@ async function main() {
         state.lastAuthHeaders[AUTH_SHAPE.apiKeyHeader] === 'KEY' &&
         !state.lastAuthHeaders['authorization'],
         `x-api-key=${state.lastAuthHeaders[AUTH_SHAPE.apiKeyHeader]}`);
-    chk('username and password go in the body',
-        state.lastAuthBody?.username === 'USER' && state.lastAuthBody?.password === 'PASS');
+    // Read from AUTH_SHAPE, not a literal. The casing is the thing that was
+    // wrong against the live service — hard-coding it here would re-freeze the
+    // bug the connection test's probe just found.
+    chk('username and password go in the body, under the names AUTH_SHAPE declares',
+        state.lastAuthBody?.[AUTH_SHAPE.fields.username] === 'USER' &&
+        state.lastAuthBody?.[AUTH_SHAPE.fields.password] === 'PASS',
+        JSON.stringify(state.lastAuthBody));
+    chk('and that name is the capital-N one the live service accepted',
+        AUTH_SHAPE.fields.username === 'userName', AUTH_SHAPE.fields.username);
     chk('the token comes back', token === 'ID-TOKEN', token);
     shut(server);
   }

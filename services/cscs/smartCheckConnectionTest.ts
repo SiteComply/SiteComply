@@ -8,6 +8,8 @@ import {
   bodySnippet,
   authenticate,
   CANDIDATE_FIELD_SHAPES,
+  CANDIDATE_AUTH_PRESENTATIONS,
+  keptHeaders,
 } from './smartCheckAuth';
 import type { SmartCheckCredentials } from './smartCheckAuth';
 
@@ -240,19 +242,36 @@ export async function testSmartCheckConnection(credentials: {
   const controller = new AbortController();
   const abort = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
+  /*
+   * Try each way of presenting the token until one is not refused.
+   *
+   * EXHAUSTIVE HERE, unlike the sign-in probe. These requests carry no
+   * credentials — only a token already obtained — and ask about a synthetic
+   * all-zero card, so a refused attempt costs nothing and cannot lock anything
+   * out. The sign-in probe was capped at two for exactly the opposite reason.
+   *
+   * 401 and 403 are the only statuses worth re-asking: they are the ones the
+   * presentation could cause. Any other answer means the endpoint engaged with
+   * the request and the presentation is not the question.
+   */
   let res: Response;
+  const presentationsTried: string[] = [];
   try {
-    res = await fetch(target.toString(), {
-      method: REQUEST_SHAPE.method,
-      headers: {
+    let attempt: Response | null = null;
+    for (const p of CANDIDATE_AUTH_PRESENTATIONS) {
+      attempt = await fetch(target.toString(), {
+        method: REQUEST_SHAPE.method,
         // Built per request and never logged, exactly as the live path does.
-        ...authHeaders(creds, token),
-      },
-      body: JSON.stringify({
-        [REQUEST_SHAPE.fields.cardNumber]: PROBE_CARD_NUMBER,
-      }),
-      signal: controller.signal,
-    });
+        headers: authHeaders(creds, token, p),
+        body: JSON.stringify({
+          [REQUEST_SHAPE.fields.cardNumber]: PROBE_CARD_NUMBER,
+        }),
+        signal: controller.signal,
+      });
+      presentationsTried.push(`${p.label} → ${attempt.status}`);
+      if (attempt.status !== 401 && attempt.status !== 403) break;
+    }
+    res = attempt as Response;
   } catch (e) {
     const timedOut = e instanceof Error && e.name === 'AbortError';
     return done({
@@ -274,7 +293,12 @@ export async function testSmartCheckConnection(credentials: {
   }
 
   const bodyText = await res.text().catch(() => '');
-  const verdict = classifySmartCheckResponse(res.status, bodyText, target.host);
+  const verdict = classifySmartCheckResponse(
+    res.status,
+    bodyText,
+    target.host,
+    { tried: presentationsTried, headers: keptHeaders(res.headers) },
+  );
   return done({ ...verdict, detail: `${verdict.detail}${shapeNote}` });
 }
 
@@ -487,20 +511,51 @@ export function classifySmartCheckResponse(
   status: number,
   bodyText: string,
   host: string,
+  probe: { tried?: string[]; headers?: Record<string, string> } = {},
 ): Omit<CscsConnectionTestResult, 'durationMs'> {
+  const trace = probe.headers
+    ? ` Response headers: ${Object.entries(probe.headers)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join('; ')}.`
+    : '';
+  const attempts = probe.tried?.length
+    ? ` Token presentations tried: ${probe.tried.join('; ')}.`
+    : '';
+
   if (status === 401 || status === 403) {
+    /*
+     * DO NOT ASSERT THE CAUSE HERE.
+     *
+     * This gateway answers 403 with an empty body for a route that DOES NOT
+     * EXIST — measured directly: a deliberately nonsense path under the same
+     * base returns exactly the status, body and headers our card path does. So
+     * a 403 cannot distinguish "the token is presented wrongly" from "there is
+     * no endpoint at this address", and the previous version of this message
+     * named the first as the remaining blocker, which sent the reader after the
+     * header format while the path went unexamined.
+     *
+     * The path is the STRONGER suspect while pathConfirmed is false, because it
+     * is the one thing already known to be wrong: appending it to the documented
+     * base produces two version segments in one URL.
+     */
+    const allRefused = (probe.tried?.length ?? 0) >= CANDIDATE_AUTH_PRESENTATIONS.length;
     return {
       outcome: 'SIGN_IN_OK_CARD_FAILED',
       stage: 'card-check' as const,
       ok: false,
       severity: 'error',
       httpStatus: status,
-      // Sign-in already SUCCEEDED to get here, so the credentials are fine and
-      // saying "check the key" would send the reader down the wrong path. Name
-      // the things that are actually still unconfirmed.
-      title: 'Signed in successfully, but the card endpoint refused the token.',
+      title: `Signed in successfully, but ${host} refused the card request.`,
       detail:
-        'The credentials are correct — authentication passed. What is still unconfirmed is how the token should be presented: whether the Authorization header wants a bare token or the "Bearer " prefix, and whether x-api-key must be sent alongside it. Both are single values in AUTH_SHAPE.',
+        `Authentication passed, so the credentials and the sign-in request are correct.` +
+        (REQUEST_SHAPE.pathConfirmed
+          ? ''
+          : ` The card path is NOT confirmed: "${REQUEST_SHAPE.path}" appended to the configured base gives a URL with two version segments, and this gateway returns 403 with an empty body for a route that does not exist — the same answer a refused token gives. The documented card-validation path is the missing piece.`) +
+        (allRefused
+          ? ' Every way of presenting the token was refused identically, which is what an unmatched route looks like and is not what a single wrong header format looks like.'
+          : '') +
+        attempts +
+        trace,
     };
   }
 
