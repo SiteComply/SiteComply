@@ -41,9 +41,22 @@ check('2xx + empty body → UNREADABLE_RESPONSE', empty.outcome === 'UNREADABLE_
 const arr = classifySmartCheckResponse(200, '[1,2,3]', H);
 check('200 + JSON array → still treated as an object answer', arr.outcome === 'OK', arr.outcome);
 
+// Under V2.6 the card call only happens AFTER sign-in has succeeded, so a 401
+// here is not "the API key is wrong" — it is the token or how it is presented.
+// The outcome name says which: the older UNAUTHORISED sent the reader off to
+// re-check credentials that had already been accepted.
 for (const s of [401, 403]) {
   const r = classifySmartCheckResponse(s, '', H);
-  check(`${s} → UNAUTHORISED / error`, r.outcome === 'UNAUTHORISED' && r.severity === 'error' && !r.ok, r.outcome);
+  check(
+    `${s} -> SIGN_IN_OK_CARD_FAILED / error`,
+    r.outcome === 'SIGN_IN_OK_CARD_FAILED' && r.severity === 'error' && !r.ok,
+    r.outcome,
+  );
+  check(
+    `${s} does not blame the API key`,
+    !/check the key/i.test(r.detail ?? '') && !/rejected the API key/i.test(r.title),
+    r.title,
+  );
 }
 
 const nf = classifySmartCheckResponse(404, '', H);
