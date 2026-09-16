@@ -1,5 +1,6 @@
 import { AccessRequirement } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { isCscsExemptMobile } from '@/services/cscs/cscsExemptAccounts';
 import { formatDateUK } from '@/lib/datetime';
 import { getInductionValidity } from '@/services/induction/inductionValidityService';
 
@@ -91,6 +92,34 @@ export interface UnmetRequirement {
  * has inducted elsewhere is still new here, and the requirements that depend on
  * having inducted at THIS site must not fire against them.
  */
+/**
+ * What to tell an operative whose card did not pass, and what to do about it.
+ *
+ * ONE MESSAGE PER OUTCOME, because the right next step differs completely:
+ * a revoked card is a conversation with the scheme, a not-found is usually a
+ * typo, and an unreachable service is nobody's fault and will pass on a retry.
+ * "Not verified" for all five sends most of them to the wrong person.
+ */
+export function cscsRefusalAction(
+  status: string | null | undefined,
+  hasCard: boolean,
+): string {
+  switch ((status ?? '').toUpperCase()) {
+    case 'REVOKED':
+      return 'Your CSCS card is recorded as withdrawn by the card scheme. Contact the scheme before working on site.';
+    case 'EXPIRED':
+      return 'Your CSCS card is recorded as expired. Renew it and update your details.';
+    case 'NOT_FOUND':
+      return 'No matching card was found. Check the card number, surname and scheme on your details, then try again.';
+    case 'ERROR':
+      return 'Your card could not be checked just now. Try again in a few minutes, or ask your site manager.';
+    default:
+      return hasCard
+        ? 'Your CSCS card has not been verified yet. Open Your Details to confirm your surname and card scheme, then save.'
+        : 'No CSCS card is recorded for you. Add your card details in Your Details.';
+  }
+}
+
 export async function evaluateRequirements(
   workerId: string,
   siteId: string,
@@ -117,7 +146,14 @@ export async function evaluateRequirements(
   const [worker, priorHere] = await Promise.all([
     prisma.worker.findUnique({
       where: { id: workerId },
-      select: { cscsVerified: true, cscsExpiry: true, cscsCardNumber: true },
+      select: {
+        cscsVerified: true,
+        cscsExpiry: true,
+        cscsCardNumber: true,
+        cscsVerificationStatus: true,
+        // Only to honour the exempt allow-list. Nothing else reads it here.
+        mobile: true,
+      },
     }),
     prisma.submission.findFirst({
       where: { workerId, jobSiteId: siteId },
@@ -126,6 +162,22 @@ export async function evaluateRequirements(
     }),
   ]);
   if (!worker) return [];
+
+  /*
+   * THE EXEMPT TEST ACCOUNT SKIPS CSCS ENFORCEMENT.
+   *
+   * The exemption routes that mobile to the mock, which is inert in production
+   * and returns UNVERIFIED for ever. Enforcing CSCS against it would lock the
+   * account out of every site the requirement is enabled on - the two
+   * mechanisms in direct contradiction, one guaranteeing the account is never
+   * verified and the other refusing anyone who is not.
+   *
+   * NARROW ON PURPOSE. Only the CSCS requirements are skipped. Induction, the
+   * knowledge check and every other requirement still apply, because none is
+   * affected by which provider the account is routed to. Same allow-list as
+   * the provider resolver, read the same way.
+   */
+  const cscsExempt = isCscsExemptMobile(worker.mobile);
   const firstTime = priorHere === null;
 
   const unmet: UnmetRequirement[] = [];
@@ -136,15 +188,34 @@ export async function evaluateRequirements(
     // for a first-timer — otherwise they can never start.
     if (firstTime && !meta.blocksFirstTime) continue;
 
+    // Only the CSCS requirements are exempted; everything else still applies.
+    if (
+      cscsExempt &&
+      (requirement === 'CSCS_VERIFIED' || requirement === 'CSCS_IN_DATE')
+    ) {
+      continue;
+    }
+
     switch (requirement) {
       case 'CSCS_VERIFIED':
+        /*
+         * VALID, AND ONLY VALID. cscsVerified is already derived from
+         * `status === 'VALID'` in both mappers, so the boolean IS the rule -
+         * REVOKED, EXPIRED, NOT_FOUND, ERROR and UNVERIFIED are every one of
+         * them false and every one of them refused.
+         *
+         * The STATUS is read here only to say WHICH of those it was. A worker
+         * told "not verified" when their card is actually withdrawn goes looking
+         * for an admin to press a button, and the button will not help them.
+         */
         if (!worker.cscsVerified) {
           unmet.push({
             requirement,
             label: meta.label,
-            action: worker.cscsCardNumber
-              ? 'Your CSCS card has not been verified yet. Ask your site manager to verify it in SiteComply.'
-              : 'No CSCS card is recorded for you. Add your card details, then ask your site manager to verify it.',
+            action: cscsRefusalAction(
+              worker.cscsVerificationStatus,
+              Boolean(worker.cscsCardNumber),
+            ),
           });
         }
         break;
