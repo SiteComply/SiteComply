@@ -259,6 +259,7 @@ export function IdentityForm({
         autoComplete="family-name"
         autoCapitalize="words"
         placeholder="e.g. Smith"
+        hint="Needed to check a CSCS or ECS card."
         value={form.surname}
         onChange={(e) => update('surname', e.target.value)}
       />

@@ -117,6 +117,16 @@ const read = (p: string) => readFileSync(p, 'utf8');
   ok('there is no Full name box any more', !/label="Full name"/.test(form), 'still asking twice');
   ok('the surname is no longer described as a card attribute',
     !/as it appears on your card/.test(form), 'still framed as card data');
+  /*
+   * ASSERTED, because it was not there. The hint was reported as added by an
+   * edit whose anchor never matched, and I passed that on as fact. A guard on
+   * the file is the only version of "it is there" worth stating.
+   */
+  ok('the surname field carries a hint saying what it is for',
+    /hint="Needed to check a CSCS or ECS card\."/.test(form), 'no hint');
+  ok('  and it sits on the SURNAME field, not another one',
+    /label="Surname"[\s\S]{0,200}hint="Needed to check a CSCS or ECS card\."/.test(form),
+    'hint on the wrong field');
 
   // ORDER: first name, surname, company - then the card section.
   const iFirst = form.indexOf('label="First name"');
