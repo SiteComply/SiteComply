@@ -21,24 +21,36 @@ const read = (p: string) => readFileSync(p, 'utf8');
 {
   const route = read('app/api/worker/profile/route.ts');
   const guard = route.slice(route.indexOf('A CARD NUMBER OBLIGES'), route.indexOf('A CARD NUMBER OBLIGES') + 1400);
-  ok('the server requires a surname when a card is given', /surname\.trim\(\)\.length < 2/.test(guard), 'missing');
-  ok('  and a recognised scheme', /!isKnownScheme\(fields\.cscsSchemeId\)/.test(guard), 'missing');
+  /*
+   * The surname requirement MOVED OUT of the card guard: it is now required of
+   * everyone, because the display name is composed from it. Asserting it is
+   * still inside the card block would hold the code to a weaker rule than it
+   * now enforces.
+   */
+  ok('the server requires a surname of everyone, not only card holders',
+    /Please enter your surname\.'\)/.test(route), 'surname no longer universally required');
+  ok('  and a first name', /Please enter your first name\.'\)/.test(route), 'missing');
+  ok('a recognised scheme is still required with a card',
+    /!isKnownScheme\(fields\.cscsSchemeId\)/.test(guard), 'missing');
   ok('  ONLY when a card number is present', /if \(fields\.cscsCardNumber\.trim\(\)\) \{/.test(guard), 'not conditional');
   ok('  telling the operative which field, not just "invalid"',
-    /Please enter your surname/.test(guard) && /Please choose the scheme/.test(guard), guard.slice(0, 200));
+    /Please choose the scheme/.test(guard), guard.slice(0, 200));
 
   const form = read('components/checkin/IdentityForm.tsx');
-  ok('the form checks before the round trip',
-    /if \(form\.cscsCardNumber\.trim\(\)\) \{[\s\S]{0,400}form\.surname\.trim\(\)\.length < 2/.test(form),
-    'no client guard');
-  ok('  and opens the card section so the field is visible',
-    (form.match(/setShowCscs\(true\);\s*\n\s*toast\.error/g) ?? []).length === 2, 'section not opened');
+  ok('the form checks the name before the round trip',
+    /if \(!form\.firstName\.trim\(\)\)/.test(form) && /if \(!form\.surname\.trim\(\)\)/.test(form),
+    'no client name guard');
+  ok('  and the scheme when a card is given',
+    /if \(form\.cscsCardNumber\.trim\(\)\) \{[\s\S]{0,300}cscsSchemeId\.trim\(\)/.test(form),
+    'no client scheme guard');
+  ok('  opening the card section for a field that lives there',
+    (form.match(/setShowCscs\(true\);\s*\n\s*toast\.error/g) ?? []).length === 1, 'section not opened');
   ok('  the scheme is only demanded when the picker is usable',
     /schemesAreUsable\(\) && !form\.cscsSchemeId\.trim\(\)/.test(form), 'would demand an unofferable field');
 
-  // A worker with NO card must not be asked for either.
-  ok('no card means no surname requirement',
-    !/if \(true\) \{[\s\S]{0,80}surname\.trim\(\)\.length < 2/.test(route), 'unconditional');
+  // A worker with NO card must still not be asked for a scheme.
+  ok('no card means no scheme requirement',
+    /if \(fields\.cscsCardNumber\.trim\(\)\) \{/.test(route), 'scheme demanded unconditionally');
 }
 
 // ── 2. incomplete details are OUR problem, said honestly ──────────────────

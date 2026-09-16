@@ -294,6 +294,17 @@ enum GpsUnavailablePolicy {
 /// (stored in E.164 form, e.g. +447700900123) which is also their login factor.
 model Worker {
   id             String        @id @default(cuid())
+  /// Given name. Asked directly; never parsed out of fullName.
+  firstName      String?
+  /// Display name, DERIVED from firstName + surname on every save.
+  ///
+  /// KEPT rather than removed. Roughly 200 places read it - reports, exports,
+  /// close-out PDFs, induction signatures, search and sort - including documents
+  /// that have already been issued and signed. Splitting it into its parts
+  /// everywhere would touch all of them to no benefit; deriving it leaves every
+  /// one of them correct and untouched.
+  ///
+  /// Historic rows keep whatever they were given until the worker next saves.
   fullName       String
   /// Family name as held by the card scheme, captured separately.
   ///

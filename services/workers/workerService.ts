@@ -12,7 +12,10 @@ import type { CscsQualification } from '@/services/cscs';
  */
 
 export interface WorkerProfileInput {
+  /** Derived from firstName + surname by the caller; never typed by a worker. */
   fullName: string;
+  /** Given name. Stored so the form can be reopened without parsing fullName. */
+  firstName?: string | null;
   /** Family name, captured separately. Never derived from fullName. */
   surname?: string | null;
   company: string;
@@ -46,6 +49,7 @@ export async function upsertWorkerProfile(
   input: WorkerProfileInput,
 ) {
   const fullName = input.fullName.trim();
+  const firstName = input.firstName?.trim() || null;
   const surname = input.surname?.trim() || null;
   const company = input.company.trim();
 
@@ -72,6 +76,7 @@ export async function upsertWorkerProfile(
   const data: Prisma.WorkerUncheckedCreateInput = {
     mobile,
     fullName,
+    firstName,
     surname,
     company,
     cscsCardNumber: input.cscsCardNumber?.trim() || null,
@@ -86,6 +91,7 @@ export async function upsertWorkerProfile(
     create: data,
     update: {
       fullName,
+      firstName,
       surname,
       company,
       cscsCardNumber: data.cscsCardNumber,
@@ -121,6 +127,8 @@ export async function eraseWorkerPersonalData(workerId: string) {
     where: { id: workerId },
     data: {
       fullName: 'Erased (UK GDPR)',
+      // A given name is a personal identifier too.
+      firstName: null,
       // A surname is a personal identifier in its own right. Erasure that
       // left it behind would defeat the purpose of anonymising fullName.
       surname: null,

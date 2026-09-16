@@ -19,12 +19,14 @@ import {
 } from '@/services/cscs/cardImageStorage';
 import { withClosedProjectHandling } from '@/lib/routeErrors';
 import { isKnownScheme } from '@/services/cscs/schemes';
+import { composeFullName } from '@/services/workers/workerName';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 interface ProfileFields {
-  fullName: string;
+  /** Given name. The display name is derived from this plus the surname. */
+  firstName: string;
   /** Family name, captured separately. Never derived from fullName. */
   surname: string;
   company: string;
@@ -49,7 +51,7 @@ async function readBody(
         imageEntry instanceof File && imageEntry.size > 0 ? imageEntry : null;
       return {
         fields: {
-          fullName: str('fullName'),
+          firstName: str('firstName'),
           surname: str('surname'),
           company: str('company'),
           cscsCardNumber: str('cscsCardNumber'),
@@ -63,7 +65,7 @@ async function readBody(
     const json = (await req.json()) as Partial<ProfileFields>;
     return {
       fields: {
-        fullName: (json.fullName ?? '').trim(),
+        firstName: (json.firstName ?? '').trim(),
         surname: (json.surname ?? '').trim(),
         company: (json.company ?? '').trim(),
         cscsCardNumber: (json.cscsCardNumber ?? '').trim(),
@@ -100,7 +102,19 @@ async function POSTHandler(req: NextRequest) {
   if (!body) return bad('Invalid request.');
   const { fields, image } = body;
 
-  if (fields.fullName.length < 2) return bad('Please enter your full name.');
+  /*
+   * BOTH PARTS, because the display name is derived from them.
+   *
+   * fullName is no longer typed - it is composed here - so an empty part would
+   * produce a half-formed name on every report and signed document that reads
+   * it. Asked separately rather than split, for the same reason the surname is:
+   * "the last word" is wrong for compound surnames and for names written
+   * family-name-first.
+   */
+  if (fields.firstName.length < 1) return bad('Please enter your first name.');
+  if (fields.surname.trim().length < 1) return bad('Please enter your surname.');
+  const fullName = composeFullName(fields.firstName, fields.surname);
+  if (fullName.length < 2) return bad('Please enter your name.');
   if (fields.company.length < 2) return bad('Please enter your company name.');
 
   /*
@@ -116,9 +130,6 @@ async function POSTHandler(req: NextRequest) {
    * decides what gets stored.
    */
   if (fields.cscsCardNumber.trim()) {
-    if (fields.surname.trim().length < 2) {
-      return bad('Please enter your surname, as it appears on your card.');
-    }
     if (!isKnownScheme(fields.cscsSchemeId)) {
       return bad('Please choose the scheme that issued your card.');
     }
@@ -186,7 +197,7 @@ async function POSTHandler(req: NextRequest) {
       // being reported to an operative as a rejected card.
       surname: fields.surname?.trim() || null,
       schemeId: schemeId || null,
-      holderName: fields.fullName,
+      holderName: fullName,
       cardTypeHint: cscsCardType,
       expiryHint: cscsExpiry,
       workerId: session.workerId ?? null,
@@ -205,8 +216,9 @@ async function POSTHandler(req: NextRequest) {
     verified && verification?.expiry ? verification.expiry : cscsExpiry;
 
   const worker = await upsertWorkerProfile(session.mobile, {
-    fullName: fields.fullName,
-    surname: fields.surname?.trim() || null,
+    fullName,
+    firstName: fields.firstName.trim(),
+    surname: fields.surname.trim(),
     company: fields.company,
     cscsCardNumber: cardNumber,
     cscsSchemeId: schemeId || null,

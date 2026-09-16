@@ -31,7 +31,17 @@ const read = (p: string) => readFileSync(p, 'utf8');
 // ── schema: additive and nullable ─────────────────────────────────────────
 {
   const schema = read('prisma/schema.prisma');
-  const worker = schema.slice(schema.indexOf('model Worker {'), schema.indexOf('model Worker {') + 2500);
+  /*
+   * TO THE MODEL'S CLOSING BRACE, not a fixed 2500 characters.
+   *
+   * The window version silently shrank its own coverage: adding doc comments to
+   * the model pushed cscsHolderName past 2500 chars and the guard reported a
+   * dropped column that was sitting right there. A length is not a boundary.
+   */
+  const worker = schema.slice(
+    schema.indexOf('model Worker {'),
+    schema.indexOf('\n}', schema.indexOf('model Worker {')),
+  );
   ok('Worker.surname exists', /\n\s*surname\s+String\?/.test(worker), 'missing');
   ok('  and is NULLABLE — nothing is backfilled', /surname\s+String\?/.test(worker));
   ok('Worker.cscsSchemeId exists', /cscsSchemeId\s+String\?/.test(worker), 'missing');

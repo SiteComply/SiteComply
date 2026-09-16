@@ -13,7 +13,8 @@ import {
 } from '@/services/cscs/schemes';
 
 export interface IdentityInitial {
-  fullName: string;
+  /** Given name. The display name is derived from this plus the surname. */
+  firstName: string;
   /** Family name, captured separately. Never derived from fullName. */
   surname: string;
   company: string;
@@ -135,18 +136,25 @@ export function IdentityForm({
     }
 
     /*
-     * Told BEFORE the round trip, and with the card section open.
+     * Told BEFORE the round trip, and with the card section open where the
+     * missing field lives there.
      *
-     * The server enforces the same rule, but a rejection that arrives as a
+     * The server enforces the same rules, but a rejection that arrives as a
      * banner after submit — on a phone, at a site gate, with the card fields
      * collapsed out of view — is a worker who does not know which box to fill.
      */
+    if (!form.firstName.trim()) {
+      toast.error('Please enter your first name.');
+      return;
+    }
+    // The surname is required of everyone now, not only card holders: the
+    // display name is composed from it. It is also no longer described as a
+    // card attribute, because it is not one.
+    if (!form.surname.trim()) {
+      toast.error('Please enter your surname.');
+      return;
+    }
     if (form.cscsCardNumber.trim()) {
-      if (form.surname.trim().length < 2) {
-        setShowCscs(true);
-        toast.error('Please enter your surname, as it appears on your card.');
-        return;
-      }
       if (schemesAreUsable() && !form.cscsSchemeId.trim()) {
         setShowCscs(true);
         toast.error('Please choose the scheme that issued your card.');
@@ -157,7 +165,7 @@ export function IdentityForm({
     setBusy(true);
     try {
       const fd = new FormData();
-      fd.append('fullName', form.fullName);
+      fd.append('firstName', form.firstName);
       fd.append('surname', form.surname);
       fd.append('company', form.company);
       fd.append('cscsCardNumber', form.cscsCardNumber);
@@ -220,14 +228,18 @@ export function IdentityForm({
         </p>
       )}
 
+      {/* First name and surname, asked separately.
+          Asking for a full name AND a surname asked most people for their
+          surname twice, and put a person's own name under a heading about
+          their card. The display name is derived from these two on save. */}
       <TextField
-        label="Full name"
-        autoComplete="name"
+        label="First name"
+        autoComplete="given-name"
         autoCapitalize="words"
         autoFocus={!recognised}
-        placeholder="e.g. Jordan Smith"
-        value={form.fullName}
-        onChange={(e) => update('fullName', e.target.value)}
+        placeholder="e.g. Jordan"
+        value={form.firstName}
+        onChange={(e) => update('firstName', e.target.value)}
       />
 
       {/* Surname, ASKED rather than derived.
@@ -240,7 +252,7 @@ export function IdentityForm({
         label="Surname"
         autoComplete="family-name"
         autoCapitalize="words"
-        placeholder="Your family name, as it appears on your card"
+        placeholder="e.g. Smith"
         value={form.surname}
         onChange={(e) => update('surname', e.target.value)}
       />

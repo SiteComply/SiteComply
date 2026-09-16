@@ -8,6 +8,7 @@ import { getWorkerByMobile } from '@/services/workers/workerService';
 import { getWorkerContext } from '@/services/workerDashboard/workerDashboardService';
 import { formatUkMobileForDisplay } from '@/lib/phone';
 import { toDateInputValue } from '@/lib/datetime';
+import { openingFirstName } from '@/services/workers/workerName';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,7 +47,10 @@ export default async function CheckInDetailsPage() {
         recognised={recognised}
         verificationLive={verificationLive}
         initial={{
-          fullName: worker?.fullName ?? '',
+          // Opened, not parsed: the stored firstName where there is one, an EXACT
+          // suffix match where a surname is known, and otherwise the whole existing
+          // name for the worker to correct. See services/workers/workerName.ts.
+          firstName: openingFirstName(worker ?? {}),
           // Empty for a returning worker who predates the field. NOT derived
           // from fullName: they are asked once, and stay unverified until they
           // answer — the owner's choice over guessing or backfilling.
