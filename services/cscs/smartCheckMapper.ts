@@ -306,11 +306,154 @@ export function messageForStatus(
  * and reconciling that here means the disagreement is resolved once rather than
  * at every call site.
  */
+/**
+ * The V2.6 card response, as CONFIRMED against the live service (2026-09-16).
+ *
+ *   {responseMethod, responseMessage, responseCode, errorCode,
+ *    responseData: {
+ *      cards: [{cardSerial, customerName, registrationNumber,
+ *               customerPhotoType, customerPhoto, expired, cancelled,
+ *               cardColour}],
+ *      scheme: {schemeIdentifier, schemeName, schemeTelephone,
+ *               schemeWebsite, schemeLogo}}}
+ *
+ * Three things about it that the generic mapper below could never have handled,
+ * and would have got silently wrong:
+ *
+ *  1. THERE IS NO STATUS FIELD. The card's standing is two booleans, `expired`
+ *     and `cancelled`. Every name the generic mapper hedged across - status,
+ *     cardStatus, verificationStatus, result, outcome - is absent, so it would
+ *     have found nothing and returned ERROR on a perfectly good card.
+ *  2. THE CARD IS IN AN ARRAY, two levels down. pick() looks one wrapper deep
+ *     and would have found `cards` and `scheme`, not the fields inside them.
+ *  3. THERE IS NO EXPIRY DATE. Only the `expired` flag. Nothing here can set a
+ *     date, and inventing one would be worse than leaving the worker's own.
+ *
+ * WHAT IS DELIBERATELY NOT READ: `customerPhoto` is ~4KB of base64 image of a
+ * person. SiteComply did not ask for it, has nowhere to put it, and storing or
+ * logging someone's photograph because it arrived in a payload is not a decision
+ * to make by accident. It is ignored here and masked in every diagnostic.
+ */
+interface V26Card {
+  cardSerial?: unknown;
+  customerName?: unknown;
+  registrationNumber?: unknown;
+  expired?: unknown;
+  cancelled?: unknown;
+  cardColour?: unknown;
+}
+
+/** True when the payload is the confirmed V2.6 card shape. */
+export function isV26CardResponse(payload: SmartCheckPayload): boolean {
+  const data = payload['responseData'];
+  if (!data || typeof data !== 'object') return false;
+  return Array.isArray((data as Record<string, unknown>)['cards']);
+}
+
+/**
+ * Standing, from two booleans.
+ *
+ * FAIL-SAFE ON ABSENCE. A card whose flags are missing is not a valid card, it
+ * is a response we do not understand - ERROR, never VALID. `cancelled` is
+ * checked first: a card that is both cancelled and expired is withdrawn, and
+ * that is the more serious fact to report.
+ */
+export function statusFromV26Flags(card: V26Card): CscsVerificationStatus {
+  const { cancelled, expired } = card;
+  if (typeof cancelled !== 'boolean' || typeof expired !== 'boolean') {
+    return 'ERROR';
+  }
+  if (cancelled) return 'REVOKED';
+  if (expired) return 'EXPIRED';
+  return 'VALID';
+}
+
+export function mapV26CardResponse(
+  payload: SmartCheckPayload,
+  providerName: string,
+  checkedAt: Date = new Date(),
+): CscsVerificationResult {
+  const data = (payload['responseData'] ?? {}) as Record<string, unknown>;
+  const cards = Array.isArray(data['cards']) ? (data['cards'] as V26Card[]) : [];
+  const schemeBlock = (data['scheme'] ?? {}) as Record<string, unknown>;
+  const scheme = str(schemeBlock['schemeName']) ?? str(schemeBlock['schemeIdentifier']);
+
+  // NO CARDS IS AN ANSWER, not a failure: the scheme has no record matching
+  // what we asked about.
+  if (cards.length === 0) {
+    return {
+      status: 'NOT_FOUND',
+      verified: false,
+      scheme,
+      providerName,
+      checkedAt,
+      expiry: null,
+      cardType: null,
+      holderName: null,
+      qualifications: [],
+      message: messageForStatus('NOT_FOUND', null),
+    };
+  }
+
+  /*
+   * MORE THAN ONE CARD is not something this integration can resolve. We asked
+   * about one scheme, surname and serial; if the scheme returns several we do
+   * not know which one the worker is holding, and picking the first would be a
+   * guess with a competency record attached to it.
+   */
+  if (cards.length > 1) {
+    return {
+      status: 'ERROR',
+      verified: false,
+      scheme,
+      providerName,
+      checkedAt,
+      expiry: null,
+      cardType: null,
+      holderName: null,
+      qualifications: [],
+      message:
+        'More than one card matched these details, so it is not clear which one to record. Contact the card scheme.',
+    };
+  }
+
+  const card = cards[0] as V26Card;
+  const status = statusFromV26Flags(card);
+
+  return {
+    status,
+    // Derived from status ALONE, as everywhere else in this file.
+    verified: status === 'VALID',
+    scheme,
+    providerName,
+    checkedAt,
+    // No date is available in this contract. Null, not a guess - the worker's
+    // own typed expiry is left standing rather than overwritten with nothing.
+    expiry: null,
+    cardType: mapCardType(card.cardColour),
+    holderName: str(card.customerName),
+    // Not present in this contract. Empty, not absent, so callers do not have
+    // to distinguish "no qualifications" from "we did not look".
+    qualifications: [],
+    message: messageForStatus(status, null),
+  };
+}
+
 export function mapSmartCheckResponse(
   payload: SmartCheckPayload,
   providerName: string,
   checkedAt: Date = new Date(),
 ): CscsVerificationResult {
+  /*
+   * The confirmed shape first. Anything else falls through to the hedging below,
+   * which is what this file did while the contract was unknown - kept so a
+   * differently-shaped reply is still read rather than rejected outright, but it
+   * is no longer the path a real Smart Check response takes.
+   */
+  if (isV26CardResponse(payload)) {
+    return mapV26CardResponse(payload, providerName, checkedAt);
+  }
+
   const rawStatus = pick(
     payload,
     'status',

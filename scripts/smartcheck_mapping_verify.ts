@@ -9,7 +9,13 @@
  * one that never ran.
  */
 import { readFileSync } from 'fs';
-import { mapSmartCheckResponse, mapStatus } from '../services/cscs/smartCheckMapper';
+import {
+  mapSmartCheckResponse,
+  mapStatus,
+  mapV26CardResponse,
+  statusFromV26Flags,
+  isV26CardResponse,
+} from '../services/cscs/smartCheckMapper';
 import { shapeSummary } from '../services/cscs/smartCheckAuth';
 
 let pass = 0;
@@ -98,6 +104,104 @@ const read = (p: string) => readFileSync(p, 'utf8');
   for (const f of ['cscsScheme', 'cscsVerified', 'cscsVerificationStatus', 'cscsHolderName', 'cscsQualifications']) {
     ok(`${f} is selected for the screen`, new RegExp(`${f}: true`).test(detail), f);
   }
+}
+
+// ── the CONFIRMED V2.6 card shape ─────────────────────────────────────────
+// Captured from the live service 2026-09-16. The generic mapper below could
+// never have read this: there is no status field, the card is inside an array
+// two levels down, and there is no expiry date at all.
+{
+  const card = (over: Record<string, unknown> = {}) => ({
+    responseMethod: 'card',
+    responseMessage: '',
+    responseCode: '200',
+    errorCode: '',
+    responseData: {
+      cards: [
+        {
+          cardSerial: 'a'.repeat(32),
+          customerName: 'Wei Zhang',
+          registrationNumber: '14660726',
+          customerPhotoType: 'J',
+          customerPhoto: 'B'.repeat(3894),
+          expired: false,
+          cancelled: false,
+          cardColour: 'Gold',
+          ...over,
+        },
+      ],
+      scheme: { schemeIdentifier: 'C4T', schemeName: 'CSCS' },
+    },
+  });
+
+  ok('the confirmed shape is recognised', isV26CardResponse(card() as never));
+  ok('  and a differently-shaped payload is not', !isV26CardResponse({ status: 'VALID' } as never));
+
+  const good = mapSmartCheckResponse(card() as never, 'smartcheck');
+  ok('a live card maps to VALID', good.status === 'VALID', good.status);
+  ok('  and is verified', good.verified === true);
+  ok('  the holder name comes from customerName', good.holderName === 'Wei Zhang', good.holderName);
+  ok('  the card type comes from cardColour', good.cardType === 'GOLD_SUPERVISORY', good.cardType);
+  ok('  the scheme comes from scheme.schemeName', good.scheme === 'CSCS', good.scheme);
+
+  // NO EXPIRY EXISTS IN THIS CONTRACT. Null, never a guess - a fabricated date
+  // would overwrite the worker's own and read as authoritative.
+  ok('no expiry date is invented', good.expiry === null, good.expiry);
+
+  // THE PHOTOGRAPH IS NOT TAKEN. ~4KB of base64 image of a person, which
+  // SiteComply did not ask for and has nowhere to put.
+  const serialised = JSON.stringify(good);
+  ok('the cardholder photo is not carried into the result', !/BBBB/.test(serialised), serialised.slice(0, 120));
+  ok('  nor the card serial', !serialised.includes('a'.repeat(32)), serialised.slice(0, 120));
+
+  // Status from the two booleans.
+  ok('cancelled -> REVOKED', mapSmartCheckResponse(card({ cancelled: true }) as never, 'x').status === 'REVOKED');
+  ok('expired -> EXPIRED', mapSmartCheckResponse(card({ expired: true }) as never, 'x').status === 'EXPIRED');
+  ok('cancelled AND expired -> REVOKED (the graver fact)',
+    mapSmartCheckResponse(card({ cancelled: true, expired: true }) as never, 'x').status === 'REVOKED');
+  for (const s2 of ['REVOKED', 'EXPIRED']) {
+    const r = mapSmartCheckResponse(card(s2 === 'REVOKED' ? { cancelled: true } : { expired: true }) as never, 'x');
+    ok(`  a ${s2} card is NOT verified`, r.verified === false);
+  }
+
+  // FAIL-SAFE ON ABSENCE. Missing flags are a response we do not understand.
+  ok('a missing cancelled flag -> ERROR', statusFromV26Flags({ expired: false } as never) === 'ERROR');
+  ok('a missing expired flag -> ERROR', statusFromV26Flags({ cancelled: false } as never) === 'ERROR');
+  ok('a STRING "false" is not a boolean false',
+    statusFromV26Flags({ cancelled: 'false', expired: 'false' } as never) === 'ERROR');
+  ok('  so it is never VALID', mapSmartCheckResponse(
+    card({ cancelled: 'false', expired: 'false' }) as never, 'x').verified === false);
+
+  // No cards is an ANSWER; several cards is not one we can resolve.
+  const none = mapSmartCheckResponse(
+    { responseData: { cards: [], scheme: { schemeName: 'CSCS' } } } as never, 'x');
+  ok('an empty cards array is NOT_FOUND', none.status === 'NOT_FOUND', none.status);
+  ok('  and still reports the scheme', none.scheme === 'CSCS', none.scheme);
+
+  const two = mapSmartCheckResponse({
+    responseData: {
+      cards: [
+        { expired: false, cancelled: false, cardColour: 'Gold', customerName: 'A' },
+        { expired: false, cancelled: false, cardColour: 'Blue', customerName: 'B' },
+      ],
+      scheme: { schemeName: 'CSCS' },
+    },
+  } as never, 'x');
+  ok('two matching cards is ERROR, not a guess', two.status === 'ERROR', two.status);
+  ok('  and picks neither', two.cardType === null && two.holderName === null, two);
+  ok('  saying why, in words an admin can act on', /more than one card/i.test(two.message), two.message);
+
+  // Every CSCS colour resolves.
+  for (const [colour, expected] of [
+    ['Green', 'GREEN_LABOURER'], ['Red', 'RED_TRAINEE'], ['Blue', 'BLUE_SKILLED'],
+    ['Gold', 'GOLD_SUPERVISORY'], ['Black', 'BLACK_MANAGER'], ['White', 'WHITE_PROFESSIONAL'],
+  ] as [string, string][]) {
+    ok(`cardColour "${colour}" -> ${expected}`,
+      mapV26CardResponse(card({ cardColour: colour }) as never, 'x').cardType === expected,
+      mapV26CardResponse(card({ cardColour: colour }) as never, 'x').cardType);
+  }
+  ok('an unknown colour does not invent a card type',
+    mapV26CardResponse(card({ cardColour: 'Turquoise' }) as never, 'x').cardType === null);
 }
 
 // ── the status vocabulary: unknown must NEVER become VALID ────────────────
