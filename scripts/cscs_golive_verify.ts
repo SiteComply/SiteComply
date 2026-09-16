@@ -27,9 +27,11 @@ const read = (p: string) => readFileSync(p, 'utf8');
    * still inside the card block would hold the code to a weaker rule than it
    * now enforces.
    */
-  ok('the server requires a surname of everyone, not only card holders',
-    /Please enter your surname\.'\)/.test(route), 'surname no longer universally required');
-  ok('  and a first name', /Please enter your first name\.'\)/.test(route), 'missing');
+  ok('a first name is always required', /Please enter your first name\.'\)/.test(route), 'missing');
+  ok('a surname is required when there is a card to check',
+    /cardIntent && fields\.surname\.trim\(\)\.length < 1/.test(route), 'not tied to card intent');
+  ok('  but NOT of a worker without one',
+    /const cardIntent =/.test(route), 'universal requirement');
   ok('a recognised scheme is still required with a card',
     /!isKnownScheme\(fields\.cscsSchemeId\)/.test(guard), 'missing');
   ok('  ONLY when a card number is present', /if \(fields\.cscsCardNumber\.trim\(\)\) \{/.test(guard), 'not conditional');
@@ -37,14 +39,16 @@ const read = (p: string) => readFileSync(p, 'utf8');
     /Please choose the scheme/.test(guard), guard.slice(0, 200));
 
   const form = read('components/checkin/IdentityForm.tsx');
-  ok('the form checks the name before the round trip',
-    /if \(!form\.firstName\.trim\(\)\)/.test(form) && /if \(!form\.surname\.trim\(\)\)/.test(form),
-    'no client name guard');
+  ok('the form checks the first name before the round trip',
+    /if \(!form\.firstName\.trim\(\)\)/.test(form), 'no client name guard');
+  ok('  and the surname only when a card or scheme is given',
+    /\(form\.cscsCardNumber\.trim\(\) \|\| form\.cscsSchemeId\.trim\(\)\) &&[\s\S]{0,60}!form\.surname\.trim\(\)/.test(form),
+    'surname demanded unconditionally');
   ok('  and the scheme when a card is given',
     /if \(form\.cscsCardNumber\.trim\(\)\) \{[\s\S]{0,300}cscsSchemeId\.trim\(\)/.test(form),
     'no client scheme guard');
-  ok('  opening the card section for a field that lives there',
-    (form.match(/setShowCscs\(true\);\s*\n\s*toast\.error/g) ?? []).length === 1, 'section not opened');
+  ok('  opening the card section when the reason lives there',
+    (form.match(/setShowCscs\(true\);\s*\n\s*toast\.error/g) ?? []).length === 2, 'section not opened');
   ok('  the scheme is only demanded when the picker is usable',
     /schemesAreUsable\(\) && !form\.cscsSchemeId\.trim\(\)/.test(form), 'would demand an unofferable field');
 

@@ -112,7 +112,26 @@ async function POSTHandler(req: NextRequest) {
    * family-name-first.
    */
   if (fields.firstName.length < 1) return bad('Please enter your first name.');
-  if (fields.surname.trim().length < 1) return bad('Please enter your surname.');
+
+  /*
+   * THE SURNAME FOLLOWS THE CARD, NOT THE NAME.
+   *
+   * It is only needed to look a card up, so only a card obliges it. Requiring it
+   * of everyone would have made a display-name refactor into a new question at
+   * every site gate for operatives who hold no card and never will.
+   *
+   * A worker who gives only a first name appears on the register by that name.
+   * That is their answer to the question asked, and a returning worker's
+   * existing name survives untouched: openingFirstName hands back the WHOLE
+   * stored name when no surname is known, so saving without edits recomposes
+   * exactly what was there before.
+   */
+  const cardIntent =
+    Boolean(fields.cscsCardNumber.trim()) || Boolean(fields.cscsSchemeId.trim());
+  if (cardIntent && fields.surname.trim().length < 1) {
+    return bad('Please enter your surname so your card can be checked.');
+  }
+
   const fullName = composeFullName(fields.firstName, fields.surname);
   if (fullName.length < 2) return bad('Please enter your name.');
   if (fields.company.length < 2) return bad('Please enter your company name.');
@@ -218,7 +237,7 @@ async function POSTHandler(req: NextRequest) {
   const worker = await upsertWorkerProfile(session.mobile, {
     fullName,
     firstName: fields.firstName.trim(),
-    surname: fields.surname.trim(),
+    surname: fields.surname.trim() || null,
     company: fields.company,
     cscsCardNumber: cardNumber,
     cscsSchemeId: schemeId || null,

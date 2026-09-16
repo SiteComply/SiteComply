@@ -84,7 +84,21 @@ const read = (p: string) => readFileSync(p, 'utf8');
     /const fullName = composeFullName\(/.test(route), 'still typed');
   ok('  and no longer reads a fullName field from the request',
     !/fields\.fullName/.test(route), 'still reading a typed fullName');
-  ok('both parts are required', /Please enter your first name/.test(route) && /Please enter your surname/.test(route));
+  /*
+   * THE SURNAME FOLLOWS THE CARD. Requiring it of everyone would have turned a
+   * display-name refactor into a new question at every gate for operatives who
+   * hold no card. The first name is always required; the surname only when
+   * there is a card to check.
+   */
+  ok('the first name is always required', /Please enter your first name/.test(route));
+  ok('the surname is required ONLY with a card or scheme',
+    /const cardIntent =\s*\n?\s*Boolean\(fields\.cscsCardNumber\.trim\(\)\) \|\| Boolean\(fields\.cscsSchemeId\.trim\(\)\);/.test(route),
+    'not conditional on card intent');
+  ok('  and the message says why', /so your card can be checked/.test(route));
+  ok('a worker with no card is NOT asked for a surname',
+    /if \(cardIntent && fields\.surname\.trim\(\)\.length < 1\)/.test(route), 'universal requirement');
+  ok('a name of one character alone is still refused',
+    /if \(fullName\.length < 2\) return bad/.test(route), 'no minimum');
   ok('the composed name is what gets stored', /^\s*fullName,$/m.test(route), 'not stored');
   ok('Smart Check still receives the SURNAME field, not a parsed name',
     /surname: fields\.surname\?\.trim\(\) \|\| null,/.test(route), 'verification input changed');

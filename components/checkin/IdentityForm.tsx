@@ -147,11 +147,17 @@ export function IdentityForm({
       toast.error('Please enter your first name.');
       return;
     }
-    // The surname is required of everyone now, not only card holders: the
-    // display name is composed from it. It is also no longer described as a
-    // card attribute, because it is not one.
-    if (!form.surname.trim()) {
-      toast.error('Please enter your surname.');
+    /*
+     * The surname is asked for only when there is a card to check. It is a
+     * person's attribute and sits in the personal section, but it is not
+     * something an operative without a card needs to supply.
+     */
+    if (
+      (form.cscsCardNumber.trim() || form.cscsSchemeId.trim()) &&
+      !form.surname.trim()
+    ) {
+      setShowCscs(true);
+      toast.error('Please enter your surname so your card can be checked.');
       return;
     }
     if (form.cscsCardNumber.trim()) {
