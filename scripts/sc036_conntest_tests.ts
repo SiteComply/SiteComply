@@ -8,6 +8,7 @@
  * use the RFC 6761 `.invalid`/`.test` reserved TLDs precisely so they can never
  * accidentally reach a real service.
  */
+import { REQUEST_SHAPE } from '../services/cscs/smartCheckProvider';
 import {
   classifySmartCheckResponse,
   testSmartCheckConnection,
@@ -94,7 +95,20 @@ check('other 4xx → REQUEST_REJECTED', teapot.outcome === 'REQUEST_REJECTED', t
 check('4xx points at the request body, not the credentials',
   /points at the request body/i.test(br.detail) && !/credentials are (wrong|incorrect)/i.test(br.detail),
   br.detail);
-check('4xx names the field names it is sending', /schemeId, surname, registrationNumber/.test(br.detail), br.detail);
+// Derived from REQUEST_SHAPE, not hardcoded. This previously spelled out
+// "schemeId, surname, registrationNumber" and failed the moment the wire names
+// were corrected to what the service actually asked for - re-freezing the very
+// values that were wrong is exactly what a literal in a test does.
+check(
+  '4xx names the field names it is sending',
+  Object.values(REQUEST_SHAPE.fields).every((f) => br.detail.includes(f)),
+  br.detail,
+);
+check(
+  '  and those are the service\'s own names, not the Test Cards page\'s',
+  br.detail.includes('schemeIdentifier') && br.detail.includes('cardSerialNumber'),
+  br.detail,
+);
 
 for (const s of [500, 502, 503]) {
   const r = classifySmartCheckResponse(s, '', H);
