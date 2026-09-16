@@ -9,7 +9,8 @@
  * one that never ran.
  */
 import { readFileSync } from 'fs';
-import { mapSmartCheckResponse } from '../services/cscs/smartCheckMapper';
+import { mapSmartCheckResponse, mapStatus } from '../services/cscs/smartCheckMapper';
+import { shapeSummary } from '../services/cscs/smartCheckAuth';
 
 let pass = 0;
 let fail = 0;
@@ -97,6 +98,69 @@ const read = (p: string) => readFileSync(p, 'utf8');
   for (const f of ['cscsScheme', 'cscsVerified', 'cscsVerificationStatus', 'cscsHolderName', 'cscsQualifications']) {
     ok(`${f} is selected for the screen`, new RegExp(`${f}: true`).test(detail), f);
   }
+}
+
+// ── the status vocabulary: unknown must NEVER become VALID ────────────────
+// This is the one mapping where a wrong guess is dangerous rather than merely
+// broken: an unrecognised status read as VALID waves a revoked card through a
+// site gate.
+{
+  for (const unknown of [
+    'Q', '42', 'card ok', 'GREEN', 'issued',
+    '', '   ', 'null', 'undefined',
+  ]) {
+    const r = mapStatus(unknown);
+    ok(`"${unknown}" does not become VALID`, r !== 'VALID', r);
+  }
+  ok('a non-string status does not become VALID', mapStatus({ a: 1 }) !== 'VALID', mapStatus({ a: 1 }));
+  ok('a boolean true does not become VALID', mapStatus(true) !== 'VALID', mapStatus(true));
+  ok('null does not become VALID', mapStatus(null) === 'ERROR');
+
+  // ORDERING IS FAIL-SAFE. A status containing both words must resolve to the
+  // restrictive reading, and that must not depend on which test runs first.
+  ok('"valid - revoked" resolves to REVOKED', mapStatus('valid - revoked') === 'REVOKED', mapStatus('valid - revoked'));
+  ok('"active but expired" resolves to EXPIRED', mapStatus('active but expired') === 'EXPIRED', mapStatus('active but expired'));
+  ok('"valid: no match" resolves to NOT_FOUND', mapStatus('valid: no match') === 'NOT_FOUND', mapStatus('valid: no match'));
+  ok('"invalid" is NOT read as valid', mapStatus('invalid') === 'NOT_FOUND', mapStatus('invalid'));
+  ok('"INVALID CARD" is NOT read as valid', mapStatus('INVALID CARD') === 'NOT_FOUND', mapStatus('INVALID CARD'));
+
+  /*
+   * NEGATION. "inactive" contains "active", and every one of these mapped to
+   * VALID until a test asked. This is the most dangerous mistake the mapper can
+   * make - a card the scheme has switched off, read as good, at a site gate.
+   */
+  for (const negated of [
+    'inactive', 'INACTIVE', 'Not Active', 'not valid', 'never valid',
+    'valid - on hold', 'provisional active', 'awaiting review - active',
+    'no longer valid',
+  ]) {
+    ok(`"${negated}" is NEVER VALID`, mapStatus(negated) !== 'VALID', mapStatus(negated));
+  }
+  // And the genuinely good words still pass, so the guard above is not simply
+  // "nothing is ever valid".
+  ok('a suspended-but-active card is REVOKED, not ERROR',
+    mapStatus('active (suspended)') === 'REVOKED', mapStatus('active (suspended)'));
+
+  // The words that SHOULD pass, so the guard above is not just "nothing works".
+  for (const good of ['VALID', 'Valid', 'ACTIVE', 'current']) {
+    ok(`"${good}" maps to VALID`, mapStatus(good) === 'VALID', mapStatus(good));
+  }
+}
+
+// ── the diagnostic must reveal the vocabulary, not the cardholder ─────────
+{
+  const sample = shapeSummary({
+    responseData: {
+      cardStatus: 'Active', cardType: 'Gold', scheme: 'CSCS', expiryDate: '2028-03-31',
+      holderName: 'Wei Zhang', registrationNumber: '14660726',
+    },
+  });
+  ok('the card status value is shown - it is what the mapper must recognise',
+    /cardStatus: "Active"/.test(sample), sample);
+  ok('  as is the card type', /cardType: "Gold"/.test(sample), sample);
+  ok('  and the scheme', /scheme: "CSCS"/.test(sample), sample);
+  ok('the cardholder name is NOT shown', !/Wei Zhang/.test(sample), sample);
+  ok('  nor the card number', !/14660726/.test(sample), sample);
 }
 
 // ── the contract is not claimed confirmed while it is not ─────────────────

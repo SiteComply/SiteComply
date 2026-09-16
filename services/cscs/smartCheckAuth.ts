@@ -306,6 +306,30 @@ const SAFE_VALUE_FIELDS = new Set([
   'message',
   'error',
   'success',
+  /*
+   * MAPPING-CRITICAL AND NOT PERSONAL.
+   *
+   * The status vocabulary is the one thing in this contract that must not be
+   * guessed: mapping an unrecognised status to VALID would wave a revoked card
+   * through a site gate. These fields carry the words the mapper has to
+   * recognise, and none of them describes a person - a card's status, grade and
+   * scheme belong to the card.
+   *
+   * holderName and name stay OFF this list. They are the cardholder.
+   */
+  'cardStatus',
+  'verificationStatus',
+  'outcome',
+  'result',
+  'cardType',
+  'cardGrade',
+  'grade',
+  'scheme',
+  'schemeName',
+  'cardScheme',
+  'expiry',
+  'expiryDate',
+  'validTo',
 ]);
 
 const SHAPE_MAX_DEPTH = 6;

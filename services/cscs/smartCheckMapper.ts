@@ -208,6 +208,39 @@ export function mapStatus(raw: unknown): CscsVerificationStatus {
     // "invalid" contains "valid" — guard it explicitly rather than relying on
     // ordering, because that dependency is invisible to the next reader.
     if (k.includes('invalid')) return 'NOT_FOUND';
+
+    /*
+     * NEGATION AND QUALIFICATION, both of which substring matching gets wrong.
+     *
+     * "inactive" CONTAINS "active". So did "Not Active", "not valid" and
+     * "never valid" — every one of them mapped to VALID, which is the single
+     * most dangerous mistake this file can make: a card the scheme has switched
+     * off, read as good, and an operative waved through a site gate on it.
+     *
+     * Found by a test asking what an unrecognised status does, not by reading
+     * the code; the bug is invisible unless you think to try the negated form.
+     *
+     * ERROR rather than NOT_FOUND: we do not know what these mean, and saying so
+     * is honest. NOT_FOUND would assert something specific about the card.
+     */
+    const NEGATED = [
+      'inactive',
+      'notactive',
+      'nonactive',
+      'notvalid',
+      'nonvalid',
+      'never',
+      'not',
+      'no',
+      'pending',
+      'review',
+      'provisional',
+      'awaiting',
+      'suspend',
+      'hold',
+    ];
+    if (NEGATED.some((n) => k.includes(n))) return 'ERROR';
+
     return 'VALID';
   }
   return 'ERROR';
