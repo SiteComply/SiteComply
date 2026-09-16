@@ -51,7 +51,25 @@ export type SmartCheckPayload = Record<string, unknown>;
  */
 function pick(payload: SmartCheckPayload, ...keys: string[]): unknown {
   const containers: SmartCheckPayload[] = [payload];
-  for (const c of ['card', 'data', 'result', 'cardDetails', 'card_details']) {
+  /*
+   * `responseData` FIRST, because that is the envelope this partner actually
+   * uses - the sign-in reply wraps everything in it, and the card reply is the
+   * same service. It was missing from this list entirely, so a perfectly good
+   * 200 would have been read as an empty payload and mapped to UNVERIFIED: a
+   * working integration reporting that it had verified nothing.
+   *
+   * The rest are the hedges this file was written with while the contract was
+   * unknown. They stay until the response shape is confirmed, then go - see the
+   * header comment.
+   */
+  for (const c of [
+    'responseData',
+    'card',
+    'data',
+    'result',
+    'cardDetails',
+    'card_details',
+  ]) {
     const nested = payload[c];
     if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
       containers.push(nested as SmartCheckPayload);
