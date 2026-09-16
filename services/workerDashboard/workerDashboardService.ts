@@ -1,6 +1,12 @@
 import { redirect } from 'next/navigation';
 import { DocumentCategory } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import {
+  needsCscsRemediation,
+  remediationHeading,
+  remediationDismissKey,
+} from '@/services/cscs/cscsRemediation';
+import { cscsRefusalAction } from '@/services/workerAccess/accessRequirements';
 import { getWorkerSession, getActiveWorkerSiteId } from '@/lib/session';
 import { getWorkerByMobile } from '@/services/workers/workerService';
 import { listSiteContacts } from '@/services/sites/siteContactService';
@@ -36,6 +42,15 @@ export interface WorkerCheckIn {
 
 export interface WorkerContext {
   worker: { id: string; fullName: string; company: string };
+  /**
+   * Set when this operative should be asked to review their card details.
+   *
+   * Computed ONCE here, where every worker screen already comes for its context,
+   * rather than in eleven pages that would each have to remember the rule. Undefined
+   * means no prompt: the flag is off, the account is exempt, there is no card, or
+   * the card is VALID or could not be checked at all.
+   */
+  cscsRemediation?: { heading: string; action: string; dismissKey: string };
   submission: {
     id: string;
     checkedInAt: Date;
@@ -193,12 +208,33 @@ export async function getWorkerContext(): Promise<WorkerContext | null> {
   const active =
     (preferred && open.find((s) => s.jobSiteId === preferred)) || open[0];
 
+  /*
+   * Decided once, here. Eleven worker screens come through this function for
+   * their context; deciding it in each of them would mean eleven copies of a
+   * rule that must stay identical - and the exemption is one of the things it
+   * has to get right every time.
+   */
+  const cscsRemediation = needsCscsRemediation(worker)
+    ? {
+        heading: remediationHeading(worker.cscsVerificationStatus),
+        action: cscsRefusalAction(
+          worker.cscsVerificationStatus,
+          Boolean(worker.cscsCardNumber),
+        ),
+        dismissKey: remediationDismissKey(
+          worker.id,
+          worker.cscsVerificationStatus,
+        ),
+      }
+    : undefined;
+
   return {
     worker: {
       id: worker.id,
       fullName: worker.fullName,
       company: worker.company,
     },
+    cscsRemediation,
     submission: {
       id: active.id,
       checkedInAt: active.checkedInAt,

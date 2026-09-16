@@ -14,8 +14,15 @@ export default async function NewPermitPage({
 }: {
   searchParams: { type?: string };
 }) {
-  const { worker, submission, site, panels, openCheckIns, activeSiteId } =
-    await requireWorkerContext();
+  const {
+    worker,
+    submission,
+    site,
+    panels,
+    openCheckIns,
+    activeSiteId,
+    cscsRemediation,
+  } = await requireWorkerContext();
   if (!panels.ACTIVE_PERMITS) redirect('/worker/dashboard');
 
   const [unread, types] = await Promise.all([
@@ -26,6 +33,7 @@ export default async function NewPermitPage({
 
   return (
     <WorkerShell
+      cscsRemediation={cscsRemediation}
       submissionId={submission.id}
       siteName={site.name}
       checkedInAt={submission.checkedInAt}

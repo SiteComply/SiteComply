@@ -22,8 +22,15 @@ export const dynamic = 'force-dynamic';
  * never padded with empty shells.
  */
 export default async function WorkerSiteInformationPage() {
-  const { worker, submission, site, panels, openCheckIns, activeSiteId } =
-    await requireWorkerContext();
+  const {
+    worker,
+    submission,
+    site,
+    panels,
+    openCheckIns,
+    activeSiteId,
+    cscsRemediation,
+  } = await requireWorkerContext();
   if (!panels.SITE_INFORMATION) redirect('/worker/dashboard');
 
   const [unread, data] = await Promise.all([
@@ -63,6 +70,7 @@ export default async function WorkerSiteInformationPage() {
 
   return (
     <WorkerShell
+      cscsRemediation={cscsRemediation}
       submissionId={submission.id}
       siteName={site.name}
       checkedInAt={submission.checkedInAt}

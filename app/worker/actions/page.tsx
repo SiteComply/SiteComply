@@ -28,8 +28,15 @@ export const dynamic = 'force-dynamic';
  * management data and stay in the Platform.
  */
 export default async function WorkerActionsPage() {
-  const { worker, submission, site, panels, openCheckIns, activeSiteId } =
-    await requireWorkerContext();
+  const {
+    worker,
+    submission,
+    site,
+    panels,
+    openCheckIns,
+    activeSiteId,
+    cscsRemediation,
+  } = await requireWorkerContext();
   if (!panels.OUTSTANDING_ACTIONS) redirect('/worker/dashboard');
 
   const [unread, actions] = await Promise.all([
@@ -40,6 +47,7 @@ export default async function WorkerActionsPage() {
 
   return (
     <WorkerShell
+      cscsRemediation={cscsRemediation}
       submissionId={submission.id}
       siteName={site.name}
       checkedInAt={submission.checkedInAt}

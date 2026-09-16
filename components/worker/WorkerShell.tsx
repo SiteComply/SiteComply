@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { CscsRemediationBanner } from '@/components/worker/CscsRemediationBanner';
 import { ReportIssueButton } from '@/components/ui/ReportIssueButton';
 import Link from 'next/link';
 import { Logo } from '@/components/brand/Logo';
@@ -29,8 +30,19 @@ export function WorkerShell({
   sites = [],
   activeSiteId,
   submissionId,
+  cscsRemediation,
 }: {
   children: ReactNode;
+  /**
+   * Set when this operative should be asked to review their card details.
+   *
+   * Decided on the server and passed in, so the shell renders what it is told
+   * rather than re-deriving a rule that lives in one place. Undefined means no
+   * prompt - which is every operative when the flag is off, the exempt test
+   * account always, and anyone whose card is VALID or whose check could not be
+   * completed.
+   */
+  cscsRemediation?: { heading: string; action: string; dismissKey: string };
   siteName: string;
   checkedInAt: Date;
   panels: PanelVisibility;
@@ -237,6 +249,15 @@ export function WorkerShell({
         </aside>
 
         <main id="main" className="min-w-0 flex-1">
+          {/* Above the page content, inside the main region, so it is read out
+              in order and cannot be mistaken for site-wide chrome. */}
+          {cscsRemediation && (
+            <CscsRemediationBanner
+              heading={cscsRemediation.heading}
+              action={cscsRemediation.action}
+              dismissKey={cscsRemediation.dismissKey}
+            />
+          )}
           {children}
         </main>
       </div>

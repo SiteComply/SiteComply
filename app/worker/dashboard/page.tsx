@@ -36,8 +36,15 @@ export const dynamic = 'force-dynamic';
  * worker is actually checked into.
  */
 export default async function WorkerDashboardPage() {
-  const { worker, submission, site, panels, openCheckIns, activeSiteId } =
-    await requireWorkerContext();
+  const {
+    worker,
+    submission,
+    site,
+    panels,
+    openCheckIns,
+    activeSiteId,
+    cscsRemediation,
+  } = await requireWorkerContext();
 
   const counts = await getWorkerDashboardCounts(site.id, worker.id);
 
@@ -74,6 +81,7 @@ export default async function WorkerDashboardPage() {
 
   return (
     <WorkerShell
+      cscsRemediation={cscsRemediation}
       submissionId={submission.id}
       siteName={site.name}
       checkedInAt={submission.checkedInAt}

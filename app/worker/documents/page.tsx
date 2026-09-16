@@ -15,8 +15,15 @@ export const dynamic = 'force-dynamic';
  * they have their own panel and page, so nothing is listed (or counted) twice.
  */
 export default async function WorkerDocumentsPage() {
-  const { worker, submission, site, panels, openCheckIns, activeSiteId } =
-    await requireWorkerContext();
+  const {
+    worker,
+    submission,
+    site,
+    panels,
+    openCheckIns,
+    activeSiteId,
+    cscsRemediation,
+  } = await requireWorkerContext();
   if (!panels.SITE_DOCUMENTS) redirect('/worker/dashboard');
 
   const [unread, documents] = await Promise.all([
@@ -26,6 +33,7 @@ export default async function WorkerDocumentsPage() {
 
   return (
     <WorkerShell
+      cscsRemediation={cscsRemediation}
       submissionId={submission.id}
       siteName={site.name}
       checkedInAt={submission.checkedInAt}

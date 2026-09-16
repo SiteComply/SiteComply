@@ -23,8 +23,15 @@ export const dynamic = 'force-dynamic';
  * register — a permit here never blocks the worker from checking in or working.
  */
 export default async function WorkerPermitsPage() {
-  const { worker, submission, site, panels, openCheckIns, activeSiteId } =
-    await requireWorkerContext();
+  const {
+    worker,
+    submission,
+    site,
+    panels,
+    openCheckIns,
+    activeSiteId,
+    cscsRemediation,
+  } = await requireWorkerContext();
   if (!panels.ACTIVE_PERMITS) redirect('/worker/dashboard');
 
   const [unread, permitsList, types] = await Promise.all([
@@ -43,6 +50,7 @@ export default async function WorkerPermitsPage() {
 
   return (
     <WorkerShell
+      cscsRemediation={cscsRemediation}
       submissionId={submission.id}
       siteName={site.name}
       checkedInAt={submission.checkedInAt}

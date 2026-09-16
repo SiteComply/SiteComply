@@ -32,8 +32,15 @@ export default async function WorkerPermitDetailPage({
 }: {
   params: { id: string };
 }) {
-  const { worker, submission, site, panels, openCheckIns, activeSiteId } =
-    await requireWorkerContext();
+  const {
+    worker,
+    submission,
+    site,
+    panels,
+    openCheckIns,
+    activeSiteId,
+    cscsRemediation,
+  } = await requireWorkerContext();
   if (!panels.ACTIVE_PERMITS) redirect('/worker/dashboard');
 
   const detail = await getWorkerPermit(worker.id, params.id);
@@ -47,6 +54,7 @@ export default async function WorkerPermitDetailPage({
 
   return (
     <WorkerShell
+      cscsRemediation={cscsRemediation}
       submissionId={submission.id}
       siteName={site.name}
       checkedInAt={submission.checkedInAt}

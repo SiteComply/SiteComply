@@ -22,8 +22,15 @@ export const dynamic = 'force-dynamic';
  * used at check-in); everything already read is listed below for reference.
  */
 export default async function WorkerBulletinsPage() {
-  const { worker, submission, site, panels, openCheckIns, activeSiteId } =
-    await requireWorkerContext();
+  const {
+    worker,
+    submission,
+    site,
+    panels,
+    openCheckIns,
+    activeSiteId,
+    cscsRemediation,
+  } = await requireWorkerContext();
   if (!panels.DAILY_BULLETIN) redirect('/worker/dashboard');
 
   const bulletins = await getWorkerBulletins(site.id, worker.id);
@@ -32,6 +39,7 @@ export default async function WorkerBulletinsPage() {
 
   return (
     <WorkerShell
+      cscsRemediation={cscsRemediation}
       submissionId={submission.id}
       siteName={site.name}
       checkedInAt={submission.checkedInAt}

@@ -12,8 +12,15 @@ export const dynamic = 'force-dynamic';
 
 /** Worker Dashboard → Site contacts (SC-003). Numbers are tap-to-call. */
 export default async function WorkerContactsPage() {
-  const { worker, submission, site, panels, openCheckIns, activeSiteId } =
-    await requireWorkerContext();
+  const {
+    worker,
+    submission,
+    site,
+    panels,
+    openCheckIns,
+    activeSiteId,
+    cscsRemediation,
+  } = await requireWorkerContext();
   if (!panels.SITE_CONTACTS) redirect('/worker/dashboard');
 
   const [unread, contacts] = await Promise.all([
@@ -23,6 +30,7 @@ export default async function WorkerContactsPage() {
 
   return (
     <WorkerShell
+      cscsRemediation={cscsRemediation}
       submissionId={submission.id}
       siteName={site.name}
       checkedInAt={submission.checkedInAt}

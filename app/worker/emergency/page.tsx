@@ -16,8 +16,15 @@ export const dynamic = 'force-dynamic';
  * toggle, and the page as a whole is reachable if ANY of the three is on.
  */
 export default async function WorkerEmergencyPage() {
-  const { worker, submission, site, panels, openCheckIns, activeSiteId } =
-    await requireWorkerContext();
+  const {
+    worker,
+    submission,
+    site,
+    panels,
+    openCheckIns,
+    activeSiteId,
+    cscsRemediation,
+  } = await requireWorkerContext();
   if (
     !panels.EMERGENCY_INFORMATION &&
     !panels.FIRST_AIDER &&
@@ -31,6 +38,7 @@ export default async function WorkerEmergencyPage() {
 
   return (
     <WorkerShell
+      cscsRemediation={cscsRemediation}
       submissionId={submission.id}
       siteName={site.name}
       checkedInAt={submission.checkedInAt}
