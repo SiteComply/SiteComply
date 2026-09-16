@@ -169,6 +169,9 @@ async function POSTHandler(req: NextRequest) {
       cardTypeHint: cscsCardType,
       expiryHint: cscsExpiry,
       workerId: session.workerId ?? null,
+      // Only used to honour the exempt test account. Every other mobile takes
+      // the live provider exactly as before.
+      mobile: session.mobile,
     });
   }
 

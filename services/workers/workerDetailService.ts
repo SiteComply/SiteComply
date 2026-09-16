@@ -1,5 +1,6 @@
 import { CscsCardType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { isCscsExemptMobile } from '@/services/cscs/cscsExemptAccounts';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 
 /**
@@ -39,6 +40,14 @@ export interface WorkerDetail {
     fullName: string;
     /** Family name, captured separately. Never derived from fullName. */
     surname: string | null;
+    /**
+     * Whether this operative is on the CSCS exempt allow-list.
+     *
+     * Surfaced so an admin is never left wondering why one account stays
+     * unverified while every other card checks. A bypass nobody can see is a
+     * bypass someone eventually mistakes for a fault.
+     */
+    cscsExempt: boolean;
     company: string;
     mobile: string;
     cscsCardNumber: string | null;
@@ -188,6 +197,9 @@ export async function getWorkerDetailForViewer(
       ...worker,
       cscsQualifications: qualifications,
       verifiedByProvider,
+      // Read from the environment, not stored: the allow-list changes by
+      // configuration without a deploy, so a persisted copy would go stale.
+      cscsExempt: isCscsExemptMobile(worker.mobile),
     },
     complianceStatus: {
       latestStatus: latest.status,

@@ -186,6 +186,20 @@ export default async function WorkerDetailPage({
               {worker.cscsCardNumber && (
                 <Detail label="CSCS number" value={worker.cscsCardNumber} />
               )}
+              {/* The exempt test account, said plainly.
+                An account that never verifies looks like a fault unless the
+                screen says otherwise, and the person most likely to hit it is
+                whoever is troubleshooting something else at the time. */}
+              {worker.cscsExempt && (
+                <div className="rounded-lg bg-surface-sunken px-3 py-2 text-xs text-ink-muted">
+                  <span className="font-semibold text-ink">
+                    Exempt from CSCS Smart Check.
+                  </span>{' '}
+                  This is a designated test account. Its card details are not
+                  sent to CSCS, so it stays unverified by design. The exemption
+                  is set in configuration and can be removed without a release.
+                </div>
+              )}
               {/* What a Smart Check needs, and whether we have it.
                     Shown only for a worker who HAS a card, because that is the
                     only case where the absence matters. States the consequence

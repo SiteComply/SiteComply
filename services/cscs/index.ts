@@ -1,6 +1,7 @@
 import { CscsProvider } from './CscsProvider';
 import { MockCscsProvider } from './mockProvider';
 import { getCscsRuntimeConfig } from './cscsConfigService';
+import { isCscsExemptMobile } from './cscsExemptAccounts';
 import { SmartCheckCscsProvider } from './smartCheckProvider';
 
 export type {
@@ -43,8 +44,34 @@ export function buildCscsProvider(
  * than the next check. One extra singleton read per verification is a trivial
  * cost against a network call to a partner API.
  */
-export async function resolveCscsProvider(): Promise<CscsProvider> {
+export async function resolveCscsProvider(
+  /**
+   * The operative's E.164 mobile, where the caller knows it.
+   *
+   * Only used to honour the exempt allow-list. Omitting it simply means the
+   * exemption cannot apply, which is the safe default: a caller that does not
+   * know who it is checking gets the live provider.
+   */
+  e164Mobile?: string | null,
+): Promise<CscsProvider> {
   const config = await getCscsRuntimeConfig();
+
+  /*
+   * THE EXEMPT TEST ACCOUNT, resolved here and nowhere else.
+   *
+   * One branch, at the single point that decides what runs, so there is exactly
+   * one place to read and one place to delete. Routing to the mock rather than
+   * skipping verification is deliberate: the attempt still happens, still takes
+   * the normal path and is still logged with provider = 'mock', so the audit
+   * trail says what ran instead of falling silent.
+   *
+   * The mock is inert in production, so an exempt worker comes back UNVERIFIED
+   * and can never be marked compliant by this branch.
+   */
+  if (isCscsExemptMobile(e164Mobile)) {
+    return buildCscsProvider('mock');
+  }
+
   return buildCscsProvider(config.providerId, {
     apiUrl: config.apiUrl ?? '',
     apiKey: config.apiKey ?? '',

@@ -61,7 +61,11 @@ async function log(entry: {
 }
 
 export async function verifyCscsCard(
-  input: CscsVerifyInput & { workerId?: string | null },
+  input: CscsVerifyInput & {
+    workerId?: string | null;
+    /** E.164 mobile, so the exempt test account can be honoured. */
+    mobile?: string | null;
+  },
 ): Promise<CscsVerificationResult> {
   const startedAt = Date.now();
   const config = await getCscsRuntimeConfig();
@@ -91,7 +95,7 @@ export async function verifyCscsCard(
     return result;
   }
 
-  const provider = await resolveCscsProvider();
+  const provider = await resolveCscsProvider(input.mobile);
 
   try {
     const result = await provider.verifyCard(input);
