@@ -27,6 +27,7 @@ import {
   classifySignInFailure,
   signInWithCandidateShapes,
   classifySmartCheckResponse,
+  ALTERNATE_REG_COUNT,
 } from '../services/cscs/smartCheckConnectionTest';
 import { CANDIDATE_AUTH_PRESENTATIONS, authHeaders } from '../services/cscs/smartCheckAuth';
 import {
@@ -215,7 +216,14 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
     ok('a long opaque value is stripped', bodySnippet(`{"k":"${'A'.repeat(64)}"}`)!.includes('[long value]'));
     ok('a password field is masked', /redacted/i.test(bodySnippet('{"password":"hunter2hunter2"}')!));
     ok('an email is stripped', !bodySnippet('{"user":"bob@example.com"}')!.includes('bob@example.com'));
-    ok('a long body is capped', (bodySnippet('x '.repeat(800)) ?? '').length <= 301);
+    // Derive the allowance from the marker rather than hardcoding it: the
+    // ellipsis went from one character to three when the output was made
+    // ASCII-only, and a literal 301 failed a cap that was working fine.
+    const MARKER = '...';
+    ok('a long body is capped',
+      (bodySnippet('x '.repeat(800)) ?? '').length <= 300 + MARKER.length,
+      (bodySnippet('x '.repeat(800)) ?? '').length);
+    ok('  and says it was truncated', (bodySnippet('x '.repeat(800)) ?? '').endsWith(MARKER));
     ok('an empty body yields no snippet', bodySnippet('') === undefined);
   }
 
@@ -383,7 +391,9 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
     ok('an empty responseData reports as null', /responseData: null/.test(shapeSummary({ responseData: null })));
     ok('no token-like field yields no paths', tokenLikePaths({ responseData: { a: 1 } }).length === 0);
     ok('depth is bounded', describeShape({ a: { b: { c: { d: { e: { f: { g: 1 } } } } } } }).includes('<object>'));
-    ok('the summary is capped', shapeSummary({ big: Object.fromEntries(Array.from({ length: 200 }, (_, i) => [`k${i}`, 'x'])) }).length <= 901);
+    const big = shapeSummary({ big: Object.fromEntries(Array.from({ length: 200 }, (_, i) => [`k${i}`, 'x'])) });
+    ok('the summary is capped', big.length <= 900 + '...'.length, big.length);
+    ok('  and says it was truncated', big.endsWith('...'));
   }
 
   // ── 16. that shape reaches the admin, end to end ───────────────────────
@@ -743,6 +753,88 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
     ok('every card call site uses the helper',
       (stage2.match(/await cardFetch\(/g) ?? []).length >= 3,
       `${(stage2.match(/await cardFetch\(/g) ?? []).length} call sites`);
+  }
+
+  // ── 27b. the other documented cards: sent, and reported ────────────────
+  // Mutation testing found all four of these missing — the ladder was built and
+  // asserted nowhere, so deleting the loop, the report, or the conclusion
+  // changed nothing. The same gap as the control and the sentinel before it.
+  {
+    const src = readFileSync('services/cscs/smartCheckConnectionTest.ts', 'utf8');
+    /*
+     * Anchor on the LOOP, not on the comment.
+     *
+     * "THE OTHER DOCUMENTED CARDS." also appears in an earlier doc-comment, so
+     * slicing from it started above probeBody and swallowed probeBody's own
+     * surname line — which satisfied the one-variable check no matter what the
+     * alternate request actually sent. Mutation testing caught it; reading would
+     * not have.
+     */
+    const loopAt = src.indexOf('for (const registration of ALTERNATE_REGISTRATIONS)');
+    const block = src.slice(
+      src.lastIndexOf('if (attempt &&', loopAt),
+      src.indexOf('THE CONTROL.', loopAt),
+    );
+    ok('the guard is reading the alternate-card block only',
+      block.includes('registration') && !block.includes('scanType]: scanType'), block.slice(0, 120));
+    ok('the alternates are only tried when the first was refused',
+      /attempt\.status === 401 \|\| attempt\.status === 403/.test(block), 'gate missing');
+    ok('  and the loop actually iterates them',
+      /for \(const registration of ALTERNATE_REGISTRATIONS\)/.test(block), 'not iterating');
+    ok('  through the timeout helper', /await cardFetch\(/.test(block), 'raw fetch');
+    ok('  recording each result', /cardsTried\.push\(/.test(block), 'not recorded');
+
+    // ONE VARIABLE AT A TIME. Changing the surname as well would make a
+    // different answer uninterpretable.
+    ok('only the registration number varies',
+      /surname\]: PROBE_CARD\.surname/.test(block) &&
+      /registrationNumber\]: registration/.test(block) &&
+      /schemeId\]: PROBE_CARD\.schemeId/.test(block), block.slice(0, 300));
+
+    ok('three alternates, all documented', ALTERNATE_REG_COUNT === 3, ALTERNATE_REG_COUNT);
+
+    // …and the verdict states what the ladder showed.
+    const allRefused = classifySmartCheckResponse(403, '', HOST, {
+      cardsTried: ['13285326 -> 403', '14661856 -> 403', '14662192 -> 403'],
+    });
+    ok('four identical refusals is called out as not card-specific',
+      /not about a particular record/.test(allRefused.detail), allRefused.detail);
+    ok('  listing each registration', /13285326/.test(allRefused.detail) && /14662192/.test(allRefused.detail));
+
+    const mixed = classifySmartCheckResponse(403, '', HOST, {
+      cardsTried: ['13285326 -> 403', '14661856 -> 200 ok', '14662192 -> 403'],
+    });
+    ok('a differing card overturns the blanket reading',
+      /the record matters and this is not a blanket refusal/.test(mixed.detail), mixed.detail);
+    ok('  and does NOT claim a blanket refusal',
+      !/not about a particular record/.test(mixed.detail), mixed.detail);
+
+    const none = classifySmartCheckResponse(403, '', HOST, {});
+    ok('with no ladder run, neither conclusion is drawn',
+      !/documented test registrations/.test(none.detail), none.detail);
+  }
+
+  // ── 28. the diagnostic has to be COPYABLE ──────────────────────────────
+  // The owner could not paste the result because it contained ->, - and ...
+  // as typographic characters. A diagnostic that has to be retyped is half a
+  // diagnostic, and this one has to travel to CSCS.
+  {
+    const nonAsciiInOutput = (file: string) =>
+      readFileSync(file, 'utf8')
+        .split('\n')
+        .filter((l) => {
+          const t = l.trim();
+          return !t.startsWith('*') && !t.startsWith('//') && !t.startsWith('/*');
+        })
+        .filter((l) => /[^\x00-\x7F]/.test(l));
+    for (const f of [
+      'services/cscs/smartCheckConnectionTest.ts',
+      'services/cscs/smartCheckAuth.ts',
+    ]) {
+      const bad = nonAsciiInOutput(f);
+      ok(`${f}: output strings are plain ASCII`, bad.length === 0, bad.slice(0, 2));
+    }
+    ok('the status separator is ASCII', /-> /.test(String(classifySmartCheckResponse(403, '', HOST, { tried: ['x -> 403'] }).detail)));
   }
 
   server.closeAllConnections();

@@ -79,6 +79,22 @@ const PROBE_CARD = {
   registrationNumber: '14660726',
 };
 
+/**
+ * The other documented registrations for the same test record.
+ *
+ * Tried only when the first is refused, and only to answer one question: is the
+ * refusal about THIS CARD or about the account's ability to look any card up?
+ * Four identical refusals across four separate documented records is evidence a
+ * partner can act on; one refusal is an anecdote.
+ *
+ * Same scheme and surname deliberately — changing one variable at a time is the
+ * whole point, and these are the registrations CSCS publish for testing.
+ */
+const ALTERNATE_REGISTRATIONS = ['13285326', '14661856', '14662192'];
+
+/** Exported so a test can hold the count without importing the values. */
+export const ALTERNATE_REG_COUNT = ALTERNATE_REGISTRATIONS.length;
+
 export type CscsConnectionOutcome =
   | 'OK'
   | 'CARD_NOT_FOUND'
@@ -251,7 +267,7 @@ export async function testSmartCheckConnection(credentials: {
   /* A shape other than the first worked. That is the finding, not a footnote. */
   const shapeNote =
     acceptedShape && acceptedShape !== CANDIDATE_FIELD_SHAPES[0]?.label
-      ? ` Sign-in succeeded with the body field names "${acceptedShape}", NOT the "${CANDIDATE_FIELD_SHAPES[0]?.label}" the integration sends today — AUTH_SHAPE.fields needs updating to match.`
+      ? ` Sign-in succeeded with the body field names "${acceptedShape}", NOT the "${CANDIDATE_FIELD_SHAPES[0]?.label}" the integration sends today - AUTH_SHAPE.fields needs updating to match.`
       : '';
 
   /* STAGE 2 — ask about a card, with the token from stage 1. */
@@ -299,6 +315,8 @@ export async function testSmartCheckConnection(credentials: {
   let controlResult: string | null = null;
   /** What a deliberately invalid scan type returns. See THE SENTINEL. */
   let sentinelStatus: number | null = null;
+  /** How each documented test registration fared. See THE OTHER DOCUMENTED CARDS. */
+  const cardsTried: string[] = [];
 
   /** The probe's body, with one scan type substituted in. */
   const probeBody = (scanType: string) => ({
@@ -315,7 +333,7 @@ export async function testSmartCheckConnection(credentials: {
         probeBody(REQUEST_SHAPE.scanType),
         authHeaders(creds, token, p),
       );
-      presentationsTried.push(`${p.label} → ${attempt.status}`);
+      presentationsTried.push(`${p.label} -> ${attempt.status}`);
       if (attempt.status !== 401 && attempt.status !== 403) break;
     }
 
@@ -334,7 +352,7 @@ export async function testSmartCheckConnection(credentials: {
       if (attempt && attempt.status >= 400 && attempt.status < 500) {
         const firstBody = await attempt.clone().text().catch(() => '');
         scanTypesTried.push(
-          `${REQUEST_SHAPE.scanType} → ${attempt.status} ${envelopeMessage(firstBody) ?? '(no message)'}`.trim(),
+          `${REQUEST_SHAPE.scanType} -> ${attempt.status} ${envelopeMessage(firstBody) ?? '(no message)'}`.trim(),
         );
 
         /*
@@ -362,7 +380,7 @@ export async function testSmartCheckConnection(credentials: {
               ? `${candidate} (deliberately invalid)`
               : candidate;
           scanTypesTried.push(
-            `${label} → ${next.status} ${envelopeMessage(text) ?? '(no message)'}`.trim(),
+            `${label} -> ${next.status} ${envelopeMessage(text) ?? '(no message)'}`.trim(),
           );
           if (candidate === SCAN_TYPE_SENTINEL) {
             sentinelStatus = next.status;
@@ -375,6 +393,36 @@ export async function testSmartCheckConnection(credentials: {
           }
         }
       }
+
+    /*
+     * THE OTHER DOCUMENTED CARDS.
+     *
+     * Only when the first was refused, and only to separate "this card" from
+     * "any card". If all four documented registrations are refused identically
+     * the account cannot look cards up at all, which is a statement CSCS can
+     * check in one query; if one behaves differently the problem is the record,
+     * not the entitlement.
+     *
+     * Safe: no credentials, published test data, and a lookup is a read.
+     */
+    if (attempt && (attempt.status === 401 || attempt.status === 403)) {
+      for (const registration of ALTERNATE_REGISTRATIONS) {
+        const alt = await cardFetch(
+          {
+            [REQUEST_SHAPE.fields.schemeId]: PROBE_CARD.schemeId,
+            [REQUEST_SHAPE.fields.surname]: PROBE_CARD.surname,
+            [REQUEST_SHAPE.fields.registrationNumber]: registration,
+            [REQUEST_SHAPE.fields.scanType]: REQUEST_SHAPE.scanType,
+          },
+          authHeaders(creds, token),
+        ).catch(() => null);
+        if (!alt) continue;
+        const text = await alt.text().catch(() => '');
+        cardsTried.push(
+          `${registration} -> ${alt.status} ${envelopeMessage(text) ?? '(no message)'}`.trim(),
+        );
+      }
+    }
 
     /*
      * THE CONTROL.
@@ -441,6 +489,7 @@ export async function testSmartCheckConnection(credentials: {
       acceptedScanType,
       controlResult,
       sentinelStatus,
+      cardsTried,
     },
   );
   return done({ ...verdict, detail: `${verdict.detail}${shapeNote}` });
@@ -560,7 +609,7 @@ export function classifySignInFailure(
     : '';
   const probed =
     tried.length > 1
-      ? ` Body field names tried, in order: ${tried.join(', ')} — all refused the same way.`
+      ? ` Body field names tried, in order: ${tried.join(', ')} - all refused the same way.`
       : '';
 
   if (kind === 'no-token') {
@@ -611,7 +660,7 @@ export function classifySignInFailure(
       // The host is NOT blamed. It answered, and quickly.
       title: `${host} answered the sign-in, but not with JSON.`,
       detail: `${withBody(
-        `The connection, the address and the TLS handshake are all fine — the service replied${facts ? ` with ${facts}` : ''} and the body could not be parsed. An empty body here means /authenticate ran and did not accept the request as formed — the field names, an unexpected header, or a missing field — rather than that the username or password is wrong.`,
+        `The connection, the address and the TLS handshake are all fine - the service replied${facts ? ` with ${facts}` : ''} and the body could not be parsed. An empty body here means /authenticate ran and did not accept the request as formed - the field names, an unexpected header, or a missing field - rather than that the username or password is wrong.`,
       )}${sent}${probed}${trace}`,
     };
   }
@@ -662,6 +711,7 @@ export function classifySmartCheckResponse(
     acceptedScanType?: string | null;
     controlResult?: string | null;
     sentinelStatus?: number | null;
+    cardsTried?: string[];
   } = {},
 ): Omit<CscsConnectionTestResult, 'durationMs'> {
   const trace = probe.headers
@@ -689,9 +739,9 @@ export function classifySmartCheckResponse(
    * the right advice rather than a guess.
    */
   const control = probe.controlResult
-    ? ` CONTROL — the same request WITHOUT ${REQUEST_SHAPE.fields.scanType} returned ${probe.controlResult}.` +
+    ? ` CONTROL - the same request WITHOUT ${REQUEST_SHAPE.fields.scanType} returned ${probe.controlResult}.` +
       (/^40[13]/.test(probe.controlResult)
-        ? ' It was refused the same way, so the refusal is not caused by anything this integration changed — the request that previously reached body validation no longer does.'
+        ? ' It was refused the same way, so the refusal is not caused by anything this integration changed - the request that previously reached body validation no longer does.'
         : ' It was NOT refused the same way, so the refusal follows from the request this integration now sends, not from an authorisation on the CSCS side.')
     : '';
 
@@ -707,15 +757,29 @@ export function classifySmartCheckResponse(
     probe.sentinelStatus == null
       ? ''
       : probe.sentinelStatus >= 400 && probe.sentinelStatus < 403
-        ? ` A deliberately invalid scan type returned ${probe.sentinelStatus}, so the field name is right and the service IS reading the value. A 403 for a real value therefore means that value is understood and not permitted — worth asking CSCS which scan types this key is entitled to use.`
+        ? ` A deliberately invalid scan type returned ${probe.sentinelStatus}, so the field name is right and the service IS reading the value. A 403 for a real value therefore means that value is understood and not permitted - worth asking CSCS which scan types this key is entitled to use.`
         : probe.sentinelStatus === 403
-          ? ` A deliberately invalid scan type returned 403 as well, so the refusal does not depend on WHAT the field contains — merely supplying it is enough. The value is not the story.`
+          ? ` A deliberately invalid scan type returned 403 as well, so the refusal does not depend on WHAT the field contains - merely supplying it is enough. The value is not the story.`
           : ` A deliberately invalid scan type returned ${probe.sentinelStatus}.`;
+
+  /*
+   * The card ladder, and what it means.
+   *
+   * Four documented registrations refused identically says the account cannot
+   * look ANY card up. That is the difference between a question CSCS can answer
+   * from their own records and a guess we are asking them to check.
+   */
+  const cards = probe.cardsTried?.length
+    ? ` Other documented test registrations: ${probe.cardsTried.join('; ')}.` +
+      (probe.cardsTried.every((c) => / -> 40[13] /.test(c) || / -> 40[13]$/.test(c))
+        ? ' Every documented test card was refused the same way, so this is not about a particular record.'
+        : ' They did NOT all behave the same way, so the record matters and this is not a blanket refusal.')
+    : '';
 
   const scans = probe.scanTypes?.length
     ? ` Scan types tried: ${probe.scanTypes.join('; ')}.` +
       (probe.acceptedScanType
-        ? ` The service accepted "${probe.acceptedScanType}" — set REQUEST_SHAPE.scanType to it.`
+        ? ` The service accepted "${probe.acceptedScanType}" - set REQUEST_SHAPE.scanType to it.`
         : ' No candidate was accepted.') +
       sentinel
     : '';
@@ -747,12 +811,13 @@ export function classifySmartCheckResponse(
       detail:
         `Authentication passed, so the credentials and the sign-in request are correct.` +
         (REQUEST_SHAPE.pathConfirmed
-          ? ` The card path "${REQUEST_SHAPE.path}" is the documented one, so this is no longer a wrong-endpoint 403. On this gateway that leaves the API key not being authorised for this endpoint — a usage-plan or subscription setting CSCS control — or the token not being accepted for card lookups. The presentations below distinguish those: all four refused identically points at the key's authorisation, not at the header format.`
-          : ` The card path is NOT confirmed: "${REQUEST_SHAPE.path}" appended to the configured base gives a URL with two version segments, and this gateway returns 403 with an empty body for a route that does not exist — the same answer a refused token gives. The documented card-validation path is the missing piece.`) +
+          ? ` The card path "${REQUEST_SHAPE.path}" is the documented one, so this is no longer a wrong-endpoint 403. On this gateway that leaves the API key not being authorised for this endpoint - a usage-plan or subscription setting CSCS control - or the token not being accepted for card lookups. The presentations below distinguish those: all four refused identically points at the key's authorisation, not at the header format.`
+          : ` The card path is NOT confirmed: "${REQUEST_SHAPE.path}" appended to the configured base gives a URL with two version segments, and this gateway returns 403 with an empty body for a route that does not exist - the same answer a refused token gives. The documented card-validation path is the missing piece.`) +
         (allRefused
           ? ' Every way of presenting the token was refused identically, which is not what a single wrong header format looks like.'
           : '') +
         control +
+        cards +
         scans +
         attempts +
         trace,
@@ -775,7 +840,7 @@ export function classifySmartCheckResponse(
       // URL and all four credentials have just been proven.
       title: `Signed in successfully. ${host} answered the card call, but inconclusively.`,
       detail: REQUEST_SHAPE.pathConfirmed
-        ? `Authentication passed, so the base URL and all four credentials are correct. A 404 means no record matched — but the probe asks about a DOCUMENTED test card (scheme ${PROBE_CARD.schemeId}, ${PROBE_CARD.surname}, ${PROBE_CARD.registrationNumber}), which should resolve. That points at the request field names rather than at the card.${bodySnippet(bodyText) ? ` The service replied: ${bodySnippet(bodyText)}` : ''}${attempts}${trace}`
+        ? `Authentication passed, so the base URL and all four credentials are correct. A 404 means no record matched - but the probe asks about a DOCUMENTED test card (scheme ${PROBE_CARD.schemeId}, ${PROBE_CARD.surname}, ${PROBE_CARD.registrationNumber}), which should resolve. That points at the request field names rather than at the card.${bodySnippet(bodyText) ? ` The service replied: ${bodySnippet(bodyText)}` : ''}${attempts}${trace}`
         : 'Authentication worked, so the base URL and all four credentials are correct. The 404 is ambiguous only because the card-validation path is not yet confirmed: it means either that the card matched no record, or that this is not the path CSCS publish. Confirm the path, then run this again.',
     };
   }
@@ -801,7 +866,7 @@ export function classifySmartCheckResponse(
       httpStatus: status,
       title: `${host} returned a server error (HTTP ${status}).`,
       detail:
-        'The endpoint and credentials were accepted far enough to reach the service, which then failed. This is usually a fault at the provider — try again shortly.',
+        'The endpoint and credentials were accepted far enough to reach the service, which then failed. This is usually a fault at the provider - try again shortly.',
     };
   }
 
@@ -816,9 +881,9 @@ export function classifySmartCheckResponse(
       // The card path is confirmed now, so a 4xx here points at the BODY — and
       // the field-name casing is the part still unconfirmed.
       detail:
-        `The host, the credentials and the card path are all working, so this points at the request body. The three parts V2.6 identifies a card by are confirmed; their JSON field names are not — the integration sends ${Object.values(REQUEST_SHAPE.fields).join(', ')}.` +
+        `The host, the credentials and the card path are all working, so this points at the request body. The three parts V2.6 identifies a card by are confirmed; their JSON field names are not - the integration sends ${Object.values(REQUEST_SHAPE.fields).join(', ')}.` +
         (envelopeMessage(bodyText)
-          ? ` The service said — ${envelopeMessage(bodyText)}.`
+          ? ` The service said - ${envelopeMessage(bodyText)}.`
           : bodySnippet(bodyText)
             ? ` The service replied: ${bodySnippet(bodyText)}`
             : '') +
@@ -872,7 +937,7 @@ export function classifySmartCheckResponse(
       `The service accepted the request and returned a readable response for the documented test card (scheme ${PROBE_CARD.schemeId}, ${PROBE_CARD.surname}, ${PROBE_CARD.registrationNumber}).` +
       (REQUEST_SHAPE.fieldsConfirmed
         ? ''
-        : ' The card request field NAMES are not yet confirmed, so a reply does not by itself prove the lookup was understood — check the response below actually describes that card.') +
+        : ' The card request field NAMES are not yet confirmed, so a reply does not by itself prove the lookup was understood - check the response below actually describes that card.') +
       ` Response shape (values masked): ${shapeSummary(parsed)}` +
       scans +
       attempts +

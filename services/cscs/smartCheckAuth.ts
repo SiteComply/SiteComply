@@ -327,7 +327,7 @@ export function describeShape(v: unknown, depth = 0, key = ''): string {
     if (depth >= SHAPE_MAX_DEPTH) return `<array, ${v.length} items>`;
     return v.length === 0
       ? '[]'
-      : `[${describeShape(v[0], depth + 1, key)}${v.length > 1 ? `, …${v.length - 1} more` : ''}]`;
+      : `[${describeShape(v[0], depth + 1, key)}${v.length > 1 ? `, ...${v.length - 1} more` : ''}]`;
   }
   if (typeof v === 'object') {
     if (depth >= SHAPE_MAX_DEPTH) return '<object>';
@@ -336,7 +336,7 @@ export function describeShape(v: unknown, depth = 0, key = ''): string {
     const body = shown
       .map((k) => `${k}: ${describeShape((v as Record<string, unknown>)[k], depth + 1, k)}`)
       .join(', ');
-    const more = keys.length > shown.length ? `, …${keys.length - shown.length} more` : '';
+    const more = keys.length > shown.length ? `, ...${keys.length - shown.length} more` : '';
     return `{${body}${more}}`;
   }
   if (typeof v === 'string') {
@@ -398,7 +398,7 @@ export function envelopeMessage(bodyText: string): string | undefined {
 /** describeShape, capped for a message an admin reads on one screen. */
 export function shapeSummary(v: unknown): string {
   const text = describeShape(v);
-  return text.length > SHAPE_MAX_CHARS ? `${text.slice(0, SHAPE_MAX_CHARS)}…` : text;
+  return text.length > SHAPE_MAX_CHARS ? `${text.slice(0, SHAPE_MAX_CHARS)}...` : text;
 }
 
 /**
@@ -441,7 +441,7 @@ export function bodySnippet(text: string): string | undefined {
     // like one of redact()'s known patterns. A 40-character run in an
     // unparseable body is far more likely to be a secret than a useful clue.
     .replace(/[A-Za-z0-9._\-+/=]{40,}/g, '[long value]');
-  return safe.length > MAX_SNIPPET ? `${safe.slice(0, MAX_SNIPPET)}…` : safe;
+  return safe.length > MAX_SNIPPET ? `${safe.slice(0, MAX_SNIPPET)}...` : safe;
 }
 
 export interface SmartCheckCredentials {
