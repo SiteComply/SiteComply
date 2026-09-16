@@ -3,8 +3,10 @@ import {
   resolveCscsProvider,
   CscsVerifyInput,
   CscsVerificationResult,
+  type CscsProvider,
 } from './index';
 import { getCscsRuntimeConfig } from './cscsConfigService';
+import { CscsDetailsMissingError } from './CscsProvider';
 import { messageForStatus } from './smartCheckMapper';
 
 /**
@@ -65,6 +67,18 @@ export async function verifyCscsCard(
     workerId?: string | null;
     /** E.164 mobile, so the exempt test account can be honoured. */
     mobile?: string | null;
+    /**
+     * Run against THIS provider instead of the configured one.
+     *
+     * For the Platform "check this card now" action, which must reach CSCS while
+     * the live provider is still the mock. Every other caller omits it and gets
+     * the configured provider, so there is no way to reach this by accident.
+     *
+     * The result is still logged and still recorded against the worker: a real
+     * check that produced a real answer IS that worker's competency record, and
+     * discarding it would leave the screen disagreeing with the audit log.
+     */
+    providerOverride?: CscsProvider;
   },
 ): Promise<CscsVerificationResult> {
   const startedAt = Date.now();
@@ -95,7 +109,8 @@ export async function verifyCscsCard(
     return result;
   }
 
-  const provider = await resolveCscsProvider(input.mobile);
+  const provider =
+    input.providerOverride ?? (await resolveCscsProvider(input.mobile));
 
   try {
     const result = await provider.verifyCard(input);
@@ -116,20 +131,35 @@ export async function verifyCscsCard(
     // eslint-disable-next-line no-console
     console.error('[CSCS Smart Check] verification failed:', error);
 
+    /*
+     * INCOMPLETE DETAILS ARE NOT A SERVICE FAILURE.
+     *
+     * "The CSCS Smart Check service could not complete this check" blames CSCS
+     * for something we never asked them, and leaves the operative with nothing
+     * to act on. When the lookup never ran because we lack the surname or the
+     * scheme, say that, and say which - they are standing at a gate with the
+     * card in their hand and one field to fill.
+     *
+     * UNVERIFIED, not ERROR: no check was attempted, and that is exactly what
+     * UNVERIFIED means. ERROR would imply something went wrong at the provider.
+     */
+    const detailsMissing = error instanceof CscsDetailsMissingError;
     const result: CscsVerificationResult = {
-      status: 'ERROR',
+      status: detailsMissing ? 'UNVERIFIED' : 'ERROR',
       verified: false,
       scheme: input.scheme ?? null,
       providerName: provider.name,
       checkedAt: new Date(),
-      message: messageForStatus('ERROR', null),
+      message: detailsMissing
+        ? `We need your ${(error as CscsDetailsMissingError).missing.join(' and ')} to check this card. Your details have been saved.`
+        : messageForStatus('ERROR', null),
     };
     await log({
       workerId: input.workerId,
       cardNumber: input.cardNumber,
       scheme: input.scheme,
       provider: provider.name,
-      status: 'ERROR',
+      status: detailsMissing ? 'UNVERIFIED' : 'ERROR',
       verified: false,
       // The provider's own message, which is written to never carry a
       // credential or an endpoint. Kept out of `result.message`, which a worker

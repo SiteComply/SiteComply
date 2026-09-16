@@ -103,6 +103,27 @@ async function POSTHandler(req: NextRequest) {
   if (fields.fullName.length < 2) return bad('Please enter your full name.');
   if (fields.company.length < 2) return bad('Please enter your company name.');
 
+  /*
+   * A CARD NUMBER OBLIGES A SURNAME AND A SCHEME.
+   *
+   * CSCS Smart Check identifies a card by scheme + surname + serial. Without
+   * all three the lookup cannot run, so a card captured without them is a card
+   * that can never be verified - and the operative is never told why.
+   *
+   * Required only WHEN A CARD IS GIVEN. An operative with no card is not asked
+   * for either, because neither is needed for anything else. Enforced here as
+   * well as in the form: the form can be bypassed, and this is the boundary that
+   * decides what gets stored.
+   */
+  if (fields.cscsCardNumber.trim()) {
+    if (fields.surname.trim().length < 2) {
+      return bad('Please enter your surname, as it appears on your card.');
+    }
+    if (!isKnownScheme(fields.cscsSchemeId)) {
+      return bad('Please choose the scheme that issued your card.');
+    }
+  }
+
   // Optional CSCS card type.
   let cscsCardType: CscsCardType | null = null;
   if (fields.cscsCardType) {

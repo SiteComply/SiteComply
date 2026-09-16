@@ -134,6 +134,26 @@ export function IdentityForm({
       return;
     }
 
+    /*
+     * Told BEFORE the round trip, and with the card section open.
+     *
+     * The server enforces the same rule, but a rejection that arrives as a
+     * banner after submit — on a phone, at a site gate, with the card fields
+     * collapsed out of view — is a worker who does not know which box to fill.
+     */
+    if (form.cscsCardNumber.trim()) {
+      if (form.surname.trim().length < 2) {
+        setShowCscs(true);
+        toast.error('Please enter your surname, as it appears on your card.');
+        return;
+      }
+      if (schemesAreUsable() && !form.cscsSchemeId.trim()) {
+        setShowCscs(true);
+        toast.error('Please choose the scheme that issued your card.');
+        return;
+      }
+    }
+
     setBusy(true);
     try {
       const fd = new FormData();

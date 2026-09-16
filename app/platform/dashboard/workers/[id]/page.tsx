@@ -14,6 +14,7 @@ import { getWorkerDetailForViewer } from '@/services/workers/workerDetailService
 import { CSCS_CARD_LABELS, cscsVerificationLabel } from '@/lib/cscs';
 import { schemeById } from '@/services/cscs/schemes';
 import { ManualCheckOutNote } from '@/components/platform/ManualCheckOutNote';
+import { CscsCheckNowButton } from '@/components/platform/CscsCheckNowButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -185,6 +186,12 @@ export default async function WorkerDetailPage({
               />
               {worker.cscsCardNumber && (
                 <Detail label="CSCS number" value={worker.cscsCardNumber} />
+              )}
+              {/* Validate against a real card without switching the live
+                provider for every operative. Placed with the CSCS details
+                it acts on, not in a toolbar away from them. */}
+              {!worker.cscsExempt && worker.cscsCardNumber && (
+                <CscsCheckNowButton workerId={worker.id} />
               )}
               {/* The exempt test account, said plainly.
                 An account that never verifies looks like a fault unless the

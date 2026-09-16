@@ -3,6 +3,7 @@ import {
   CscsVerifyInput,
   CscsVerificationResult,
   CscsVerifyError,
+  CscsDetailsMissingError,
 } from './CscsProvider';
 import { mapSmartCheckResponse, type SmartCheckPayload } from './smartCheckMapper';
 import {
@@ -245,13 +246,12 @@ export function cardRequestBody(
     registrationNumber ? null : 'registration number',
     surname ? null : 'surname',
     schemeId ? null : 'scheme ID',
-  ].filter(Boolean);
+  ].filter((m): m is string => m !== null);
 
   if (missing.length) {
-    throw new CscsVerifyError(
+    throw new CscsDetailsMissingError(
       `CSCS Smart Check needs the ${missing.join(', ')} to look a card up, and ${missing.length > 1 ? 'they are' : 'it is'} not held for this worker.`,
-      undefined,
-      false,
+      missing,
     );
   }
 

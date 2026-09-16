@@ -83,6 +83,26 @@ export interface CscsProvider {
   verifyCard(input: CscsVerifyInput): Promise<CscsVerificationResult>;
 }
 
+/**
+ * The worker's details are incomplete, so no lookup was attempted.
+ *
+ * DISTINCT FROM A FAILED CHECK, and the distinction reaches an operative: "the
+ * service could not complete this check" blames CSCS for something we never
+ * asked them, and leaves the worker with nothing to do about it. A separate type
+ * rather than a string to match on - reading prose to decide what happened is
+ * how the sign-in classifier spent a day blaming the network.
+ */
+export class CscsDetailsMissingError extends Error {
+  constructor(
+    message: string,
+    /** Which parts are absent, in words an operative would recognise. */
+    readonly missing: string[],
+  ) {
+    super(message);
+    this.name = 'CscsDetailsMissingError';
+  }
+}
+
 /** Thrown when a Smart Check cannot be completed, to be handled gracefully upstream. */
 export class CscsVerifyError extends Error {
   constructor(
