@@ -35,6 +35,7 @@ import {
   cardRequestBody,
   CANDIDATE_SCAN_TYPES,
   SCAN_TYPE_SENTINEL,
+  CANDIDATE_FIELD_NAMINGS,
 } from '../services/cscs/smartCheckProvider';
 import {
   CANDIDATE_FIELD_SHAPES,
@@ -828,6 +829,62 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
     const none = classifySmartCheckResponse(403, '', HOST, {});
     ok('with no ladder run, neither conclusion is drawn',
       !/documented test registrations/.test(none.detail), none.detail);
+  }
+
+  // ── 27c. the wire names the service itself asked for ───────────────────
+  {
+    ok('the scheme field is named schemeIdentifier',
+      REQUEST_SHAPE.fields.schemeId === 'schemeIdentifier', REQUEST_SHAPE.fields);
+    ok('the card number field is named cardSerialNumber',
+      REQUEST_SHAPE.fields.registrationNumber === 'cardSerialNumber', REQUEST_SHAPE.fields);
+    ok('  the Test Cards page vocabulary is NOT on the wire',
+      !Object.values(REQUEST_SHAPE.fields).includes('registrationNumber') &&
+      !Object.values(REQUEST_SHAPE.fields).includes('schemeId'), REQUEST_SHAPE.fields);
+    ok('scanType keeps the casing the service accepted',
+      REQUEST_SHAPE.fields.scanType === 'scanType');
+    // surname has never been objected to, but the service names only what is
+    // MISSING - so it is not confirmed, and the flag must not pretend otherwise.
+    ok('the field set is still NOT claimed confirmed',
+      REQUEST_SHAPE.fieldsConfirmed === false);
+
+    const wire = JSON.stringify(cardRequestBody({ cardNumber: '14660726', surname: 'Zhang', schemeId: 'C4T' }));
+    ok('the serialised body uses the service\'s own names',
+      /"schemeIdentifier":"C4T"/.test(wire) && /"cardSerialNumber":"14660726"/.test(wire), wire);
+    ok('  and still sends scanType as a number', /"scanType":3/.test(wire), wire);
+
+    ok('the first candidate naming is what the live path sends',
+      CANDIDATE_FIELD_NAMINGS[0]?.schemeId === REQUEST_SHAPE.fields.schemeId &&
+      CANDIDATE_FIELD_NAMINGS[0]?.registrationNumber === REQUEST_SHAPE.fields.registrationNumber &&
+      CANDIDATE_FIELD_NAMINGS[0]?.surname === REQUEST_SHAPE.fields.surname,
+      CANDIDATE_FIELD_NAMINGS[0]);
+    ok('  the candidates are distinct',
+      new Set(CANDIDATE_FIELD_NAMINGS.map((n) => `${n.schemeId}|${n.surname}|${n.registrationNumber}`)).size
+        === CANDIDATE_FIELD_NAMINGS.length, CANDIDATE_FIELD_NAMINGS.length);
+    ok('  and one of them varies the surname casing',
+      CANDIDATE_FIELD_NAMINGS.some((n) => n.surname === 'surName'), CANDIDATE_FIELD_NAMINGS.map((n) => n.surname));
+
+    const accepted = classifySmartCheckResponse(400, '{"responseMessage":"x"}', HOST, {
+      namingsTried: ['a -> 400 missing', 'b -> 200 ok'],
+      acceptedNaming: 'b',
+    });
+    ok('an accepted naming is called out as the finding',
+      /accepted "b" - set REQUEST_SHAPE.fields to match/.test(accepted.detail), accepted.detail);
+    const rejected = classifySmartCheckResponse(400, '{"responseMessage":"x"}', HOST, {
+      namingsTried: ['a -> 400 missing', 'b -> 400 missing'],
+    });
+    ok('none accepted says so plainly',
+      /None was accepted/.test(rejected.detail), rejected.detail);
+    ok('  and lists what was tried', /Field namings tried:/.test(rejected.detail), rejected.detail);
+    const noProbe = classifySmartCheckResponse(400, '{"responseMessage":"x"}', HOST, {});
+    ok('with no naming probe, nothing is claimed',
+      !/Field namings tried/.test(noProbe.detail), noProbe.detail);
+
+    // The probe must be able to vary the names; a probeBody that ignored its
+    // argument would report a ladder every rung of which was the same request.
+    const src = readFileSync('services/cscs/smartCheckConnectionTest.ts', 'utf8');
+    const pb = src.slice(src.indexOf('const probeBody = ('), src.indexOf('const probeBody = (') + 500);
+    ok('probeBody honours the naming it is given',
+      /\[naming\.schemeId\]/.test(pb) && /\[naming\.registrationNumber\]/.test(pb) && /\[naming\.surname\]/.test(pb), pb);
   }
 
   // ── 28. the diagnostic has to be COPYABLE ──────────────────────────────

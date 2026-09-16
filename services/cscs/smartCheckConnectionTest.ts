@@ -2,6 +2,7 @@ import {
   REQUEST_SHAPE,
   CANDIDATE_SCAN_TYPES,
   SCAN_TYPE_SENTINEL,
+  CANDIDATE_FIELD_NAMINGS,
 } from './smartCheckProvider';
 import { AUTH_SHAPE } from './smartCheckAuth';
 import {
@@ -317,12 +318,18 @@ export async function testSmartCheckConnection(credentials: {
   let sentinelStatus: number | null = null;
   /** How each documented test registration fared. See THE OTHER DOCUMENTED CARDS. */
   const cardsTried: string[] = [];
+  /** How each candidate set of wire names fared. See THE FIELD NAMES. */
+  const namingsTried: string[] = [];
+  let acceptedNaming: string | null = null;
 
   /** The probe's body, with one scan type substituted in. */
-  const probeBody = (scanType: number) => ({
-    [REQUEST_SHAPE.fields.schemeId]: PROBE_CARD.schemeId,
-    [REQUEST_SHAPE.fields.surname]: PROBE_CARD.surname,
-    [REQUEST_SHAPE.fields.registrationNumber]: PROBE_CARD.registrationNumber,
+  const probeBody = (
+    scanType: number,
+    naming: { schemeId: string; surname: string; registrationNumber: string } = REQUEST_SHAPE.fields,
+  ) => ({
+    [naming.schemeId]: PROBE_CARD.schemeId,
+    [naming.surname]: PROBE_CARD.surname,
+    [naming.registrationNumber]: PROBE_CARD.registrationNumber,
     [REQUEST_SHAPE.fields.scanType]: scanType,
   });
   try {
@@ -393,6 +400,43 @@ export async function testSmartCheckConnection(credentials: {
           }
         }
       }
+
+    /*
+     * THE FIELD NAMES.
+     *
+     * Only when validation is still objecting - a 4xx carrying the service's own
+     * envelope, which is how it says what is missing. The Test Cards page calls
+     * these Scheme ID and Registration Number; the API calls them scheme
+     * identifier and card serial number. Two sources, two vocabularies, and
+     * guessing between them has already cost a day, so ask instead.
+     *
+     * Stops on the first naming that draws no complaint. The live path keeps
+     * sending REQUEST_SHAPE.fields until this reports and the change is made by
+     * hand.
+     */
+    if (attempt && attempt.status >= 400 && attempt.status < 500) {
+      const firstText = await attempt.clone().text().catch(() => '');
+      if (envelopeMessage(firstText)) {
+        namingsTried.push(
+          `${CANDIDATE_FIELD_NAMINGS[0]?.label ?? 'current'} -> ${attempt.status} ${envelopeMessage(firstText)}`,
+        );
+        for (const naming of CANDIDATE_FIELD_NAMINGS.slice(1)) {
+          const next = await cardFetch(
+            probeBody(REQUEST_SHAPE.scanType, naming),
+            authHeaders(creds, token),
+          );
+          const text = await next.clone().text().catch(() => '');
+          namingsTried.push(
+            `${naming.label} -> ${next.status} ${envelopeMessage(text) ?? '(no message)'}`.trim(),
+          );
+          if (next.status < 400) {
+            attempt = next;
+            acceptedNaming = naming.label;
+            break;
+          }
+        }
+      }
+    }
 
     /*
      * THE OTHER DOCUMENTED CARDS.
@@ -490,6 +534,8 @@ export async function testSmartCheckConnection(credentials: {
       controlResult,
       sentinelStatus,
       cardsTried,
+      namingsTried,
+      acceptedNaming,
     },
   );
   return done({ ...verdict, detail: `${verdict.detail}${shapeNote}` });
@@ -712,6 +758,8 @@ export function classifySmartCheckResponse(
     controlResult?: string | null;
     sentinelStatus?: number | null;
     cardsTried?: string[];
+    namingsTried?: string[];
+    acceptedNaming?: string | null;
   } = {},
 ): Omit<CscsConnectionTestResult, 'durationMs'> {
   const trace = probe.headers
@@ -776,6 +824,17 @@ export function classifySmartCheckResponse(
         : ' They did NOT all behave the same way, so the record matters and this is not a blanket refusal.')
     : '';
 
+  /*
+   * The wire-name ladder. The service names what is MISSING, so each line is its
+   * own account of which naming it did or did not understand.
+   */
+  const namings = probe.namingsTried?.length
+    ? ` Field namings tried: ${probe.namingsTried.join('; ')}.` +
+      (probe.acceptedNaming
+        ? ` The service accepted "${probe.acceptedNaming}" - set REQUEST_SHAPE.fields to match.`
+        : ' None was accepted; the service is still naming something it has not been given.')
+    : '';
+
   const scans = probe.scanTypes?.length
     ? ` Scan types tried: ${probe.scanTypes.join('; ')}.` +
       (probe.acceptedScanType != null
@@ -817,6 +876,7 @@ export function classifySmartCheckResponse(
           ? ' Every way of presenting the token was refused identically, which is not what a single wrong header format looks like.'
           : '') +
         control +
+        namings +
         cards +
         scans +
         attempts +
@@ -882,6 +942,7 @@ export function classifySmartCheckResponse(
       // the field-name casing is the part still unconfirmed.
       detail:
         `The host, the credentials and the card path are all working, so this points at the request body. The three parts V2.6 identifies a card by are confirmed; their JSON field names are not - the integration sends ${Object.values(REQUEST_SHAPE.fields).join(', ')}.` +
+        namings +
         (envelopeMessage(bodyText)
           ? ` The service said - ${envelopeMessage(bodyText)}.`
           : bodySnippet(bodyText)

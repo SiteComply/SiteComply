@@ -94,15 +94,26 @@ export const REQUEST_SHAPE = {
    * The old shape sent `{cardNumber}` alone, which no amount of correcting the
    * path would have made work.
    *
-   * THE CASING IS NOT YET CONFIRMED. camelCase is the assumption, on the
-   * strength of `userName` in the sign-in body and `responseData` in its reply.
-   * If the card call fails on field names, this is the line to change — and the
-   * connection test reports the response so it can be seen rather than guessed.
+   * NAMED BY THE SERVICE ITSELF. With scanType finally sent as a number the
+   * request reached full validation, which answered in plain words: "Card serial
+   * number and scheme identifier are required". So the wire names are
+   * cardSerialNumber and schemeIdentifier - not the registrationNumber and
+   * schemeId taken from the Test Cards page's column headings.
+   *
+   * camelCase is now evidenced rather than assumed: scanType was accepted at
+   * exactly that casing.
+   *
+   * `surname` has never been objected to, but it has never been confirmed
+   * either - the service names only what is MISSING, and it may simply not have
+   * got that far. fieldsConfirmed stays false until a request passes validation
+   * whole.
    */
   fields: {
-    schemeId: 'schemeId',
+    // The KEYS are ours; the VALUES are the wire names V2.6 uses. Renaming a key
+    // would churn every call site for nothing, so only the values move.
+    schemeId: 'schemeIdentifier',
     surname: 'surname',
-    registrationNumber: 'registrationNumber',
+    registrationNumber: 'cardSerialNumber',
     scanType: 'scanType',
   },
   /** Whether `fields` above is confirmed. Casing only; the parts themselves are. */
@@ -145,6 +156,51 @@ export const REQUEST_SHAPE = {
  * never send them.
  */
 export const CANDIDATE_SCAN_TYPES: number[] = [3, 1, 2];
+
+/**
+ * Wire-name sets the connection test may try, most likely first.
+ *
+ * Entry one is what REQUEST_SHAPE.fields sends, so a run that succeeds there
+ * proves the live names are right. The rest exist because the Test Cards page
+ * and the API use different vocabularies for the same fields - "Scheme ID" and
+ * "Registration Number" against "scheme identifier" and "card serial number" -
+ * and guessing between two sources has already cost a day.
+ *
+ * Probed by the TEST only, and only while validation is still objecting. The
+ * live path sends REQUEST_SHAPE.fields until this reports and the change is made
+ * deliberately.
+ */
+export const CANDIDATE_FIELD_NAMINGS: {
+  label: string;
+  schemeId: string;
+  surname: string;
+  registrationNumber: string;
+}[] = [
+  {
+    label: 'schemeIdentifier / surname / cardSerialNumber',
+    schemeId: 'schemeIdentifier',
+    surname: 'surname',
+    registrationNumber: 'cardSerialNumber',
+  },
+  {
+    label: 'schemeIdentifier / surName / cardSerialNumber',
+    schemeId: 'schemeIdentifier',
+    surname: 'surName',
+    registrationNumber: 'cardSerialNumber',
+  },
+  {
+    label: 'schemeId / surname / cardSerialNumber',
+    schemeId: 'schemeId',
+    surname: 'surname',
+    registrationNumber: 'cardSerialNumber',
+  },
+  {
+    label: 'schemeIdentifier / surname / registrationNumber',
+    schemeId: 'schemeIdentifier',
+    surname: 'surname',
+    registrationNumber: 'registrationNumber',
+  },
+];
 
 /**
  * A scan type that cannot possibly be valid.
