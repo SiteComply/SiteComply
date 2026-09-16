@@ -571,30 +571,46 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
       /if \(e instanceof CscsVerifyError\) throw e;/.test(fn), 'guard missing');
   }
 
-  // ── 24. scanType: the field the service asked for ──────────────────────
+  // ── 24. scanType: a NUMBER, as V2.6 documents it ───────────────────────
+  // This block previously asserted that every candidate "means entered by
+  // hand" - which was true of six strings that could never work, because the
+  // documented type is Number. An assertion can be perfectly satisfied and
+  // still be guarding the wrong property.
   {
     ok('scanType is a card request field',
       REQUEST_SHAPE.fields.scanType === 'scanType', REQUEST_SHAPE.fields);
-    ok('  the value is carried on REQUEST_SHAPE, not derived from the worker',
-      typeof REQUEST_SHAPE.scanType === 'string' && REQUEST_SHAPE.scanType.length > 0,
-      REQUEST_SHAPE.scanType);
-    ok('  and it is flagged unconfirmed', REQUEST_SHAPE.scanTypeConfirmed === false);
-    ok('  the candidates all mean "entered by hand"',
-      CANDIDATE_SCAN_TYPES.every((c) => /manual|keyed/i.test(c)), CANDIDATE_SCAN_TYPES);
-    ok('  the live value is among them', CANDIDATE_SCAN_TYPES.includes(REQUEST_SHAPE.scanType));
+    ok('  and the value is a NUMBER, not a string',
+      typeof REQUEST_SHAPE.scanType === 'number', typeof REQUEST_SHAPE.scanType);
+    ok('  specifically 3, which V2.6 documents as Manual entry',
+      REQUEST_SHAPE.scanType === 3, REQUEST_SHAPE.scanType);
+    ok('  and it is now marked confirmed against the documentation',
+      REQUEST_SHAPE.scanTypeConfirmed === true);
+    ok('every candidate is a number', CANDIDATE_SCAN_TYPES.every((c) => typeof c === 'number'), CANDIDATE_SCAN_TYPES);
+    ok('  the live value is tried first', CANDIDATE_SCAN_TYPES[0] === REQUEST_SHAPE.scanType, CANDIDATE_SCAN_TYPES);
+    ok('the sentinel is an out-of-range NUMBER',
+      typeof SCAN_TYPE_SENTINEL === 'number' && !CANDIDATE_SCAN_TYPES.includes(SCAN_TYPE_SENTINEL),
+      SCAN_TYPE_SENTINEL);
 
     const body = cardRequestBody({ cardNumber: '14660726', surname: 'Zhang', schemeId: 'C4T' });
-    ok('the live body now carries a scan type',
-      body[REQUEST_SHAPE.fields.scanType] === REQUEST_SHAPE.scanType, body);
+    ok('the live body carries scanType', body[REQUEST_SHAPE.fields.scanType] === REQUEST_SHAPE.scanType, body);
     ok('  four fields, no more', Object.keys(body).length === 4, body);
 
-    const overridden = cardRequestBody(
-      { cardNumber: '1', surname: 'Z', schemeId: 'C4T' }, 'KEYED');
-    ok('the probe can override it', overridden[REQUEST_SHAPE.fields.scanType] === 'KEYED', overridden);
-    ok('  without changing the live default', REQUEST_SHAPE.scanType !== 'KEYED' || true);
+    // THE POINT. JSON.stringify must emit 3, not "3" - the wire format is what
+    // was wrong, and only serialising it proves the fix.
+    const wire = JSON.stringify(body);
+    ok('the SERIALISED body sends a bare number', /"scanType":3(,|})/.test(wire), wire);
+    ok('  and not a quoted string', !/"scanType":"/.test(wire), wire);
 
-    // A missing scan type is OUR bug, not the worker's — it must never be listed
-    // among the things not held for a worker.
+    const overridden = cardRequestBody({ cardNumber: '1', surname: 'Z', schemeId: 'C4T' }, 1);
+    ok('the probe can override it', overridden[REQUEST_SHAPE.fields.scanType] === 1, overridden);
+    ok('  and the override also serialises as a number',
+      /"scanType":1(,|})/.test(JSON.stringify(overridden)), JSON.stringify(overridden));
+
+    // The live path describes how WE captured the card. 1 and 2 are scanning
+    // methods SiteComply does not have; claiming one would be a false statement
+    // to a partner about provenance.
+    ok('the live path only ever claims manual entry', REQUEST_SHAPE.scanType === 3);
+
     let msg = '';
     try { cardRequestBody({ cardNumber: '', surname: '', schemeId: '' }); } catch (e) { msg = (e as Error).message; }
     ok('the refusal does not blame the worker for the scan type', !/scan/i.test(msg), msg);
@@ -627,11 +643,11 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
       /No candidate was accepted/.test(v.detail), v.detail);
 
     const v2 = classifySmartCheckResponse(400, body, HOST, {
-      scanTypes: ['MANUAL → 400 …', 'KEYED → 400 Something else is required'],
-      acceptedScanType: 'KEYED',
+      scanTypes: ['3 -> 400 ...', '1 -> 400 Something else is required'],
+      acceptedScanType: 1,
     });
     ok('an accepted scan type is called out as the finding',
-      /accepted "KEYED"/.test(v2.detail), v2.detail);
+      /accepted scanType 1/.test(v2.detail), v2.detail);
     ok('  and names the line to change', /REQUEST_SHAPE.scanType/.test(v2.detail), v2.detail);
   }
 
@@ -731,8 +747,8 @@ async function signInFailure(base: string): Promise<SmartCheckAuthError> {
       /if \(next\.status < 400\) \{/.test(walk), 'adoption rule missing');
     ok('the sentinel is not in the live candidate list',
       !CANDIDATE_SCAN_TYPES.includes(SCAN_TYPE_SENTINEL), CANDIDATE_SCAN_TYPES);
-    ok('  and could not be mistaken for a real value',
-      /NOT_A_REAL/.test(SCAN_TYPE_SENTINEL), SCAN_TYPE_SENTINEL);
+    ok('  and is far outside the documented range 1-3',
+      SCAN_TYPE_SENTINEL > 3, SCAN_TYPE_SENTINEL);
   }
 
   // ── 27. one timeout per request, not one across all of them ────────────

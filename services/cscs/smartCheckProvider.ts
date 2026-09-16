@@ -110,51 +110,55 @@ export const REQUEST_SHAPE = {
   /**
    * How the card details reached us.
    *
-   * REQUIRED — the service answered HTTP 400 "Scan type is required", which also
-   * told us something valuable: it was reading our body, so the path, the
-   * credentials and the token are all correct and only the mapping is left.
+   * A NUMBER, not a string. V2.6 defines scanType as a Number and documents
+   * 3 = Manual entry. We had been sending the string "MANUAL".
    *
-   * THE VALUE IS NOT CONFIRMED. SiteComply takes card details by keyed entry,
-   * never by scanning a QR code or reading an NFC chip, so a manual value is the
-   * right MEANING; the spelling the service expects is a guess. The connection
-   * test probes the candidates and reports which the service accepts, rather
-   * than this line quietly being wrong in production.
+   * THAT ONE FACT EXPLAINS THE 403, and it explains why the probe looked so
+   * convincing while being wrong: every candidate it tried - MANUAL, Manual,
+   * MANUAL_ENTRY, KEYED, MANUALENTRY and a deliberately invalid value - was a
+   * STRING. They all failed identically because they shared the defect the
+   * experiment was not varying. "Even nonsense behaves the same, so the value is
+   * not being read" was the right reading of the wrong experiment: the TYPE was
+   * wrong, so the value never got as far as being read.
+   *
+   * SiteComply has no scanner. Every lookup it makes is keyed entry, so 3 is the
+   * only value the live path ever sends. Sending 1 or 2 would be a false claim
+   * about how the card was captured.
    */
-  scanType: 'MANUAL',
-  scanTypeConfirmed: false,
+  scanType: 3,
+  /** Documented: V2.6 defines scanType as a Number, 3 = Manual entry. */
+  scanTypeConfirmed: true,
 };
 
 /**
- * Spellings of "entered by hand" to try.
+ * Scan types the connection test may try, most correct first.
  *
- * Probed by the CONNECTION TEST only, and safe to probe: no credentials are
- * submitted, the card asked about is CSCS's own published test record, and a
- * lookup is a read. The live path sends REQUEST_SHAPE.scanType and nothing else.
+ * NUMBERS, because V2.6 defines the field as a Number. The previous list held
+ * six spellings of "manual" as strings and could never have succeeded: it varied
+ * the value while holding the wrong type constant, so every entry failed the
+ * same way and the report concluded the value was irrelevant. It was - but not
+ * for the reason given.
  *
- * The distinction the probe is really drawing: if every candidate still comes
- * back "Scan type is required", the FIELD NAME is wrong. If the message changes
- * to something about an invalid value, the field name is right and the value is
- * wrong — and the service usually names what it wanted.
+ * 3 is manual entry and is what the live path sends. 1 and 2 are here ONLY so a
+ * failing run can say whether the endpoint accepts any scan type at all; they
+ * describe scanning methods SiteComply does not have, so the live path must
+ * never send them.
  */
+export const CANDIDATE_SCAN_TYPES: number[] = [3, 1, 2];
+
 /**
  * A scan type that cannot possibly be valid.
  *
- * Sent by the connection test to find out whether the field is VALIDATED at all.
- * If nonsense draws a 400 the field name is right and the service is reading the
- * value; if nonsense draws the same 403 as a real value, the value is not what
- * the 403 is about.
+ * A NUMBER out of range, not a nonsense string. As a string it tested nothing
+ * the real candidates did not already test, because the wrong TYPE was the
+ * defect every one of them shared — which is exactly how a sentinel can look
+ * like it is ruling something out while ruling out nothing at all.
  *
- * Never sent by the live path, and never adopted whatever it returns.
+ * Sent by the connection test to find out whether the field is validated by
+ * value once the type is right. Never sent by the live path, and never adopted
+ * whatever it returns.
  */
-export const SCAN_TYPE_SENTINEL = 'NOT_A_REAL_SCAN_TYPE';
-
-export const CANDIDATE_SCAN_TYPES = [
-  'MANUAL',
-  'Manual',
-  'MANUAL_ENTRY',
-  'KEYED',
-  'MANUALENTRY',
-];
+export const SCAN_TYPE_SENTINEL = 99;
 
 export interface SmartCheckSettings {
   apiUrl?: string;
@@ -175,8 +179,8 @@ export interface SmartCheckSettings {
 export function cardRequestBody(
   input: CscsVerifyInput,
   /** Override the scan type. Connection-test probe only. */
-  scanType?: string,
-): Record<string, string> {
+  scanType?: number,
+): Record<string, string | number> {
   const registrationNumber = (input.cardNumber ?? '').trim();
   const surname = (input.surname ?? '').trim();
   const schemeId = (input.schemeId ?? '').trim();

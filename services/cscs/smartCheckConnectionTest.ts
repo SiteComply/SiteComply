@@ -310,7 +310,7 @@ export async function testSmartCheckConnection(credentials: {
   let res: Response;
   const presentationsTried: string[] = [];
   const scanTypesTried: string[] = [];
-  let acceptedScanType: string | null = null;
+  let acceptedScanType: number | null = null;
   /** What the pre-scanType body returns now. See THE CONTROL below. */
   let controlResult: string | null = null;
   /** What a deliberately invalid scan type returns. See THE SENTINEL. */
@@ -319,7 +319,7 @@ export async function testSmartCheckConnection(credentials: {
   const cardsTried: string[] = [];
 
   /** The probe's body, with one scan type substituted in. */
-  const probeBody = (scanType: string) => ({
+  const probeBody = (scanType: number) => ({
     [REQUEST_SHAPE.fields.schemeId]: PROBE_CARD.schemeId,
     [REQUEST_SHAPE.fields.surname]: PROBE_CARD.surname,
     [REQUEST_SHAPE.fields.registrationNumber]: PROBE_CARD.registrationNumber,
@@ -708,7 +708,7 @@ export function classifySmartCheckResponse(
     tried?: string[];
     headers?: Record<string, string>;
     scanTypes?: string[];
-    acceptedScanType?: string | null;
+    acceptedScanType?: number | null;
     controlResult?: string | null;
     sentinelStatus?: number | null;
     cardsTried?: string[];
@@ -778,8 +778,8 @@ export function classifySmartCheckResponse(
 
   const scans = probe.scanTypes?.length
     ? ` Scan types tried: ${probe.scanTypes.join('; ')}.` +
-      (probe.acceptedScanType
-        ? ` The service accepted "${probe.acceptedScanType}" - set REQUEST_SHAPE.scanType to it.`
+      (probe.acceptedScanType != null
+        ? ` The service accepted scanType ${probe.acceptedScanType} - set REQUEST_SHAPE.scanType to it.`
         : ' No candidate was accepted.') +
       sentinel
     : '';
