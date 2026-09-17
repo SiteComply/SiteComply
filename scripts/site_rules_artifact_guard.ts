@@ -104,6 +104,15 @@ function main() {
       client.includes('no longer contains the site rules'));
   chk('the cross-reference to the separate free-text field',
       client.includes('Longer reference material'));
+  chk('the short intro copy',
+      client.includes(
+        'Selected rules are shown to operatives during their induction and must be',
+      ));
+  // Paired absence. The verbose original said this; if it is back, the intro
+  // was reverted. The presence check directly above proves the new copy is in
+  // the same bundle, so this cannot pass by looking in the wrong place.
+  chk('the verbose original intro is gone',
+      !client.includes('They are not ticked individually.'));
   // Absence, paired with a presence check on the same string in the same place:
   // if this heading were gone the presence half would fail first.
   chk('PPE requirements is still its own section, unchanged',

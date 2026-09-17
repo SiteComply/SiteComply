@@ -161,6 +161,19 @@ if(exp.indexOf(\"key: 'site-rules'\")<0)
 // PPE must still be there and untouched beside it.
 if(exp.indexOf(\"key: 'ppe'\")<0) fail('the PPE section has gone missing');
 
+// ---------------- an unticked rule is not a deleted rule ----------------
+// A strikethrough reads as 'removed' or 'no longer valid'. An unticked rule is
+// neither: it is a rule this site has chosen not to show, and the checkbox says
+// so on its own. Asserted because it is a judgement that is easy to undo by
+// reflex while tidying styles.
+const cfg=strip('components/platform/SiteRulesConfig.tsx');
+if(/line-through/.test(cfg))
+  fail('unticked rules are struck through again - that reads as deleted, not unselected');
+if(/border-dashed/.test(cfg))
+  fail('unticked rules have a dashed border again - same problem as the strikethrough');
+if(cfg.indexOf('Selected rules are shown to operatives during their induction')<0)
+  fail('the short intro copy is gone');
+
 console.log('      confirmed: enum intact, rules are never answerable, versioning');
 console.log('                 still goes through saveChecklist, the free-text field');
 console.log('                 is still separate, and both silent-failure paths');

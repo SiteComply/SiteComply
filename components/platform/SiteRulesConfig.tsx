@@ -149,18 +149,9 @@ export function SiteRulesConfig({
 
   return (
     <div className="space-y-4">
-      {/* The workspace renders this section's name and one-line description, so
-          this says what that cannot: how the rules are agreed to, and that saving
-          can publish a new induction version. */}
       <p className="text-sm text-ink-muted">
-        The selected rules are shown to every operative during their induction,
-        under the single acknowledgement{' '}
-        <span className="font-semibold text-ink">
-          “I have read and will follow the site rules and signage.”
-        </span>{' '}
-        They are not ticked individually. Changes apply to the next induction —
-        operatives who have already inducted are not asked again until their
-        induction expires.
+        Selected rules are shown to operatives during their induction and must be
+        acknowledged before they are given access to site.
       </p>
 
       {!acknowledged && selected.length > 0 && (
@@ -185,12 +176,7 @@ export function SiteRulesConfig({
         {rows.map((row, i) => (
           <li
             key={`${row.label}-${i}`}
-            className={cn(
-              'flex flex-wrap items-start gap-3 rounded-lg border p-3',
-              row.selected
-                ? 'border-line bg-surface'
-                : 'border-dashed border-line bg-surface-sunken',
-            )}
+            className="flex flex-wrap items-start gap-3 rounded-lg border border-line bg-surface p-3"
           >
             <input
               type="checkbox"
@@ -201,12 +187,12 @@ export function SiteRulesConfig({
               onChange={() => toggle(i)}
             />
             <span className="min-w-0 flex-1">
-              <span
-                className={cn(
-                  'block text-sm font-medium',
-                  row.selected ? 'text-ink' : 'text-ink-subtle line-through',
-                )}
-              >
+              {/* Deliberately identical whether or not the rule is selected. A
+                  strikethrough, or grey text, reads as "deleted" or "no longer
+                  valid" - which is not what an unticked rule is. It is a rule
+                  this site has chosen not to show. The checkbox carries that
+                  distinction on its own, which is the whole job of a checkbox. */}
+              <span className="block text-sm font-medium text-ink">
                 {row.label}
               </span>
               {row.helpText && (
