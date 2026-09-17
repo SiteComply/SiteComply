@@ -31,6 +31,7 @@ import {
   mergeRuleItems,
   isLibraryRule,
   isOptionalTemplateRule,
+  buildRuleRows,
   DEFAULT_SITE_RULES,
   SITE_RULE_LIBRARY,
   type MergeableItem,
@@ -153,6 +154,52 @@ function main() {
       drugs !== undefined && /under the influence/i.test(drugs.label) &&
       !/^No alcohol or drugs on site/i.test(drugs.label),
       drugs?.label);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  console.log('\n[1e] The editor: what a Site Manager actually sees');
+
+  // A BRAND NEW SITE — seeded with the defaults, nothing else.
+  const fresh = buildRuleRows(DEFAULT_SITE_RULES, SITE_RULE_LIBRARY);
+  chk('every library rule appears, adopted or not',
+      fresh.length === SITE_RULE_LIBRARY.length, `${fresh.length} rows`);
+  chk('the 10 defaults are ticked',
+      fresh.filter((r) => r.selected).length === DEFAULT_SITE_RULES.length);
+  chk('the 5 optional templates are present and unticked',
+      fresh.filter((r) => r.optional).length === 5 &&
+      fresh.filter((r) => r.optional).every((r) => !r.selected));
+  chk('optional rows are badged Optional, not Site-specific',
+      fresh.filter((r) => r.optional).every((r) => !r.custom));
+  chk('no default is wrongly badged Optional',
+      fresh.filter((r) => r.selected).every((r) => !r.optional));
+  chk('the smoking template is there, unticked, badged Optional',
+      fresh.some(
+        (r) => /Smoking and vaping/.test(r.label) && !r.selected && r.optional,
+      ));
+  chk('help text rides along for the rules that have it',
+      fresh.some((r) => r.helpText !== null));
+
+  // A SITE THAT HAS ADOPTED ONE TEMPLATE AND DROPPED ONE DEFAULT, and added
+  // a rule of its own.
+  const adopted: typeof DEFAULT_SITE_RULES = [
+    ...DEFAULT_SITE_RULES.filter((r) => !/PPE/.test(r.label)),
+    { label: 'Smoking and vaping only in the designated area.', helpText: null },
+    { label: 'No deliveries through the school gate before 9am.', helpText: null },
+  ];
+  const used = buildRuleRows(adopted, SITE_RULE_LIBRARY);
+  chk('the adopted template now shows ticked, still badged Optional',
+      used.some(
+        (r) => /Smoking and vaping/.test(r.label) && r.selected && r.optional,
+      ));
+  chk('the dropped default shows unticked, NOT removed from the list',
+      used.some((r) => /PPE/.test(r.label) && !r.selected && !r.optional));
+  chk('the site\'s own rule is badged Site-specific and comes last',
+      used[used.length - 1]?.custom === true &&
+      /school gate/.test(used[used.length - 1]!.label));
+  chk('the site\'s own rule is not mistaken for a library one',
+      used.filter((r) => r.custom).length === 1);
+  chk('nothing saved is silently dropped from the editor',
+      adopted.every((saved) =>
+        used.some((r) => r.label === saved.label && r.selected)));
 
   // ─────────────────────────────────────────────────────────────────────────
   console.log('\n[2] New sites are seeded with the rules selected');
@@ -466,6 +513,21 @@ function main() {
       /permit/i.test('Do not start work without a valid permit where one is required.'));
   chk('[1c] would fail on a returning signage rule',
       /signage/i.test('Obey all site signage, speed limits and pedestrian routes.'));
+
+  // If the editor were handed only the DEFAULT tier, [1e] would notice: the five
+  // optional templates would simply not be rows, and could never be adopted.
+  const defaultsOnly = buildRuleRows(
+    DEFAULT_SITE_RULES,
+    SITE_RULE_LIBRARY.filter((r) => r.defaultSelected),
+  );
+  chk('[1e] would fail if the editor got only the defaults',
+      defaultsOnly.filter((r) => r.optional).length === 0 &&
+      defaultsOnly.length < SITE_RULE_LIBRARY.length,
+      `${defaultsOnly.length} rows, 0 optional`);
+  // ...and the real call must not look like that.
+  chk('[1e] the real editor call does offer the templates',
+      buildRuleRows(DEFAULT_SITE_RULES, SITE_RULE_LIBRARY)
+        .filter((r) => r.optional).length === 5);
 
   console.log(`\n== ${passed} passed, ${failed} failed ==`);
   if (failed > 0) process.exitCode = 1;

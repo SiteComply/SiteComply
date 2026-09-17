@@ -164,6 +164,8 @@ if(!/case 'rules':/.test(flow))
 const svc=strip('services/checklists/siteRulesService.ts');
 if(!/export function validateSiteRules/.test(svc)) fail('validateSiteRules is gone');
 if(!/export function mergeRuleItems/.test(svc)) fail('mergeRuleItems is gone');
+if(!/export function buildRuleRows/.test(svc))
+  fail('buildRuleRows is gone - the editor row logic would be untestable again');
 if(!/required: false,/.test(svc))
   fail('the service no longer forces required:false — a rule could gate a screen');
 // It must go through saveChecklist, so versioning stays in ONE place. A second
@@ -211,6 +213,8 @@ if(cfg.indexOf('Selected rules are shown to operatives during their induction')<
 // unreachable and the conversion was a deletion.
 if(!/library=\{SITE_RULE_LIBRARY\}/.test(exp))
   fail('the editor is not being given the full library - optional templates would be unreachable');
+if(!/buildRuleRows\(initial, library\)/.test(cfg))
+  fail('the editor is not building its rows from the shared, tested function');
 if(cfg.indexOf(\"'Optional'\")<0)
   fail('the Optional badge is gone - an unadopted template would look like a deselected default');
 

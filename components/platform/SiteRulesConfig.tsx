@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/cn';
-import type {
-  LibraryRule,
-  SiteRule,
+import {
+  buildRuleRows,
+  type LibraryRule,
+  type RuleRow,
+  type SiteRule,
 } from '@/services/checklists/siteRulesService';
 
 /**
@@ -32,45 +34,6 @@ import type {
  * arrows lie.
  */
 
-interface Row {
-  label: string;
-  helpText: string | null;
-  selected: boolean;
-  /** From the library (can be re-ticked) vs typed for this site. */
-  custom: boolean;
-  /** A library rule that is NOT seeded by default — adopted only if it applies. */
-  optional: boolean;
-}
-
-function toRows(current: SiteRule[], library: LibraryRule[]): Row[] {
-  const byLabel = new Map(current.map((r) => [r.label.trim().toLowerCase(), r]));
-  const libraryRows: Row[] = library.map((r) => {
-    const live = byLabel.get(r.label.trim().toLowerCase());
-    return {
-      label: r.label,
-      // A site that edited the help text in the checklist builder keeps its
-      // wording; only the selection state comes from whether the row exists.
-      helpText: live ? live.helpText : (r.helpText ?? null),
-      selected: Boolean(live),
-      custom: false,
-      optional: !r.defaultSelected,
-    };
-  });
-  const libraryLabels = new Set(
-    library.map((r) => r.label.trim().toLowerCase()),
-  );
-  const customRows: Row[] = current
-    .filter((r) => !libraryLabels.has(r.label.trim().toLowerCase()))
-    .map((r) => ({
-      label: r.label,
-      helpText: r.helpText,
-      selected: true,
-      custom: true,
-      optional: false,
-    }));
-  return [...libraryRows, ...customRows];
-}
-
 export function SiteRulesConfig({
   siteId,
   initial,
@@ -87,8 +50,11 @@ export function SiteRulesConfig({
 }) {
   const router = useRouter();
   const toast = useToast();
-  const initialRows = useMemo(() => toRows(initial, library), [initial, library]);
-  const [rows, setRows] = useState<Row[]>(initialRows);
+  const initialRows = useMemo(
+    () => buildRuleRows(initial, library),
+    [initial, library],
+  );
+  const [rows, setRows] = useState<RuleRow[]>(initialRows);
   const [newRule, setNewRule] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
