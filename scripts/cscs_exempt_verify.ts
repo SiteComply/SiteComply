@@ -106,14 +106,41 @@ async function checkSafetyProperty() {
   const saved = process.env.NODE_ENV;
   (process.env as Record<string, string>).NODE_ENV = 'production';
   try {
-    const r = await new MockCscsProvider().verifyCard(
+    // Constructed the way resolveCscsProvider constructs it for an exempt
+    // account, so this exercises the real path rather than a neighbouring one.
+    const r = await new MockCscsProvider('exempt-account').verifyCard(
       { cardNumber: '14660726', surname: 'Zhang', schemeId: 'C4T' } as never,
     );
     ok('an exempt worker is routed to a provider that returns UNVERIFIED',
       r.status === 'UNVERIFIED', r.status);
     ok('  and is NEVER marked verified', r.verified === false, r.verified);
     ok('  with a message that does not claim a check happened',
-      /not switched on|not been verified/i.test(r.message), r.message);
+      !/Smart Check|verified successfully/i.test(r.message), r.message);
+
+    // THE WORDING. Behaviour above is unchanged; this is what the operative
+    // reads. The previous message said automatic checking was "not switched on
+    // yet", which reads as a broken integration when Smart Check is configured
+    // and working — it was reported as a bug for precisely that reason.
+    ok('  and says plainly that the ACCOUNT is exempt',
+      /exempt from CSCS verification/i.test(r.message), r.message);
+    ok('  without implying CSCS checking is off or unavailable',
+      !/not switched on|not enabled|unavailable|disabled|misconfigur/i.test(r.message),
+      r.message);
+
+    // An ordinary tenant with no provider configured must KEEP the original
+    // explanation — it is still true for them, and this change must not reach
+    // them.
+    const unconfigured = await new MockCscsProvider().verifyCard(
+      { cardNumber: '14660726', surname: 'Zhang', schemeId: 'C4T' } as never,
+    );
+    ok('an unconfigured tenant still gets the original explanation',
+      /not switched on yet/i.test(unconfigured.message), unconfigured.message);
+    ok('  and is never told it is exempt',
+      !/exempt/i.test(unconfigured.message), unconfigured.message);
+    ok('  so the two cases are genuinely distinguished',
+      unconfigured.message !== r.message);
+    ok('  and the unconfigured default is what an unspecified caller gets',
+      new MockCscsProvider().constructor === MockCscsProvider);
   } finally {
     if (saved === undefined) delete (process.env as Record<string, unknown>).NODE_ENV;
     else (process.env as Record<string, string>).NODE_ENV = saved;
@@ -128,8 +155,15 @@ async function main() {
   ok('the exemption is honoured in resolveCscsProvider', /isCscsExemptMobile\(e164Mobile\)/.test(idx));
   ok('  exactly once - one place to read, one place to delete',
     (idx.match(/isCscsExemptMobile\(/g) ?? []).length === 1, idx.match(/isCscsExemptMobile\(/g));
+  // Matches the CALL, not its exact argument list: the branch now passes a
+  // reason so the operative can be told why, and pinning the old zero-argument
+  // form made a wording change look like a routing change.
   ok('  routing to the mock, not skipping the check',
-    /isCscsExemptMobile\(e164Mobile\)\) \{\s*\n\s*return buildCscsProvider\('mock'\);/.test(idx), 'not routed to mock');
+    /isCscsExemptMobile\(e164Mobile\)\)[\s\S]{0,400}?return buildCscsProvider\('mock'/.test(idx),
+    'not routed to mock');
+  ok('  and telling the mock it is an exempt account, not an unconfigured tenant',
+    /buildCscsProvider\('mock', \{ mockReason: 'exempt-account' \}\)/.test(idx),
+    'reason not passed');
   ok('a caller that does not know the mobile gets the LIVE provider',
     /e164Mobile\?: string \| null/.test(idx), 'mobile not optional-safe');
 

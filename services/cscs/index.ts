@@ -28,7 +28,14 @@ export function buildCscsProvider(
         apiKey: settings.apiKey,
       });
     case 'mock':
-      return new MockCscsProvider();
+      // `mockReason` is how the exemption branch below says WHY it chose the
+      // mock. Absent, the mock explains itself as an unconfigured tenant, which
+      // is correct for every other caller.
+      return new MockCscsProvider(
+        settings.mockReason === 'exempt-account'
+          ? 'exempt-account'
+          : 'not-configured',
+      );
     default:
       throw new Error(
         `Unknown CSCS provider "${providerId}". Use "smartcheck" or "mock".`,
@@ -69,7 +76,10 @@ export async function resolveCscsProvider(
    * and can never be marked compliant by this branch.
    */
   if (isCscsExemptMobile(e164Mobile)) {
-    return buildCscsProvider('mock');
+    // The reason travels with the choice. Smart Check is configured and working;
+    // this ACCOUNT is exempt, and the operative is told exactly that rather than
+    // being shown a message that reads as a broken integration.
+    return buildCscsProvider('mock', { mockReason: 'exempt-account' });
   }
 
   return buildCscsProvider(config.providerId, {

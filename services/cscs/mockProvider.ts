@@ -38,8 +38,30 @@ import {
  *   - otherwise                        → VALID (echoes the typed grade/expiry and
  *                                        adds representative competency records)
  */
+/**
+ * WHY the mock was chosen, which decides what the operative is told.
+ *
+ * The two reasons look identical to the provider but mean opposite things to
+ * the person reading the screen:
+ *
+ *   'not-configured' — this tenant has no verification provider set up. "Not
+ *                      switched on yet" is the honest explanation.
+ *   'exempt-account' — verification IS configured and working; THIS account is
+ *                      on the test allow-list and deliberately skips it.
+ *
+ * Telling an exempt tester that "automatic CSCS checking is not switched on
+ * yet" reads as a broken or misconfigured integration, and prompted exactly
+ * that report. The mock cannot infer which case it is in, so the caller that
+ * made the choice says so.
+ */
+export type MockReason = 'not-configured' | 'exempt-account';
+
 export class MockCscsProvider implements CscsProvider {
   readonly name = 'mock';
+
+  /** Defaults to 'not-configured' — the safe reading for any caller that has
+   *  not deliberately routed an exempt account here. */
+  constructor(private readonly reason: MockReason = 'not-configured') {}
 
   async verifyCard(input: CscsVerifyInput): Promise<CscsVerificationResult> {
     const checkedAt = new Date();
@@ -52,10 +74,15 @@ export class MockCscsProvider implements CscsProvider {
         providerName: this.name,
         checkedAt,
         scheme: null,
+        // UNCHANGED, and deliberately so: an exempt account is still UNVERIFIED
+        // and still `verified: false`. Only the explanation differs. Nothing
+        // here may ever let the allow-list manufacture a pass.
         status: 'UNVERIFIED',
         verified: false,
         message:
-          'Card details recorded. Automatic CSCS checking is not switched on yet, so this card has not been verified.',
+          this.reason === 'exempt-account'
+            ? 'This test account is exempt from CSCS verification and can continue without a card check.'
+            : 'Card details recorded. Automatic CSCS checking is not switched on yet, so this card has not been verified.',
       };
     }
 
