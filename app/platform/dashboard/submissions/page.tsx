@@ -316,6 +316,19 @@ export default async function PlatformSubmissionsPage({
                         openSinceLabel={`Open since ${formatDateTimeUK(selected.checkedInAt)} · ${daysOpen(selected.checkedInAt, now)} days.`}
                       />
                     ) : null}
+                    {/* The induction record as a branded PDF. This is the
+                        surface that makes the document usable as evidence: until
+                        it existed, only the operative could produce their own
+                        record, on their own phone, so nobody who actually needs
+                        it — a client, an auditor, a principal contractor — could
+                        be given one. The route re-checks permission and site
+                        scope. */}
+                    <a
+                      href={`/api/platform/submissions/${selected.id}/record`}
+                      className="mt-3 inline-flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink hover:bg-surface-sunken"
+                    >
+                      Download induction record (PDF)
+                    </a>
                     <Link
                       href={`/platform/dashboard/workers/${selected.worker.id}`}
                       className="mt-3 inline-block text-sm font-semibold text-brand-700 hover:underline"

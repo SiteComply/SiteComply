@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { WorkerPageHeader } from '@/components/worker/PanelCard';
 import { WorkerIcon } from '@/components/worker/icons';
 import { AttendanceShell } from '@/components/attendance/AttendanceShell';
-import { PrintButton } from '@/components/worker/PrintButton';
 import {
   requireWorkerIdentity,
   getWorkerContext,
@@ -161,7 +160,16 @@ export default async function WorkerInductionRecordPage({
       )}
 
       <div className="space-y-3">
-        <PrintButton label="View / download record" />
+        {/* A real PDF from the server, not window.print() on this screen.
+            The old button printed the worker app — navigation and all — at
+            whatever margins the browser chose, which is why the output read as
+            a screenshot rather than a record. */}
+        <a
+          href={`/api/worker/inductions/${record.submissionId}/record`}
+          className="touch-target flex w-full items-center justify-center rounded-xl border border-line bg-surface px-4 py-3 text-base font-semibold text-ink hover:bg-surface-sunken print:hidden"
+        >
+          Download induction record (PDF)
+        </a>
         {justCompleted && (
           <Link
             href="/worker/dashboard"
