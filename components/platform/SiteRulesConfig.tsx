@@ -5,12 +5,16 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/cn';
+// Imported from siteRuleRows, NOT siteRulesService. This is a client component,
+// and a value imported from the service reaches lib/prisma and node:async_hooks,
+// which fails the browser build outright. The type checker cannot see this: a
+// type-only import is erased before webpack ever looks.
 import {
   buildRuleRows,
   type LibraryRule,
   type RuleRow,
   type SiteRule,
-} from '@/services/checklists/siteRulesService';
+} from '@/services/checklists/siteRuleRows';
 
 /**
  * Site Rules Library — the rules shown to an operative during induction.

@@ -164,8 +164,14 @@ if(!/case 'rules':/.test(flow))
 const svc=strip('services/checklists/siteRulesService.ts');
 if(!/export function validateSiteRules/.test(svc)) fail('validateSiteRules is gone');
 if(!/export function mergeRuleItems/.test(svc)) fail('mergeRuleItems is gone');
-if(!/export function buildRuleRows/.test(svc))
+const rows=strip('services/checklists/siteRuleRows.ts');
+if(!/export function buildRuleRows/.test(rows))
   fail('buildRuleRows is gone - the editor row logic would be untestable again');
+// siteRuleRows must stay PURE, or the split that fixed the browser build is undone.
+if(/from '@\/lib\/prisma'|adminChecklistService|@prisma\/client/.test(rows))
+  fail('siteRuleRows now imports server-only code - the client bundle will break again');
+if(!/buildRuleRows/.test(svc))
+  fail('siteRulesService no longer re-exports buildRuleRows');
 if(!/required: false,/.test(svc))
   fail('the service no longer forces required:false — a rule could gate a screen');
 // It must go through saveChecklist, so versioning stays in ONE place. A second
@@ -215,6 +221,23 @@ if(!/library=\{SITE_RULE_LIBRARY\}/.test(exp))
   fail('the editor is not being given the full library - optional templates would be unreachable');
 if(!/buildRuleRows\(initial, library\)/.test(cfg))
   fail('the editor is not building its rows from the shared, tested function');
+// THE CLIENT/SERVER BOUNDARY. SiteRulesConfig is a client component, and a VALUE
+// imported from siteRulesService reaches adminChecklistService -> lib/prisma ->
+// node:async_hooks, which fails the browser build outright. This is invisible to
+// tsc: a type-only import is erased before webpack ever sees it, so the type
+// check passes and the build does not. Asserted here because it has happened.
+const cfgRaw=fs.readFileSync('components/platform/SiteRulesConfig.tsx','utf8');
+for (const m of cfgRaw.matchAll(/^import\s+([\s\S]*?)from\s+'([^']+)'/gm)) {
+  const clause=m[1], from=m[2];
+  if(from.indexOf('siteRulesService')<0) continue;
+  // An 'import type' clause is fine, and so is a clause whose every member is
+  // individually prefixed with 'type'.
+  const typeOnly=/^\s*type\s/.test(clause) ||
+    clause.replace(/[{}]/g,'').split(',').map(x=>x.trim()).filter(Boolean)
+      .every(x=>/^type\s/.test(x));
+  if(!typeOnly)
+    fail('SiteRulesConfig value-imports siteRulesService - that pulls Prisma into the browser bundle. Import from siteRuleRows instead.');
+}
 if(cfg.indexOf(\"'Optional'\")<0)
   fail('the Optional badge is gone - an unadopted template would look like a deselected default');
 

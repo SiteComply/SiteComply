@@ -9,6 +9,10 @@ import {
   UK_SITE_RULES_DEFAULT,
 } from '@/services/checklists/ukSiteRulesLibrary';
 import { isSiteRulesAck } from '@/services/checklists/inductionFlow';
+import type {
+  SiteRule,
+  LibraryRule,
+} from '@/services/checklists/siteRuleRows';
 
 /**
  * Site Rules Library — the rules an operative is shown during induction.
@@ -32,16 +36,19 @@ import { isSiteRulesAck } from '@/services/checklists/inductionFlow';
  * readable any time, not the induction rule set. Two fields, two jobs.
  */
 
-export interface SiteRule {
-  label: string;
-  helpText: string | null;
-}
-
-/** A library entry, plus which tier it belongs to. */
-export interface LibraryRule extends SiteRule {
-  /** Seeded onto a new site. False for an optional site-specific template. */
-  defaultSelected: boolean;
-}
+/**
+ * The pure shapes and the editor's row logic live in `siteRuleRows`, which
+ * imports nothing server-only, and are re-exported here so server-side callers
+ * have one place to look. The split exists because the Site rules editor is a
+ * CLIENT component: a value imported from this file reaches lib/prisma and
+ * breaks the browser build. See siteRuleRows for the full note.
+ */
+export {
+  buildRuleRows,
+  type SiteRule,
+  type LibraryRule,
+  type RuleRow,
+} from '@/services/checklists/siteRuleRows';
 
 /**
  * The WHOLE library offered in the editor — both tiers.
@@ -80,64 +87,6 @@ const OPTIONAL_LABELS = new Set(
 
 export function isOptionalTemplateRule(label: string): boolean {
   return OPTIONAL_LABELS.has(label.trim().toLowerCase());
-}
-
-/**
- * A row in the Site rules editor: what a Site Manager actually sees.
- *
- * Lives here, not in the component, so the decision "which rules appear, ticked
- * or unticked, badged how" can be tested without a browser. The component around
- * it is a checkbox, a label and two arrows; this is the part that can be wrong.
- */
-export interface RuleRow {
-  label: string;
-  helpText: string | null;
-  /** Shown at induction. An unticked row is not deleted — it can be ticked back. */
-  selected: boolean;
-  /** Typed for this site rather than drawn from the library. */
-  custom: boolean;
-  /** A library rule NOT seeded by default — adopted only where it applies. */
-  optional: boolean;
-}
-
-/**
- * Build the editor's rows from the library and whatever this site has saved.
- *
- * Every library rule appears whether or not the site uses it: the optional
- * templates are the unticked ones, and an unticked default is one this site has
- * chosen to drop. Rules the site has saved that match nothing in the library are
- * its own, and come last.
- */
-export function buildRuleRows(
-  current: SiteRule[],
-  library: LibraryRule[],
-): RuleRow[] {
-  const byLabel = new Map(current.map((r) => [r.label.trim().toLowerCase(), r]));
-  const libraryRows: RuleRow[] = library.map((r) => {
-    const live = byLabel.get(r.label.trim().toLowerCase());
-    return {
-      label: r.label,
-      // A site that edited the help text in the checklist builder keeps its
-      // wording; only the selection state comes from whether the row exists.
-      helpText: live ? live.helpText : r.helpText,
-      selected: Boolean(live),
-      custom: false,
-      optional: !r.defaultSelected,
-    };
-  });
-  const libraryLabels = new Set(
-    library.map((r) => r.label.trim().toLowerCase()),
-  );
-  const customRows: RuleRow[] = current
-    .filter((r) => !libraryLabels.has(r.label.trim().toLowerCase()))
-    .map((r) => ({
-      label: r.label,
-      helpText: r.helpText,
-      selected: true,
-      custom: true,
-      optional: false,
-    }));
-  return [...libraryRows, ...customRows];
 }
 
 const MAX_RULES = 40;
