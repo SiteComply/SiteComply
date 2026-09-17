@@ -61,7 +61,12 @@ export async function GET(
     headers: {
       'Content-Type': 'application/pdf',
       'Content-Length': String(pdf.length),
-      'Content-Disposition': `attachment; filename="${inductionRecordFilename(data)}"`,
+      // INLINE, not attachment: the record is meant to be read before it is
+      // kept. The browser's PDF viewer opens it, and the reader still has save
+      // and print there — so nothing is lost, and a document nobody looked at
+      // does not land in a downloads folder. The filename still travels with it
+      // and is what the viewer's save button offers.
+      'Content-Disposition': `inline; filename="${inductionRecordFilename(data)}"`,
       // Never cached: the document carries personal data and a generation
       // timestamp that must be true at the moment it is produced.
       'Cache-Control': 'private, no-store',

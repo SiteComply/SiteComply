@@ -163,12 +163,19 @@ export default async function WorkerInductionRecordPage({
         {/* A real PDF from the server, not window.print() on this screen.
             The old button printed the worker app — navigation and all — at
             whatever margins the browser chose, which is why the output read as
-            a screenshot rather than a record. */}
+            a screenshot rather than a record.
+
+            Opens in a new tab so the operative keeps their place here: on a
+            phone, replacing this page with a PDF viewer and relying on Back is
+            a good way to lose the record you just signed. Saving and printing
+            are available in the viewer. */}
         <a
           href={`/api/worker/inductions/${record.submissionId}/record`}
+          target="_blank"
+          rel="noopener noreferrer"
           className="touch-target flex w-full items-center justify-center rounded-xl border border-line bg-surface px-4 py-3 text-base font-semibold text-ink hover:bg-surface-sunken print:hidden"
         >
-          Download induction record (PDF)
+          View induction record (PDF)
         </a>
         {justCompleted && (
           <Link

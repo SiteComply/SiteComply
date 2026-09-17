@@ -325,9 +325,11 @@ export default async function PlatformSubmissionsPage({
                         scope. */}
                     <a
                       href={`/api/platform/submissions/${selected.id}/record`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="mt-3 inline-flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink hover:bg-surface-sunken"
                     >
-                      Download induction record (PDF)
+                      View induction record (PDF)
                     </a>
                     <Link
                       href={`/platform/dashboard/workers/${selected.worker.id}`}
