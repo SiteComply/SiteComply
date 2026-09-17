@@ -33,8 +33,9 @@ const seeded: FlowItem[] = UK_INDUCTION_TEMPLATE.map((t, i) => ({
 }));
 
 const describe = (s: ReturnType<typeof buildInductionSteps>[number]) =>
-  s.kind === 'section' ? `section:${s.section.key}(${s.items.length})`
+  s.kind === 'section' ? `section:${s.section.key}(${s.items.length})${s.rules ? `+${s.rules.length}rules` : ''}`
   : s.kind === 'ppe' ? `ppe(${s.items.length})`
+  : s.kind === 'rules' ? `rules(${s.items.length})`
   : s.kind === 'gdpr' ? 'gdpr'
   : `${s.kind}:${s.item.label.slice(0, 28)}`;
 
@@ -52,14 +53,24 @@ function main() {
   chk('3 = PPE, unchanged, 6 items', steps[2]?.kind === 'ppe' && steps[2].items.length === 6);
   chk('4 = GDPR, still standalone', steps[3]?.kind === 'gdpr');
 
-  console.log('\n[2] Nothing was dropped — the SAME items are still asked');
-  const asked = steps.flatMap((s) =>
-    s.kind === 'section' || s.kind === 'ppe' ? s.items.map((i) => i.id)
-    : s.kind === 'gdpr' ? [] : [s.item.id]);
+  console.log('\n[2] Nothing was dropped — every item still REACHES the operative');
+  // Site rules are shown, not asked, so they ride on a step's `rules` rather than
+  // its `items`. Counted here all the same: this check exists to prove nothing
+  // silently vanishes from the induction, and a rule nobody sees has vanished.
+  const shown = steps.flatMap((s) =>
+    s.kind === 'section' || s.kind === 'ppe' || s.kind === 'rules'
+      ? [
+          ...s.items.map((i: FlowItem) => i.id),
+          ...(s.kind === 'section' ? (s.rules ?? []) : []).map((i: FlowItem) => i.id),
+        ]
+    : s.kind === 'gdpr' ? []
+    : s.kind === 'acknowledgement'
+      ? [s.item.id, ...(s.rules ?? []).map((i: FlowItem) => i.id)]
+      : [s.item.id]);
   chk('every checklist item still appears exactly once',
-      asked.length === seeded.length && new Set(asked).size === seeded.length,
-      `${asked.length} asked of ${seeded.length}`);
-  const missing = seeded.filter((i) => !asked.includes(i.id));
+      shown.length === seeded.length && new Set(shown).size === seeded.length,
+      `${shown.length} shown of ${seeded.length}`);
+  const missing = seeded.filter((i) => !shown.includes(i.id));
   chk('none missing', missing.length === 0, missing.map((m) => m.label).join('; '));
 
   console.log('\n[3] Each acknowledgement is still answered INDIVIDUALLY');

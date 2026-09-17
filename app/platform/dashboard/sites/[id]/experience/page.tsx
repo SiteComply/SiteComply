@@ -18,6 +18,12 @@ import {
   getSitePpeRequirements,
   DEFAULT_PPE,
 } from '@/services/checklists/sitePpeService';
+import { SiteRulesConfig } from '@/components/platform/SiteRulesConfig';
+import {
+  getSiteRules,
+  siteRulesAreAcknowledged,
+  DEFAULT_SITE_RULES,
+} from '@/services/checklists/siteRulesService';
 import { GpsCheckInConfig } from '@/components/platform/GpsCheckInConfig';
 import { SiteInformationConfig } from '@/components/platform/SiteInformationConfig';
 import { formatDateTimeUK } from '@/lib/datetime';
@@ -102,6 +108,13 @@ export default async function SiteExperiencePage({
 
   const ppeItems = await getSitePpeRequirements(params.id);
 
+  // Site Rules Library. Both reads hit the same current checklist, so they are
+  // issued together rather than one after the other.
+  const [siteRules, siteRulesAcknowledged] = await Promise.all([
+    getSiteRules(params.id),
+    siteRulesAreAcknowledged(params.id),
+  ]);
+
   const [siteContacts, panelVisibility] = await Promise.all([
     listSiteContactsForViewer(viewer, params.id),
     getPanelVisibilityForViewer(viewer, params.id),
@@ -165,6 +178,15 @@ export default async function SiteExperiencePage({
       label: 'Site information',
       description: 'The operative-facing Site information page.',
       group: SECTION_GROUP.seen,
+    },
+    {
+      // Site Rules Library. First in the induction group, ahead of PPE: the rules
+      // come first in the induction itself, and a manager setting a site up thinks
+      // about what people must follow before what they must wear.
+      key: 'site-rules',
+      label: 'Site rules',
+      description: 'The rules operatives are shown and agree to at induction.',
+      group: SECTION_GROUP.induction,
     },
     {
       // Owner Review Item 15 — PPE was only editable in the Admin Centre's
@@ -275,6 +297,16 @@ export default async function SiteExperiencePage({
               emergencyNumber: siteInfo.emergency.emergencyNumber,
             }}
             completeness={siteInfo.completeness}
+          />
+        )}
+
+        {active === 'site-rules' && (
+          <SiteRulesConfig
+            siteId={params.id}
+            initial={siteRules}
+            library={DEFAULT_SITE_RULES}
+            acknowledged={siteRulesAcknowledged}
+            canEdit={canConfigureDashboard}
           />
         )}
 

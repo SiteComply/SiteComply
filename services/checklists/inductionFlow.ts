@@ -10,7 +10,11 @@
  * only ever receives plain, serialisable data.
  */
 
-export type InductionItemType = 'ACKNOWLEDGEMENT' | 'YES_NO' | 'PPE_CONFIRM';
+export type InductionItemType =
+  | 'ACKNOWLEDGEMENT'
+  | 'YES_NO'
+  | 'PPE_CONFIRM'
+  | 'SITE_RULE';
 
 /**
  * SC-012: the seeded duplicate CSCS induction question. Its details are already
@@ -157,6 +161,31 @@ export function sectionFor(item: {
   return SECTION_BY_LABEL.get(normaliseLabel(item.label)) ?? null;
 }
 
+/**
+ * SITE RULES LIBRARY - the acknowledgement that covers the site's rule set.
+ *
+ * One acknowledgement for the whole set, not one per rule. That is a deliberate
+ * product decision and also the honest one: a person who is made to tick fifteen
+ * boxes in a row stops reading at about the third, and fifteen ticks are not
+ * fifteen times the assurance of one. The statement below is what the operative
+ * agrees to; the rules are what it refers to, displayed with it so "the site
+ * rules" names something they can actually see.
+ *
+ * This is the SEEDED label, matched the same way INDUCTION_SECTIONS matches
+ * (normalised, so a straight apostrophe or stray case still hits). A site that
+ * has reworded it keeps its own wording and simply hosts the rules on whichever
+ * screen that item lands on - see buildInductionSteps' fallback.
+ */
+export const SITE_RULES_ACK_LABEL =
+  'I have read and will follow the site rules and signage.';
+
+export function isSiteRulesAck(item: { label: string; type: string }): boolean {
+  return (
+    item.type === 'ACKNOWLEDGEMENT' &&
+    normaliseLabel(item.label) === normaliseLabel(SITE_RULES_ACK_LABEL)
+  );
+}
+
 export interface FlowItem {
   id: string;
   label: string;
@@ -165,11 +194,30 @@ export interface FlowItem {
   required: boolean;
 }
 
+/**
+ * `rules` is DISPLAY ONLY, on whichever screen carries the site-rules
+ * acknowledgement. It never adds anything to answer: isStepComplete ignores it,
+ * and the rules carry no entry in the answers map at all. The one acknowledgement
+ * on the same screen is the whole record.
+ */
 export type InductionStep =
-  | { kind: 'acknowledgement'; item: FlowItem }
-  | { kind: 'section'; section: InductionSection; items: FlowItem[] }
+  | { kind: 'acknowledgement'; item: FlowItem; rules?: FlowItem[] }
+  | {
+      kind: 'section';
+      section: InductionSection;
+      items: FlowItem[];
+      rules?: FlowItem[];
+    }
   | { kind: 'yesno'; item: FlowItem }
   | { kind: 'ppe'; items: FlowItem[] }
+  /**
+   * The fallback: rules exist but nothing on the checklist acknowledges them,
+   * because the site deleted or reworded the acknowledgement past recognition.
+   * Shown on their own rather than dropped - rules a manager has published must
+   * reach the operative either way - but with nothing to tick, since there is no
+   * statement left to agree to.
+   */
+  | { kind: 'rules'; items: FlowItem[] }
   | { kind: 'gdpr' };
 
 /** A single answer value, keyed in the answers map by checklist item id. */
@@ -180,6 +228,17 @@ export type InductionAnswers = Record<string, AnswerValue>;
 export function buildInductionSteps(items: FlowItem[]): InductionStep[] {
   const steps: InductionStep[] = [];
   let ppeRun: FlowItem[] = [];
+
+  // SITE RULES LIBRARY. Gathered up front and never given a screen of their own:
+  // they ride on whichever step carries the site-rules acknowledgement. Collected
+  // wherever they appear in the checklist, like a section's members, so a rule a
+  // manager dragged elsewhere still reaches the right screen.
+  const rules = items.filter((i) => i.type === 'SITE_RULE');
+  let rulesPlaced = false;
+  let rulesAnchorSet = false;
+  // Where a standalone rules screen would go if nothing claims them: the position
+  // the first rule occupies in the reading order.
+  let rulesAnchor = 0;
 
   const flushPpe = () => {
     if (ppeRun.length > 0) {
@@ -202,6 +261,14 @@ export function buildInductionSteps(items: FlowItem[]): InductionStep[] {
   const placed = new Set<string>();
 
   for (const item of items) {
+    if (item.type === 'SITE_RULE') {
+      // Remember where the rules sat, then let the rest of the loop ignore them.
+      if (!rulesAnchorSet) {
+        rulesAnchor = steps.length + (ppeRun.length > 0 ? 1 : 0);
+        rulesAnchorSet = true;
+      }
+      continue;
+    }
     if (item.type === 'PPE_CONFIRM') {
       ppeRun.push(item);
       continue;
@@ -213,21 +280,53 @@ export function buildInductionSteps(items: FlowItem[]): InductionStep[] {
       if (placed.has(section.key)) continue; // already on its own screen
       placed.add(section.key);
       const group = members.get(section.key) ?? [item];
+      // Does this section carry the site-rules acknowledgement? If so the rules
+      // are shown on it, beneath the statement that covers them.
+      const sectionRules =
+        rules.length > 0 && group.some(isSiteRulesAck) ? rules : undefined;
+      if (sectionRules) rulesPlaced = true;
       // A section left with one member — because a site deleted the others —
       // would render a section heading above a single tick. Fall back to the
       // ordinary acknowledgement screen, which is what it now is.
       if (group.length === 1) {
-        steps.push({ kind: 'acknowledgement', item: group[0]! });
+        steps.push({
+          kind: 'acknowledgement',
+          item: group[0]!,
+          ...(sectionRules ? { rules: sectionRules } : {}),
+        });
       } else {
-        steps.push({ kind: 'section', section, items: group });
+        steps.push({
+          kind: 'section',
+          section,
+          items: group,
+          ...(sectionRules ? { rules: sectionRules } : {}),
+        });
       }
       continue;
     }
 
     if (item.type === 'YES_NO') steps.push({ kind: 'yesno', item });
-    else steps.push({ kind: 'acknowledgement', item });
+    else {
+      // An ungrouped acknowledgement - a site that reworded or moved the seeded
+      // one out of its section still hosts the rules if the wording matches.
+      const own = rules.length > 0 && isSiteRulesAck(item) ? rules : undefined;
+      if (own) rulesPlaced = true;
+      steps.push({
+        kind: 'acknowledgement',
+        item,
+        ...(own ? { rules: own } : {}),
+      });
+    }
   }
   flushPpe();
+
+  // Nothing claimed them. Show them anyway, where they were.
+  if (rules.length > 0 && !rulesPlaced) {
+    steps.splice(Math.min(rulesAnchor, steps.length), 0, {
+      kind: 'rules',
+      items: rules,
+    });
+  }
 
   // UK GDPR consent is always the final step before check-in.
   steps.push({ kind: 'gdpr' });
@@ -257,6 +356,11 @@ export function isStepComplete(
       return step.items
         .filter((i) => i.required)
         .every((i) => answers[i.id] === true);
+    case 'rules':
+      // Nothing to answer. A rule is read, not ticked - the acknowledgement that
+      // covers the set is a separate item on a separate screen, and this step only
+      // exists when that item is gone.
+      return true;
     case 'gdpr':
       return gdprConsent === true;
   }

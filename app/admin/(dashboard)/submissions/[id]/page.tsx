@@ -17,7 +17,17 @@ function answerText(
 ): {
   text: string;
   ok: boolean;
+  /** Neither pass nor fail — nothing was asked. Rendered in a muted tone. */
+  neutral?: boolean;
 } {
+  if (type === 'SITE_RULE') {
+    // Site Rules Library. A rule is displayed, never answered: the single
+    // "site rules and signage" acknowledgement elsewhere in this same list is
+    // the record. Without this branch it would fall through to the
+    // acknowledgement default and every rule would read "Not acknowledged" in
+    // red on an induction that was completed correctly.
+    return { text: 'Shown at induction', ok: true, neutral: true };
+  }
   if (type === 'YES_NO') {
     return {
       text: value === 'yes' ? 'Yes' : value === 'no' ? 'No' : '—',
@@ -136,7 +146,11 @@ export default async function SubmissionDetailPage({
                   <span
                     className={cn(
                       'shrink-0 text-sm font-semibold',
-                      a.ok ? 'text-safe-700' : 'text-danger-600',
+                      a.neutral
+                        ? 'text-ink-subtle'
+                        : a.ok
+                          ? 'text-safe-700'
+                          : 'text-danger-600',
                     )}
                   >
                     {a.text}

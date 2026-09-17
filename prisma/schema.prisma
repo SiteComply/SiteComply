@@ -58,6 +58,19 @@ enum ChecklistItemType {
   ACKNOWLEDGEMENT //  Read-and-acknowledge statement (e.g. site rules, RAMS)
   YES_NO //           Yes/No question (e.g. "Have you been issued your PPE?")
   PPE_CONFIRM //      Confirm possession/wearing of a PPE item
+  /// A site rule, DISPLAYED during induction and covered by the single
+  /// "site rules and signage" acknowledgement rather than ticked individually.
+  ///
+  /// A distinct type, not an optional ACKNOWLEDGEMENT, for two reasons: gates
+  /// are derived by TYPE, so rules can never accidentally become a tick box or
+  /// count toward rulesAcknowledged; and a rule keeps its own row, so the editor
+  /// can tell a library rule from a custom one and can reorder them.
+  ///
+  /// Living in the checklist is what gives rules versioning for free - edit in
+  /// place until someone has checked in against the current version, then publish
+  /// a new one. A historic submission's acknowledgement therefore still points at
+  /// the rules that were actually on screen.
+  SITE_RULE
 }
 
 enum SubmissionStatus {

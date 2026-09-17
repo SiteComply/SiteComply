@@ -8,6 +8,7 @@ import { cn } from '@/lib/cn';
 import {
   buildInductionSteps,
   type InductionSection,
+  isSiteRulesAck,
   isStepComplete,
   type FlowItem,
   type InductionAnswers,
@@ -324,6 +325,7 @@ export function InductionWizard({
           <AcknowledgementStep
             label={step.item.label}
             helpText={step.item.helpText}
+            rules={step.rules}
             confirmed={answers[step.item.id] === true}
             onToggle={() =>
               setAnswer(
@@ -338,10 +340,13 @@ export function InductionWizard({
           <SectionStep
             section={step.section}
             items={step.items}
+            rules={step.rules}
             answers={answers}
             onToggle={(id) => setAnswer(id, answers[id] === true ? false : true)}
           />
         )}
+
+        {step.kind === 'rules' && <RulesOnlyStep items={step.items} />}
 
         {step.kind === 'yesno' && (
           <YesNoStep
@@ -453,14 +458,77 @@ function ConfirmToggle({
   );
 }
 
+/**
+ * SITE RULES LIBRARY — the site's rules, shown with the acknowledgement that
+ * covers them.
+ *
+ * Plainly listed, never behind a "show rules" disclosure. Someone is about to
+ * agree they have read these; hiding them one tap away would make that agreement
+ * a formality, and the whole reason the rule set lives next to the tick is so
+ * "the site rules" names something the person can actually see.
+ *
+ * Nothing here is interactive. There is no tick, no row to press, no answer
+ * stored — by design. One acknowledgement covers the set.
+ */
+function SiteRulesPanel({ items }: { items: FlowItem[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-line bg-surface p-4">
+      <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-subtle">
+        Site rules
+      </p>
+      <ol className="space-y-3">
+        {items.map((item, i) => (
+          <li key={item.id} className="flex gap-3">
+            <span
+              className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-xs font-bold text-ink-muted"
+              aria-hidden="true"
+            >
+              {i + 1}
+            </span>
+            <span className="flex-1">
+              <span className="block font-medium text-ink">{item.label}</span>
+              {item.helpText && (
+                <span className="mt-0.5 block text-sm text-ink-muted">
+                  {item.helpText}
+                </span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/**
+ * The rules with no acknowledgement to sit under, because the site removed or
+ * reworded it. Shown rather than dropped, and honest about what it is: read-only,
+ * with nothing to agree to. See buildInductionSteps.
+ */
+function RulesOnlyStep({ items }: { items: FlowItem[] }) {
+  return (
+    <div className="space-y-4">
+      <StepHeading>Site rules</StepHeading>
+      <p className="text-ink-muted">
+        Please read the rules for this site before you continue.
+      </p>
+      <SiteRulesPanel items={items} />
+    </div>
+  );
+}
+
 function AcknowledgementStep({
   label,
   helpText,
+  rules,
   confirmed,
   onToggle,
 }: {
   label: string;
   helpText?: string | null;
+  /** Site rules covered by THIS acknowledgement, shown above the tick. */
+  rules?: FlowItem[];
   confirmed: boolean;
   onToggle: () => void;
 }) {
@@ -468,6 +536,7 @@ function AcknowledgementStep({
     <div className="space-y-4">
       <StepHeading>{label}</StepHeading>
       {helpText && <p className="text-ink-muted">{helpText}</p>}
+      {rules && rules.length > 0 && <SiteRulesPanel items={rules} />}
       <ConfirmToggle
         checked={confirmed}
         label="I confirm and acknowledge"
@@ -517,11 +586,19 @@ function YesNoStep({
 function SectionStep({
   section,
   items,
+  rules,
   answers,
   onToggle,
 }: {
   section: InductionSection;
   items: FlowItem[];
+  /**
+   * Site rules covered by the site-rules acknowledgement in THIS section. Shown
+   * directly beneath that row rather than at the foot of the screen: a section
+   * holds three separate statements, and rules parked under the last of them
+   * would read as belonging to whichever one they happen to follow.
+   */
+  rules?: FlowItem[];
   answers: InductionAnswers;
   onToggle: (id: string) => void;
 }) {
@@ -576,6 +653,11 @@ function SectionStep({
                   </span>
                 )}
               </button>
+              {rules && rules.length > 0 && isSiteRulesAck(item) && (
+                <div className="mt-3">
+                  <SiteRulesPanel items={rules} />
+                </div>
+              )}
             </li>
           );
         })}

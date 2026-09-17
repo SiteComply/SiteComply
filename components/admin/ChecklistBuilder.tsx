@@ -6,7 +6,11 @@ import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/cn';
 
-export type BuilderItemType = 'ACKNOWLEDGEMENT' | 'YES_NO' | 'PPE_CONFIRM';
+export type BuilderItemType =
+  | 'ACKNOWLEDGEMENT'
+  | 'YES_NO'
+  | 'PPE_CONFIRM'
+  | 'SITE_RULE';
 
 export interface BuilderItemData {
   label: string;
@@ -23,6 +27,12 @@ const TYPE_LABELS: Record<BuilderItemType, string> = {
   ACKNOWLEDGEMENT: 'Acknowledgement',
   YES_NO: 'Yes / No question',
   PPE_CONFIRM: 'PPE confirmation',
+  // Site Rules Library. Listed here because a checklist loaded into this builder
+  // can CONTAIN rules, and a select with no matching option displays the first
+  // one - so leaving it out would show every rule as an "Acknowledgement" and
+  // turn it into one the moment anybody touched the dropdown. Rules are normally
+  // managed in Platform > Site > Operative experience > Site rules.
+  SITE_RULE: 'Site rule (shown, not ticked)',
 };
 
 /**

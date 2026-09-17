@@ -1,4 +1,5 @@
 import { ChecklistItemType } from '@prisma/client';
+import { UK_SITE_RULES_LIBRARY } from '@/services/checklists/ukSiteRulesLibrary';
 
 /**
  * Standard UK construction site induction template.
@@ -31,6 +32,30 @@ export const UK_INDUCTION_TEMPLATE: ChecklistItemTemplate[] = [
     type: ChecklistItemType.ACKNOWLEDGEMENT,
     required: true,
   },
+  /**
+   * The standard site rules, shown to the operative underneath the
+   * acknowledgement directly above and covered by it.
+   *
+   * Placed HERE, immediately after the statement that refers to them, rather than
+   * appended at the end: order is what the induction reads by, and a rule set that
+   * sits below the safe-working agreement is a rule set nobody connects to the
+   * tick they have already made.
+   *
+   * `required: false` on every one, because a rule is never answered. Its row
+   * exists to be displayed; the single acknowledgement above is the record. The
+   * flag would only matter if a rule could gate a screen, and deliberately none
+   * can - see SITE_RULE in the schema and buildInductionSteps.
+   *
+   * A NEW site gets all of these. An existing site gets none until somebody opens
+   * its Site rules section and saves, which is what keeps this shipping without
+   * silently changing what a live induction says.
+   */
+  ...UK_SITE_RULES_LIBRARY.map((rule) => ({
+    label: rule.label,
+    helpText: rule.helpText,
+    type: ChecklistItemType.SITE_RULE,
+    required: false,
+  })),
   {
     label:
       'I have read the Risk Assessments & Method Statements (RAMS) for my work.',
