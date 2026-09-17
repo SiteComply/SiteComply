@@ -134,8 +134,11 @@ function main() {
       client.includes('/rules') && client.includes('Could not save the site rules.'));
   chk('the "Site-specific" badge for a custom rule',
       client.includes('Site-specific'));
-  chk('the "Optional" badge for an unadopted template',
-      client.includes('Optional'));
+  // No assertion here that the Optional badge is ABSENT. The induction wizard
+  // legitimately renders that word for non-required items, so a bundle-wide
+  // check would pass whether or not the badge existed — and a check that cannot
+  // fail is worse than no check. Its absence is asserted on the component source
+  // in the deploy script, where the question can actually be answered.
   chk('the missing-acknowledgement warning',
       client.includes('no longer contains the site rules'));
   chk('the cross-reference to the separate free-text field',

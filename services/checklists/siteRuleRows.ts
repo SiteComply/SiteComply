@@ -46,17 +46,32 @@ export interface RuleRow {
   selected: boolean;
   /** Typed for this site rather than drawn from the library. */
   custom: boolean;
-  /** A library rule NOT seeded by default — adopted only where it applies. */
-  optional: boolean;
+  //
+  // THERE IS DELIBERATELY NO TIER HERE.
+  //
+  // Whether a rule is one of the universal defaults or one of the optional
+  // templates decides ONE thing: whether a new site is seeded with it. Past that
+  // point the distinction is of no interest to anybody. A Site Manager reading
+  // this list is deciding what applies to their site, and the checkbox already
+  // says that; labelling half the rules "Optional" implies the other half carry
+  // more weight, which is not true — every rule here is shown or not shown, and
+  // the ones shown are all covered by the same single acknowledgement.
+  //
+  // The tier is not merely unrendered, it is ABSENT from the row: a badge cannot
+  // be reintroduced by accident for a distinction the type does not carry. It
+  // lives where it is actually used — LibraryRule.defaultSelected for seeding,
+  // and isOptionalTemplateRule() for anything server-side that needs to ask.
 }
 
 /**
  * Build the editor's rows from the library and whatever this site has saved.
  *
- * Every library rule appears whether or not the site uses it: the optional
- * templates are the unticked ones, and an unticked default is one this site has
- * chosen to drop. Rules the site has saved that match nothing in the library are
- * its own, and come last.
+ * Every library rule appears, ticked if this site shows it and unticked if not.
+ * That is the ONLY distinction the list makes: a template the site has not
+ * adopted and a default the site has dropped are the same thing here, because to
+ * the Site Manager they are the same thing — a rule that does not apply. Rules
+ * the site has saved that match nothing in the library are its own, and come
+ * last.
  */
 export function buildRuleRows(
   current: SiteRule[],
@@ -72,7 +87,6 @@ export function buildRuleRows(
       helpText: live ? live.helpText : r.helpText,
       selected: Boolean(live),
       custom: false,
-      optional: !r.defaultSelected,
     };
   });
   const libraryLabels = new Set(
@@ -85,7 +99,6 @@ export function buildRuleRows(
       helpText: r.helpText,
       selected: true,
       custom: true,
-      optional: false,
     }));
   return [...libraryRows, ...customRows];
 }

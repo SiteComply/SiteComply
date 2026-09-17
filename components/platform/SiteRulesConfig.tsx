@@ -29,13 +29,21 @@ import {
  * can be put back. A custom rule has no such home to return to, so it is removed
  * outright.
  *
- * THREE ORIGINS, one list. A row is a universal default (no badge), an optional
- * template the site may adopt ("Optional"), or a rule typed for this site
- * ("Site-specific"). Badged rather than split into separate sections, because the
- * order of this list IS the order the rules are read at induction, and the
- * reorder controls have to be able to move any rule anywhere — a site's own rule
- * may well belong at the top. Sections would either break that or make the
- * arrows lie.
+ * ONE LIST, ONE DISTINCTION. Every rule from the standard library is presented
+ * identically and the checkbox alone says whether it applies to this site. The
+ * library's internal split — which rules a NEW site is seeded with — is not shown
+ * and is not in RuleRow at all: it decides seeding and nothing else, and badging
+ * it here would imply half the rules matter less, when every rule shown is
+ * covered by the same single acknowledgement.
+ *
+ * The one badge that remains marks a rule this site TYPED, which is a real
+ * difference: it is the only kind that can be deleted rather than just unticked,
+ * because it has no library entry to come back from.
+ *
+ * Not split into sections, either: the order of this list IS the order the rules
+ * are read at induction, and the reorder controls have to move any rule anywhere
+ * — a site's own rule may well belong at the top. Sections would break that or
+ * make the arrows lie.
  */
 
 export function SiteRulesConfig({
@@ -100,7 +108,7 @@ export function SiteRulesConfig({
     }
     setRows((list) => [
       ...list,
-      { label, helpText: null, selected: true, custom: true, optional: false },
+      { label, helpText: null, selected: true, custom: true },
     ]);
     setNewRule('');
     setError(null);
@@ -184,9 +192,13 @@ export function SiteRulesConfig({
                   {row.helpText}
                 </span>
               )}
-              {(row.custom || row.optional) && (
+              {/* Only a rule this site typed is badged. Every library rule -
+                  whether it is one of the universal defaults or one of the
+                  optional templates - is presented identically, because the
+                  checkbox alone decides whether it applies here. */}
+              {row.custom && (
                 <span className="mt-1 inline-block rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-semibold text-ink-muted">
-                  {row.custom ? 'Site-specific' : 'Optional'}
+                  Site-specific
                 </span>
               )}
             </span>

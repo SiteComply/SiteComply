@@ -238,8 +238,22 @@ for (const m of cfgRaw.matchAll(/^import\s+([\s\S]*?)from\s+'([^']+)'/gm)) {
   if(!typeOnly)
     fail('SiteRulesConfig value-imports siteRulesService - that pulls Prisma into the browser bundle. Import from siteRuleRows instead.');
 }
-if(cfg.indexOf(\"'Optional'\")<0)
-  fail('the Optional badge is gone - an unadopted template would look like a deselected default');
+// NO TIER IN THE UI. A Site Manager decides what applies with the checkbox; a
+// badge splitting the library into two classes implies half the rules matter
+// less, and they do not - every rule shown is covered by the same single
+// acknowledgement. Asserted on the component source with comments stripped, NOT
+// on the bundle: the induction wizard legitimately renders the word 'Optional'
+// for non-required items, so a bundle-wide check could never fail.
+if(/Optional/.test(cfg))
+  fail('the Optional badge is back in the Site rules editor - the library must present as one list');
+if(/row\.optional|optional:/.test(cfg))
+  fail('the editor is reading a tier off the row again');
+if(/optional: boolean/.test(rows))
+  fail('RuleRow carries a tier again - it exists so a badge CANNOT be reintroduced by accident');
+// The badge that must stay: a rule this site typed is the only kind that can be
+// deleted rather than just unticked.
+if(cfg.indexOf('Site-specific')<0)
+  fail('the Site-specific badge is gone - a custom rule would look like a library one');
 
 console.log('      confirmed: enum intact, rules are never answerable, versioning');
 console.log('                 still goes through saveChecklist, the free-text field');

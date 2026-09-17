@@ -158,6 +158,11 @@ function main() {
   // ─────────────────────────────────────────────────────────────────────────
   console.log('\n[1e] The editor: what a Site Manager actually sees');
 
+  // The tier is asked of the LIBRARY, never of the row. RuleRow deliberately does
+  // not carry it — see siteRuleRows — so these tests cannot accidentally start
+  // proving that a distinction the UI must not make is still being made.
+  const isTemplate = (r: { label: string }) => isOptionalTemplateRule(r.label);
+
   // A BRAND NEW SITE — seeded with the defaults, nothing else.
   const fresh = buildRuleRows(DEFAULT_SITE_RULES, SITE_RULE_LIBRARY);
   chk('every library rule appears, adopted or not',
@@ -165,15 +170,18 @@ function main() {
   chk('the 10 defaults are ticked',
       fresh.filter((r) => r.selected).length === DEFAULT_SITE_RULES.length);
   chk('the 5 optional templates are present and unticked',
-      fresh.filter((r) => r.optional).length === 5 &&
-      fresh.filter((r) => r.optional).every((r) => !r.selected));
-  chk('optional rows are badged Optional, not Site-specific',
-      fresh.filter((r) => r.optional).every((r) => !r.custom));
-  chk('no default is wrongly badged Optional',
-      fresh.filter((r) => r.selected).every((r) => !r.optional));
-  chk('the smoking template is there, unticked, badged Optional',
+      fresh.filter(isTemplate).length === 5 &&
+      fresh.filter(isTemplate).every((r) => !r.selected));
+  chk('no library rule is badged at all — defaults and templates look alike',
+      fresh.every((r) => !r.custom));
+  chk('the row carries NO tier, so no badge can render one',
+      fresh.every((r) => !('optional' in r)));
+  chk('a default and a template are indistinguishable but for the tick',
+      JSON.stringify(Object.keys(fresh.find((r) => !isTemplate(r))!).sort()) ===
+      JSON.stringify(Object.keys(fresh.find(isTemplate)!).sort()));
+  chk('the smoking template is there, unticked, unbadged',
       fresh.some(
-        (r) => /Smoking and vaping/.test(r.label) && !r.selected && r.optional,
+        (r) => /Smoking and vaping/.test(r.label) && !r.selected && !r.custom,
       ));
   chk('help text rides along for the rules that have it',
       fresh.some((r) => r.helpText !== null));
@@ -186,16 +194,19 @@ function main() {
     { label: 'No deliveries through the school gate before 9am.', helpText: null },
   ];
   const used = buildRuleRows(adopted, SITE_RULE_LIBRARY);
-  chk('the adopted template now shows ticked, still badged Optional',
+  chk('the adopted template now shows ticked, and still unbadged',
       used.some(
-        (r) => /Smoking and vaping/.test(r.label) && r.selected && r.optional,
+        (r) => /Smoking and vaping/.test(r.label) && r.selected && !r.custom,
       ));
   chk('the dropped default shows unticked, NOT removed from the list',
-      used.some((r) => /PPE/.test(r.label) && !r.selected && !r.optional));
-  chk('the site\'s own rule is badged Site-specific and comes last',
+      used.some((r) => /PPE/.test(r.label) && !r.selected && !r.custom));
+  chk('an adopted template and a kept default are presented identically',
+      used.find((r) => /Smoking and vaping/.test(r.label))?.custom ===
+      used.find((r) => /Sign in on arrival/.test(r.label))?.custom);
+  chk('the site\'s own rule IS badged Site-specific and comes last',
       used[used.length - 1]?.custom === true &&
       /school gate/.test(used[used.length - 1]!.label));
-  chk('the site\'s own rule is not mistaken for a library one',
+  chk('it is the only badged row',
       used.filter((r) => r.custom).length === 1);
   chk('nothing saved is silently dropped from the editor',
       adopted.every((saved) =>
@@ -521,13 +532,13 @@ function main() {
     SITE_RULE_LIBRARY.filter((r) => r.defaultSelected),
   );
   chk('[1e] would fail if the editor got only the defaults',
-      defaultsOnly.filter((r) => r.optional).length === 0 &&
+      defaultsOnly.filter((r) => isOptionalTemplateRule(r.label)).length === 0 &&
       defaultsOnly.length < SITE_RULE_LIBRARY.length,
-      `${defaultsOnly.length} rows, 0 optional`);
+      `${defaultsOnly.length} rows, 0 templates`);
   // ...and the real call must not look like that.
   chk('[1e] the real editor call does offer the templates',
       buildRuleRows(DEFAULT_SITE_RULES, SITE_RULE_LIBRARY)
-        .filter((r) => r.optional).length === 5);
+        .filter((r) => isOptionalTemplateRule(r.label)).length === 5);
 
   console.log(`\n== ${passed} passed, ${failed} failed ==`);
   if (failed > 0) process.exitCode = 1;
