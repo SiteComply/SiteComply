@@ -5,7 +5,10 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/cn';
-import type { SiteRule } from '@/services/checklists/siteRulesService';
+import type {
+  LibraryRule,
+  SiteRule,
+} from '@/services/checklists/siteRulesService';
 
 /**
  * Site Rules Library — the rules shown to an operative during induction.
@@ -16,21 +19,30 @@ import type { SiteRule } from '@/services/checklists/siteRulesService';
  * same list underneath, because to the operative reading them at 7am there is no
  * such thing as a library rule and a custom one — there are just the site's rules.
  *
- * Deselecting is not deleting: an unticked library rule stays visible, greyed, so
- * the section still reads as "here is the standard set, and here is what this site
- * does differently". A custom rule has no such home to return to, so it is removed
+ * Deselecting is not deleting: an unticked library rule stays in the list so it
+ * can be put back. A custom rule has no such home to return to, so it is removed
  * outright.
+ *
+ * THREE ORIGINS, one list. A row is a universal default (no badge), an optional
+ * template the site may adopt ("Optional"), or a rule typed for this site
+ * ("Site-specific"). Badged rather than split into separate sections, because the
+ * order of this list IS the order the rules are read at induction, and the
+ * reorder controls have to be able to move any rule anywhere — a site's own rule
+ * may well belong at the top. Sections would either break that or make the
+ * arrows lie.
  */
 
 interface Row {
   label: string;
   helpText: string | null;
   selected: boolean;
-  /** From the standard library (can be re-ticked) vs typed for this site. */
+  /** From the library (can be re-ticked) vs typed for this site. */
   custom: boolean;
+  /** A library rule that is NOT seeded by default — adopted only if it applies. */
+  optional: boolean;
 }
 
-function toRows(current: SiteRule[], library: SiteRule[]): Row[] {
+function toRows(current: SiteRule[], library: LibraryRule[]): Row[] {
   const byLabel = new Map(current.map((r) => [r.label.trim().toLowerCase(), r]));
   const libraryRows: Row[] = library.map((r) => {
     const live = byLabel.get(r.label.trim().toLowerCase());
@@ -41,6 +53,7 @@ function toRows(current: SiteRule[], library: SiteRule[]): Row[] {
       helpText: live ? live.helpText : (r.helpText ?? null),
       selected: Boolean(live),
       custom: false,
+      optional: !r.defaultSelected,
     };
   });
   const libraryLabels = new Set(
@@ -53,6 +66,7 @@ function toRows(current: SiteRule[], library: SiteRule[]): Row[] {
       helpText: r.helpText,
       selected: true,
       custom: true,
+      optional: false,
     }));
   return [...libraryRows, ...customRows];
 }
@@ -66,7 +80,7 @@ export function SiteRulesConfig({
 }: {
   siteId: string;
   initial: SiteRule[];
-  library: SiteRule[];
+  library: LibraryRule[];
   /** Does the induction still carry the acknowledgement that covers these? */
   acknowledged: boolean;
   canEdit: boolean;
@@ -116,7 +130,7 @@ export function SiteRulesConfig({
     }
     setRows((list) => [
       ...list,
-      { label, helpText: null, selected: true, custom: true },
+      { label, helpText: null, selected: true, custom: true, optional: false },
     ]);
     setNewRule('');
     setError(null);
@@ -200,9 +214,9 @@ export function SiteRulesConfig({
                   {row.helpText}
                 </span>
               )}
-              {row.custom && (
+              {(row.custom || row.optional) && (
                 <span className="mt-1 inline-block rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-semibold text-ink-muted">
-                  Site-specific
+                  {row.custom ? 'Site-specific' : 'Optional'}
                 </span>
               )}
             </span>

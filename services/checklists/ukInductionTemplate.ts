@@ -1,5 +1,5 @@
 import { ChecklistItemType } from '@prisma/client';
-import { UK_SITE_RULES_LIBRARY } from '@/services/checklists/ukSiteRulesLibrary';
+import { UK_SITE_RULES_DEFAULT } from '@/services/checklists/ukSiteRulesLibrary';
 
 /**
  * Standard UK construction site induction template.
@@ -46,11 +46,15 @@ export const UK_INDUCTION_TEMPLATE: ChecklistItemTemplate[] = [
    * flag would only matter if a rule could gate a screen, and deliberately none
    * can - see SITE_RULE in the schema and buildInductionSteps.
    *
-   * A NEW site gets all of these. An existing site gets none until somebody opens
-   * its Site rules section and saves, which is what keeps this shipping without
+   * Only the DEFAULT tier is seeded - the universal rules. The optional templates
+   * (smoking area, waste segregation, site traffic, phones, conduct) depend on how
+   * a particular site is run, so a Site Manager ticks those on when they apply.
+   *
+   * A NEW site gets these. An existing site gets none until somebody opens its
+   * Site rules section and saves, which is what keeps this shipping without
    * silently changing what a live induction says.
    */
-  ...UK_SITE_RULES_LIBRARY.map((rule) => ({
+  ...UK_SITE_RULES_DEFAULT.map((rule) => ({
     label: rule.label,
     helpText: rule.helpText,
     type: ChecklistItemType.SITE_RULE,

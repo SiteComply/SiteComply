@@ -4,7 +4,10 @@ import {
   saveChecklist,
   type ValidatedItem,
 } from '@/services/checklists/adminChecklistService';
-import { UK_SITE_RULES_LIBRARY } from '@/services/checklists/ukSiteRulesLibrary';
+import {
+  UK_SITE_RULES_LIBRARY,
+  UK_SITE_RULES_DEFAULT,
+} from '@/services/checklists/ukSiteRulesLibrary';
 import { isSiteRulesAck } from '@/services/checklists/inductionFlow';
 
 /**
@@ -34,19 +37,49 @@ export interface SiteRule {
   helpText: string | null;
 }
 
-/** The library offered to a site that has no rules yet. */
-export const DEFAULT_SITE_RULES: SiteRule[] = UK_SITE_RULES_LIBRARY.map((r) => ({
+/** A library entry, plus which tier it belongs to. */
+export interface LibraryRule extends SiteRule {
+  /** Seeded onto a new site. False for an optional site-specific template. */
+  defaultSelected: boolean;
+}
+
+/**
+ * The WHOLE library offered in the editor — both tiers.
+ *
+ * The optional templates appear as unticked rows a Site Manager can tick on.
+ * That needs no new mechanism: an unticked row already means "not shown at
+ * induction", which is exactly what an unadopted template is.
+ */
+export const SITE_RULE_LIBRARY: LibraryRule[] = UK_SITE_RULES_LIBRARY.map((r) => ({
+  label: r.label,
+  helpText: r.helpText ?? null,
+  defaultSelected: r.defaultSelected,
+}));
+
+/** Just the universal tier — what a NEW site is seeded with. */
+export const DEFAULT_SITE_RULES: SiteRule[] = UK_SITE_RULES_DEFAULT.map((r) => ({
   label: r.label,
   helpText: r.helpText ?? null,
 }));
 
-/** Labels in the standard library, for telling a library rule from a custom one. */
+/** Labels in the library, for telling a library rule from a custom one. */
 const LIBRARY_LABELS = new Set(
   UK_SITE_RULES_LIBRARY.map((r) => r.label.trim().toLowerCase()),
 );
 
 export function isLibraryRule(label: string): boolean {
   return LIBRARY_LABELS.has(label.trim().toLowerCase());
+}
+
+/** Whether a label is an OPTIONAL template rather than a universal default. */
+const OPTIONAL_LABELS = new Set(
+  UK_SITE_RULES_LIBRARY.filter((r) => !r.defaultSelected).map((r) =>
+    r.label.trim().toLowerCase(),
+  ),
+);
+
+export function isOptionalTemplateRule(label: string): boolean {
+  return OPTIONAL_LABELS.has(label.trim().toLowerCase());
 }
 
 const MAX_RULES = 40;

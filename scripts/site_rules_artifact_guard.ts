@@ -69,29 +69,63 @@ function main() {
   chk('SITE_RULE appears in the client bundle too — the wizard needs it',
       client.includes('SITE_RULE'));
 
-  console.log('\n[3] The standard library shipped, in full');
+  console.log('\n[3] The library shipped — both tiers, correctly split');
   // Checked individually rather than by count: a truncated library is the exact
   // failure a count would let through if the count itself were wrong.
-  const library = [
+  const defaults = [
     'Sign in on arrival and sign out when you leave.',
     'Wear the PPE required for this site at all times in working areas.',
     'Report all accidents, injuries and near misses straight away.',
-    'Do not start work without a valid permit where one is required.',
-    'Keep walkways, stairs and fire exits clear at all times.',
-    'Tidy your work area as you go and remove waste to the right skip.',
+    'Keep walkways, access routes and fire exits clear at all times.',
+    'Keep your work area clean and tidy as you go.',
     'Do not use plant or equipment you are not trained and authorised to use.',
     'Check tools and equipment before use and report anything defective.',
     'Do not remove or bypass guarding, barriers or safety devices.',
-    'No alcohol or drugs on site. Do not work under the influence.',
+    'On hearing the alarm, stop work, go to the assembly point and wait to be accounted for.',
+    'Do not work under the influence of alcohol or drugs.',
+  ];
+  const optional = [
     'Smoking and vaping only in the designated area.',
-    'Obey all site signage, speed limits and pedestrian routes.',
-    'On hearing the alarm, go to the assembly point and wait to be accounted for.',
+    'Segregate waste and use the correct skip for each material.',
+    'Observe the site speed limit and keep to marked pedestrian routes.',
     'Mobile phones must not be used while operating plant or working at height.',
     'Treat everyone on site with respect. Bullying and harassment are not tolerated.',
   ];
-  const missing = library.filter((r) => !server.includes(r));
-  chk(`all ${library.length} standard rules are in the server output`,
-      missing.length === 0, missing.join(' | '));
+  const missingDefaults = defaults.filter((r) => !server.includes(r));
+  chk(`all ${defaults.length} default rules are in the server output`,
+      missingDefaults.length === 0, missingDefaults.join(' | '));
+  // The optional templates must ship too — they are offered in the editor, just
+  // not seeded. Absent, a Site Manager could never adopt one.
+  //
+  // CHECKED IN THE SERVER OUTPUT, like the defaults above, and not in the client
+  // bundle. No rule text is compiled into client JS: the library is server data
+  // handed to the editor as a prop and serialised into the RSC payload at request
+  // time. An earlier draft of this guard looked in .next/static and failed a
+  // perfectly good build — the assertion was wrong, not the artifact.
+  const missingOptional = optional.filter((r) => !server.includes(r));
+  chk(`all ${optional.length} optional templates are in the server output`,
+      missingOptional.length === 0, missingOptional.join(' | '));
+  // Proves the line above is a real test and not a tautology: rule text is
+  // genuinely absent from the client bundle, so "server" is the only place it
+  // could have been found.
+  chk('CONTROL — rule text is server-side only, so that check means something',
+      !client.includes(defaults[0]!) && !client.includes(optional[0]!));
+  // The tier flag is a real property name, so it survives minification.
+  chk('the tier flag shipped', server.includes('defaultSelected'));
+
+  console.log('\n[3b] The rationalised removals did not creep back');
+  // Paired with the presence checks above: the same bundles provably contain the
+  // new wording, so an absence here cannot pass by looking in the wrong place.
+  chk('the permit rule is gone',
+      !server.includes('Do not start work without a valid permit where one is required.'));
+  chk('the signage/speed rule is gone',
+      !server.includes('Obey all site signage, speed limits and pedestrian routes.'));
+  chk('the old possession-phrased drugs rule is gone',
+      !server.includes('No alcohol or drugs on site.'));
+  chk('the old skip-bearing tidiness rule is gone',
+      !server.includes('remove waste to the right skip'));
+  chk('the old stairs-bearing access rule is gone',
+      !server.includes('Keep walkways, stairs and fire exits clear'));
 
   console.log('\n[4] The editor shipped');
   chk('the Site rules section label',
@@ -100,6 +134,8 @@ function main() {
       client.includes('/rules') && client.includes('Could not save the site rules.'));
   chk('the "Site-specific" badge for a custom rule',
       client.includes('Site-specific'));
+  chk('the "Optional" badge for an unadopted template',
+      client.includes('Optional'));
   chk('the missing-acknowledgement warning',
       client.includes('no longer contains the site rules'));
   chk('the cross-reference to the separate free-text field',

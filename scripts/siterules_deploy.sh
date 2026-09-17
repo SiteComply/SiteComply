@@ -108,10 +108,44 @@ for (const v of ['ACKNOWLEDGEMENT','YES_NO','PPE_CONFIRM'])
   if(!new RegExp('\\\\b'+v+'\\\\b').test(enumBlock[0]))
     fail(v+' has vanished from ChecklistItemType');
 
-// ---------------- the library ----------------
-const lib=strip('services/checklists/ukSiteRulesLibrary.ts');
+// ---------------- the library, and its two tiers ----------------
+// The interface declaration carries a 'label:' and a 'defaultSelected:' of its
+// own. Counting them inflates both totals equally, so the comparison below still
+// discriminates - but the failure message would name a count nobody recognises.
+// Drop the interface before counting.
+const libRaw=strip('services/checklists/ukSiteRulesLibrary.ts');
+const libStart=libRaw.indexOf('UK_SITE_RULES_LIBRARY: SiteRuleTemplate');
+if(libStart<0) fail('the library export is gone');
+const lib=libRaw.slice(libStart);
 const ruleCount=(lib.match(/label:/g)||[]).length;
 if(ruleCount<12) fail('the standard library has only '+ruleCount+' rules');
+// Every entry must state its tier. A missing flag would silently drop a rule off
+// every new site, or silently put a site-specific one on it.
+const tierCount=(lib.match(/defaultSelected:/g)||[]).length;
+if(tierCount<ruleCount)
+  fail(tierCount+' of '+ruleCount+' library entries state a tier - every one must');
+if(!/UK_SITE_RULES_DEFAULT/.test(lib)) fail('the default tier export is gone');
+// The seed must take the DEFAULT tier, never the whole library.
+const tpl=strip('services/checklists/ukInductionTemplate.ts');
+if(!/UK_SITE_RULES_DEFAULT\.map/.test(tpl))
+  fail('new sites are not seeded from the DEFAULT tier - optional templates would ship to every site');
+if(/UK_SITE_RULES_LIBRARY/.test(tpl))
+  fail('the template references the whole library again');
+// The rationalised removals, named individually. A count would pass even if the
+// wrong ones had gone.
+for (const [what,pattern] of [
+  ['permit to work',/valid permit where one is required/],
+  ['site signage',/Obey all site signage/],
+  ['possession-phrased drugs rule',/No alcohol or drugs on site/],
+]) if(pattern.test(lib)) fail('the '+what+' rule is back in the library');
+// ...and the five conversions must still EXIST, as optional templates.
+for (const [what,pattern] of [
+  ['smoking',/Smoking and vaping/],
+  ['waste segregation',/Segregate waste/],
+  ['site traffic',/site speed limit/],
+  ['mobile phones',/Mobile phones must not be used/],
+  ['respect and harassment',/Bullying and harassment/],
+]) if(!pattern.test(lib)) fail('the '+what+' optional template has been deleted, not converted');
 
 // ---------------- the flow ----------------
 const flow=strip('services/checklists/inductionFlow.ts');
@@ -173,6 +207,12 @@ if(/border-dashed/.test(cfg))
   fail('unticked rules have a dashed border again - same problem as the strikethrough');
 if(cfg.indexOf('Selected rules are shown to operatives during their induction')<0)
   fail('the short intro copy is gone');
+// The editor must receive the WHOLE library, or the optional templates are
+// unreachable and the conversion was a deletion.
+if(!/library=\{SITE_RULE_LIBRARY\}/.test(exp))
+  fail('the editor is not being given the full library - optional templates would be unreachable');
+if(cfg.indexOf(\"'Optional'\")<0)
+  fail('the Optional badge is gone - an unadopted template would look like a deselected default');
 
 console.log('      confirmed: enum intact, rules are never answerable, versioning');
 console.log('                 still goes through saveChecklist, the free-text field');

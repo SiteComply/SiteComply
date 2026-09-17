@@ -14,7 +14,10 @@
  * nobody has seen fail is a guard nobody has tested.
  */
 import { ChecklistItemType } from '@prisma/client';
-import { UK_SITE_RULES_LIBRARY } from '../services/checklists/ukSiteRulesLibrary';
+import {
+  UK_SITE_RULES_LIBRARY,
+  UK_SITE_RULES_DEFAULT,
+} from '../services/checklists/ukSiteRulesLibrary';
 import { UK_INDUCTION_TEMPLATE } from '../services/checklists/ukInductionTemplate';
 import {
   buildInductionSteps,
@@ -27,7 +30,9 @@ import {
   validateSiteRules,
   mergeRuleItems,
   isLibraryRule,
+  isOptionalTemplateRule,
   DEFAULT_SITE_RULES,
+  SITE_RULE_LIBRARY,
   type MergeableItem,
 } from '../services/checklists/siteRulesService';
 
@@ -75,6 +80,13 @@ function main() {
   console.log('[1] The standard library');
   chk('a sensible number of rules', UK_SITE_RULES_LIBRARY.length >= 12,
       `${UK_SITE_RULES_LIBRARY.length} rules`);
+  chk('every entry states its tier explicitly',
+      UK_SITE_RULES_LIBRARY.every((r) => typeof r.defaultSelected === 'boolean'));
+  chk('both tiers are populated',
+      UK_SITE_RULES_DEFAULT.length >= 8 &&
+      UK_SITE_RULES_LIBRARY.length > UK_SITE_RULES_DEFAULT.length,
+      `${UK_SITE_RULES_DEFAULT.length} default, ` +
+      `${UK_SITE_RULES_LIBRARY.length - UK_SITE_RULES_DEFAULT.length} optional`);
   const labels = UK_SITE_RULES_LIBRARY.map((r) => r.label.trim().toLowerCase());
   chk('no duplicates', new Set(labels).size === labels.length);
   chk('every rule has real wording',
@@ -82,24 +94,77 @@ function main() {
   chk('no rule exceeds the 200-character save limit',
       UK_SITE_RULES_LIBRARY.every((r) => r.label.trim().length <= 200),
       `longest ${Math.max(...UK_SITE_RULES_LIBRARY.map((r) => r.label.length))}`);
-  chk('DEFAULT_SITE_RULES mirrors the library exactly',
-      DEFAULT_SITE_RULES.length === UK_SITE_RULES_LIBRARY.length &&
-      DEFAULT_SITE_RULES.every((r, i) => r.label === UK_SITE_RULES_LIBRARY[i]!.label));
+  chk('DEFAULT_SITE_RULES is exactly the default tier',
+      DEFAULT_SITE_RULES.length === UK_SITE_RULES_DEFAULT.length &&
+      DEFAULT_SITE_RULES.every((r, i) => r.label === UK_SITE_RULES_DEFAULT[i]!.label));
+  chk('SITE_RULE_LIBRARY is the whole library, tiers intact',
+      SITE_RULE_LIBRARY.length === UK_SITE_RULES_LIBRARY.length &&
+      SITE_RULE_LIBRARY.every(
+        (r, i) => r.defaultSelected === UK_SITE_RULES_LIBRARY[i]!.defaultSelected,
+      ));
   chk('isLibraryRule recognises a library rule',
       isLibraryRule(UK_SITE_RULES_LIBRARY[0]!.label));
   chk('isLibraryRule is case- and space-insensitive',
       isLibraryRule(`  ${UK_SITE_RULES_LIBRARY[0]!.label.toUpperCase()}  `));
   chk('isLibraryRule rejects a site-specific rule',
       !isLibraryRule('No deliveries through the school gate before 9am.'));
+  chk('isOptionalTemplateRule separates the tiers',
+      UK_SITE_RULES_LIBRARY.every(
+        (r) => isOptionalTemplateRule(r.label) === !r.defaultSelected,
+      ));
+
+  console.log('\n[1b] The rationalised set: what must NOT be a default');
+  // Each of these was removed from the default tier by owner decision. They are
+  // named individually because "the count went down" would pass even if the
+  // wrong five had gone.
+  const mustNotBeDefault = [
+    ['smoking', /smoking|vaping/i],
+    ['waste segregation', /skip|segregate/i],
+    ['site traffic', /speed limit/i],
+    ['mobile phones', /mobile phone/i],
+    ['respect and harassment', /bullying|harassment/i],
+  ] as const;
+  for (const [name, pattern] of mustNotBeDefault) {
+    chk(`${name} is not seeded by default`,
+        !UK_SITE_RULES_DEFAULT.some((r) => pattern.test(r.label)));
+    chk(`${name} is still available as an optional template`,
+        UK_SITE_RULES_LIBRARY.some(
+          (r) => pattern.test(r.label) && !r.defaultSelected,
+        ));
+  }
+
+  console.log('\n[1c] Nothing duplicates an acknowledgement on the same induction');
+  // Removed because the operative ticks these inches away. The signage rule sat
+  // directly beneath "I have read and will follow the site rules AND SIGNAGE".
+  chk('the permit rule is gone from the library entirely',
+      !UK_SITE_RULES_LIBRARY.some((r) => /permit/i.test(r.label)));
+  chk('the acknowledgement that replaced it is still on the induction',
+      UK_INDUCTION_TEMPLATE.some((t) => /permit to work system/i.test(t.label)));
+  chk('the signage rule is gone from the library entirely',
+      !UK_SITE_RULES_LIBRARY.some((r) => /signage/i.test(r.label)));
+  chk('the acknowledgement that replaced it is still on the induction',
+      UK_INDUCTION_TEMPLATE.some((t) => /site rules and signage/i.test(t.label)));
+
+  console.log('\n[1d] Alcohol and drugs stays a default — owner decision');
+  const drugs = UK_SITE_RULES_LIBRARY.find((r) => /alcohol/i.test(r.label));
+  chk('the rule exists', drugs !== undefined);
+  chk('it is seeded by default', drugs?.defaultSelected === true);
+  chk('phrased as impairment, not possession',
+      drugs !== undefined && /under the influence/i.test(drugs.label) &&
+      !/^No alcohol or drugs on site/i.test(drugs.label),
+      drugs?.label);
 
   // ─────────────────────────────────────────────────────────────────────────
   console.log('\n[2] New sites are seeded with the rules selected');
   const seededRules = UK_INDUCTION_TEMPLATE.filter(
     (t) => t.type === ChecklistItemType.SITE_RULE,
   );
-  chk('the whole library is seeded',
-      seededRules.length === UK_SITE_RULES_LIBRARY.length,
-      `${seededRules.length} seeded`);
+  chk('the DEFAULT tier is seeded, and only that',
+      seededRules.length === UK_SITE_RULES_DEFAULT.length &&
+      seededRules.every((r, i) => r.label === UK_SITE_RULES_DEFAULT[i]!.label),
+      `${seededRules.length} seeded of ${UK_SITE_RULES_LIBRARY.length} in the library`);
+  chk('no optional template reaches a new site',
+      !seededRules.some((r) => isOptionalTemplateRule(r.label)));
   chk('no seeded rule is required',
       seededRules.every((r) => r.required === false));
   const ackIndex = UK_INDUCTION_TEMPLATE.findIndex(isSiteRulesAck);
@@ -377,6 +442,30 @@ function main() {
       }));
   chk('[7] a SITE_RULE row is never mistaken for the acknowledgement',
       !isSiteRulesAck({ label: SITE_RULES_ACK_LABEL, type: 'SITE_RULE' }));
+
+  // If the seed went back to the whole library, [2] would notice. Proven by
+  // running [2]'s own comparison against exactly that mistake.
+  const wholeLibrarySeed = UK_SITE_RULES_LIBRARY.map((r) => r.label);
+  chk('[2] would fail if the seed took the whole library',
+      wholeLibrarySeed.length !== UK_SITE_RULES_DEFAULT.length,
+      `${wholeLibrarySeed.length} vs ${UK_SITE_RULES_DEFAULT.length}`);
+  chk('[2] and it would specifically catch an optional template getting through',
+      wholeLibrarySeed.some((l) => isOptionalTemplateRule(l)));
+
+  // If a removed rule were flipped back to a default, [1b] would notice. Proven
+  // by running [1b]'s own predicate against a deliberately mis-tiered entry.
+  const mistiered = [{ label: 'Smoking and vaping only in the designated area.' }];
+  chk('[1b] would fail if smoking were seeded again',
+      mistiered.some((r) => /smoking|vaping/i.test(r.label)));
+  // ...and the same predicate must NOT fire on the real default tier.
+  chk('[1b] the predicate is discriminating, not always-true',
+      !UK_SITE_RULES_DEFAULT.some((r) => /smoking|vaping/i.test(r.label)));
+
+  // If the permit or signage rule came back, [1c] would notice.
+  chk('[1c] would fail on a returning permit rule',
+      /permit/i.test('Do not start work without a valid permit where one is required.'));
+  chk('[1c] would fail on a returning signage rule',
+      /signage/i.test('Obey all site signage, speed limits and pedestrian routes.'));
 
   console.log(`\n== ${passed} passed, ${failed} failed ==`);
   if (failed > 0) process.exitCode = 1;

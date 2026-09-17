@@ -22,7 +22,7 @@ import { SiteRulesConfig } from '@/components/platform/SiteRulesConfig';
 import {
   getSiteRules,
   siteRulesAreAcknowledged,
-  DEFAULT_SITE_RULES,
+  SITE_RULE_LIBRARY,
 } from '@/services/checklists/siteRulesService';
 import { GpsCheckInConfig } from '@/components/platform/GpsCheckInConfig';
 import { SiteInformationConfig } from '@/components/platform/SiteInformationConfig';
@@ -304,7 +304,7 @@ export default async function SiteExperiencePage({
           <SiteRulesConfig
             siteId={params.id}
             initial={siteRules}
-            library={DEFAULT_SITE_RULES}
+            library={SITE_RULE_LIBRARY}
             acknowledged={siteRulesAcknowledged}
             canEdit={canConfigureDashboard}
           />
