@@ -221,19 +221,56 @@ export async function evaluateRequirements(
         break;
 
       case 'CSCS_IN_DATE': {
+        /*
+         * THE SCHEME'S ANSWER OUTRANKS ANY DATE WE HOLD.
+         *
+         * V2.6 returns no expiry DATE at all - a card's standing is two booleans,
+         * `expired` and `cancelled`, and a VALID result means the scheme told us
+         * `expired: false`. So a verified card IS in date, by definition, and
+         * asking for a date on top of that asks for something the contract
+         * cannot supply.
+         *
+         * Reading cscsExpiry first was a real trap: Smart Check never writes it,
+         * so it holds only what the operative typed. Someone could obtain a
+         * perfect VALID from CSCS and still be refused for "no expiry date
+         * recorded" - told to ask a site manager to add a date that no longer
+         * comes from anywhere.
+         *
+         * The typed date is now a FALLBACK, used only where there is no verified
+         * status to rely on. It is the operative's own guess, and better than
+         * nothing when nothing is the alternative.
+         */
+        const status = (worker.cscsVerificationStatus ?? '').toUpperCase();
         const exp = worker.cscsExpiry;
+
+        if (status === 'VALID') {
+          // The scheme says the card is not expired. Nothing further to check.
+          break;
+        }
+
+        if (status === 'EXPIRED') {
+          unmet.push({
+            requirement,
+            label: meta.label,
+            action:
+              'Your CSCS card is recorded by the card scheme as expired. Renew it, then update your details so it can be checked again.',
+          });
+          break;
+        }
+
+        // No usable verified status. Fall back to whatever date we hold.
         if (!exp) {
           unmet.push({
             requirement,
             label: meta.label,
             action:
-              'No expiry date is recorded for your CSCS card. Ask your site manager to add it.',
+              'Your CSCS card has not been checked yet, and no expiry date is recorded. Open Your Details to confirm your surname and card scheme so it can be verified.',
           });
         } else if (exp.getTime() < Date.now()) {
           unmet.push({
             requirement,
             label: meta.label,
-            action: `Your CSCS card expired on ${formatDateUK(exp)}. Renew it and ask your site manager to update SiteComply.`,
+            action: `Your CSCS card expired on ${formatDateUK(exp)}. Renew it and update your details.`,
           });
         }
         break;

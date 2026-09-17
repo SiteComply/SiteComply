@@ -110,6 +110,37 @@ function withExemption<T>(fn: () => T): T {
     /continue;/.test(skip) && !/return \[\]/.test(skip), skip);
 }
 
+// ── CSCS_IN_DATE MUST NOT TRAP A VERIFIED CARD ────────────────────────────
+// V2.6 returns NO expiry date - only an `expired` boolean, which becomes the
+// VALID/EXPIRED status. Reading cscsExpiry first meant a perfect VALID could
+// still be refused for "no expiry date recorded", telling the operative to ask
+// for a date that no longer comes from anywhere.
+{
+  const req = read('services/workerAccess/accessRequirements.ts');
+  const c = req.slice(req.indexOf("case 'CSCS_IN_DATE'"), req.indexOf("case 'KNOWLEDGE_CHECK_PASSED'"));
+  ok('the case exists and was read', c.includes('cscsExpiry'), c.slice(0, 80));
+
+  ok('a VALID status satisfies it outright',
+    /if \(status === 'VALID'\) \{[\s\S]{0,140}break;/.test(c), 'VALID does not short-circuit');
+  ok('  and the status is checked BEFORE the date',
+    c.indexOf("status === 'VALID'") < c.indexOf('if (!exp)'), 'date still checked first');
+  ok('an EXPIRED status refuses, citing the scheme',
+    /status === 'EXPIRED'[\s\S]{0,260}recorded by the card scheme as expired/.test(c), 'no EXPIRED branch');
+  ok('  and does not ask for a date that cannot exist',
+    !/status === 'EXPIRED'[\s\S]{0,260}Ask your site manager to add it/.test(c), 'still asking for a date');
+
+  // The fallback still works for a card nobody has checked.
+  ok('with no status and no date it still refuses',
+    /if \(!exp\) \{/.test(c), 'no fallback');
+  ok('  pointing at the details, not at a site manager',
+    /Open Your Details to confirm your surname and card scheme/.test(c), 'stale guidance');
+  ok('with no status and a PAST date it refuses',
+    /exp\.getTime\(\) < Date\.now\(\)/.test(c), 'expired dates ignored');
+  ok('the old dead-end wording is gone',
+    !/No expiry date is recorded for your CSCS card\. Ask your site manager to add it/.test(req),
+    'the trap message survives');
+}
+
 // ── THE GATE IS ACTUALLY ENFORCED ON CHECK-IN ─────────────────────────────
 {
   const svc = read('services/workerAccess/workerAssignmentService.ts');
