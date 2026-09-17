@@ -44,6 +44,32 @@ const variants: Record<Variant, string> = {
     'hover:shadow-md hover:shadow-brand-600/25 active:bg-brand-700 active:shadow-sm',
 };
 
+/**
+ * The class composition behind a Button, exposed so a LINK can be styled as one.
+ *
+ * Some actions are navigations, not button presses — the induction record opens
+ * a PDF in a new tab, which needs a real anchor to work. Copying the class
+ * strings into that anchor would have meant two definitions of "secondary" that
+ * drift apart the first time this file changes. There is one definition, used by
+ * both.
+ *
+ * Reach for this only where an anchor is genuinely required. A control that acts
+ * on the page should still be a <button>.
+ */
+export function buttonClasses({
+  variant = 'primary',
+  size = 'lg',
+  fullWidth,
+  className,
+}: {
+  variant?: Variant;
+  size?: Size;
+  fullWidth?: boolean;
+  className?: string;
+} = {}): string {
+  return cn(base, sizes[size], variants[variant], fullWidth && 'w-full', className);
+}
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   (
     { variant = 'primary', size = 'lg', fullWidth, className, type, ...props },
@@ -52,13 +78,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     <button
       ref={ref}
       type={type ?? 'button'}
-      className={cn(
-        base,
-        sizes[size],
-        variants[variant],
-        fullWidth && 'w-full',
-        className,
-      )}
+      className={buttonClasses({ variant, size, fullWidth, className })}
       {...props}
     />
   ),

@@ -327,7 +327,7 @@ export default async function PlatformSubmissionsPage({
                       href={`/api/platform/submissions/${selected.id}/record`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mt-3 inline-flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink hover:bg-surface-sunken"
+                      className="mt-3 inline-flex items-center gap-2 rounded-lg border border-brand-500 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
                     >
                       View induction record (PDF)
                     </a>

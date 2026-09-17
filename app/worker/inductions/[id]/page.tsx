@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { WorkerPageHeader } from '@/components/worker/PanelCard';
 import { WorkerIcon } from '@/components/worker/icons';
+import { buttonClasses } from '@/components/ui/Button';
 import { AttendanceShell } from '@/components/attendance/AttendanceShell';
 import {
   requireWorkerIdentity,
@@ -173,7 +174,11 @@ export default async function WorkerInductionRecordPage({
           href={`/api/worker/inductions/${record.submissionId}/record`}
           target="_blank"
           rel="noopener noreferrer"
-          className="touch-target flex w-full items-center justify-center rounded-xl border border-line bg-surface px-4 py-3 text-base font-semibold text-ink hover:bg-surface-sunken print:hidden"
+          className={buttonClasses({
+            variant: 'secondary',
+            fullWidth: true,
+            className: 'print:hidden',
+          })}
         >
           View induction record (PDF)
         </a>
