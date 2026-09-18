@@ -96,7 +96,13 @@ const probe = (p) => p.evaluate(() => {
     const c = await ctx(br, 'WORKER', 390); const p = await c.newPage();
     await p.goto('http://localhost:3000/worker/dashboard?site=secret&q=Jane+Doe', {waitUntil:'domcontentloaded', timeout:120000});
     await p.waitForTimeout(800);
-    chk('coach mark shown on first visit', await p.evaluate(() => !!document.querySelector('[role="note"]')));
+    // The one-time coach mark ("Spotted a problem?") was REMOVED — every user
+    // saw it once per portal to be told what a control they had not asked about
+    // does. Asserted as an absence so it cannot quietly come back, and paired
+    // with the button check below so a selector typo cannot pass this vacuously.
+    chk('no coach mark on first visit', await p.evaluate(() => !document.querySelector('[role="note"]')));
+    chk('CONTROL — the Feedback button itself is on the page',
+      await p.evaluate(() => !!document.querySelector('button[aria-label="Report an issue or give feedback"]')));
     await p.click('button[aria-label="Report an issue or give feedback"]');
     await p.waitForTimeout(500);
     const d = await p.evaluate(() => {

@@ -1,9 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ReportIssueDialog, type ReportContext } from '@/components/ui/ReportIssueDialog';
-
-const COACH_PREFIX = 'sc.report.coach.';
 
 /**
  * The one entry point to issue reporting, placed top-right of each shell's top
@@ -17,14 +15,25 @@ const COACH_PREFIX = 'sc.report.coach.';
  * because those extra 8px were themselves enough to clip the badge at 320px —
  * 44px is still at the accessibility floor.
  *
- * Making the icon understood without a visible label takes four layers, because
- * `title` is not one of them on a phone — TOOLTIPS NEED HOVER, and the widths
- * that hide the label are exactly the ones with no pointer:
+ * Making the icon understood without a visible label rests on three layers:
  *   1. the visible label, wherever it fits (375px and up);
  *   2. `aria-label`, at every width, carrying the full phrase;
- *   3. a one-time coach mark, which is the only layer that teaches a sighted
- *      touch user below 375px what the icon means;
- *   4. `title`, for desktop mouse users, as a fourth layer and not the mechanism.
+ *   3. `title`, for desktop mouse users — not the mechanism, because TOOLTIPS
+ *      NEED HOVER and the widths that hide the label are exactly the ones with
+ *      no pointer.
+ *
+ * THERE WAS A FOURTH: a one-time coach mark ("Spotted a problem?"), a dark
+ * panel under the button on first visit per portal per device. Removed
+ * deliberately — every user saw it once per portal to be told what a control
+ * they had not asked about does, and that interruption was judged to cost more
+ * than it taught.
+ *
+ * KNOWN AND ACCEPTED CONSEQUENCE: below 375px the label is hidden and `title`
+ * needs a pointer, so for a SIGHTED TOUCH user at those widths the icon is now
+ * unexplained. `aria-label` still covers screen readers at every width. If that
+ * gap ever needs closing, close it by showing the LABEL at all widths — which
+ * means solving the portal-badge clipping at 320px that caused it to be hidden
+ * in the first place — not by bringing the popup back.
  */
 export function ReportIssueButton({
   portal,
@@ -39,30 +48,8 @@ export function ReportIssueButton({
 }) {
   const [open, setOpen] = useState(false);
   const [context, setContext] = useState<ReportContext | null>(null);
-  const [coach, setCoach] = useState(false);
-
-  // Shown once per portal per device. localStorage deliberately, not the
-  // database: it is a device preference, and giving it a write path would mean
-  // a request on every page load and a row about someone's dismissals.
-  useEffect(() => {
-    try {
-      if (!localStorage.getItem(COACH_PREFIX + portal)) setCoach(true);
-    } catch {
-      // Private browsing or storage disabled — no coach mark, no error.
-    }
-  }, [portal]);
-
-  function dismissCoach() {
-    setCoach(false);
-    try {
-      localStorage.setItem(COACH_PREFIX + portal, '1');
-    } catch {
-      /* nothing to do */
-    }
-  }
 
   function openDialog() {
-    dismissCoach();
     // Captured at open time, from the page the reporter is actually looking at.
     setContext({
       pagePath: window.location.pathname,
@@ -99,31 +86,6 @@ export function ReportIssueButton({
         </svg>
         <span className="hidden min-[375px]:inline">Feedback</span>
       </button>
-
-      {coach && !open && (
-        <div
-          role="note"
-          className="absolute left-1/2 top-[calc(100%+8px)] z-40 w-60 max-w-[calc(100vw-1.5rem)] -translate-x-1/2 rounded-xl bg-ink p-3 text-left shadow-card"
-        >
-          <span
-            aria-hidden="true"
-            className="absolute -top-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 bg-ink"
-          />
-          <p className="text-xs font-bold text-white">Spotted a problem?</p>
-          <p className="mt-1 text-[11.5px] leading-snug text-white/80">
-            Tap here to report an issue or send feedback about this page.
-          </p>
-          <div className="mt-2 text-right">
-            <button
-              type="button"
-              onClick={dismissCoach}
-              className="text-[11.5px] font-bold text-brand-200 hover:text-white"
-            >
-              Got it
-            </button>
-          </div>
-        </div>
-      )}
 
       <ReportIssueDialog
         open={open}
