@@ -7,6 +7,11 @@ import { useToast } from '@/components/ui/Toast';
 import { Dialog } from '@/components/ui/Dialog';
 import { SignaturePad } from '@/components/checkin/SignaturePad';
 import type { SignatureInput } from '@/services/inductionSignature/signatureService';
+import {
+  CPP_STAGES,
+  recommendNextAction,
+  type CppReadiness,
+} from '@/services/sites/cppWorkflow';
 
 /**
  * CPP document control Phase A — the revision bar above the plan.
@@ -37,6 +42,8 @@ export function CppRevisionBar({
   canIssue,
   approverName,
   declaration,
+  readiness,
+  setupHref,
 }: {
   siteId: string;
   issued: RevisionBarSummary | null;
@@ -51,11 +58,16 @@ export function CppRevisionBar({
   approverName: string;
   /** Snapshotted onto the revision, so it is shown before it is accepted. */
   declaration: string;
+  /** Outstanding content, so gaps travel with the decision to issue. */
+  readiness: CppReadiness;
+  /** Where "complete the outstanding sections" leads. */
+  setupHref: string;
 }) {
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const [signature, setSignature] = useState<SignatureInput | null>(null);
   const [accepted, setAccepted] = useState(false);
 
@@ -84,6 +96,7 @@ export function CppRevisionBar({
             : 'Draft discarded.',
       );
       setApproving(false);
+      setPreparing(false);
       setSignature(null);
       setAccepted(false);
       router.refresh();
@@ -96,124 +109,216 @@ export function CppRevisionBar({
 
   const base = `/platform/dashboard/sites/${siteId}/cpp`;
 
-  return (
-    <div className="mb-4 rounded-xl border border-line bg-surface p-4 shadow-card print:hidden">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-ink">
-            {issued
-              ? `Revision ${issued.version} is the version in force`
-              : 'No revision has been issued'}
-          </p>
-          <p className="mt-0.5 text-xs text-ink-muted">
-            {issued
-              ? `Issued ${issued.issuedAt ? new Date(issued.issuedAt).toLocaleDateString('en-GB') : ''}${issued.issuedByName ? ` by ${issued.issuedByName}` : ''}.`
-              : 'The plan below is a working draft assembled from current site information.'}
-            {draft ? ` Revision ${draft.version} is open as a draft.` : ''}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {/* The switcher. Which document you are reading must never be a guess. */}
-          <Link
-            href={base}
-            className={`touch-target rounded-lg border px-3 py-2 text-sm font-medium ${
-              viewing.kind === 'LIVE'
-                ? 'border-brand-600 bg-brand-50 text-brand-700'
-                : 'border-line text-ink hover:bg-surface-sunken'
-            }`}
-          >
-            Working draft
-          </Link>
-          {issued && (
-            <Link
-              href={`${base}?revision=${issued.id}`}
-              className={`touch-target rounded-lg border px-3 py-2 text-sm font-medium ${
-                viewing.kind === 'REVISION' && viewing.version === issued.version
-                  ? 'border-brand-600 bg-brand-50 text-brand-700'
-                  : 'border-line text-ink hover:bg-surface-sunken'
-              }`}
-            >
-              Issued (Rev {issued.version})
-            </Link>
-          )}
-          <Link
-            href={`${base}/revisions`}
-            className="touch-target rounded-lg border border-line px-3 py-2 text-sm font-medium text-ink hover:bg-surface-sunken"
-          >
-            History
-          </Link>
-        </div>
-      </div>
+  /*
+   * ONE recommended action, computed from the real state. The bar used to report
+   * facts and offer a row of equally-weighted buttons, leaving the user to infer
+   * what mattered. See cppWorkflow for the ordering and why it is that order.
+   */
+  const flow = recommendNextAction({
+    issued: issued ? { version: issued.version } : null,
+    draft: draft ? { version: draft.version } : null,
+    drift,
+    readiness,
+    canCreate,
+    canIssue,
+  });
 
-      {/* DRIFT. The reason this is worth having: a plan that no longer matches
-          the site is the thing CDM asks a Principal Contractor to notice. It
-          names the sections so the decision to revise is an informed one —
-          software can detect a change, only a duty holder can judge whether it
-          is material. */}
-      {drift?.changed && (
-        <div className="mt-3 rounded-lg border border-hivis-500/50 bg-hivis-500/10 p-3">
-          <p className="text-sm font-semibold text-ink">
-            Site information has changed since Revision {issued?.version} was
-            issued
-            {drift.changedSections.length > 0
-              ? ` — ${drift.changedSections.length} section${drift.changedSections.length === 1 ? '' : 's'} differ`
-              : ''}
-            .
-          </p>
-          {drift.changedSections.length > 0 && (
+  const activeStage = CPP_STAGES.findIndex((st) => st.key === flow.stage);
+
+  function runPrimary() {
+    if (flow.primary?.kind === 'APPROVE_AND_ISSUE') return setApproving(true);
+    // Preparing over a plan with holes asks first. Never blocks — see cppWorkflow.
+    if (flow.gaps.length > 0) return setPreparing(true);
+    return act('create');
+  }
+
+  return (
+    <div className="mb-4 print:hidden">
+      <div
+        className={`rounded-xl border bg-surface p-4 shadow-card ${
+          flow.tone === 'ATTENTION'
+            ? 'border-hivis-500/50'
+            : flow.tone === 'GOOD'
+              ? 'border-safe-500/40'
+              : 'border-line'
+        }`}
+      >
+        {/* THE STAGE INDICATOR. The three states are not obvious from the
+            controls, and a user needs to see where the plan sits before they can
+            judge what to do about it. */}
+        <ol className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          {CPP_STAGES.map((st, i) => {
+            const done = i < activeStage;
+            const current = i === activeStage;
+            return (
+              <li key={st.key} className="flex items-center gap-2">
+                <span
+                  aria-hidden
+                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold ${
+                    current
+                      ? 'bg-brand-600 text-white'
+                      : done
+                        ? 'bg-safe-500 text-white'
+                        : 'bg-surface-sunken text-ink-subtle ring-1 ring-line'
+                  }`}
+                >
+                  {done ? '✓' : i + 1}
+                </span>
+                <span
+                  className={`text-xs ${current ? 'font-bold text-ink' : 'text-ink-muted'}`}
+                >
+                  {st.label}
+                  <span className="sr-only">
+                    {current ? ' — current stage' : done ? ' — done' : ' — not yet reached'}
+                  </span>
+                </span>
+                {i < CPP_STAGES.length - 1 && (
+                  <span aria-hidden className="h-px w-6 bg-line" />
+                )}
+              </li>
+            );
+          })}
+        </ol>
+
+        <p className="mt-3 text-sm font-semibold text-ink">{flow.headline}</p>
+        {flow.detail && (
+          <p className="mt-0.5 text-sm text-ink-muted">{flow.detail}</p>
+        )}
+
+        {/* Drift, folded into the flow rather than sitting in its own box. The
+            changed sections are behind a disclosure: the COUNT is the decision,
+            the list is the detail. */}
+        {drift?.changed && drift.changedSections.length > 0 && (
+          <details className="mt-2">
+            <summary className="cursor-pointer text-xs font-semibold text-brand-700">
+              Which sections changed?
+            </summary>
             <ul className="mt-1 list-inside list-disc text-xs text-ink-muted">
               {drift.changedSections.map((t) => (
                 <li key={t}>{t}</li>
               ))}
             </ul>
-          )}
-          <p className="mt-1 text-xs text-ink-muted">
-            The issued revision is unchanged and remains the version in force.
-            Issue a new revision when the change warrants it.
-          </p>
-        </div>
-      )}
-
-      {(canCreate || canIssue) && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
-          {canCreate && !draft && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => act('create')}
-              className="touch-target rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
-            >
-              {busy ? 'Working…' : 'Create a revision from the current plan'}
-            </button>
-          )}
-          {draft && canIssue && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => setApproving(true)}
-              className="touch-target rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
-            >
-              Approve and issue Revision {draft.version}
-            </button>
-          )}
-          {draft && canCreate && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => act('discard', draft.id)}
-              className="text-sm font-medium text-ink-subtle hover:underline disabled:opacity-50"
-            >
-              Discard draft
-            </button>
-          )}
-          {draft && !canIssue && (
-            <p className="text-xs text-ink-muted">
-              Revision {draft.version} is ready to issue. Only a Director or
-              Principal Contractor can approve and issue a Construction Phase
-              Plan.
+            <p className="mt-1 text-xs text-ink-subtle">
+              The issued revision is unchanged and remains the version in force.
             </p>
-          )}
-        </div>
+          </details>
+        )}
+
+        {/* ONE primary action, with everything else demoted. */}
+        {(flow.primary || flow.secondary) && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {flow.primary &&
+              (flow.primary.kind === 'COMPLETE_CONTENT' ? (
+                <Link
+                  href={setupHref}
+                  className="touch-target rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+                >
+                  {flow.primary.label}
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={runPrimary}
+                  className="touch-target rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+                >
+                  {busy ? 'Working…' : flow.primary.label}
+                </button>
+              ))}
+            {flow.secondary && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  flow.secondary!.kind === 'NONE' && draft
+                    ? act('discard', draft.id)
+                    : flow.gaps.length > 0
+                      ? setPreparing(true)
+                      : act('create')
+                }
+                className="text-sm font-medium text-ink-subtle hover:underline disabled:opacity-50"
+              >
+                {flow.secondary.label}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Secondary row: which document you are reading, and the history. Quieter
+          than the recommended action, but never hidden. */}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Link
+          href={base}
+          className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
+            viewing.kind === 'LIVE'
+              ? 'border-brand-600 bg-brand-50 text-brand-700'
+              : 'border-line text-ink-muted hover:bg-surface-sunken'
+          }`}
+        >
+          Working draft
+        </Link>
+        {issued && (
+          <Link
+            href={`${base}?revision=${issued.id}`}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
+              viewing.kind === 'REVISION' && viewing.version === issued.version
+                ? 'border-brand-600 bg-brand-50 text-brand-700'
+                : 'border-line text-ink-muted hover:bg-surface-sunken'
+            }`}
+          >
+            Issued (Rev {issued.version})
+          </Link>
+        )}
+        <Link
+          href={`${base}/revisions`}
+          className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink-muted hover:bg-surface-sunken"
+        >
+          Revision history
+        </Link>
+      </div>
+
+      {/* PREPARING OVER GAPS. Asks, never refuses — a Principal Contractor may
+          legitimately issue an early plan and revise it as work proceeds. */}
+      {preparing && (
+        <Dialog
+          open
+          onClose={() => setPreparing(false)}
+          busy={busy}
+          titleId="cpp-prepare-title"
+          className="max-w-md"
+        >
+          <div className="p-5">
+            <h2 id="cpp-prepare-title" className="text-base font-bold text-ink">
+              Prepare a revision with information outstanding?
+            </h2>
+            <p className="mt-1 text-sm text-ink-muted">
+              A revision is a dated snapshot of the plan exactly as it stands now.
+              Anything still outstanding will be outstanding in the issued plan.
+            </p>
+            <ul className="mt-2 list-inside list-disc rounded-lg border border-hivis-500/40 bg-hivis-500/10 p-3 text-sm text-ink">
+              {flow.gaps.map((g) => (
+                <li key={g}>{g}</li>
+              ))}
+            </ul>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => act('create')}
+                className="touch-target rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+              >
+                {busy ? 'Working…' : 'Prepare it anyway'}
+              </button>
+              <Link
+                href={setupHref}
+                className="touch-target rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-surface-sunken"
+              >
+                Complete the sections first
+              </Link>
+            </div>
+          </div>
+        </Dialog>
       )}
 
       {/* APPROVAL. Issuing IS the approval, so there is no unsigned route to it:
@@ -235,6 +340,23 @@ export function CppRevisionBar({
               This becomes the version in force for this project. It cannot be
               edited afterwards — a change is made by issuing a further revision.
             </p>
+
+            {/* THE GAPS, ON THE SAME SCREEN AS THE SIGNATURE. Somebody about to
+                sign "in my judgement it is suitable and sufficient" should not
+                have to remember what was outstanding. It does not block — see
+                cppWorkflow — it just refuses to let them sign blind. */}
+            {flow.gaps.length > 0 && (
+              <div className="mt-3 rounded-lg border border-hivis-500/40 bg-hivis-500/10 p-3">
+                <p className="text-sm font-semibold text-ink">
+                  This plan still has information outstanding
+                </p>
+                <ul className="mt-1 list-inside list-disc text-sm text-ink-muted">
+                  {flow.gaps.map((g) => (
+                    <li key={g}>{g}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <p className="mt-3 rounded-lg border border-line bg-surface-sunken p-3 text-sm text-ink">
               {declaration}

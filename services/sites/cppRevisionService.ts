@@ -125,6 +125,13 @@ export interface RevisionState {
     /** Titles of sections whose content differs. */
     changedSections: string[];
   } | null;
+  /**
+   * Passed straight through from the live draft so the recommended next action
+   * can be computed in ONE place. Document control and completion were built in
+   * separate phases and never introduced to each other — the revision service
+   * had no idea whether the plan it was snapshotting had holes in it.
+   */
+  readiness: CppDraft['readiness'];
 }
 
 /** Section content as a comparable string, for the section-level diff. */
@@ -197,6 +204,7 @@ export async function getRevisionState(
     issued: issuedRow ? summaries.find((s) => s.id === issuedRow.id)! : null,
     draft: draftRow ? summaries.find((s) => s.id === draftRow.id)! : null,
     driftFromIssued,
+    readiness: liveDraft.readiness,
   };
 }
 

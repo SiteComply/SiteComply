@@ -118,17 +118,42 @@ export default async function SiteCppPage({
           canIssue={canIssueCpp(viewer.role)}
           approverName={viewer.name}
           declaration={CPP_APPROVAL_DECLARATION}
+          readiness={revisionState.readiness}
+          setupHref={setupHref}
         />
       )}
 
       {/* Screen-only controls. */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
         <div className="min-w-0">
-          <h1 className="text-xl font-bold text-ink">
-            Construction Phase Plan — draft
+          {/* The heading said "— draft" unconditionally, directly beneath a bar
+              that might be announcing Revision 2 as the version in force. Two
+              headers that can contradict each other is worse than either alone,
+              so this now follows what is actually being read. */}
+          <h1 className="flex flex-wrap items-center gap-2 text-xl font-bold text-ink">
+            Construction Phase Plan
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${
+                viewingRevision?.status === 'ISSUED'
+                  ? 'bg-safe-50 text-safe-700'
+                  : viewingRevision?.status === 'SUPERSEDED'
+                    ? 'bg-surface-sunken text-ink-muted'
+                    : 'bg-hivis-500/15 text-ink'
+              }`}
+            >
+              {viewingRevision
+                ? viewingRevision.status === 'ISSUED'
+                  ? `Revision ${viewingRevision.version} · in force`
+                  : viewingRevision.status === 'SUPERSEDED'
+                    ? `Revision ${viewingRevision.version} · superseded`
+                    : `Revision ${viewingRevision.version} · draft`
+                : 'Working draft'}
+            </span>
           </h1>
           <p className="text-sm text-ink-muted">
-            Assembled from Project Setup. Nothing here is entered twice.
+            {viewingRevision
+              ? 'A dated snapshot. It cannot be edited — a change is made by issuing a further revision.'
+              : 'Assembled from Project Setup. Nothing here is entered twice.'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

@@ -96,6 +96,23 @@ export interface CppDraft {
   };
   /** Sections not yet complete — the gap list shown before the plan. */
   outstanding: { title: string; status: SectionStatus; missing: string[] }[];
+  /**
+   * How much of the plan has information in it, across all three kinds of
+   * content. Used to decide what to recommend next, and to warn before somebody
+   * signs a declaration over a plan with visible holes.
+   *
+   * Reference sections still do not GATE anything — a Principal Contractor may
+   * legitimately issue an early plan and revise it as the work develops, which
+   * is what CDM expects. This exists so the decision is informed, not blocked.
+   */
+  readiness: {
+    /** Setup-owned sections that are not COMPLETE. */
+    outstandingSections: number;
+    /** L153 risk topics nobody has considered either way. */
+    riskTopicsUnconsidered: number;
+    /** Management arrangements with neither a company standard nor a site one. */
+    arrangementsNotRecorded: number;
+  };
 }
 
 /*
@@ -704,6 +721,18 @@ export async function getCppDraft(
       generatedByName: viewer.name,
       lastUpdatedAt: stamps[0]?.at ?? null,
       lastUpdatedByName: stamps[0]?.by ?? null,
+    },
+    readiness: {
+      outstandingSections: sections.filter(
+        (s) =>
+          s.gatesCompletion &&
+          s.stepKey !== null &&
+          applicableKeys.has(s.stepKey) &&
+          s.status !== 'COMPLETE',
+      ).length,
+      riskTopicsUnconsidered: risks.unanswered,
+      arrangementsNotRecorded: arrangements.filter((a) => a.source === 'NONE')
+        .length,
     },
     outstanding: sections
       .filter(
