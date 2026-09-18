@@ -15,14 +15,19 @@ import type { SignatureInput } from '@/services/inductionSignature/signatureServ
  * exported as a compact PNG data URL.
  */
 export function SignaturePad({
-  workerName,
+  defaultName,
   onChange,
 }: {
-  workerName: string;
+  /**
+   * Pre-filled into the Type field. Was `workerName` — this is now also used by
+   * a Director approving a Construction Phase Plan, and a prop that says
+   * "worker" on a duty-holder's signature would mislead the next reader.
+   */
+  defaultName: string;
   onChange: (value: SignatureInput | null) => void;
 }) {
   const [mode, setMode] = useState<'DRAWN' | 'TYPED'>('DRAWN');
-  const [typedName, setTypedName] = useState(workerName);
+  const [typedName, setTypedName] = useState(defaultName);
   const [hasInk, setHasInk] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -61,9 +66,9 @@ export function SignaturePad({
       }
       const canvas = canvasRef.current;
       const dataUrl = canvas ? canvas.toDataURL('image/png') : '';
-      onChange(dataUrl ? { type: 'DRAWN', name: workerName, dataUrl } : null);
+      onChange(dataUrl ? { type: 'DRAWN', name: defaultName, dataUrl } : null);
     },
-    [onChange, workerName],
+    [onChange, defaultName],
   );
 
   function pos(e: React.PointerEvent<HTMLCanvasElement>) {

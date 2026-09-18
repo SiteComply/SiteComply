@@ -4,8 +4,16 @@ import { prisma } from '@/lib/prisma';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import {
   permits,
-  canEditSite,
+  canIssueCpp,
 } from '@/services/platformUsers/platformPermissions';
+import {
+  buildBlobPath,
+  uploadDocumentBlob,
+} from '@/services/documents/blobStorage';
+import {
+  parseSignatureInput,
+  type SignatureInput,
+} from '@/services/inductionSignature/signatureService';
 import { getCppDraft, type CppDraft, type CppSection } from '@/services/sites/cppService';
 
 /**
@@ -21,6 +29,21 @@ import { getCppDraft, type CppDraft, type CppSection } from '@/services/sites/cp
  * document must be frozen or it is not a document. Draft live, revision frozen,
  * drift reported.
  */
+
+/**
+ * THE DECLARATION A DUTY HOLDER ACCEPTS WHEN ISSUING.
+ *
+ * Deliberately narrow about what software can and cannot attest. SiteComply
+ * assembles the plan; it cannot warrant that the plan is suitable or sufficient,
+ * and that judgement is the Principal Contractor's duty under CDM 2015. The
+ * declaration therefore asks the approver to confirm THEIR judgement, not to
+ * countersign the system's.
+ *
+ * Snapshotted onto each revision, so changing this wording never rewrites what
+ * somebody already signed.
+ */
+export const CPP_APPROVAL_DECLARATION =
+  'I confirm that I have reviewed this Construction Phase Plan, that I am authorised to approve it for this project, and that in my judgement it is suitable and sufficient for the construction work to which it relates. I understand that it must be reviewed and revised as the work proceeds.';
 
 /** What is frozen. Deliberately NOT the whole draft — see contentForHash. */
 export interface CppSnapshot {
@@ -272,11 +295,13 @@ export async function issueRevision(
   siteId: string,
   revisionId: string,
   note?: string | null,
+  signature?: unknown,
 ): Promise<RevisionResult> {
-  if (!canEditSite(viewer.role)) {
+  if (!canIssueCpp(viewer.role)) {
     return {
       ok: false,
-      error: 'Only a Director can issue a Construction Phase Plan.',
+      error:
+        'Only a Director or Principal Contractor can approve and issue a Construction Phase Plan.',
     };
   }
   if (!viewer.siteIds.includes(siteId)) {
@@ -290,6 +315,23 @@ export async function issueRevision(
   if (rev.status !== CppRevisionStatus.DRAFT) {
     return { ok: false, error: `Revision ${rev.version} is not a draft.` };
   }
+
+  /*
+   * A SIGNATURE IS REQUIRED TO ISSUE.
+   *
+   * Issuing is the approval, so there is no unsigned route to it — an issued
+   * plan with no named approver would be exactly the blank-lines-and-a-pen
+   * problem this replaced, only harder to notice because it would look official.
+   */
+  const parsed = parseSignatureInput(signature);
+  if (!parsed) {
+    return {
+      ok: false,
+      error: 'A signature is required to approve and issue the plan.',
+    };
+  }
+  const approval = await buildApprovalRecord(siteId, parsed);
+  if (!approval.ok) return { ok: false, error: approval.error };
 
   const now = new Date();
   await prisma.$transaction(async (tx) => {
@@ -320,9 +362,19 @@ export async function issueRevision(
       where: { id: rev.id },
       data: {
         status: CppRevisionStatus.ISSUED,
+        // issuedAt/issuedByName ARE the approval timestamp and approver —
+        // approving and issuing are one act, and a second pair of fields would
+        // be duplicate state that could disagree.
         issuedAt: now,
         issuedByUserId: viewer.id,
         issuedByName: viewer.name,
+        // The role held AT THE TIME of approval. People change role; the
+        // question a reviewer asks is what authority this person had then.
+        approverRole: viewer.role,
+        declarationText: CPP_APPROVAL_DECLARATION,
+        signedName: approval.record.signedName,
+        signatureType: approval.record.signatureType,
+        signatureBlobPath: approval.record.signatureBlobPath,
       },
     });
     await tx.cppRevisionEvent.create({
@@ -370,4 +422,73 @@ export async function discardDraftRevision(
     };
   }
   return { ok: true, revisionId, version: 0 };
+}
+
+/**
+ * Validate a signature and store a drawn one privately.
+ *
+ * Mirrors the induction's buildSignatureRecord rather than reusing it, because
+ * that one returns fields shaped for a Submission and writes the induction's own
+ * declaration. The VALIDATION is shared — parseSignatureInput — which is the part
+ * that must not diverge.
+ */
+async function buildApprovalRecord(
+  siteId: string,
+  input: SignatureInput,
+): Promise<
+  | {
+      ok: true;
+      record: {
+        signedName: string;
+        signatureType: 'DRAWN' | 'TYPED';
+        signatureBlobPath: string | null;
+      };
+    }
+  | { ok: false; error: string }
+> {
+  if (input.type === 'TYPED') {
+    return {
+      ok: true,
+      record: {
+        signedName: input.name,
+        signatureType: 'TYPED',
+        signatureBlobPath: null,
+      },
+    };
+  }
+  const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(
+    input.dataUrl ?? '',
+  );
+  if (!match) return { ok: false, error: 'The signature image is invalid.' };
+  const buffer = Buffer.from(match[1]!, 'base64');
+  // Same ceiling as the induction signature: a canvas PNG that exceeds it is a
+  // malformed or hostile payload rather than a signature.
+  if (buffer.length === 0 || buffer.length > 400_000) {
+    return { ok: false, error: 'The signature image is too large.' };
+  }
+  const blobPath = buildBlobPath(siteId, 'cpp-approval-signature.png');
+  await uploadDocumentBlob(blobPath, buffer, 'image/png');
+  return {
+    ok: true,
+    record: {
+      signedName: input.name,
+      signatureType: 'DRAWN',
+      signatureBlobPath: blobPath,
+    },
+  };
+}
+
+/** The stored signature image for one revision, for the approval block. */
+export async function getApprovalSignatureBlobPath(
+  viewer: PlatformViewer,
+  siteId: string,
+  revisionId: string,
+): Promise<string | null> {
+  if (!permits(viewer.role, 'sites', 'view')) return null;
+  if (!viewer.siteIds.includes(siteId)) return null;
+  const row = await prisma.cppRevision.findFirst({
+    where: { id: revisionId, jobSiteId: siteId },
+    select: { signatureBlobPath: true },
+  });
+  return row?.signatureBlobPath ?? null;
 }

@@ -152,8 +152,15 @@ function main() {
     /@@unique\(\[jobSiteId, version\]\)/.test(schema));
 
   console.log('\n[4] Permissions');
-  chk('[4] issuing is Director-only', /issueRevision[\s\S]{0,500}canEditSite\(viewer\.role\)/.test(code(svc)));
-  chk('[4]   and says so plainly', /Only a Director can issue a Construction Phase Plan/.test(svc));
+  // Phase A gated issuing at canEditSite (Director only) so nothing would have
+  // to be loosened later; Phase B widened it to the Principal Contractor, who is
+  // the duty holder CDM names. The ENDURING claim is that issuing is restricted
+  // to duty-holder roles and is enforced in the service — the exact role list is
+  // owned by cpp_approval_verify, which tests it directly.
+  chk('[4] issuing is restricted to duty-holder roles, in the service',
+    /issueRevision[\s\S]{0,600}canIssueCpp\(viewer\.role\)/.test(code(svc)));
+  chk('[4]   and it is not merely the ordinary site-edit right',
+    !/issueRevision[\s\S]{0,600}permits\(viewer\.role, 'sites', 'edit'\)/.test(code(svc)));
   chk('[4] creating a revision follows sites:edit',
     /createRevision[\s\S]{0,400}permits\(viewer\.role, 'sites', 'edit'\)/.test(code(svc)));
   chk('[4] every entry point checks site scope',

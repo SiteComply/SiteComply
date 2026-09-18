@@ -8,9 +8,10 @@ import { getCppDraft } from '@/services/sites/cppService';
 import {
   getRevisionState,
   getRevision,
+  CPP_APPROVAL_DECLARATION,
 } from '@/services/sites/cppRevisionService';
 import { CppRevisionBar } from '@/components/platform/CppRevisionBar';
-import { permits, canEditSite } from '@/services/platformUsers/platformPermissions';
+import { permits, canIssueCpp } from '@/services/platformUsers/platformPermissions';
 import { formatDateTimeUK } from '@/lib/datetime';
 
 export const dynamic = 'force-dynamic';
@@ -114,7 +115,9 @@ export default async function SiteCppPage({
               : { kind: 'LIVE' }
           }
           canCreate={permits(viewer.role, 'sites', 'edit')}
-          canIssue={canEditSite(viewer.role)}
+          canIssue={canIssueCpp(viewer.role)}
+          approverName={viewer.name}
+          declaration={CPP_APPROVAL_DECLARATION}
         />
       )}
 
@@ -393,22 +396,104 @@ export default async function SiteCppPage({
           </li>
         </ol>
 
-        {/* Approval block — printed, so a reviewer can sign the issued copy. */}
+        {/* APPROVAL.
+            This was three blank lines to be filled in with a pen after printing,
+            which was the whole of the approval mechanism. On an ISSUED revision
+            it is now the recorded act: who approved it, the authority they held
+            at the time, the declaration they accepted and their signature. On a
+            working draft it stays blank lines, because nothing has been
+            approved and pretending otherwise is the failure being fixed. */}
         <section className="mt-8 break-inside-avoid border-t border-line pt-4">
           <h3 className="text-base font-bold text-ink">
             Duty holder review and approval
           </h3>
-          <p className="mt-1 text-xs text-ink-muted">
-            To be completed by the Principal Contractor on review of this draft.
-          </p>
-          <div className="mt-4 grid gap-6 sm:grid-cols-3">
-            {['Reviewed by', 'Position', 'Date'].map((label) => (
-              <div key={label}>
-                <div className="h-8 border-b border-ink-subtle" />
-                <p className="mt-1 text-xs text-ink-subtle">{label}</p>
+          {viewingRevision?.status === 'ISSUED' ||
+          viewingRevision?.status === 'SUPERSEDED' ? (
+            <div className="mt-2">
+              <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="inline font-semibold">Approved by: </dt>
+                  <dd className="inline">
+                    {viewingRevision.signedName ??
+                      viewingRevision.issuedByName ??
+                      'Not recorded'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="inline font-semibold">Position: </dt>
+                  <dd className="inline">
+                    {viewingRevision.approverRole
+                      ? viewingRevision.approverRole.replace(/_/g, ' ').toLowerCase()
+                      : 'Not recorded'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="inline font-semibold">Date: </dt>
+                  <dd className="inline">
+                    {viewingRevision.issuedAt
+                      ? formatDateTimeUK(viewingRevision.issuedAt)
+                      : 'Not recorded'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="inline font-semibold">Revision: </dt>
+                  <dd className="inline">{viewingRevision.version}</dd>
+                </div>
+              </dl>
+
+              {viewingRevision.declarationText && (
+                <p className="mt-3 border-l-2 border-line pl-3 text-xs text-ink-muted">
+                  {viewingRevision.declarationText}
+                </p>
+              )}
+
+              {viewingRevision.signatureType === 'DRAWN' ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={`/api/platform/sites/${cpp.site.id}/cpp-revisions/${viewingRevision.id}/signature`}
+                  alt={`Signature of ${viewingRevision.signedName ?? 'the approver'}`}
+                  className="mt-3 h-16 w-auto"
+                />
+              ) : viewingRevision.signedName ? (
+                /* Same stack the induction record uses for a typed signature —
+                   there is no Tailwind `font-signature` class, and inventing one
+                   here would have rendered in the body face without erroring. */
+                <p
+                  className="mt-3 text-2xl text-ink"
+                  style={{
+                    fontFamily: '"Segoe Script", "Brush Script MT", cursive',
+                  }}
+                >
+                  {viewingRevision.signedName}
+                </p>
+              ) : null}
+
+              {/* An honest gap rather than a blank space. Revisions issued
+                  before approval capture existed have no signature, and
+                  back-filling one would invent evidence nobody gave. */}
+              {!viewingRevision.signedName && (
+                <p className="mt-3 text-xs italic text-ink-subtle">
+                  This revision was issued before approval records were captured,
+                  so no signature is held for it.
+                </p>
+              )}
+            </div>
+          ) : (
+            <>
+              <p className="mt-1 text-xs text-ink-muted">
+                This is a working draft. Approval is recorded when a revision is
+                issued.
+              </p>
+              <div className="mt-4 grid gap-6 sm:grid-cols-3">
+                {['Reviewed by', 'Position', 'Date'].map((label) => (
+                  <div key={label}>
+                    <div className="h-8 border-b border-ink-subtle" />
+                    <p className="mt-1 text-xs text-ink-subtle">{label}</p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </section>
       </article>
     </PlatformShell>

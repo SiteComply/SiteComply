@@ -398,6 +398,24 @@ export function canEditSite(role: PlatformRoleValue): boolean {
   return SITE_EDIT_ROLES.includes(role);
 }
 
+/**
+ * Who may approve and issue a Construction Phase Plan.
+ *
+ * Approving and issuing are ONE act on this product, and it is a duty-holder act
+ * under CDM 2015 rather than site administration — a Site Manager must not be
+ * able to approve the plan they wrote. Phase A gated this at `canEditSite`
+ * (Director only) so nothing had to be loosened later; Phase B adds the
+ * Principal Contractor, who is the duty holder the regulations actually name.
+ */
+export const CPP_ISSUE_ROLES: PlatformRoleValue[] = [
+  'DIRECTOR',
+  'PRINCIPAL_CONTRACTOR',
+];
+
+export function canIssueCpp(role: PlatformRoleValue): boolean {
+  return CPP_ISSUE_ROLES.includes(role);
+}
+
 // ---------------------------------------------------------------------------
 // Pure lookup helpers — inert foundation, NOT called anywhere yet. A future
 // enforcement stage will use these; they perform no gating on their own.

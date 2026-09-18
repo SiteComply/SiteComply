@@ -4,6 +4,9 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
+import { Dialog } from '@/components/ui/Dialog';
+import { SignaturePad } from '@/components/checkin/SignaturePad';
+import type { SignatureInput } from '@/services/inductionSignature/signatureService';
 
 /**
  * CPP document control Phase A — the revision bar above the plan.
@@ -32,6 +35,8 @@ export function CppRevisionBar({
   viewing,
   canCreate,
   canIssue,
+  approverName,
+  declaration,
 }: {
   siteId: string;
   issued: RevisionBarSummary | null;
@@ -42,18 +47,29 @@ export function CppRevisionBar({
   viewing: { kind: 'LIVE' } | { kind: 'REVISION'; version: number; status: string };
   canCreate: boolean;
   canIssue: boolean;
+  /** Pre-filled into the signature. The person about to approve. */
+  approverName: string;
+  /** Snapshotted onto the revision, so it is shown before it is accepted. */
+  declaration: string;
 }) {
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [signature, setSignature] = useState<SignatureInput | null>(null);
+  const [accepted, setAccepted] = useState(false);
 
-  async function act(action: 'create' | 'issue' | 'discard', revisionId?: string) {
+  async function act(
+    action: 'create' | 'issue' | 'discard',
+    revisionId?: string,
+    sig?: SignatureInput | null,
+  ) {
     setBusy(true);
     try {
       const res = await fetch(`/api/platform/sites/${siteId}/cpp-revisions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, revisionId }),
+        body: JSON.stringify({ action, revisionId, signature: sig ?? undefined }),
       });
       const data = (await res.json()) as { ok: boolean; error?: string; version?: number };
       if (!res.ok || !data.ok) {
@@ -64,9 +80,12 @@ export function CppRevisionBar({
         action === 'create'
           ? `Revision ${data.version} created as a draft.`
           : action === 'issue'
-            ? `Revision ${data.version} issued.`
+            ? `Revision ${data.version} approved and issued.`
             : 'Draft discarded.',
       );
+      setApproving(false);
+      setSignature(null);
+      setAccepted(false);
       router.refresh();
     } catch {
       toast.error('Network problem. Please try again.');
@@ -171,10 +190,10 @@ export function CppRevisionBar({
             <button
               type="button"
               disabled={busy}
-              onClick={() => act('issue', draft.id)}
+              onClick={() => setApproving(true)}
               className="touch-target rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
             >
-              Issue Revision {draft.version}
+              Approve and issue Revision {draft.version}
             </button>
           )}
           {draft && canCreate && (
@@ -189,11 +208,75 @@ export function CppRevisionBar({
           )}
           {draft && !canIssue && (
             <p className="text-xs text-ink-muted">
-              Revision {draft.version} is ready to issue. Only a Director can
-              issue a Construction Phase Plan.
+              Revision {draft.version} is ready to issue. Only a Director or
+              Principal Contractor can approve and issue a Construction Phase
+              Plan.
             </p>
           )}
         </div>
+      )}
+
+      {/* APPROVAL. Issuing IS the approval, so there is no unsigned route to it:
+          an issued plan with no named approver would be the blank-lines-and-a-pen
+          problem again, only harder to notice because it would look official. */}
+      {approving && draft && (
+        <Dialog
+          open
+          onClose={() => setApproving(false)}
+          busy={busy}
+          titleId="cpp-approve-title"
+          className="max-w-lg"
+        >
+          <div className="p-5">
+            <h2 id="cpp-approve-title" className="text-base font-bold text-ink">
+              Approve and issue Revision {draft.version}
+            </h2>
+            <p className="mt-1 text-sm text-ink-muted">
+              This becomes the version in force for this project. It cannot be
+              edited afterwards — a change is made by issuing a further revision.
+            </p>
+
+            <p className="mt-3 rounded-lg border border-line bg-surface-sunken p-3 text-sm text-ink">
+              {declaration}
+            </p>
+
+            <label className="mt-3 flex items-start gap-2 text-sm text-ink">
+              <input
+                type="checkbox"
+                checked={accepted}
+                onChange={(e) => setAccepted(e.target.checked)}
+                className="mt-0.5 h-4 w-4"
+              />
+              <span>I confirm the declaration above.</span>
+            </label>
+
+            <div className="mt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">
+                Signature
+              </p>
+              <SignaturePad defaultName={approverName} onChange={setSignature} />
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={busy || !accepted || !signature}
+                onClick={() => act('issue', draft.id, signature)}
+                className="touch-target rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+              >
+                {busy ? 'Issuing…' : 'Approve and issue'}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setApproving(false)}
+                className="touch-target rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-surface-sunken disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Dialog>
       )}
     </div>
   );

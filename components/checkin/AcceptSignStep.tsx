@@ -115,7 +115,7 @@ export function AcceptSignStep({
 
       <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
         <p className="mb-3 text-sm font-semibold text-ink">Please sign below</p>
-        <SignaturePad workerName={workerName} onChange={setSignature} />
+        <SignaturePad defaultName={workerName} onChange={setSignature} />
         <p className="mt-3 flex items-center gap-1.5 text-xs text-ink-subtle">
           <WorkerIcon name="shield" className="h-3.5 w-3.5" />
           Your signature is securely stored and cannot be altered.

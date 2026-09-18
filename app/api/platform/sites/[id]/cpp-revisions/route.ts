@@ -14,7 +14,8 @@ export const dynamic = 'force-dynamic';
  * CPP document control Phase A — revision actions.
  *
  *   POST body { action: 'create' }                      -> snapshot as a new draft
- *   POST body { action: 'issue',   revisionId, note? }  -> make it the version in force
+ *   POST body { action: 'issue',   revisionId, signature, note? }
+ *                                                       -> approve and issue it
  *   POST body { action: 'discard', revisionId }         -> delete an UNISSUED draft
  *
  * One route with an explicit action rather than three, because all three are
@@ -32,7 +33,13 @@ async function POSTHandler(
     return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
   }
 
-  let body: { action?: string; revisionId?: string; note?: string | null };
+  let body: {
+    action?: string;
+    revisionId?: string;
+    note?: string | null;
+    /** Required for `issue` — approving and issuing are one act. */
+    signature?: unknown;
+  };
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -44,7 +51,13 @@ async function POSTHandler(
       ? await createRevision(viewer, params.id)
       : body.action === 'issue'
         ? body.revisionId
-          ? await issueRevision(viewer, params.id, body.revisionId, body.note ?? null)
+          ? await issueRevision(
+              viewer,
+              params.id,
+              body.revisionId,
+              body.note ?? null,
+              body.signature,
+            )
           : ({ ok: false, error: 'No revision given.' } as const)
         : body.action === 'discard'
           ? body.revisionId

@@ -3103,6 +3103,31 @@ model CppRevision {
   issuedByName   String?
   issuedAt       DateTime?
 
+  /// CPP document control Phase B — the approval record.
+  ///
+  /// There is deliberately NO separate approvedAt/approvedByName: approving and
+  /// issuing are one act here, so `issuedAt` and `issuedByName` ARE the approval
+  /// timestamp and approver. A second pair would be duplicate state that could
+  /// disagree with the first.
+  ///
+  /// What is added is what the act itself needs as evidence: the role the
+  /// approver held, the declaration they accepted, and their signature.
+  ///
+  /// `approverRole` is snapshotted rather than read from the user record later —
+  /// people change role, and the question a reviewer asks is what authority the
+  /// person held AT THE TIME they approved the plan.
+  approverRole String?
+
+  /// The declaration text as accepted. Snapshotted for the same reason the
+  /// induction snapshots its own: a later wording change must never rewrite what
+  /// somebody signed.
+  declarationText String?
+
+  signedName        String?
+  signatureType     SignatureType?
+  /// Drawn signature PNG in private blob storage. Null for TYPED.
+  signatureBlobPath String?
+
   supersededAt           DateTime?
   supersededByRevision   CppRevision?  @relation("CppSupersedes", fields: [supersededByRevisionId], references: [id])
   supersededByRevisionId String?
