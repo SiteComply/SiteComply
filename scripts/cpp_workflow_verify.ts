@@ -65,6 +65,14 @@ function main() {
     // deploy typechecks, so it failed there rather than here.
     flow({ issued: { version: 2 }, drift: { changed: true, changedSections: ['A'] } })
       .primary?.label.includes('Revision 3') === true);
+  // The headline names the revision, so the button does not repeat it — that
+  // made the primary action long as well as prominent.
+  chk('[2] the approve action is the verb alone',
+    flow({ draft: { version: 2 } }).primary?.label === 'Approve and issue');
+  chk('[2]   and the headline is what names the revision',
+    /Revision 2/.test(flow({ draft: { version: 2 } }).headline));
+  chk('[2] no primary label repeats a revision the headline already names',
+    !/Revision \d+/.test(flow({ draft: { version: 2 } }).primary?.label ?? ''));
   chk('[2] never two primary actions at once',
     [flow(), flow({ readiness: GAPPY }), flow({ draft: { version: 1 } }),
      flow({ issued: { version: 1 } })].every((f) => f.primary === null || typeof f.primary.label === 'string'));
@@ -74,6 +82,8 @@ function main() {
   chk('[3] no primary action when nothing needs doing', current.primary === null);
   chk('[3] but a quiet secondary remains — a dead stop reads as broken',
     current.secondary?.kind === 'PREPARE_REVISION');
+  chk('[3] the discard action is worded as a control, not a description',
+    flow({ draft: { version: 1 } }).secondary?.label === 'Discard revision');
   chk('[3] and the tone is positive', current.tone === 'GOOD');
   chk('[3] it says plainly that nothing needs doing',
     /Nothing needs doing/.test(current.detail ?? ''));
@@ -140,6 +150,20 @@ function main() {
     /Which sections changed\?/.test(bar));
   chk('[8] the switcher and history survive as secondary',
     /Working draft/.test(bar) && /Revision history/.test(bar));
+
+  console.log('\n[9] The controls look like the rest of the platform');
+  // These were hand-rolled class strings while every other platform editor uses
+  // the Button component — which is why the primary read as oversized and the
+  // secondary did not read as a control at all.
+  chk('[9] no hand-rolled primary button classes remain',
+    !/bg-brand-600 px-4 py-2/.test(bar));
+  chk('[9] the shared Button component is used', /<Button/.test(bar));
+  chk('[9] the secondary action is an outlined button, not bare text',
+    /variant="secondary"/.test(bar) && !/text-ink-subtle hover:underline/.test(bar));
+  chk('[9] a navigation is styled through buttonClasses, not a copied string',
+    /buttonClasses\(\{ variant: 'primary', size: 'md' \}\)/.test(bar));
+  chk('[9] the switcher says which revision is in force, not that one was issued',
+    /Revision \{issued\.version\} \(Current\)/.test(bar) && !/Issued \(Rev /.test(bar));
 
   console.log(`\n== ${passed} passed, ${failed} failed ==`);
   if (failed > 0) process.exitCode = 1;

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
 import { Dialog } from '@/components/ui/Dialog';
+import { Button, buttonClasses } from '@/components/ui/Button';
 import { SignaturePad } from '@/components/checkin/SignaturePad';
 import type { SignatureInput } from '@/services/inductionSignature/signatureService';
 import {
@@ -209,25 +210,33 @@ export function CppRevisionBar({
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {flow.primary &&
               (flow.primary.kind === 'COMPLETE_CONTENT' ? (
+                // A navigation, so a real anchor — styled through buttonClasses
+                // rather than a copied class string, per Button's own note.
                 <Link
                   href={setupHref}
-                  className="touch-target rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+                  className={buttonClasses({ variant: 'primary', size: 'md' })}
                 >
                   {flow.primary.label}
                 </Link>
               ) : (
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  size="md"
                   disabled={busy}
                   onClick={runPrimary}
-                  className="touch-target rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
                 >
                   {busy ? 'Working…' : flow.primary.label}
-                </button>
+                </Button>
               ))}
+            {/* The secondary action was bare underlined text and read as a
+                caption, not a control — "Discard this revision" in particular
+                looked like an explanation of what the page had just done. It is
+                an outlined button now: clearly pressable, clearly not the
+                recommended path. */}
             {flow.secondary && (
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="md"
                 disabled={busy}
                 onClick={() =>
                   flow.secondary!.kind === 'NONE' && draft
@@ -236,10 +245,9 @@ export function CppRevisionBar({
                       ? setPreparing(true)
                       : act('create')
                 }
-                className="text-sm font-medium text-ink-subtle hover:underline disabled:opacity-50"
               >
                 {flow.secondary.label}
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -267,7 +275,7 @@ export function CppRevisionBar({
                 : 'border-line text-ink-muted hover:bg-surface-sunken'
             }`}
           >
-            Issued (Rev {issued.version})
+            Revision {issued.version} (Current)
           </Link>
         )}
         <Link
@@ -302,17 +310,17 @@ export function CppRevisionBar({
               ))}
             </ul>
             <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                size="md"
                 disabled={busy}
                 onClick={() => act('create')}
-                className="touch-target rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
               >
                 {busy ? 'Working…' : 'Prepare it anyway'}
-              </button>
+              </Button>
               <Link
                 href={setupHref}
-                className="touch-target rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-surface-sunken"
+                className={buttonClasses({ variant: 'secondary', size: 'md' })}
               >
                 Complete the sections first
               </Link>
@@ -380,22 +388,22 @@ export function CppRevisionBar({
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                size="md"
                 disabled={busy || !accepted || !signature}
                 onClick={() => act('issue', draft.id, signature)}
-                className="touch-target rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
               >
                 {busy ? 'Issuing…' : 'Approve and issue'}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="secondary"
+                size="md"
                 disabled={busy}
                 onClick={() => setApproving(false)}
-                className="touch-target rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-surface-sunken disabled:opacity-50"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </Dialog>

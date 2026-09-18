@@ -195,8 +195,12 @@ function main() {
     /driftFromIssued: RevisionState\['driftFromIssued'\] = null;/.test(code(svc)));
   chk('[7] the banner states the issued revision is unchanged',
     /The issued revision is unchanged and remains the version in force/.test(bar));
+  // Asserted on the PAIR being offered, not on either label's exact wording.
+  // The issued button was relabelled "Revision N (Current)" because "Issued
+  // (Rev N)" named the EVENT when a reader needs to know which document is in
+  // force — and pinning the old string made that a test failure.
   chk('[7] the switcher offers both documents',
-    /Working draft/.test(bar) && /Issued \(Rev /.test(bar));
+    /Working draft/.test(bar) && /\?revision=\$\{issued\.id\}/.test(bar));
 
   console.log('\n[8] Nothing is seeded, and history is not hidden');
   chk('[8] no revision is invented for existing sites',

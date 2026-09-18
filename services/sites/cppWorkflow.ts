@@ -114,11 +114,11 @@ export function recommendNextAction(input: CppWorkflowInput): CppWorkflow {
         headline: `Revision ${input.draft.version} is prepared and ready for approval`,
         detail:
           'Approving issues it as the version in force. It cannot be edited afterwards.',
-        primary: {
-          kind: 'APPROVE_AND_ISSUE',
-          label: `Approve and issue Revision ${input.draft.version}`,
-        },
-        secondary: { kind: 'NONE', label: 'Discard this revision' },
+        // The headline directly above already says WHICH revision, so naming it
+        // again made the button long as well as prominent. The action is the
+        // verb; the object is in the sentence.
+        primary: { kind: 'APPROVE_AND_ISSUE', label: 'Approve and issue' },
+        secondary: { kind: 'NONE', label: 'Discard revision' },
         tone: 'ATTENTION',
         gaps,
       };
@@ -147,7 +147,7 @@ export function recommendNextAction(input: CppWorkflowInput): CppWorkflow {
           ? `${n} section${n === 1 ? '' : 's'} now differ from the issued plan.`
           : 'The plan no longer matches the current site information.',
       primary: input.canCreate
-        ? { kind: 'UPDATE_PLAN', label: `Prepare Revision ${input.issued.version + 1} for approval` }
+        ? { kind: 'UPDATE_PLAN', label: `Prepare Revision ${input.issued.version + 1}` }
         : null,
       secondary: null,
       tone: 'ATTENTION',
@@ -195,8 +195,9 @@ export function recommendNextAction(input: CppWorkflowInput): CppWorkflow {
     headline: 'The plan is complete and has not yet been issued',
     detail:
       'Preparing a revision takes a dated snapshot that can be approved and issued.',
+    // "for approval" is already carried by the detail line beneath.
     primary: input.canCreate
-      ? { kind: 'PREPARE_REVISION', label: 'Prepare Revision 1 for approval' }
+      ? { kind: 'PREPARE_REVISION', label: 'Prepare Revision 1' }
       : null,
     secondary: null,
     tone: 'INFO',
