@@ -82,6 +82,14 @@ export interface CppDraft {
     name: string;
     jobReference: string;
     address: string;
+    /**
+     * The organisation issuing the plan, for the masthead.
+     *
+     * A construction phase plan is the PRINCIPAL CONTRACTOR'S document. It is
+     * already recorded under CDM duty holders; the masthead names it so the
+     * document reads as theirs rather than as something the software produced.
+     */
+    principalContractor: string | null;
   };
   sections: CppSection[];
   /** Site layout drawings and emergency plans, filed as documents. */
@@ -712,6 +720,7 @@ export async function getCppDraft(
       address: [site.addressLine1, site.addressLine2, site.town, site.postcode]
         .filter(Boolean)
         .join(', '),
+      principalContractor: clean(cdm?.principalContractor),
     },
     sections,
     drawings,

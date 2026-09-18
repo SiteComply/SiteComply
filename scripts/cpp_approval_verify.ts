@@ -96,22 +96,29 @@ function main() {
   console.log('\n[5] The printed approval block');
   chk('[5] the blank pen-and-paper lines are gone from an ISSUED revision',
     /viewingRevision\?\.status === 'ISSUED' \|\|/.test(page));
+  // The claim is that an UNAPPROVED document shows unsigned lines and says so —
+  // not the exact sentence, which the redesign reworded.
   chk('[5] a working draft still shows blank lines — nothing was approved',
-    /This is a working draft\. Approval is recorded when a revision is/.test(page));
+    /This is a working draft\./.test(page) && /cpp-sigline/.test(page));
   chk('[5] approver, position and date are printed',
-    /Approved by: /.test(page) && /Position: /.test(page) && /Date: /.test(page));
+    /<dt>Approved by<\/dt>/.test(page) && /<dt>Position<\/dt>/.test(page) &&
+    /<dt>Date<\/dt>/.test(page));
   chk('[5] the declaration accepted is printed with it',
     /viewingRevision\.declarationText/.test(page));
   chk('[5] a drawn signature is rendered from the scoped route',
     /cpp-revisions\/\$\{viewingRevision\.id\}\/signature/.test(page));
+  // The face moved into the scoped document stylesheet with the redesign, so
+  // the assertion follows it rather than the page.
   chk('[5] a typed signature uses the same face as the induction record',
-    /"Segoe Script", "Brush Script MT", cursive/.test(page));
+    /'Segoe Script', 'Brush Script MT', cursive/.test(
+      readFileSync('app/globals.css', 'utf8'),
+    ));
 
   console.log('\n[6] Phase A revisions are not given invented evidence');
   chk('[6] every approval column is NULLABLE',
     !/approverRole\s+String\b(?!\?)/.test(schema));
   chk('[6] a revision with no signature says so honestly',
-    /issued before approval records were captured/.test(page));
+    /[Ii]ssued before approval records were captured/.test(page));
   chk('[6] nothing back-fills a signature', !/UPDATE "CppRevision" SET "signedName"/.test(
     readFileSync('/home/cc-dev-1/cpp_approval.sql', 'utf8')));
   chk('[6] the migration is additive only',

@@ -115,8 +115,16 @@ function main() {
     /No recurring inspections are scheduled for this site/.test(svc));
   chk('[6] an empty wired section reads "None recorded", not "Not yet recorded"',
     /s\.gatesCompletion \? 'Not yet recorded\.' : 'None recorded\.'/.test(page));
+  // The document no longer carries ANY in-section navigation. The issued-document
+  // redesign removed the "Manage this" links: a controlled document handed to a
+  // client or an inspector should not contain application links, and the
+  // screen-only gap list and workflow bar still route people to the right editor.
+  // The original claim — that an empty wired section never sends the reader to a
+  // wizard that cannot fix it — holds more strongly than before.
   chk('[6]   and does not send the reader to a wizard that cannot fix it',
-    /href=\{s\.manageHref \?\? setupHref\}/.test(page));
+    !/setupHref/.test(page.slice(page.indexOf('cpp-doc'))));
+  chk('[6] CONTROL — the screen-only gap list still routes to the wizard',
+    /href=\{setupHref\}/.test(page.slice(0, page.indexOf('cpp-doc'))));
 
   console.log('\n[7] Labels are the reader\'s language, and only real values');
   chk('[7] access requirements are translated for a duty holder',

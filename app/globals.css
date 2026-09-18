@@ -112,3 +112,212 @@
     @apply min-h-touch min-w-touch;
   }
 }
+
+/* ===================================================================
+   CONSTRUCTION PHASE PLAN — the issued document.
+   ===================================================================
+
+   A deliberate departure from the app's visual language, and the only place in
+   the product that gets one. Everywhere else is a screen a manager operates;
+   this is a controlled document a client, a Principal Contractor or an HSE
+   inspector reads, and it has to look like one.
+
+   The design is MONOCHROME. Hierarchy comes from rule weight, type weight and
+   space — not colour — which is what makes a printed construction document read
+   as authoritative rather than generated. Two exceptions, both carrying
+   information rather than decoration:
+     · a single dark SiteComply blue (--cpp-accent, the brand's own --brand-900)
+       on document-control rules and section numbers;
+     · one muted amber on outstanding items.
+
+   Everything is scoped under .cpp-doc so none of it can leak into the app, and
+   every value is literal rather than a Tailwind token, because this document
+   must not shift when the app's palette does.
+   =================================================================== */
+.cpp-doc {
+  --cpp-paper: #fdfdfc;
+  --cpp-ink: #16181a;
+  --cpp-ink-2: #3d4145;
+  --cpp-ink-3: #71767c;
+  --cpp-rule: #c4c6c8;
+  --cpp-rule-2: #e3e4e5;
+  --cpp-accent: #003a54; /* SiteComply brand-900 — the darkest brand blue */
+  --cpp-flag: #7a5410;
+
+  background: var(--cpp-paper);
+  color: var(--cpp-ink);
+  font-family: var(--cpp-serif), Georgia, 'Times New Roman', serif;
+  font-size: 17.5px;
+  line-height: 1.6;
+}
+.cpp-doc .cpp-sans {
+  font-family: var(--cpp-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ── Masthead ───────────────────────────────────────────────────── */
+.cpp-doc .cpp-issuer {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap;
+  font-family: var(--cpp-sans), sans-serif;
+  font-size: 12px; font-weight: 600; letter-spacing: .17em; text-transform: uppercase;
+  padding-bottom: 11px; border-bottom: 3px solid var(--cpp-ink);
+}
+.cpp-doc .cpp-issuer .ref {
+  font-weight: 400; color: var(--cpp-ink-3); letter-spacing: .1em;
+  font-variant-numeric: tabular-nums;
+}
+.cpp-doc .cpp-doctype {
+  font-family: var(--cpp-sans), sans-serif;
+  font-size: 12px; font-weight: 600; letter-spacing: .24em; text-transform: uppercase;
+  color: var(--cpp-accent); margin: 26px 0 15px;
+}
+.cpp-doc h1.cpp-title {
+  font-family: var(--cpp-sans), sans-serif;
+  font-weight: 700; font-size: 42px; line-height: 1.07; margin: 0;
+  letter-spacing: -.032em; text-wrap: balance;
+}
+.cpp-doc .cpp-site { font-size: 21px; color: var(--cpp-ink-2); margin: 12px 0 0; }
+
+/* Revision and status: the most important fact on the page, given weight and
+   air rather than a coloured box. */
+.cpp-doc .cpp-status {
+  margin: 28px 0 0; padding: 15px 0;
+  border-top: 1px solid var(--cpp-accent); border-bottom: 1px solid var(--cpp-accent);
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 26px;
+  font-family: var(--cpp-sans), sans-serif;
+}
+.cpp-doc .cpp-status .rev {
+  font-size: 23px; font-weight: 700; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+.cpp-doc .cpp-status .state {
+  font-size: 12px; font-weight: 600; letter-spacing: .17em; text-transform: uppercase;
+  color: var(--cpp-ink-2);
+}
+.cpp-doc .cpp-status .when {
+  font-size: 15px; color: var(--cpp-ink-2); margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Document control: two columns of ruled rows. No cells, no chips. */
+.cpp-doc .cpp-control {
+  margin: 0; padding: 22px 0 0;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0 46px;
+}
+.cpp-doc .cpp-control .row {
+  display: grid; grid-template-columns: 152px 1fr; gap: 0 14px;
+  padding: 8px 0; border-bottom: 1px solid var(--cpp-rule-2);
+}
+.cpp-doc .cpp-control dt {
+  font-family: var(--cpp-sans), sans-serif;
+  font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--cpp-ink-3); padding-top: 3px; margin: 0;
+}
+.cpp-doc .cpp-control dd {
+  margin: 0; font-size: 16.5px; font-variant-numeric: tabular-nums;
+}
+
+/* ── Body ───────────────────────────────────────────────────────── */
+.cpp-doc .cpp-part {
+  font-family: var(--cpp-sans), sans-serif;
+  font-size: 12px; font-weight: 700; letter-spacing: .21em; text-transform: uppercase;
+  color: var(--cpp-ink); margin: 0 0 20px; padding-bottom: 7px;
+  border-bottom: 2px solid var(--cpp-ink);
+}
+.cpp-doc .cpp-part + .cpp-part,
+.cpp-doc li + .cpp-part { margin-top: 44px; }
+.cpp-doc .cpp-section {
+  display: grid; grid-template-columns: 58px 1fr; gap: 0 20px;
+  padding: 23px 0; border-bottom: 1px solid var(--cpp-rule-2);
+}
+.cpp-doc .cpp-no {
+  font-family: var(--cpp-sans), sans-serif;
+  font-size: 13.5px; font-weight: 700; color: var(--cpp-accent);
+  padding-top: 7px; font-variant-numeric: tabular-nums;
+}
+.cpp-doc h2.cpp-h {
+  font-family: var(--cpp-sans), sans-serif;
+  font-size: 18px; font-weight: 600; margin: 0 0 9px; letter-spacing: -.015em;
+}
+.cpp-doc .cpp-p { margin: 0 0 10px; max-width: 60ch; }
+.cpp-doc .cpp-p:last-child { margin-bottom: 0; }
+.cpp-doc .cpp-lab {
+  font-family: var(--cpp-sans), sans-serif;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .15em; text-transform: uppercase;
+  color: var(--cpp-ink-3); margin: 0 0 1px;
+}
+.cpp-doc .cpp-origin {
+  font-family: var(--cpp-sans), sans-serif;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--cpp-ink-3); margin: 0 0 8px;
+}
+.cpp-doc .cpp-items { margin: 0; padding: 0; list-style: none; max-width: 64ch; }
+.cpp-doc .cpp-items li {
+  padding: 8px 0; border-bottom: 1px solid var(--cpp-rule-2);
+}
+.cpp-doc .cpp-items li:last-child { border-bottom: 0; }
+.cpp-doc .cpp-items .detail {
+  display: block; font-size: 16px; color: var(--cpp-ink-2); margin-top: 2px;
+}
+.cpp-doc .cpp-na { color: var(--cpp-ink-3); }
+.cpp-doc .cpp-flag {
+  font-family: var(--cpp-sans), sans-serif;
+  font-size: 14px; color: var(--cpp-flag); margin: 15px 0 0; max-width: 60ch;
+  padding-left: 13px; border-left: 2px solid var(--cpp-flag);
+}
+
+/* ── Approval. The heaviest rule on the page, then air, then the signature. ── */
+.cpp-doc .cpp-approval { margin-top: 46px; padding-top: 20px; border-top: 3px solid var(--cpp-ink); }
+.cpp-doc .cpp-approval .meta {
+  font-family: var(--cpp-sans), sans-serif;
+  font-size: 12px; font-weight: 600; letter-spacing: .15em; text-transform: uppercase;
+  color: var(--cpp-ink-3); margin: 0 0 22px;
+}
+.cpp-doc .cpp-decl { font-size: 17px; color: var(--cpp-ink-2); max-width: 66ch; margin: 0 0 30px; }
+.cpp-doc .cpp-who {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 26px; margin-bottom: 32px;
+}
+.cpp-doc .cpp-who > div { padding: 0 0 11px; border-bottom: 1px solid var(--cpp-rule-2); }
+.cpp-doc .cpp-who dt {
+  font-family: var(--cpp-sans), sans-serif;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .15em; text-transform: uppercase;
+  color: var(--cpp-ink-3); margin: 0 0 3px;
+}
+.cpp-doc .cpp-who dd {
+  margin: 0; font-size: 17.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.cpp-doc .cpp-sig {
+  font-family: 'Segoe Script', 'Brush Script MT', cursive;
+  font-size: 33px; line-height: 1; padding-bottom: 9px;
+  border-bottom: 2px solid var(--cpp-ink); display: block;
+}
+.cpp-doc .cpp-sigline {
+  border-bottom: 2px solid var(--cpp-ink); display: block; min-height: 42px;
+}
+.cpp-doc .cpp-sigcap {
+  font-family: var(--cpp-sans), sans-serif;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .15em; text-transform: uppercase;
+  color: var(--cpp-ink-3); margin: 9px 0 0;
+}
+
+/* ── Colophon. Softened: sentence case, light, unobtrusive. The branding is a
+   small mark and one line of provenance — the document is the Principal
+   Contractor's, produced here. ── */
+.cpp-doc .cpp-foot {
+  margin-top: 42px; padding-top: 13px; border-top: 1px solid var(--cpp-rule);
+  display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  font-family: var(--cpp-sans), sans-serif;
+  font-size: 12px; font-weight: 400; color: var(--cpp-ink-3); letter-spacing: .01em;
+}
+.cpp-doc .cpp-foot .mark { display: flex; align-items: center; gap: 7px; }
+.cpp-doc .cpp-foot svg { width: 14px; height: 14px; flex: none; }
+
+@media (max-width: 760px) {
+  .cpp-doc { font-size: 16.5px; }
+  .cpp-doc h1.cpp-title { font-size: 29px; }
+  .cpp-doc .cpp-control { grid-template-columns: 1fr; gap: 0; }
+  .cpp-doc .cpp-status .when { margin-left: 0; width: 100%; }
+  .cpp-doc .cpp-section { grid-template-columns: 40px 1fr; gap: 0 12px; }
+  .cpp-doc .cpp-who { grid-template-columns: 1fr; gap: 0; }
+  .cpp-doc .cpp-who > div { padding-top: 11px; }
+}

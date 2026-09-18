@@ -169,17 +169,24 @@ function main() {
     /withClosedProjectHandling/.test(route));
 
   console.log('\n[5] The plan does not lie about its own standing');
-  chk('[5] the banner follows the revision being read',
+  // The document was restyled to the monochrome issued-document design. The
+  // ENDURING claim is that what is printed follows the revision being read —
+  // the specific banner copy moved into the status line, so pinning the old
+  // sentence made a deliberate redesign look like a regression.
+  chk('[5] the status line follows the revision being read',
     /viewingRevision\?\.status === 'ISSUED'/.test(page) &&
-    /Superseded — Revision/.test(page));
+    /'Current revision'/.test(page) && /'Superseded'/.test(page));
   chk('[5] the unconditional "Draft" banner is gone',
     !/Draft — for duty holder review and approval/.test(page));
-  chk('[5] a working draft still says so',
-    /Working draft — for duty holder review and approval/.test(page));
+  chk('[5] a working draft is still identified as one',
+    /'Working draft'/.test(page) && /not an approved plan/.test(page));
   chk('[5] live completeness is hidden against a frozen revision',
     /\{!viewingRevision && \(/.test(page));
   chk('[5] the gap list too', /!viewingRevision && cpp\.outstanding\.length > 0/.test(page));
-  chk('[5] issue date is printed when there is one', /<dt className="inline font-semibold">Issued: <\/dt>/.test(page));
+  // Asserted on the VALUE being printed, not the markup that carried it. The
+  // redesign moved the issue date from a definition row into the status line.
+  chk('[5] issue date is printed when there is one',
+    /Issued \$\{formatDateUK\(viewingRevision\.issuedAt\)\}/.test(page));
 
   console.log('\n[6] The live draft survived document control');
   chk('[6] the page still assembles the live draft every request',

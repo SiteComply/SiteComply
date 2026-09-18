@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { Chivo, Crimson_Pro } from 'next/font/google';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
 import { PrintButton } from '@/components/worker/PrintButton';
@@ -12,7 +13,35 @@ import {
 } from '@/services/sites/cppRevisionService';
 import { CppRevisionBar } from '@/components/platform/CppRevisionBar';
 import { permits, canIssueCpp } from '@/services/platformUsers/platformPermissions';
-import { formatDateTimeUK } from '@/lib/datetime';
+import { formatDateUK } from '@/lib/datetime';
+
+/*
+ * THE ONLY WEBFONTS IN THE PRODUCT, AND DELIBERATELY SCOPED TO THIS ROUTE.
+ *
+ * Everything else in SiteComply runs on the system stack, which is the right
+ * call for a worker checking in on site over mobile data. This page is the
+ * opposite case: a formal document read on a desktop by a manager, a client or
+ * an auditor, where the typography IS the deliverable. `next/font` self-hosts,
+ * so there is no third-party request and no CSP surface — and because the
+ * variables are applied to this page's document only, the operative's phone
+ * never downloads them.
+ *
+ * Chivo carries apparatus (labels, numbers, headings); Crimson Pro carries the
+ * prose. A serif body at a 60-odd character measure is what makes a construction
+ * phase plan read as a document rather than a screen.
+ */
+const chivo = Chivo({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--cpp-sans',
+  display: 'swap',
+});
+const crimson = Crimson_Pro({
+  subsets: ['latin'],
+  weight: ['400', '600'],
+  variable: '--cpp-serif',
+  display: 'swap',
+});
 
 export const dynamic = 'force-dynamic';
 
@@ -143,10 +172,10 @@ export default async function SiteCppPage({
             >
               {viewingRevision
                 ? viewingRevision.status === 'ISSUED'
-                  ? `Revision ${viewingRevision.version} · in force`
+                  ? `Revision ${viewingRevision.version} · current`
                   : viewingRevision.status === 'SUPERSEDED'
                     ? `Revision ${viewingRevision.version} · superseded`
-                    : `Revision ${viewingRevision.version} · draft`
+                    : `Revision ${viewingRevision.version} · prepared`
                 : 'Working draft'}
             </span>
           </h1>
@@ -202,324 +231,317 @@ export default async function SiteCppPage({
         </div>
       )}
 
-      {/* ---------------- The document itself ---------------- */}
-      {/* UX REFRESH PHASE 7 — the one place in this refresh where LESS width is
-          the improvement. Everywhere else the brief's "use more page width" is
-          right, because those screens are dashboards, registers and workspaces.
-          This is a formal document a duty-holder reads end to end, and prose set
-          across 1600px is genuinely hard to follow — measure is readability, not
-          decoration. The document gets a comfortable measure and centres in the
-          wider frame.
+      {/* ---------------- The document itself ----------------
 
-          `print:max-w-none` matters: on paper the page IS the measure, so the
-          screen cap must not also constrain the printed CPP. */}
-      <article className="mx-auto max-w-5xl rounded-xl border border-line bg-surface p-6 shadow-card print:max-w-none print:rounded-none print:border-0 print:p-0 print:shadow-none">
-        {/* DRAFT status is stated on screen AND in print. Software can assemble a
-            CPP; it cannot warrant that the plan is adequate — that is the
-            Principal Contractor's duty under CDM 2015. */}
-        {/* THE STATUS BANNER MUST MATCH WHAT IS BEING READ. It said "Draft"
-            unconditionally, which was true when the CPP was only ever a live
-            view. Printing "draft" across an issued revision — or "issued" across
-            a working draft — would be the document lying about its own standing,
-            which is the one thing document control cannot tolerate. */}
-        <div
-          className={`mb-5 rounded-lg border-2 p-3 print:rounded-none ${
-            viewingRevision?.status === 'ISSUED'
-              ? 'border-safe-500 bg-safe-50'
-              : viewingRevision?.status === 'SUPERSEDED'
-                ? 'border-ink-subtle bg-surface-sunken'
-                : 'border-hivis-500 bg-hivis-500/10'
-          }`}
-        >
-          <p className="text-sm font-bold uppercase tracking-wide text-ink">
-            {viewingRevision?.status === 'ISSUED'
-              ? `Issued — Revision ${viewingRevision.version}`
-              : viewingRevision?.status === 'SUPERSEDED'
-                ? `Superseded — Revision ${viewingRevision.version}`
+          A DELIBERATE DEPARTURE from the app's visual language, and the only
+          one in the product. Everything else here is a screen a manager
+          operates; this is a controlled document a client, a Principal
+          Contractor or an HSE inspector reads.
+
+          Monochrome by design: hierarchy is carried by rule weight, type weight
+          and space rather than colour, which is what makes a printed
+          construction document read as authoritative instead of generated. The
+          only colour is one dark SiteComply blue on document control, and a
+          muted amber on outstanding items — both information, not decoration.
+
+          Styles live under .cpp-doc in globals.css so they cannot leak into the
+          app, and the two webfonts are scoped to this route so the operative's
+          phone never downloads them. `print:max-w-none` stays: on paper the page
+          IS the measure. */}
+      <article
+        className={`cpp-doc ${chivo.variable} ${crimson.variable} mx-auto max-w-4xl border border-line px-12 py-12 shadow-card print:max-w-none print:border-0 print:p-0 print:shadow-none`}
+      >
+        <header>
+          {/* The document is the Principal Contractor's. Their name leads it. */}
+          <div className="cpp-issuer">
+            <span>{cpp.site.principalContractor ?? cpp.site.name}</span>
+            <span className="ref">Job {cpp.site.jobReference}</span>
+          </div>
+
+          <p className="cpp-doctype">Construction Phase Plan — CDM 2015</p>
+          <h1 className="cpp-title">{cpp.site.name}</h1>
+          {cpp.site.address && <p className="cpp-site">{cpp.site.address}</p>}
+
+          {/* REVISION AND STATUS. The most important fact on the page, given
+              weight and air rather than a coloured box — and stated in document
+              control language, not application language. */}
+          <div className="cpp-status">
+            <span className="rev">
+              {viewingRevision
+                ? `Revision ${String(viewingRevision.version).padStart(2, '0')}`
+                : 'Working draft'}
+            </span>
+            <span className="state">
+              {viewingRevision?.status === 'ISSUED'
+                ? 'Current revision'
+                : viewingRevision?.status === 'SUPERSEDED'
+                  ? 'Superseded'
+                  : viewingRevision
+                    ? 'Prepared — not yet issued'
+                    : 'Not yet issued'}
+            </span>
+            <span className="when">
+              {viewingRevision?.issuedAt
+                ? `Issued ${formatDateUK(viewingRevision.issuedAt)}`
                 : viewingRevision
-                  ? `Draft revision ${viewingRevision.version} — not yet issued`
-                  : 'Working draft — for duty holder review and approval'}
-          </p>
-          <p className="mt-1 text-xs text-ink-muted">
-            This document has been assembled automatically from the information
-            recorded in SiteComply. It is a starting point, not an approved
-            plan. The Principal Contractor remains responsible under the
-            Construction (Design and Management) Regulations 2015 for ensuring
-            the construction phase plan is suitable, sufficient and kept up to
-            date. Review, amend and approve before issue.
-          </p>
-        </div>
+                  ? `Prepared ${formatDateUK(viewingRevision.preparedAt)}`
+                  : `Assembled ${formatDateUK(cpp.meta.generatedAt)}`}
+            </span>
+          </div>
 
-        <header className="mb-6 border-b border-line pb-4">
-          <h2 className="text-2xl font-bold text-ink">
-            Construction Phase Plan
-          </h2>
-          <p className="mt-1 text-base font-semibold text-ink">
-            {cpp.site.name}
-          </p>
-          <p className="text-sm text-ink-muted">
-            Job reference {cpp.site.jobReference}
-          </p>
-          <p className="text-sm text-ink-muted">{cpp.site.address}</p>
-          <dl className="mt-3 grid gap-x-6 gap-y-1 text-xs text-ink-subtle sm:grid-cols-2">
-            <div>
-              <dt className="inline font-semibold">
-                {viewingRevision ? 'Revision prepared: ' : 'Draft generated: '}
-              </dt>
-              <dd className="inline">
-                {viewingRevision
-                  ? `${formatDateTimeUK(viewingRevision.preparedAt)} by ${viewingRevision.preparedByName}`
-                  : `${formatDateTimeUK(cpp.meta.generatedAt)} by ${cpp.meta.generatedByName}`}
+          <dl className="cpp-control">
+            <div className="row">
+              <dt>Prepared by</dt>
+              <dd>{viewingRevision ? viewingRevision.preparedByName : cpp.meta.generatedByName}</dd>
+            </div>
+            <div className="row">
+              <dt>Approved by</dt>
+              <dd>
+                {viewingRevision?.signedName ??
+                  viewingRevision?.issuedByName ??
+                  'Not yet approved'}
               </dd>
             </div>
-            {viewingRevision?.issuedAt && (
-              <div>
-                <dt className="inline font-semibold">Issued: </dt>
-                <dd className="inline">
-                  {formatDateTimeUK(viewingRevision.issuedAt)}
-                  {viewingRevision.issuedByName
-                    ? ` by ${viewingRevision.issuedByName}`
-                    : ''}
-                </dd>
-              </div>
-            )}
-            <div>
-              <dt className="inline font-semibold">
-                Information last updated:{' '}
-              </dt>
-              <dd className="inline">
+            <div className="row">
+              <dt>Principal Designer</dt>
+              <dd>
+                {cpp.sections
+                  .find((x) => x.key === 'duty-holders')
+                  ?.entries.find((e) => e.label === 'Principal Designer')?.value ??
+                  'Not recorded'}
+              </dd>
+            </div>
+            <div className="row">
+              <dt>Information updated</dt>
+              <dd>
                 {cpp.meta.lastUpdatedAt
-                  ? `${formatDateTimeUK(cpp.meta.lastUpdatedAt)}${
-                      cpp.meta.lastUpdatedByName
-                        ? ` by ${cpp.meta.lastUpdatedByName}`
-                        : ''
-                    }`
+                  ? formatDateUK(cpp.meta.lastUpdatedAt)
                   : 'Not yet recorded'}
               </dd>
             </div>
-            {/* Live setup progress. Hidden against a frozen revision, where it
+            {/* Live setup progress. Omitted against a frozen revision, where it
                 would report TODAY's completeness beside a historic document. */}
             {!viewingRevision && (
-              <div>
-                <dt className="inline font-semibold">Setup completeness: </dt>
-                <dd className="inline">
-                  {cpp.completeness.completed} of {cpp.completeness.applicable}{' '}
-                  sections ({cpp.completeness.percent}%)
+              <div className="row">
+                <dt>Sections complete</dt>
+                <dd>
+                  {cpp.completeness.completed} of {cpp.completeness.applicable}
                 </dd>
               </div>
             )}
             {!viewingRevision && (
-            <div>
-              <dt className="inline font-semibold">Status: </dt>
-              {/* PRINTED, and previously the lie. This read "All required
-                  sections recorded" whenever somebody had ticked the steps,
-                  directly above a screen-only list naming the sections that were
-                  missing. It is now the same computation as that list, and it
-                  says HOW MANY are outstanding rather than only that some are. */}
-              <dd className="inline">
-                {cpp.completeness.cppReady
-                  ? 'All required sections recorded'
-                  : `Incomplete — ${cpp.outstanding.length} section${
-                      cpp.outstanding.length === 1 ? '' : 's'
-                    } outstanding`}
-              </dd>
-            </div>
+              <div className="row">
+                <dt>Status</dt>
+                <dd>
+                  {cpp.completeness.cppReady
+                    ? 'All required sections recorded'
+                    : `${cpp.outstanding.length} section${cpp.outstanding.length === 1 ? '' : 's'} outstanding`}
+                </dd>
+              </div>
             )}
           </dl>
+
+          {/* The draft caveat, kept. Software can assemble a plan; it cannot
+              warrant that the plan is adequate — that is the Principal
+              Contractor's duty under CDM 2015, and the document says so. */}
+          {!viewingRevision && (
+            <p className="cpp-flag" style={{ marginTop: '22px' }}>
+              This is a working draft assembled from the information recorded for
+              this project. It is not an approved plan. The Principal Contractor
+              remains responsible for ensuring the construction phase plan is
+              suitable, sufficient and kept up to date.
+            </p>
+          )}
         </header>
 
-        <ol className="space-y-6">
+        <main style={{ marginTop: '44px' }}>
           {sections.map((s, idx) => (
-            <li key={s.key} className="break-inside-avoid">
-              <h3 className="text-base font-bold text-ink">
-                {idx + 1}. {s.title}
-              </h3>
-              {/* A REGISTER, where the section has one — site rules, PPE,
-                  permit types, RAMS, inspections. Listed rather than squeezed
-                  into prose, because that is what a reader scans for. */}
-              {s.items.length > 0 && (
-                <ul className="mt-2 space-y-1.5">
-                  {s.items.map((it, i) => (
-                    <li key={`${i}-${it.label}`} className="flex gap-2 text-sm">
-                      <span aria-hidden className="text-ink-subtle">
-                        •
-                      </span>
-                      <span>
-                        <span className="text-ink">{it.label}</span>
-                        {it.detail && (
-                          <span className="block text-xs text-ink-muted">
-                            {it.detail}
-                          </span>
-                        )}
-                      </span>
+            <div className="cpp-section" key={s.key}>
+              <div className="cpp-no">{idx + 1}.0</div>
+              <div>
+                <h2 className="cpp-h">{s.title}</h2>
+                {!s.gatesCompletion && s.entries.length > 0 && s.entries[0]?.value && (
+                  <p className="cpp-origin">{s.entries[0].label}</p>
+                )}
+
+                {s.items.length > 0 && (
+                  <ul className="cpp-items">
+                    {s.items.map((it, i) => (
+                      <li key={`${i}-${it.label}`}>
+                        <span>{it.label}</span>
+                        {it.detail && <span className="detail">{it.detail}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {s.entries
+                  .filter((e) => e.value !== null)
+                  .filter((e) => s.gatesCompletion || s.items.length > 0 || e !== s.entries[0])
+                  .map((e) => (
+                    <div key={e.label} style={{ marginBottom: '13px' }}>
+                      <p className="cpp-lab">{e.label}</p>
+                      <p className="cpp-p" style={{ whiteSpace: 'pre-line' }}>
+                        {e.value}
+                      </p>
+                    </div>
+                  ))}
+
+                {s.items.length === 0 &&
+                  s.entries.every((e) => e.value === null) && (
+                    <p className="cpp-p cpp-na">
+                      {s.gatesCompletion ? 'Not yet recorded.' : 'None recorded.'}
+                    </p>
+                  )}
+
+                {s.status === 'PARTIAL' && s.missing.length > 0 && (
+                  <p className="cpp-flag">
+                    Section incomplete. Still required: {s.missing.join(', ')}.
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+
+          <div className="cpp-section">
+            <div className="cpp-no">{sections.length + 1}.0</div>
+            <div>
+              <h2 className="cpp-h">Drawings and emergency plans</h2>
+              {drawings.length === 0 ? (
+                <p className="cpp-p cpp-na">
+                  No site layout drawings or emergency plans are filed for this
+                  project.
+                </p>
+              ) : (
+                <ul className="cpp-items">
+                  {drawings.map((d) => (
+                    <li key={d.id}>
+                      <span>{d.title}</span>
+                      <span className="detail">{d.fileName}</span>
                     </li>
                   ))}
                 </ul>
               )}
-
-              {s.items.length === 0 &&
-              s.entries.every((e) => e.value === null) ? (
-                <p className="mt-1 text-sm italic text-ink-subtle">
-                  {/* A wired section is not a setup gap, so it must not send the
-                      reader to the wizard for something the wizard cannot fix. */}
-                  {s.gatesCompletion ? 'Not yet recorded.' : 'None recorded.'}{' '}
-                  <Link
-                    href={s.manageHref ?? setupHref}
-                    className="font-semibold text-brand-700 underline print:hidden"
-                  >
-                    {s.gatesCompletion
-                      ? 'Complete in Project setup'
-                      : 'Manage this'}
-                  </Link>
-                </p>
-              ) : (
-                <dl className="mt-2 space-y-2">
-                  {s.entries
-                    .filter((e) => e.value !== null)
-                    .map((e) => (
-                      <div key={e.label}>
-                        <dt className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">
-                          {e.label}
-                        </dt>
-                        <dd className="whitespace-pre-line text-sm text-ink">
-                          {e.value}
-                        </dd>
-                      </div>
-                    ))}
-                </dl>
-              )}
-              {s.status === 'PARTIAL' && (
-                <p className="mt-2 border-l-2 border-hivis-500 pl-2 text-xs text-ink-muted">
-                  Section incomplete. Still required: {s.missing.join(', ')}.
-                </p>
-              )}
-            </li>
-          ))}
-
-          <li className="break-inside-avoid">
-            <h3 className="text-base font-bold text-ink">
-              {sections.length + 1}. Drawings and emergency plans
-            </h3>
-            {drawings.length === 0 ? (
-              <p className="mt-1 text-sm italic text-ink-subtle">
-                No site layout drawings or emergency plans filed.
+              <p className="cpp-p" style={{ marginTop: '10px' }}>
+                Drawings are held in the site&rsquo;s document register and issued
+                alongside this plan.
               </p>
-            ) : (
-              <ul className="mt-2 list-inside list-disc text-sm text-ink">
-                {drawings.map((d) => (
-                  <li key={d.id}>
-                    {d.title}{' '}
-                    <span className="text-ink-subtle">({d.fileName})</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="mt-1 text-xs text-ink-subtle">
-              Drawings are held in the site&apos;s document register and issued
-              alongside this plan.
-            </p>
-          </li>
-        </ol>
-
-        {/* APPROVAL.
-            This was three blank lines to be filled in with a pen after printing,
-            which was the whole of the approval mechanism. On an ISSUED revision
-            it is now the recorded act: who approved it, the authority they held
-            at the time, the declaration they accepted and their signature. On a
-            working draft it stays blank lines, because nothing has been
-            approved and pretending otherwise is the failure being fixed. */}
-        <section className="mt-8 break-inside-avoid border-t border-line pt-4">
-          <h3 className="text-base font-bold text-ink">
-            Duty holder review and approval
-          </h3>
-          {viewingRevision?.status === 'ISSUED' ||
-          viewingRevision?.status === 'SUPERSEDED' ? (
-            <div className="mt-2">
-              <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
-                <div>
-                  <dt className="inline font-semibold">Approved by: </dt>
-                  <dd className="inline">
-                    {viewingRevision.signedName ??
-                      viewingRevision.issuedByName ??
-                      'Not recorded'}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="inline font-semibold">Position: </dt>
-                  <dd className="inline">
-                    {viewingRevision.approverRole
-                      ? viewingRevision.approverRole.replace(/_/g, ' ').toLowerCase()
-                      : 'Not recorded'}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="inline font-semibold">Date: </dt>
-                  <dd className="inline">
-                    {viewingRevision.issuedAt
-                      ? formatDateTimeUK(viewingRevision.issuedAt)
-                      : 'Not recorded'}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="inline font-semibold">Revision: </dt>
-                  <dd className="inline">{viewingRevision.version}</dd>
-                </div>
-              </dl>
-
-              {viewingRevision.declarationText && (
-                <p className="mt-3 border-l-2 border-line pl-3 text-xs text-ink-muted">
-                  {viewingRevision.declarationText}
-                </p>
-              )}
-
-              {viewingRevision.signatureType === 'DRAWN' ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={`/api/platform/sites/${cpp.site.id}/cpp-revisions/${viewingRevision.id}/signature`}
-                  alt={`Signature of ${viewingRevision.signedName ?? 'the approver'}`}
-                  className="mt-3 h-16 w-auto"
-                />
-              ) : viewingRevision.signedName ? (
-                /* Same stack the induction record uses for a typed signature —
-                   there is no Tailwind `font-signature` class, and inventing one
-                   here would have rendered in the body face without erroring. */
-                <p
-                  className="mt-3 text-2xl text-ink"
-                  style={{
-                    fontFamily: '"Segoe Script", "Brush Script MT", cursive',
-                  }}
-                >
-                  {viewingRevision.signedName}
-                </p>
-              ) : null}
-
-              {/* An honest gap rather than a blank space. Revisions issued
-                  before approval capture existed have no signature, and
-                  back-filling one would invent evidence nobody gave. */}
-              {!viewingRevision.signedName && (
-                <p className="mt-3 text-xs italic text-ink-subtle">
-                  This revision was issued before approval records were captured,
-                  so no signature is held for it.
-                </p>
-              )}
             </div>
-          ) : (
-            <>
-              <p className="mt-1 text-xs text-ink-muted">
-                This is a working draft. Approval is recorded when a revision is
-                issued.
-              </p>
-              <div className="mt-4 grid gap-6 sm:grid-cols-3">
-                {['Reviewed by', 'Position', 'Date'].map((label) => (
-                  <div key={label}>
-                    <div className="h-8 border-b border-ink-subtle" />
-                    <p className="mt-1 text-xs text-ink-subtle">{label}</p>
+          </div>
+
+          {/* APPROVAL. The heaviest rule on the page, then air, then the
+              signature. No frame — the rule does the work. */}
+          <div className="cpp-approval">
+            <h2 className="cpp-h" style={{ fontSize: '20px', marginBottom: '5px' }}>
+              Duty holder approval
+            </h2>
+            <p className="meta">
+              {viewingRevision?.status === 'ISSUED' ||
+              viewingRevision?.status === 'SUPERSEDED'
+                ? `Revision ${String(viewingRevision.version).padStart(2, '0')} · approved and issued ${
+                    viewingRevision.issuedAt
+                      ? formatDateUK(viewingRevision.issuedAt)
+                      : ''
+                  }`
+                : 'Approval is recorded when a revision is issued'}
+            </p>
+
+            {viewingRevision?.status === 'ISSUED' ||
+            viewingRevision?.status === 'SUPERSEDED' ? (
+              <>
+                {viewingRevision.declarationText && (
+                  <p className="cpp-decl">{viewingRevision.declarationText}</p>
+                )}
+                <dl className="cpp-who">
+                  <div>
+                    <dt>Approved by</dt>
+                    <dd>
+                      {viewingRevision.signedName ??
+                        viewingRevision.issuedByName ??
+                        'Not recorded'}
+                    </dd>
                   </div>
-                ))}
-              </div>
-            </>
-          )}
-        </section>
+                  <div>
+                    <dt>Position</dt>
+                    <dd>
+                      {viewingRevision.approverRole
+                        ? viewingRevision.approverRole
+                            .replace(/_/g, ' ')
+                            .toLowerCase()
+                            .replace(/^./, (c) => c.toUpperCase())
+                        : 'Not recorded'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Date</dt>
+                    <dd>
+                      {viewingRevision.issuedAt
+                        ? formatDateUK(viewingRevision.issuedAt)
+                        : 'Not recorded'}
+                    </dd>
+                  </div>
+                </dl>
+                <div style={{ maxWidth: '330px' }}>
+                  {viewingRevision.signatureType === 'DRAWN' ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={`/api/platform/sites/${cpp.site.id}/cpp-revisions/${viewingRevision.id}/signature`}
+                      alt={`Signature of ${viewingRevision.signedName ?? 'the approver'}`}
+                      style={{ height: '58px', width: 'auto', display: 'block' }}
+                    />
+                  ) : viewingRevision.signedName ? (
+                    <span className="cpp-sig">{viewingRevision.signedName}</span>
+                  ) : (
+                    <span className="cpp-sigline" />
+                  )}
+                  <p className="cpp-sigcap">
+                    {viewingRevision.signedName
+                      ? 'Signature of approver'
+                      : 'Issued before approval records were captured'}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="cpp-decl">
+                  This is a working draft. The Principal Contractor approves and
+                  issues the plan, and the approval is recorded here.
+                </p>
+                <dl className="cpp-who">
+                  <div><dt>Approved by</dt><dd className="cpp-sigline" /></div>
+                  <div><dt>Position</dt><dd className="cpp-sigline" /></div>
+                  <div><dt>Date</dt><dd className="cpp-sigline" /></div>
+                </dl>
+              </>
+            )}
+          </div>
+
+          {/* COLOPHON. The branding, and all of it: a small mark and one line of
+              provenance. The document is the Principal Contractor's; it was
+              produced here. */}
+          <div className="cpp-foot">
+            <span className="mark">
+              <svg viewBox="0 0 32 32" aria-hidden="true">
+                <circle cx="16" cy="16" r="14" fill="none" stroke="#71767c" strokeWidth="3" />
+                <path
+                  d="M9.5 16.6l4.4 4.4 8.6-9.2"
+                  fill="none"
+                  stroke="#16181a"
+                  strokeWidth="3.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              Prepared and issued in SiteComply
+            </span>
+            <span>
+              {cpp.site.jobReference}
+              {viewingRevision
+                ? ` · Revision ${String(viewingRevision.version).padStart(2, '0')}`
+                : ' · Working draft'}
+            </span>
+          </div>
+        </main>
       </article>
     </PlatformShell>
   );
