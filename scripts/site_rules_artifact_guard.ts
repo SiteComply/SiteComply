@@ -131,8 +131,12 @@ function main() {
   // STRING LITERALS ONLY — this reads the compiled bundle, where source shape
   // (`key: 'site-rules'`, quoting, whitespace) does not survive. An earlier fix
   // here matched source shape and failed a perfectly good build; see the header.
-  chk('the Site rules section label',
-      server.includes('Site rules (induction)'));
+  // The suffix was removed once "Additional site information" had done the
+  // disambiguating: renaming the OTHER field is what resolved the collision, so
+  // the rule set keeps the plain name. Asserted as an ABSENCE paired with the
+  // description below, which is the unique literal proving the tab shipped.
+  chk('the Site rules section label carries no disambiguating suffix',
+      server.includes('Site rules') && !server.includes('Site rules (induction)'));
   chk('  and its description names the induction, not the free-text field',
       server.includes('The numbered rules operatives agree to at induction'));
   // The free-text field's new name must ship too, or the two are still

@@ -184,7 +184,7 @@ export default async function SiteExperiencePage({
       // come first in the induction itself, and a manager setting a site up thinks
       // about what people must follow before what they must wear.
       key: 'site-rules',
-      label: 'Site rules (induction)',
+      label: 'Site rules',
       description:
         'The numbered rules operatives agree to at induction, and review any time on Site information.',
       group: SECTION_GROUP.induction,

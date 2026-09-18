@@ -678,14 +678,19 @@ function main() {
   const infoCfg = readFileSync('components/platform/SiteInformationConfig.tsx', 'utf8');
   const wizard = readFileSync('components/platform/SiteSetupWizard.tsx', 'utf8');
 
-  chk('[14] the library tab names the induction',
-      /label: 'Site rules \(induction\)'/.test(exp));
+  // Plain "Site rules" — the collision was resolved by renaming the free-text
+  // field, so the rule set does not need a suffix to be unambiguous. The tab's
+  // DESCRIPTION still names the induction, which is where that belongs.
+  chk('[14] the library tab is labelled plainly',
+      /label: 'Site rules',/.test(exp) && !/Site rules \(induction\)/.test(exp));
+  chk('[14]   — and its description still names the induction',
+      /The numbered rules operatives agree to at induction/.test(exp));
   chk('[14] the free-text field is no longer called "Site rules"',
       !/label="Site rules"/.test(infoCfg));
   chk('[14]   — it is called Additional site information',
       /label="Additional site information"/.test(infoCfg));
   chk('[14]   — and points at the right editor for actual rules',
-      /Site rules \(induction\)/.test(infoCfg));
+      /use the Site rules section/.test(infoCfg));
   chk('[14] the setup wizard agrees with the editor',
       /label: 'Additional site information'/.test(wizard) &&
       !/'siteRules', label: 'Site rules'/.test(wizard));

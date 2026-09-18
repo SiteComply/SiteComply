@@ -64,8 +64,13 @@ grep -q "alsoWhenSiteRules: true" components/worker/WorkerNav.tsx \
 grep -q "await siteHasSiteRules(activeSiteId)" components/worker/WorkerShell.tsx \
   || fail "the shell does not resolve site-rules visibility"
 # The renames. A regression here re-creates the exact confusion being fixed.
-grep -q "label: 'Site rules (induction)'" "app/platform/dashboard/sites/[id]/experience/page.tsx" \
-  || fail "the library tab is not distinguished from the free-text field"
+EXP="app/platform/dashboard/sites/[id]/experience/page.tsx"
+grep -q "label: 'Site rules'," "$EXP" \
+  || fail "the Site rules tab label is missing"
+grep -q "Site rules (induction)" "$EXP" \
+  && fail "the '(induction)' suffix is back - it was removed deliberately"
+grep -q "The numbered rules operatives agree to at induction" "$EXP" \
+  || fail "the tab description no longer names the induction"
 grep -q 'label="Additional site information"' components/platform/SiteInformationConfig.tsx \
   || fail "the free-text field is still labelled Site rules"
 grep -q "label: 'Additional site information'" components/platform/SiteSetupWizard.tsx \
