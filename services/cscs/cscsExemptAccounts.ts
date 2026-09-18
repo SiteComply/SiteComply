@@ -21,9 +21,15 @@
  * ── WHY THIS CANNOT BECOME A COMPLIANCE HOLE ──────────────────────────────
  *
  * An exempt worker is routed to the MOCK provider, which is inert in production:
- * it returns UNVERIFIED with "Card details recorded. Automatic CSCS checking is
- * not switched on yet", and `verified` is false. So the worst this can do is
- * leave a test account permanently unverified — never mark one compliant.
+ * it returns UNVERIFIED with "This test account is exempt from CSCS verification
+ * and can continue without a card check", and `verified` is false. So the worst
+ * this can do is leave a test account permanently unverified — never mark one
+ * compliant.
+ *
+ * The wording is the mock's 'exempt-account' reason, passed by the one branch in
+ * resolveCscsProvider below. It is only the EXPLANATION: an unconfigured tenant
+ * still reads "Automatic CSCS checking is not switched on yet", and both cases
+ * return the identical UNVERIFIED / verified:false result.
  *
  * That direction matters. A bypass that fails towards "not verified" is a
  * nuisance; one that fails towards "verified" is a competent-looking record for
