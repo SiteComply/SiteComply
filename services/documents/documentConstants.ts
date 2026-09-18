@@ -9,13 +9,16 @@ export type DocumentCategoryValue =
   | 'RAMS'
   | 'INSURANCE'
   | 'CERTIFICATE'
+  | 'DRAWING'
   | 'GENERAL';
 
 /**
  * Selectable document categories, in display order, with human labels.
  *
- * Deliberately kept to four broad buckets — expand only if a genuine business
- * requirement emerges. RAMS also covers method statements; CERTIFICATE covers
+ * Deliberately kept to a few broad buckets — expand only if a genuine business
+ * requirement emerges. DRAWING was the one such case: the Construction Phase
+ * Plan needs to list site layout drawings and emergency plans as an appendix,
+ * and was inferring them from words in filenames. RAMS also covers method statements; CERTIFICATE covers
  * training/plant/other certificates; GENERAL covers permits, toolbox talks and
  * anything else.
  */
@@ -26,6 +29,10 @@ export const DOCUMENT_CATEGORIES: {
   { value: 'RAMS', label: 'RAMS' },
   { value: 'INSURANCE', label: 'Insurance' },
   { value: 'CERTIFICATE', label: 'Certificates' },
+  // CPP Tier 2 — the appendix used to guess at these from filenames. Listed
+  // before General so it is a visible choice when filing, not a category people
+  // discover after the fact.
+  { value: 'DRAWING', label: 'Drawings & Site Plans' },
   { value: 'GENERAL', label: 'General Documents' },
 ];
 

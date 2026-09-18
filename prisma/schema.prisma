@@ -119,6 +119,12 @@ enum DocumentCategory {
   RAMS //         Risk Assessment & Method Statement
   INSURANCE
   CERTIFICATE //  Training, plant and other certificates
+  /// CPP Tier 2 — site layout drawings and emergency plans, which the
+  /// Construction Phase Plan lists as an appendix. Previously these were found
+  /// by matching the words "drawing", "layout", "plan" or "emergency" in a
+  /// filename, which silently missed "Site Setup 02.pdf" and wrongly swept in
+  /// "Action plan.pdf". A category is the honest way to ask the question.
+  DRAWING
   GENERAL //      Anything else (permits, toolbox talks, misc paperwork)
 }
 
@@ -463,6 +469,7 @@ model JobSite {
   workerPanelSettings WorkerPanelSetting[]
   /// SC-023 Phase 3 — competency and induction requirements for access.
   accessRequirements  SiteAccessRequirement[]
+  riskTopics          SiteRiskTopic[]
   /// SC-024 — generated project close-out packs.
   closeOutPacks       CloseOutPack[]
 
@@ -3024,6 +3031,78 @@ model CloseOutPackShareView {
   ipHash String?
 
   @@index([shareId, viewedAt])
+}
+
+/// CPP Tier 2 — the significant-risk topics from HSE L153 Appendix 3.
+///
+/// Members match `key` in services/sites/cppRiskTopics.ts exactly. That file is
+/// the display catalogue (labels, hints, grouping); this enum is the storage.
+/// Adding a topic means adding it in BOTH, and the verification suite asserts
+/// the two agree rather than trusting that they do.
+enum RiskTopic {
+  // Safety risks
+  DELIVERY_REMOVAL_MATERIALS
+  SERVICES
+  ADJACENT_LAND_USE
+  STABILITY_OF_STRUCTURES
+  PREVENTING_FALLS
+  FRAGILE_MATERIALS
+  LIFTING_OPERATIONS
+  PLANT_MAINTENANCE
+  EXCAVATIONS_GROUND
+  TRAFFIC_PEDESTRIAN
+  STORAGE_OF_MATERIALS
+  WELLS_TUNNELS
+  WORK_NEAR_WATER
+  DIVING
+  CAISSON_COMPRESSED_AIR
+  EXPLOSIVES
+  OTHER_SAFETY
+  // Health risks
+  ASBESTOS
+  CONTAMINATED_LAND
+  MANUAL_HANDLING
+  HAZARDOUS_SUBSTANCES
+  NOISE_VIBRATION
+  IONISING_RADIATION
+  UV_RADIATION
+  OTHER_HEALTH
+}
+
+/// CPP Tier 2 — one significant-risk topic, as decided for one site.
+///
+/// THREE STATES, and the middle one is the point. `applicable` null means the
+/// topic has not been considered; false is a recorded decision by a named person
+/// that it does not apply; true means it applies and `controls` describes how it
+/// is managed. "We considered diving operations and there are none" and "nobody
+/// thought about it" are different things, and a construction phase plan that
+/// cannot tell them apart is the problem this replaces.
+///
+/// NO ROW = UNANSWERED. Topics are deliberately not seeded: pre-filling every
+/// site with "not applicable" would manufacture the appearance of consideration,
+/// which is exactly the failure mode being fixed.
+model SiteRiskTopic {
+  id        String  @id @default(cuid())
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+
+  topic RiskTopic
+
+  /// null = not yet considered, false = does not apply, true = applies.
+  applicable Boolean?
+
+  /// How the risk is controlled. Expected when `applicable` is true; ignored
+  /// otherwise, so switching a topic off does not destroy what was written.
+  controls String?
+
+  updatedByUserId String?
+  updatedByName   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([jobSiteId, topic])
+  @@index([jobSiteId, applicable])
 }
 
 /// SC-025 — append-only record of project closure and reopening.

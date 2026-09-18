@@ -5,6 +5,7 @@ import { completenessFor } from '@/services/sites/siteSetupService';
 import { getSiteRules } from '@/services/checklists/siteRulesService';
 import { getSitePpeRequirements } from '@/services/checklists/sitePpeService';
 import { getSiteServiceConfig } from '@/services/siteServices/siteServiceAvailability';
+import { getRiskRegister } from '@/services/sites/cppRiskService';
 import type {
   DerivedCompleteness,
   SectionStatus,
@@ -95,8 +96,14 @@ export interface CppDraft {
   outstanding: { title: string; status: SectionStatus; missing: string[] }[];
 }
 
-/** Documents that belong in a CPP appendix — drawings and emergency plans. */
-const DRAWING_TITLE_HINTS = ['drawing', 'layout', 'plan', 'emergency'];
+/*
+ * DRAWING_TITLE_HINTS was here: ['drawing','layout','plan','emergency'], matched
+ * against a document's title and filename to decide what belonged in the
+ * appendix. It silently omitted "Site Setup 02.pdf" and wrongly swept in
+ * "Action plan.pdf", and no amount of extra words would have fixed guessing.
+ * Documents now carry a DRAWING category, so the appendix asks the register
+ * instead of inferring from a filename.
+ */
 
 /**
  * Access requirements in the language of a construction phase plan.
@@ -144,7 +151,7 @@ export async function getCppDraft(
       contacts: { orderBy: { order: 'asc' } },
       documents: {
         orderBy: { createdAt: 'desc' },
-        select: { id: true, title: true, fileName: true },
+        select: { id: true, title: true, fileName: true, category: true },
       },
     },
   });
@@ -163,7 +170,7 @@ export async function getCppDraft(
    * the same single-source rule the setup sections follow. Nothing here is
    * captured for the CPP's benefit, and nothing here is stored.
    */
-  const [rules, ppe, serviceGroups, inductionCfg, accessReqs, ramsDocs, schedules] =
+  const [rules, ppe, serviceGroups, inductionCfg, accessReqs, ramsDocs, schedules, risks] =
     await Promise.all([
       getSiteRules(siteId),
       getSitePpeRequirements(siteId),
@@ -188,6 +195,7 @@ export async function getCppDraft(
           auditTemplate: { select: { name: true } },
         },
       }),
+      getRiskRegister(siteId),
     ]);
 
   const fmtDate = (d: Date | null | undefined) =>
@@ -254,6 +262,64 @@ export async function getCppDraft(
     missing: [],
     gatesCompletion: false,
   });
+
+  /**
+   * A risk register section. Reference content like the wired sections: the
+   * register does not gate setup completion, because completion belongs to the
+   * setup steps and Tier 2 must not move anybody's percentage any more than
+   * Tier 1 did. Its own state is reported separately, in the entries.
+   */
+  const riskSection = (
+    key: string,
+    title: string,
+    kind: 'SAFETY' | 'HEALTH',
+  ): CppSection => {
+    const rows = risks.rows.filter((r) => r.kind === kind);
+    const applies = rows.filter((r) => r.answer === 'APPLIES');
+    const notApplicable = rows.filter((r) => r.answer === 'NOT_APPLICABLE');
+    const unanswered = rows.filter((r) => r.answer === 'UNANSWERED');
+    return {
+      key,
+      title,
+      stepKey: null,
+      manageHref: `/platform/dashboard/sites/${siteId}/risks`,
+      entries: [
+        {
+          label: 'Topics considered',
+          value: `${applies.length + notApplicable.length} of ${rows.length} considered — ${applies.length} apply to this site, ${notApplicable.length} recorded as not applicable.`,
+        },
+        {
+          // Named plainly rather than buried: an unconsidered topic is the
+          // failure this section exists to prevent.
+          label: 'Not yet considered',
+          value:
+            unanswered.length === 0
+              ? null
+              : `${unanswered.length} topic${unanswered.length === 1 ? '' : 's'}: ${unanswered.map((r) => r.label).join('; ')}.`,
+        },
+      ],
+      items: [
+        ...applies.map((r) => ({
+          label: r.label,
+          detail:
+            (r.controls ?? '').trim() === ''
+              ? 'APPLIES — control measures not yet recorded'
+              : r.controls,
+        })),
+        ...notApplicable.map((r) => ({
+          label: r.label,
+          detail: 'Considered — does not apply to this site',
+        })),
+      ],
+      status: rows.every((r) => r.answer !== 'UNANSWERED')
+        ? 'COMPLETE'
+        : rows.some((r) => r.answer !== 'UNANSWERED')
+          ? 'PARTIAL'
+          : 'EMPTY',
+      missing: [],
+      gatesCompletion: false,
+    };
+  };
 
   const sections: CppSection[] = [
     section('project', 'Project description and programme', 'project', [
@@ -449,6 +515,21 @@ export async function getCppDraft(
       { label: 'Site-specific hazards', value: clean(info?.siteHazards) },
       { label: 'Existing site risks', value: clean(info?.existingSiteRisks) },
     ]),
+    /*
+     * THE STATUTORY RISK REGISTER — L153 Appendix 3.
+     *
+     * The narrative hazard fields above stay: they are the site's own
+     * description, and a PC who has written a good one should not lose it. This
+     * is the structured list beneath, so a topic cannot be omitted by not being
+     * thought of.
+     *
+     * A topic recorded as NOT APPLICABLE is PRINTED, not hidden. That is the
+     * whole value of asking: "considered, does not apply" is a statement a duty
+     * holder made, and it is what distinguishes a considered plan from a silent
+     * one. Unanswered topics are printed too, as open questions.
+     */
+    riskSection('risks-safety', 'Significant safety risks and controls', 'SAFETY'),
+    riskSection('risks-health', 'Significant health risks and controls', 'HEALTH'),
     section('high-risk', 'High-risk activities', 'high-risk', [
       { label: 'High-risk activities', value: clean(info?.highRiskActivities) },
     ]),
@@ -537,13 +618,7 @@ export async function getCppDraft(
 
   // Site layout drawings and emergency plans live in the Documents register
   // (Phase 1 decision), so the appendix references them rather than duplicating.
-  const drawings = site.documents.filter((d) =>
-    DRAWING_TITLE_HINTS.some(
-      (h) =>
-        d.title.toLowerCase().includes(h) ||
-        d.fileName.toLowerCase().includes(h),
-    ),
-  );
+  const drawings = site.documents.filter((d) => d.category === 'DRAWING');
 
   // Latest touch across the contributing records — provenance for the document.
   const stamps: { at: Date; by: string | null }[] = [];
