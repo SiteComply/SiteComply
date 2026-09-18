@@ -5,6 +5,12 @@ import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
 import { PrintButton } from '@/components/worker/PrintButton';
 import { requirePlatformViewer } from '@/services/platformUsers/platformAccess';
 import { getCppDraft } from '@/services/sites/cppService';
+import {
+  getRevisionState,
+  getRevision,
+} from '@/services/sites/cppRevisionService';
+import { CppRevisionBar } from '@/components/platform/CppRevisionBar';
+import { permits, canEditSite } from '@/services/platformUsers/platformPermissions';
 import { formatDateTimeUK } from '@/lib/datetime';
 
 export const dynamic = 'force-dynamic';
@@ -23,12 +29,35 @@ export const dynamic = 'force-dynamic';
  */
 export default async function SiteCppPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: { revision?: string };
 }) {
   const viewer = await requirePlatformViewer();
   const cpp = await getCppDraft(viewer, params.id);
   if (!cpp) notFound();
+
+  /*
+   * THE LIVE DRAFT IS STILL ASSEMBLED EVERY TIME. Document control did not turn
+   * the CPP into stored data — it added frozen revisions ALONGSIDE the live
+   * view, and the revision state compares the two. Everything below renders the
+   * live draft unless a specific revision was asked for.
+   */
+  const revisionState = await getRevisionState(viewer, params.id, cpp);
+  const viewingRevision = searchParams.revision
+    ? await getRevision(viewer, params.id, searchParams.revision)
+    : null;
+
+  // A frozen revision replaces the SECTIONS and drawings; the gap list and
+  // completeness describe live setup progress and belong to the working draft,
+  // so they are hidden when reading history rather than shown misleadingly.
+  const sections = viewingRevision
+    ? viewingRevision.snapshot.sections
+    : cpp.sections;
+  const drawings = viewingRevision
+    ? viewingRevision.snapshot.drawings
+    : cpp.drawings;
 
   const setupHref = `/platform/dashboard/sites/${cpp.site.id}/setup`;
 
@@ -46,6 +75,48 @@ export default async function SiteCppPage({
           ]}
         />
       </div>
+
+      {revisionState && (
+        <CppRevisionBar
+          siteId={cpp.site.id}
+          issued={
+            revisionState.issued
+              ? {
+                  id: revisionState.issued.id,
+                  version: revisionState.issued.version,
+                  status: revisionState.issued.status,
+                  preparedByName: revisionState.issued.preparedByName,
+                  issuedByName: revisionState.issued.issuedByName,
+                  issuedAt: revisionState.issued.issuedAt?.toISOString() ?? null,
+                }
+              : null
+          }
+          draft={
+            revisionState.draft
+              ? {
+                  id: revisionState.draft.id,
+                  version: revisionState.draft.version,
+                  status: revisionState.draft.status,
+                  preparedByName: revisionState.draft.preparedByName,
+                  issuedByName: null,
+                  issuedAt: null,
+                }
+              : null
+          }
+          drift={revisionState.driftFromIssued}
+          viewing={
+            viewingRevision
+              ? {
+                  kind: 'REVISION',
+                  version: viewingRevision.version,
+                  status: viewingRevision.status,
+                }
+              : { kind: 'LIVE' }
+          }
+          canCreate={permits(viewer.role, 'sites', 'edit')}
+          canIssue={canEditSite(viewer.role)}
+        />
+      )}
 
       {/* Screen-only controls. */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
@@ -72,7 +143,7 @@ export default async function SiteCppPage({
 
       {/* Gap list — screen only. A plan with silent holes is worse than one that
           says what is missing, so this is shown before the document itself. */}
-      {cpp.outstanding.length > 0 && (
+      {!viewingRevision && cpp.outstanding.length > 0 && (
         <div className="mb-4 rounded-xl border border-hivis-500/40 bg-hivis-500/10 p-4 print:hidden">
           <p className="text-sm font-semibold text-ink">
             {cpp.outstanding.length} section
@@ -118,9 +189,28 @@ export default async function SiteCppPage({
         {/* DRAFT status is stated on screen AND in print. Software can assemble a
             CPP; it cannot warrant that the plan is adequate — that is the
             Principal Contractor's duty under CDM 2015. */}
-        <div className="mb-5 rounded-lg border-2 border-hivis-500 bg-hivis-500/10 p-3 print:rounded-none">
+        {/* THE STATUS BANNER MUST MATCH WHAT IS BEING READ. It said "Draft"
+            unconditionally, which was true when the CPP was only ever a live
+            view. Printing "draft" across an issued revision — or "issued" across
+            a working draft — would be the document lying about its own standing,
+            which is the one thing document control cannot tolerate. */}
+        <div
+          className={`mb-5 rounded-lg border-2 p-3 print:rounded-none ${
+            viewingRevision?.status === 'ISSUED'
+              ? 'border-safe-500 bg-safe-50'
+              : viewingRevision?.status === 'SUPERSEDED'
+                ? 'border-ink-subtle bg-surface-sunken'
+                : 'border-hivis-500 bg-hivis-500/10'
+          }`}
+        >
           <p className="text-sm font-bold uppercase tracking-wide text-ink">
-            Draft — for duty holder review and approval
+            {viewingRevision?.status === 'ISSUED'
+              ? `Issued — Revision ${viewingRevision.version}`
+              : viewingRevision?.status === 'SUPERSEDED'
+                ? `Superseded — Revision ${viewingRevision.version}`
+                : viewingRevision
+                  ? `Draft revision ${viewingRevision.version} — not yet issued`
+                  : 'Working draft — for duty holder review and approval'}
           </p>
           <p className="mt-1 text-xs text-ink-muted">
             This document has been assembled automatically from the information
@@ -145,12 +235,26 @@ export default async function SiteCppPage({
           <p className="text-sm text-ink-muted">{cpp.site.address}</p>
           <dl className="mt-3 grid gap-x-6 gap-y-1 text-xs text-ink-subtle sm:grid-cols-2">
             <div>
-              <dt className="inline font-semibold">Draft generated: </dt>
+              <dt className="inline font-semibold">
+                {viewingRevision ? 'Revision prepared: ' : 'Draft generated: '}
+              </dt>
               <dd className="inline">
-                {formatDateTimeUK(cpp.meta.generatedAt)} by{' '}
-                {cpp.meta.generatedByName}
+                {viewingRevision
+                  ? `${formatDateTimeUK(viewingRevision.preparedAt)} by ${viewingRevision.preparedByName}`
+                  : `${formatDateTimeUK(cpp.meta.generatedAt)} by ${cpp.meta.generatedByName}`}
               </dd>
             </div>
+            {viewingRevision?.issuedAt && (
+              <div>
+                <dt className="inline font-semibold">Issued: </dt>
+                <dd className="inline">
+                  {formatDateTimeUK(viewingRevision.issuedAt)}
+                  {viewingRevision.issuedByName
+                    ? ` by ${viewingRevision.issuedByName}`
+                    : ''}
+                </dd>
+              </div>
+            )}
             <div>
               <dt className="inline font-semibold">
                 Information last updated:{' '}
@@ -165,13 +269,18 @@ export default async function SiteCppPage({
                   : 'Not yet recorded'}
               </dd>
             </div>
-            <div>
-              <dt className="inline font-semibold">Setup completeness: </dt>
-              <dd className="inline">
-                {cpp.completeness.completed} of {cpp.completeness.applicable}{' '}
-                sections ({cpp.completeness.percent}%)
-              </dd>
-            </div>
+            {/* Live setup progress. Hidden against a frozen revision, where it
+                would report TODAY's completeness beside a historic document. */}
+            {!viewingRevision && (
+              <div>
+                <dt className="inline font-semibold">Setup completeness: </dt>
+                <dd className="inline">
+                  {cpp.completeness.completed} of {cpp.completeness.applicable}{' '}
+                  sections ({cpp.completeness.percent}%)
+                </dd>
+              </div>
+            )}
+            {!viewingRevision && (
             <div>
               <dt className="inline font-semibold">Status: </dt>
               {/* PRINTED, and previously the lie. This read "All required
@@ -187,11 +296,12 @@ export default async function SiteCppPage({
                     } outstanding`}
               </dd>
             </div>
+            )}
           </dl>
         </header>
 
         <ol className="space-y-6">
-          {cpp.sections.map((s, idx) => (
+          {sections.map((s, idx) => (
             <li key={s.key} className="break-inside-avoid">
               <h3 className="text-base font-bold text-ink">
                 {idx + 1}. {s.title}
@@ -260,15 +370,15 @@ export default async function SiteCppPage({
 
           <li className="break-inside-avoid">
             <h3 className="text-base font-bold text-ink">
-              {cpp.sections.length + 1}. Drawings and emergency plans
+              {sections.length + 1}. Drawings and emergency plans
             </h3>
-            {cpp.drawings.length === 0 ? (
+            {drawings.length === 0 ? (
               <p className="mt-1 text-sm italic text-ink-subtle">
                 No site layout drawings or emergency plans filed.
               </p>
             ) : (
               <ul className="mt-2 list-inside list-disc text-sm text-ink">
-                {cpp.drawings.map((d) => (
+                {drawings.map((d) => (
                   <li key={d.id}>
                     {d.title}{' '}
                     <span className="text-ink-subtle">({d.fileName})</span>

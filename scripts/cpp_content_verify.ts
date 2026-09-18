@@ -79,8 +79,16 @@ function main() {
   console.log('\n[4] Everything is read, nothing is captured or stored');
   chk('[4] no write reaches the CPP service',
     !/prisma\.\w+\.(create|update|upsert|delete|createMany|updateMany)/.test(svcCode));
-  chk('[4] the schema is untouched by this change',
-    !/model Cpp|CppRevision/.test(readFileSync('prisma/schema.prisma', 'utf8')));
+  // This asserted the schema had NO CPP model, which was true when Tier 1
+  // shipped and stopped being true when document control added CppRevision.
+  // The claim it was really making — that Tier 1 content is assembled from its
+  // source modules and never kept as a second copy — survives, so that is what
+  // it asserts now. A frozen revision snapshot is a different thing: a dated
+  // record for document control, not a rival source of truth.
+  chk('[4] the CPP still assembles content from its source modules',
+    !/prisma\.cppRevision/.test(svcCode));
+  chk('[4] CONTROL — it does read the source modules directly',
+    /prisma\.document\.findMany/.test(svcCode) && /getSiteRules\(siteId\)/.test(svcCode));
   chk('[4] the draft is still assembled per request, not snapshotted',
     /export async function getCppDraft/.test(svcCode) && !/snapshot/i.test(svcCode));
 

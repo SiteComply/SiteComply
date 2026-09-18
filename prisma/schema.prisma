@@ -471,6 +471,7 @@ model JobSite {
   accessRequirements  SiteAccessRequirement[]
   riskTopics          SiteRiskTopic[]
   arrangements        SiteArrangement[]
+  cppRevisions        CppRevision[]
   /// SC-024 — generated project close-out packs.
   closeOutPacks       CloseOutPack[]
 
@@ -3032,6 +3033,111 @@ model CloseOutPackShareView {
   ipHash String?
 
   @@index([shareId, viewedAt])
+}
+
+/// CPP document control Phase A — the lifecycle of one revision.
+///
+/// APPROVED AND ISSUED ARE ONE STATE by decision: approving and distributing are
+/// a single act for the projects this serves, and a state nobody transitions
+/// through is a state that lies about the workflow.
+///
+/// Phase B adds the approval record and signature behind ISSUED. Postgres can
+/// add enum values, so IN_REVIEW and WITHDRAWN can arrive then without touching
+/// what is stored here.
+enum CppRevisionStatus {
+  DRAFT //       being prepared; the snapshot is taken but nothing is in force
+  ISSUED //      the version in force
+  SUPERSEDED //  a later revision has been issued
+}
+
+/// CPP document control Phase A — a controlled revision of the Construction
+/// Phase Plan.
+///
+/// ── WHY THIS EXISTS ──────────────────────────────────────────────────────
+///
+/// The CPP was a live view: assembled from current data on every request, with
+/// no version, no issue date and no history. Open it twice and you had two
+/// documents with the same status and no way to tell them apart, and "what did
+/// the plan say in March?" was unanswerable because the March plan no longer
+/// existed. After an incident that is the document that matters.
+///
+/// ── THE SNAPSHOT IS THE POINT, AND IT IS IMMUTABLE ───────────────────────
+///
+/// `snapshot` holds the assembled document as it stood when the revision was
+/// created. Nothing edits it afterwards — not a correction, not a typo fix. A
+/// mistake is fixed by issuing a new revision, which is what document control
+/// means and why the audit trail is append-only.
+///
+/// It freezes CONTENT, not appearance: an old revision re-renders in whatever
+/// design is current. Freezing appearance needs the stored PDF artefact, which
+/// is a later phase — worth knowing before someone assumes otherwise.
+///
+/// ── contentHash ──────────────────────────────────────────────────────────
+///
+/// A hash of the section content only — never generation timestamps or the
+/// completeness figures, or every page load would look like a change and the
+/// drift notice would become noise. Comparing the live draft's hash against the
+/// issued revision's is how the system can say the plan in force no longer
+/// matches the site, which is what makes the CDM duty to review and update
+/// dischargeable rather than aspirational. Same approach as
+/// InductionQuestionBank.contentHash.
+model CppRevision {
+  id        String  @id @default(cuid())
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+
+  /// 1, 2, 3… per site. Shown as "Revision 2".
+  version Int
+  status  CppRevisionStatus @default(DRAFT)
+
+  /// The assembled document, frozen. Never updated after creation.
+  snapshot    Json
+  /// Section content only — see the note above.
+  contentHash String
+
+  preparedByUserId String?
+  preparedByName   String
+  preparedAt       DateTime @default(now())
+
+  issuedByUserId String?
+  issuedByName   String?
+  issuedAt       DateTime?
+
+  supersededAt           DateTime?
+  supersededByRevision   CppRevision?  @relation("CppSupersedes", fields: [supersededByRevisionId], references: [id])
+  supersededByRevisionId String?
+  supersedes             CppRevision[] @relation("CppSupersedes")
+
+  events CppRevisionEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([jobSiteId, version])
+  @@index([jobSiteId, status])
+}
+
+/// CPP document control Phase A — append-only history of what happened to a
+/// revision and who did it.
+///
+/// Append-only on purpose, like SiteClosureEvent: the value of an audit trail is
+/// that it cannot be tidied up afterwards. `action` is a string rather than an
+/// enum so Phase B can record approval events without a migration.
+model CppRevisionEvent {
+  id         String      @id @default(cuid())
+  revision   CppRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  revisionId String
+
+  /// 'CREATED' | 'ISSUED' | 'SUPERSEDED'  (Phase B adds approval actions)
+  action String
+  note   String?
+
+  actorUserId String?
+  actorName   String
+
+  createdAt DateTime @default(now())
+
+  @@index([revisionId, createdAt])
 }
 
 /// CPP Tier 3A — the management arrangements a construction phase plan sets out.
