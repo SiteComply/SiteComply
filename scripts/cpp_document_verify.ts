@@ -119,6 +119,59 @@ function main() {
   chk('[7] an unapproved document shows unsigned rules, not a claim',
     /cpp-sigline/.test(page));
 
+  console.log('\n[8] Print and PDF behave like a controlled document');
+  // The restyle silently dropped the break protection the old markup had, so a
+  // section could split mid-table and the approval block could be orphaned from
+  // its signature. Guarded now so it cannot be lost again.
+  chk('[8] the sheet has a size and real margins',
+    /@page \{[\s\S]*?size: A4;[\s\S]*?margin: 18mm 16mm 22mm;/.test(css));
+  const print = css.slice(css.indexOf('@media print {'));
+  chk('[8] CONTROL — the print block was located',
+    print.includes('.cpp-section') && print.length > 400);
+  for (const [sel, what] of [
+    ['.cpp-doc .cpp-section', 'a section is never split'],
+    ['.cpp-doc .cpp-approval', 'the approval block is never split'],
+    ['.cpp-doc .cpp-items li', 'a register row is never split'],
+    ['.cpp-doc .cpp-who', 'the approver row is never split'],
+  ] as const) {
+    chk(`[8] ${what}`,
+      new RegExp(`${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{[^}]*break-inside: avoid`).test(print));
+  }
+  chk('[8] both the modern and legacy break properties are set — print engines differ',
+    /break-inside: avoid; page-break-inside: avoid/.test(print));
+  chk('[8] a heading never ends a sheet',
+    /break-after: avoid; page-break-after: avoid/.test(print));
+  chk('[8] the plan proper starts on a fresh sheet',
+    /\.cpp-body \{ break-before: page/.test(print));
+  chk('[8] the screen paper treatment is dropped on paper',
+    /box-shadow: none !important/.test(print));
+
+  console.log('\n[9] Contents — navigation without invented page numbers');
+  chk('[9] the contents is part of the document, not chrome',
+    /<nav className="cpp-contents"/.test(page) && !/print:hidden[^>]*cpp-contents/.test(page));
+  chk('[9] every section is listed', /sections\.map\(\(s, idx\) => \(\s*<li/.test(page));
+  chk('[9] the appendix and the approval are listed too',
+    /#cpp-drawings/.test(page) && /#cpp-approval/.test(page));
+  chk('[9] entries are anchors on screen', /href=\{`#cpp-\$\{s\.key\}`\}/.test(page));
+  chk('[9]   and the sections carry matching ids', /id=\{`cpp-\$\{s\.key\}`\}/.test(page));
+  chk('[9] anchors print as plain text, not blue links',
+    /\.cpp-contents a \{ color: inherit; text-decoration: none; \}/.test(print));
+  // THE POINT. A contents page citing a page the PDF then contradicts is a
+  // document-control defect, so there are no page numbers anywhere.
+  // Scoped to the CPP page. A build-wide grep hits the INDUCTION RECORD PDF,
+  // which paginates for real via @react-pdf and can therefore number honestly —
+  // the rule is that a document which cannot know its pagination must not claim
+  // it, not that the string may never appear in the product.
+  chk('[9] NO page numbers are invented in the contents',
+    !/Page \d|pageNumber|\.pg\b/.test(page));
+  chk('[9] CONTROL — the real PDF renderer is allowed to number its pages',
+    /pageNumber/.test(
+      readFileSync('services/inductionRecord/InductionRecordPdf.tsx', 'utf8'),
+    ));
+  chk('[9]   and the reason is recorded', /cannot know where a sheet\s*\n?\s*breaks/.test(css));
+  chk('[9] no simulated pagination on screen',
+    !/page-boundary|simulatedPage|pageHeight/.test(page + css));
+
   console.log(`\n== ${passed} passed, ${failed} failed ==`);
   if (failed > 0) process.exitCode = 1;
 }

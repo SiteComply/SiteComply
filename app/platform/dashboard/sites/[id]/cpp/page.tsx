@@ -354,9 +354,37 @@ export default async function SiteCppPage({
           )}
         </header>
 
-        <main style={{ marginTop: '44px' }}>
+        {/* CONTENTS. Part of the document, not chrome: a real issued plan has
+            one, an auditor uses it to navigate a paper copy, and it prints.
+
+            DELIBERATELY NO PAGE NUMBERS. A scrolling view cannot know where a
+            sheet breaks, and a contents page citing a page the PDF then
+            contradicts is a document-control defect rather than a convenience.
+            Section numbers navigate both paper and screen. On screen each entry
+            is an anchor; in print it is plain text. */}
+        <nav className="cpp-contents" aria-label="Contents">
+          <h2>Contents</h2>
+          <ol>
+            {sections.map((s, idx) => (
+              <li key={s.key}>
+                <span className="n">{idx + 1}.0</span>
+                <a href={`#cpp-${s.key}`}>{s.title}</a>
+              </li>
+            ))}
+            <li>
+              <span className="n">{sections.length + 1}.0</span>
+              <a href="#cpp-drawings">Drawings and emergency plans</a>
+            </li>
+            <li>
+              <span className="n">{sections.length + 2}.0</span>
+              <a href="#cpp-approval">Duty holder approval</a>
+            </li>
+          </ol>
+        </nav>
+
+        <main className="cpp-body" style={{ marginTop: '44px' }}>
           {sections.map((s, idx) => (
-            <div className="cpp-section" key={s.key}>
+            <div className="cpp-section" key={s.key} id={`cpp-${s.key}`}>
               <div className="cpp-no">{idx + 1}.0</div>
               <div>
                 <h2 className="cpp-h">{s.title}</h2>
@@ -403,7 +431,7 @@ export default async function SiteCppPage({
             </div>
           ))}
 
-          <div className="cpp-section">
+          <div className="cpp-section" id="cpp-drawings">
             <div className="cpp-no">{sections.length + 1}.0</div>
             <div>
               <h2 className="cpp-h">Drawings and emergency plans</h2>
@@ -431,7 +459,7 @@ export default async function SiteCppPage({
 
           {/* APPROVAL. The heaviest rule on the page, then air, then the
               signature. No frame — the rule does the work. */}
-          <div className="cpp-approval">
+          <div className="cpp-approval" id="cpp-approval">
             <h2 className="cpp-h" style={{ fontSize: '20px', marginBottom: '5px' }}>
               Duty holder approval
             </h2>

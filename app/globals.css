@@ -321,3 +321,96 @@
   .cpp-doc .cpp-who { grid-template-columns: 1fr; gap: 0; }
   .cpp-doc .cpp-who > div { padding-top: 11px; }
 }
+
+/* ── CONSTRUCTION PHASE PLAN — PRINT AND PDF ──────────────────────────────
+   The document's real output. Everything above styles the screen; this decides
+   what a client, a Principal Contractor or an inspector actually receives.
+
+   WHAT THIS CONTROLS: sheet size, margins, and where the content is allowed to
+   break. WHAT IT CANNOT: the browser's own header and footer (URL, date, page
+   count) are a setting in the user's print dialog, not something CSS can
+   suppress — and `@page` margin boxes, which would give a proper running foot,
+   are not supported in Chrome. Real running heads and page numbers arrive with
+   the server-rendered PDF, where they can be true rather than approximated.
+   ───────────────────────────────────────────────────────────────────────── */
+@page {
+  size: A4;
+  /* Generous foot so the browser's own footer does not crowd the content. */
+  margin: 18mm 16mm 22mm;
+}
+
+@media print {
+  /* BREAK PROTECTION. This existed before the document was restyled and was
+     lost in the rewrite: a section could split mid-table and the approval block
+     could be orphaned from its signature. A construction phase plan that breaks
+     a risk topic away from its control measures is worse than one that wastes a
+     little space. */
+  .cpp-doc .cpp-section { break-inside: avoid; page-break-inside: avoid; }
+  .cpp-doc .cpp-approval { break-inside: avoid; page-break-inside: avoid; }
+  .cpp-doc .cpp-items li { break-inside: avoid; page-break-inside: avoid; }
+  .cpp-doc .cpp-who { break-inside: avoid; page-break-inside: avoid; }
+  .cpp-doc .cpp-foot { break-inside: avoid; page-break-inside: avoid; }
+
+  /* A heading must never be the last thing on a sheet. */
+  .cpp-doc h1.cpp-title,
+  .cpp-doc h2.cpp-h,
+  .cpp-doc .cpp-part { break-after: avoid; page-break-after: avoid; }
+
+  /* The masthead and the contents each get their own sheet, as a bound document
+     does — the plan proper starts on a fresh page. */
+  .cpp-doc .cpp-contents { break-before: page; page-break-before: always; }
+  .cpp-doc .cpp-body { break-before: page; page-break-before: always; }
+
+  /* On paper the sheet IS the frame, so the screen's paper treatment goes. */
+  .cpp-doc {
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    background: #fff;
+    font-size: 10.5pt;
+    line-height: 1.5;
+  }
+  .cpp-doc h1.cpp-title { font-size: 24pt; }
+  .cpp-doc h2.cpp-h { font-size: 12pt; }
+  .cpp-doc .cpp-status .rev { font-size: 14pt; }
+
+  /* Anchors in the contents are navigation, not content — they print as plain
+     text rather than as blue underlined links. */
+  .cpp-doc .cpp-contents a { color: inherit; text-decoration: none; }
+}
+
+/* ── Contents ─────────────────────────────────────────────────────────── */
+.cpp-doc .cpp-contents { margin-top: 44px; }
+.cpp-doc .cpp-contents h2 {
+  font-family: var(--cpp-sans), sans-serif;
+  font-size: 12px; font-weight: 700; letter-spacing: .21em; text-transform: uppercase;
+  color: var(--cpp-ink); margin: 0 0 18px; padding-bottom: 7px;
+  border-bottom: 2px solid var(--cpp-ink);
+}
+.cpp-doc .cpp-contents ol { margin: 0; padding: 0; list-style: none; max-width: 62ch; }
+.cpp-doc .cpp-contents li {
+  display: flex; align-items: baseline; gap: 14px;
+  padding: 7px 0; border-bottom: 1px solid var(--cpp-rule-2);
+}
+.cpp-doc .cpp-contents li:last-child { border-bottom: 0; }
+.cpp-doc .cpp-contents .n {
+  font-family: var(--cpp-sans), sans-serif;
+  font-size: 12.5px; font-weight: 700; color: var(--cpp-accent);
+  min-width: 34px; font-variant-numeric: tabular-nums;
+}
+.cpp-doc .cpp-contents a { color: inherit; text-decoration: none; }
+.cpp-doc .cpp-contents a:hover { text-decoration: underline; }
+.cpp-doc .cpp-contents a:focus-visible {
+  outline: 2px solid var(--cpp-accent); outline-offset: 3px;
+}
+/* No page numbers, deliberately. A scrolling view cannot know where a sheet
+   breaks, and a contents page that cites a page the PDF then contradicts is a
+   document-control defect rather than a convenience. Section numbers navigate
+   the document on paper and on screen alike. */
+
+/* ── Sheet framing on screen. Print-like margins so the preview reads as a
+   document, without claiming to be paginated. ─────────────────────────── */
+.cpp-doc {
+  border: 1px solid var(--cpp-rule-2);
+  box-shadow: 0 1px 2px rgb(22 24 26 / 0.05), 0 8px 28px rgb(22 24 26 / 0.06);
+}
