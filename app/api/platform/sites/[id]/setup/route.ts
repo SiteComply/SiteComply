@@ -29,7 +29,7 @@ async function PUTHandler(
   let body: {
     stepKey?: string;
     values?: Record<string, unknown>;
-    markComplete?: boolean;
+    markReviewed?: boolean;
   };
   try {
     body = (await req.json()) as typeof body;
@@ -50,7 +50,7 @@ async function PUTHandler(
   const result = await saveSetupStep(viewer, params.id, {
     stepKey: body.stepKey,
     values: body.values ?? {},
-    markComplete: body.markComplete === true,
+    markReviewed: body.markReviewed === true,
   });
 
   if (!result.ok) {

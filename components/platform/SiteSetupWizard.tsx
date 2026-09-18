@@ -8,7 +8,6 @@ import Link from 'next/link';
 import {
   SETUP_STEPS,
   applicableSteps,
-  computeCompleteness,
   type SetupFlag,
   type SetupStep,
 } from '@/services/sites/siteSetupConstants';
@@ -219,12 +218,19 @@ const FIELDS: Record<
   ],
 };
 
+import {
+  computeDerivedCompleteness,
+  requirementsFor,
+  type SetupSnapshot,
+} from '@/services/sites/siteSetupCompletion';
+
 export function SiteSetupWizard({
   siteId,
   siteName,
   initialValues,
   initialPeople,
   completedSteps,
+  siteRuleCount,
   canEditProject,
   serviceGroups,
   configTemplates = [],
@@ -233,7 +239,14 @@ export function SiteSetupWizard({
   siteName: string;
   initialValues: SetupValues;
   initialPeople: KeyPersonRow[];
+  /** Steps the user has marked REVIEWED. No longer drives completion. */
   completedSteps: string[];
+  /**
+   * Published Site Rules Library items. The rules section's requirement, and not
+   * something this wizard edits — it is passed in so the badge matches the
+   * server rather than guessing from the free-text field.
+   */
+  siteRuleCount: number;
   canEditProject: boolean;
   /** SC-021 — permits and inspections available on this site. */
   serviceGroups: SiteServiceGroup[];
@@ -263,10 +276,29 @@ export function SiteSetupWizard({
     };
   }, [values]);
 
+  /*
+   * The SAME computation the server runs, over the values currently in the form.
+   *
+   * Live, so filling a required field turns its badge green immediately rather
+   * than on the next reload — and, more importantly, so the wizard can never
+   * show a different verdict from the Construction Phase Plan.
+   */
+  const snapshot = useMemo<SetupSnapshot>(
+    () => ({
+      values,
+      counts: {
+        siteManagers: people.filter((p) => p.kind === 'SITE_MANAGER').length,
+        firstAiders: people.filter((p) => p.kind === 'FIRST_AIDER').length,
+        siteRules: siteRuleCount,
+      },
+    }),
+    [values, people, siteRuleCount],
+  );
+
   // Conditional steps stay visible so they can be filled in the first place;
   // only the completeness maths uses `applicableSteps`.
   const visible = SETUP_STEPS;
-  const completeness = computeCompleteness(flags, done);
+  const completeness = computeDerivedCompleteness(flags, snapshot, done);
   const applicable = applicableSteps(flags).map((s) => s.key);
   const active = visible.find((s) => s.key === activeKey) ?? visible[0]!;
   const editable = active.owner === 'SITE_MANAGER' || canEditProject;
@@ -278,7 +310,7 @@ export function SiteSetupWizard({
     }));
   }
 
-  async function save(step: SetupStep, markComplete: boolean) {
+  async function save(step: SetupStep, markReviewed: boolean) {
     setSaving(true);
     setMessage(null);
     try {
@@ -290,7 +322,7 @@ export function SiteSetupWizard({
         body: JSON.stringify({
           stepKey: step.key,
           values: payload,
-          markComplete,
+          markReviewed,
         }),
       });
       const data = (await res.json()) as { ok: boolean; error?: string };
@@ -300,14 +332,14 @@ export function SiteSetupWizard({
       }
       setDone((d) => {
         const next = new Set(d);
-        if (markComplete) next.add(step.key);
+        if (markReviewed) next.add(step.key);
         else next.delete(step.key);
         return [...next];
       });
       setMessage({
         tone: 'ok',
-        text: markComplete
-          ? `${step.title} marked complete.`
+        text: markReviewed
+          ? `${step.title} marked reviewed.`
           : 'Progress saved.',
       });
       router.refresh();
@@ -375,6 +407,37 @@ export function SiteSetupWizard({
           You can leave and come back at any time — every section saves on its
           own.
         </p>
+
+        {/* THE RECALCULATION EXPLAINER.
+            Completion used to be whatever had been ticked, so sites that were
+            marked through with thin data will now show a LOWER figure than they
+            did yesterday. That looks like a regression unless it is explained,
+            and the explanation belongs next to the number that changed. Shown
+            only while something is outstanding — once a site is genuinely
+            complete there is nothing to account for. */}
+        {!completeness.cppReady && (
+          <p className="mt-3 rounded-lg border border-line bg-surface-sunken p-3 text-xs text-ink-muted">
+            <span className="font-semibold text-ink">
+              Completion is now based on the information recorded.
+            </span>{' '}
+            A section counts as complete when the details a Construction Phase
+            Plan needs are actually present — it is no longer set by marking a
+            section done. If this figure has gone down, the sections below show
+            exactly what is still required.
+            {completeness.reviewedButIncomplete.length > 0 && (
+              <>
+                {' '}
+                <span className="font-semibold text-ink">
+                  {completeness.reviewedButIncomplete.length} section
+                  {completeness.reviewedButIncomplete.length === 1 ? ' was' : 's were'}{' '}
+                  previously marked done but{' '}
+                  {completeness.reviewedButIncomplete.length === 1 ? 'is' : 'are'}{' '}
+                  missing required information.
+                </span>
+              </>
+            )}
+          </p>
+        )}
       </div>
 
       {message && (
@@ -426,9 +489,16 @@ export function SiteSetupWizard({
                 )}
                 <div className="space-y-1">
                   {run.items.map((step) => {
-                    const isDone = done.includes(step.key);
+                    const st = completeness.statuses[step.key];
+                    const status = st?.status ?? 'COMPLETE';
+                    // Optional sections get no tick: nothing is required of
+                    // them, so a green mark would claim something it cannot.
+                    const measurable = st?.measurable ?? false;
+                    const isReviewed = done.includes(step.key);
                     const isActive = step.key === active.key;
                     const relevant = applicable.includes(step.key);
+                    // Reviewed but not complete is the state the old model hid.
+                    const flagged = isReviewed && status !== 'COMPLETE';
                     return (
                       <button
                         key={step.key}
@@ -444,16 +514,54 @@ export function SiteSetupWizard({
                         <span
                           aria-hidden
                           className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-                            isDone
-                              ? 'bg-safe-500 text-white'
-                              : 'bg-surface-sunken text-ink-subtle ring-1 ring-line'
+                            !measurable
+                              ? 'bg-surface-sunken text-ink-subtle ring-1 ring-line'
+                              : status === 'COMPLETE'
+                                ? 'bg-safe-500 text-white'
+                                : flagged
+                                  ? 'bg-danger-600 text-white'
+                                  : status === 'PARTIAL'
+                                    ? 'bg-hivis-500 text-white'
+                                    : 'bg-surface-sunken text-ink-subtle ring-1 ring-line'
                           }`}
                         >
-                          {isDone ? '✓' : ''}
+                          {!measurable
+                            ? ''
+                            : status === 'COMPLETE'
+                              ? '✓'
+                              : flagged
+                                ? '!'
+                                : status === 'PARTIAL'
+                                  ? '·'
+                                  : ''}
                         </span>
                         <span className="min-w-0 flex-1 truncate">
                           {step.title}
                         </span>
+                        {/* Colour is never the only carrier of the state. */}
+                        <span className="sr-only">
+                          {!relevant
+                            ? 'not applicable'
+                            : !measurable
+                              ? 'optional'
+                              : status === 'COMPLETE'
+                              ? 'complete'
+                              : flagged
+                                ? 'marked reviewed but information missing'
+                                : status === 'PARTIAL'
+                                  ? 'started, incomplete'
+                                  : 'not started'}
+                          {isReviewed ? ', reviewed' : ''}
+                        </span>
+                        {isReviewed && measurable && status === 'COMPLETE' && (
+                          <span
+                            aria-hidden
+                            title="Reviewed"
+                            className="shrink-0 text-[10px] font-bold uppercase text-ink-subtle"
+                          >
+                            R
+                          </span>
+                        )}
                         {!relevant && (
                           <span className="shrink-0 text-[10px] uppercase text-ink-subtle">
                             n/a
@@ -472,6 +580,49 @@ export function SiteSetupWizard({
         <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
           <h2 className="text-base font-bold text-ink">{active.title}</h2>
           <p className="mb-1 text-sm text-ink-muted">{active.description}</p>
+
+          {/* WHAT THIS SECTION STILL NEEDS, named.
+              "Incomplete" without saying what is missing just moves the guessing
+              somewhere else; every requirement carries a label for this. */}
+          {(() => {
+            const st = completeness.statuses[active.key];
+            if (!st || st.status === 'COMPLETE') return null;
+            const reviewed = done.includes(active.key);
+            return (
+              <div
+                className={`mb-3 rounded-lg border p-3 text-xs ${
+                  reviewed
+                    ? 'border-danger-600/40 bg-danger-600/10'
+                    : 'border-hivis-500/40 bg-hivis-500/10'
+                }`}
+              >
+                <p className="font-semibold text-ink">
+                  {reviewed
+                    ? 'Marked reviewed, but required information is missing'
+                    : st.status === 'PARTIAL'
+                      ? 'Started — not yet complete'
+                      : 'Not yet started'}
+                </p>
+                <ul className="mt-1 list-inside list-disc text-ink-muted">
+                  {st.missing.map((m) => (
+                    <li key={m}>{m}</li>
+                  ))}
+                </ul>
+                {active.key === 'rules' && (
+                  <p className="mt-1 text-ink-muted">
+                    Site rules come from the Site Rules Library, not the field
+                    below — publish at least one in Operative experience → Site
+                    rules. The field below is supplementary information.
+                  </p>
+                )}
+                {active.key === 'people' && (
+                  <p className="mt-1 text-ink-muted">
+                    Add these using the personnel list below.
+                  </p>
+                )}
+              </div>
+            );
+          })()}
           <p className="mb-4 text-xs text-ink-subtle">
             Owned by {active.owner === 'DIRECTOR' ? 'Director' : 'Site Manager'}
             {active.requiresFlag &&
@@ -588,13 +739,19 @@ export function SiteSetupWizard({
             >
               {saving ? 'Saving…' : 'Save and continue later'}
             </button>
+            {/* "Mark complete" is gone. Completion is derived from the data
+                and cannot be asserted — this records only that the user has
+                BEEN THROUGH the section, which is still worth tracking and
+                deliberately makes no compliance claim. It is therefore allowed
+                on an incomplete section; the section simply shows as reviewed
+                with information outstanding. */}
             <button
               type="button"
               onClick={() => save(active, true)}
               disabled={!editable || saving}
               className="touch-target rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
             >
-              Save and mark complete
+              Save and mark reviewed
             </button>
             {done.includes(active.key) && (
               <button
@@ -603,7 +760,7 @@ export function SiteSetupWizard({
                 disabled={!editable || saving}
                 className="text-sm font-medium text-ink-subtle hover:underline disabled:opacity-50"
               >
-                Reopen this section
+                Remove reviewed mark
               </button>
             )}
           </div>

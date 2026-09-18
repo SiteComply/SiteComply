@@ -72,15 +72,26 @@ export default async function SiteCppPage({
 
       {/* Gap list — screen only. A plan with silent holes is worse than one that
           says what is missing, so this is shown before the document itself. */}
-      {cpp.outstandingTitles.length > 0 && (
+      {cpp.outstanding.length > 0 && (
         <div className="mb-4 rounded-xl border border-hivis-500/40 bg-hivis-500/10 p-4 print:hidden">
           <p className="text-sm font-semibold text-ink">
-            {cpp.outstandingTitles.length} section
-            {cpp.outstandingTitles.length === 1 ? '' : 's'} not yet recorded
+            {cpp.outstanding.length} section
+            {cpp.outstanding.length === 1 ? '' : 's'} not yet complete
           </p>
-          <ul className="mt-1 list-inside list-disc text-sm text-ink-muted">
-            {cpp.outstandingTitles.map((t) => (
-              <li key={t}>{t}</li>
+          {/* A section that has been STARTED is a different problem from one
+              nobody has touched, and the required information that is still
+              missing is named rather than left to be hunted for. */}
+          <ul className="mt-1 space-y-1 text-sm text-ink-muted">
+            {cpp.outstanding.map((o) => (
+              <li key={o.title}>
+                <span className="font-medium text-ink">{o.title}</span>
+                {o.status === 'PARTIAL' ? ' — started, incomplete' : ' — not recorded'}
+                {o.missing.length > 0 && (
+                  <span className="block text-xs text-ink-subtle">
+                    Still needed: {o.missing.join(', ')}
+                  </span>
+                )}
+              </li>
             ))}
           </ul>
           <Link
@@ -163,10 +174,17 @@ export default async function SiteCppPage({
             </div>
             <div>
               <dt className="inline font-semibold">Status: </dt>
+              {/* PRINTED, and previously the lie. This read "All required
+                  sections recorded" whenever somebody had ticked the steps,
+                  directly above a screen-only list naming the sections that were
+                  missing. It is now the same computation as that list, and it
+                  says HOW MANY are outstanding rather than only that some are. */}
               <dd className="inline">
                 {cpp.completeness.cppReady
                   ? 'All required sections recorded'
-                  : 'Incomplete — see outstanding sections'}
+                  : `Incomplete — ${cpp.outstanding.length} section${
+                      cpp.outstanding.length === 1 ? '' : 's'
+                    } outstanding`}
               </dd>
             </div>
           </dl>
@@ -178,7 +196,7 @@ export default async function SiteCppPage({
               <h3 className="text-base font-bold text-ink">
                 {idx + 1}. {s.title}
               </h3>
-              {s.empty ? (
+              {s.entries.every((e) => e.value === null) ? (
                 <p className="mt-1 text-sm italic text-ink-subtle">
                   Not yet recorded.{' '}
                   <Link
@@ -203,6 +221,11 @@ export default async function SiteCppPage({
                       </div>
                     ))}
                 </dl>
+              )}
+              {s.status === 'PARTIAL' && (
+                <p className="mt-2 border-l-2 border-hivis-500 pl-2 text-xs text-ink-muted">
+                  Section incomplete. Still required: {s.missing.join(', ')}.
+                </p>
               )}
             </li>
           ))}

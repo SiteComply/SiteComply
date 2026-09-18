@@ -6,11 +6,15 @@ import {
   canEditSite,
 } from '@/services/platformUsers/platformPermissions';
 import {
-  computeCompleteness,
   isSetupStepKey,
-  type SetupCompleteness,
   type SetupFlag,
 } from '@/services/sites/siteSetupConstants';
+import {
+  computeDerivedCompleteness,
+  type DerivedCompleteness,
+  type SetupSnapshot,
+} from '@/services/sites/siteSetupCompletion';
+import { getSiteRules } from '@/services/checklists/siteRulesService';
 
 /**
  * SC-019 Phase 1 — the project setup wizard's server side.
@@ -74,9 +78,104 @@ export function deriveFlags(
   };
 }
 
-export function completenessFor(site: LoadedSite): SetupCompleteness {
-  return computeCompleteness(
+/**
+ * The server's view of the wizard's form values.
+ *
+ * THE ONE PLACE THE TWO SIDES COULD DRIFT. The wizard evaluates completion from
+ * `values[stepKey][fieldName]` in React state; this rebuilds that exact shape
+ * from the saved rows so both reach the same verdict. Every key here must match
+ * the field `name` in SiteSetupWizard's STEP_FIELDS — a typo would silently make
+ * a required field permanently unsatisfiable on the server while the wizard
+ * showed it green. `setup_completion_verify` asserts the two agree field by
+ * field rather than trusting this comment.
+ *
+ * Dates are emitted as YYYY-MM-DD because that is what the date inputs hold.
+ */
+export function buildSetupSnapshot(
+  site: LoadedSite,
+  siteRuleCount: number,
+): SetupSnapshot {
+  const info = site.siteInformation;
+  const cdm = site.cdmDutyHolders;
+  const proj = site.projectDetails;
+  const iso = (d: Date | null | undefined) =>
+    d ? d.toISOString().slice(0, 10) : null;
+
+  return {
+    values: {
+      project: {
+        description: proj?.description ?? null,
+        scopeOfWorks: proj?.scopeOfWorks ?? null,
+        startDate: iso(proj?.startDate),
+        plannedEndDate: iso(proj?.plannedEndDate),
+        // Only an ANSWER counts. A site with no projectDetails row has not said
+        // "no" — it has not been asked, which is not the same thing.
+        cdmNotifiable: proj ? proj.cdmNotifiable : null,
+      },
+      f10: { f10Reference: proj?.f10Reference ?? null },
+      client: {
+        clientName: cdm?.clientName ?? null,
+        clientContactName: cdm?.clientContactName ?? null,
+        clientContactEmail: cdm?.clientContactEmail ?? null,
+        clientContactPhone: cdm?.clientContactPhone ?? null,
+      },
+      'duty-holders': {
+        principalDesigner: cdm?.principalDesigner ?? null,
+        principalContractor: cdm?.principalContractor ?? null,
+      },
+      emergency: {
+        fireAssemblyPoint: site.fireAssemblyPoint ?? null,
+        nearestHospital: site.nearestHospital ?? null,
+        emergencyNumber: site.emergencyNumber ?? null,
+        fireArrangements: info?.fireArrangements ?? null,
+        emergencyProcedures: info?.emergencyProcedures ?? null,
+      },
+      welfare: {
+        welfareFacilities: info?.welfareFacilities ?? null,
+        workingHours: info?.workingHours ?? null,
+      },
+      rules: { siteRules: info?.siteRules ?? null },
+      hazards: {
+        siteHazards: info?.siteHazards ?? null,
+        existingSiteRisks: info?.existingSiteRisks ?? null,
+      },
+      'high-risk': { highRiskActivities: info?.highRiskActivities ?? null },
+      'temporary-works': { temporaryWorks: info?.temporaryWorks ?? null },
+      access: {
+        accessEgress: info?.accessEgress ?? null,
+        deliveryProcedures: info?.deliveryProcedures ?? null,
+      },
+      traffic: { trafficManagement: info?.trafficManagement ?? null },
+      utilities: { utilitiesIsolation: info?.utilitiesIsolation ?? null },
+      environment: { environmentalControls: info?.environmentalControls ?? null },
+    },
+    counts: {
+      siteManagers: site.keyPeople.filter(
+        (p) => p.kind === SiteKeyPersonKind.SITE_MANAGER,
+      ).length,
+      firstAiders: site.keyPeople.filter(
+        (p) => p.kind === SiteKeyPersonKind.FIRST_AIDER,
+      ).length,
+      siteRules: siteRuleCount,
+    },
+  };
+}
+
+/**
+ * Completion for a site, derived from its data.
+ *
+ * `completedSteps` is now the REVIEWED list and is passed through for display
+ * only — it no longer contributes to `percent`, `outstanding` or `cppReady`.
+ * Async because the rules requirement reads the Site Rules Library; the old
+ * signature was synchronous, which is why every caller changed.
+ */
+export async function completenessFor(
+  site: LoadedSite,
+): Promise<DerivedCompleteness> {
+  const rules = await getSiteRules(site.id);
+  return computeDerivedCompleteness(
     deriveFlags(site),
+    buildSetupSnapshot(site, rules.length),
     site.setupProgress?.completedSteps ?? [],
   );
 }
@@ -102,8 +201,16 @@ const date = (v: unknown): Date | null => {
 export interface SaveStepInput {
   stepKey: string;
   values: Record<string, unknown>;
-  /** Whether to mark the step complete (vs just saving progress). */
-  markComplete: boolean;
+  /**
+   * Whether to record that the user has REVIEWED this step.
+   *
+   * Was `markComplete`, and was the bug: it asserted completion without the
+   * server ever looking at the values, so a step could be "complete" with every
+   * field blank. Completion is now derived from the data in
+   * siteSetupCompletion; this flag is a tracking marker only and makes no
+   * compliance claim, which is why it is still accepted on an incomplete step.
+   */
+  markReviewed: boolean;
 }
 
 /**
@@ -320,7 +427,7 @@ export async function saveSetupStep(
       return { ok: false, reason: 'invalid', error: 'Unknown setup step.' };
   }
 
-  await recordProgress(siteId, viewer, input.stepKey, input.markComplete);
+  await recordProgress(siteId, viewer, input.stepKey, input.markReviewed);
   return { ok: true };
 }
 
@@ -342,14 +449,14 @@ async function recordProgress(
   siteId: string,
   viewer: PlatformViewer,
   stepKey: string,
-  markComplete: boolean,
+  markReviewed: boolean,
 ): Promise<void> {
   const existing = await prisma.siteSetupProgress.findUnique({
     where: { jobSiteId: siteId },
     select: { completedSteps: true },
   });
   const done = new Set(existing?.completedSteps ?? []);
-  if (markComplete) done.add(stepKey);
+  if (markReviewed) done.add(stepKey);
   else done.delete(stepKey);
 
   const data = {

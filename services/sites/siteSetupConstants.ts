@@ -224,34 +224,15 @@ export function stepsForOwner(
     : steps.filter((s) => s.owner === 'SITE_MANAGER');
 }
 
-export interface SetupCompleteness {
-  applicable: number;
-  completed: number;
-  percent: number;
-  /** Steps still outstanding, in wizard order. */
-  outstanding: SetupStep[];
-  /** True when every CPP-required applicable step is done. */
-  cppReady: boolean;
-}
+/*
+ * SetupCompleteness and computeCompleteness(flags, completedSteps) were here.
+ *
+ * They decided completion from a list of step keys somebody had ticked, and
+ * never looked at a single field value — so a site could be marked through with
+ * every field blank and still report 100% and cppReady. Replaced by
+ * siteSetupCompletion.computeDerivedCompleteness(), which reads the data.
+ *
+ * DELETED RATHER THAN DEPRECATED on purpose: a tick-based completeness function
+ * left in this file is one import away from quietly coming back.
+ */
 
-export function computeCompleteness(
-  flags: Partial<Record<SetupFlag, boolean>>,
-  completedSteps: string[],
-): SetupCompleteness {
-  const applicable = applicableSteps(flags);
-  const done = new Set(completedSteps);
-  const outstanding = applicable.filter((s) => !done.has(s.key));
-  const completed = applicable.length - outstanding.length;
-  return {
-    applicable: applicable.length,
-    completed,
-    percent:
-      applicable.length === 0
-        ? 0
-        : Math.round((completed / applicable.length) * 100),
-    outstanding,
-    cppReady: applicable
-      .filter((s) => s.cppRequired)
-      .every((s) => done.has(s.key)),
-  };
-}

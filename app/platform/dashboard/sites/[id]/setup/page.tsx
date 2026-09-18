@@ -7,6 +7,7 @@ import {
   canEditSite,
 } from '@/services/platformUsers/platformPermissions';
 import { getSetupForSite } from '@/services/sites/siteSetupService';
+import { getSiteRules } from '@/services/checklists/siteRulesService';
 import { getSiteServiceConfig } from '@/services/siteServices/siteServiceAvailability';
 import { listActiveConfigTemplates } from '@/services/siteServices/siteConfigTemplateService';
 import {
@@ -45,6 +46,10 @@ export default async function SiteSetupPage({
 
   const site = await getSetupForSite(viewer, params.id);
   if (!site) notFound();
+
+  // The rules section's completion requirement lives in the Site Rules Library,
+  // not in this wizard's free-text field — so the count has to come with it.
+  const siteRules = await getSiteRules(site.id);
 
   const info = site.siteInformation;
   const cdm = site.cdmDutyHolders;
@@ -143,6 +148,7 @@ export default async function SiteSetupPage({
         initialValues={initialValues}
         initialPeople={initialPeople}
         completedSteps={site.setupProgress?.completedSteps ?? []}
+        siteRuleCount={siteRules.length}
         canEditProject={canEditSite(viewer.role)}
         serviceGroups={serviceGroups}
         configTemplates={configTemplates}

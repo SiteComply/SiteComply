@@ -1,11 +1,11 @@
 import { prisma } from '@/lib/prisma';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
-import {
-  completenessFor,
-  deriveFlags,
-} from '@/services/sites/siteSetupService';
-import type { SetupCompleteness } from '@/services/sites/siteSetupConstants';
+import { completenessFor } from '@/services/sites/siteSetupService';
+import type {
+  DerivedCompleteness,
+  SectionStatus,
+} from '@/services/sites/siteSetupCompletion';
 
 /**
  * SC-019 Phase 2 — assemble a Construction Phase Plan DRAFT.
@@ -38,8 +38,15 @@ export interface CppSection {
   /** Which wizard step fills this section, for the "complete this" link. */
   stepKey: string;
   entries: CppEntry[];
-  /** True when nothing in the section has been recorded yet. */
-  empty: boolean;
+  /**
+   * The section's real state, from the SAME computation the wizard and the
+   * completeness figure use. Previously this was `empty`, derived here from
+   * whether any entry had a value — a second opinion that could, and did,
+   * disagree with the headline status printed a few lines above it.
+   */
+  status: SectionStatus;
+  /** Required information not yet recorded, for the gap list. */
+  missing: string[];
 }
 
 export interface CppDraft {
@@ -52,7 +59,7 @@ export interface CppDraft {
   sections: CppSection[];
   /** Site layout drawings and emergency plans, filed as documents. */
   drawings: { id: string; title: string; fileName: string }[];
-  completeness: SetupCompleteness;
+  completeness: DerivedCompleteness;
   /** Provenance for the printed document. */
   meta: {
     generatedAt: Date;
@@ -60,8 +67,8 @@ export interface CppDraft {
     lastUpdatedAt: Date | null;
     lastUpdatedByName: string | null;
   };
-  /** Sections with nothing recorded — the gap list shown before the plan. */
-  outstandingTitles: string[];
+  /** Sections not yet complete — the gap list shown before the plan. */
+  outstanding: { title: string; status: SectionStatus; missing: string[] }[];
 }
 
 /** Documents that belong in a CPP appendix — drawings and emergency plans. */
@@ -111,6 +118,12 @@ export async function getCppDraft(
       .filter((p) => p.kind === kind)
       .map((p) => [p.name, p.phone, p.location].filter(Boolean).join(' · '));
 
+  /*
+   * Status is NOT decided here. It is stamped on below from the one shared
+   * computation, so a section cannot hold an opinion that differs from the
+   * headline figure printed above it — which is precisely the contradiction
+   * this change exists to remove.
+   */
   const section = (
     key: string,
     title: string,
@@ -121,7 +134,8 @@ export async function getCppDraft(
     title,
     stepKey,
     entries,
-    empty: entries.every((e) => e.value === null),
+    status: 'EMPTY',
+    missing: [],
   });
 
   const sections: CppSection[] = [
@@ -254,6 +268,30 @@ export async function getCppDraft(
     projectDetails: proj,
   };
 
+  // ONE computation, shared with the setup wizard and the completeness figure.
+  const completeness = await completenessFor(loaded as never);
+
+  /*
+   * Stamp each section with its step's real status.
+   *
+   * A section whose step is not APPLICABLE to this site (temporary works on a
+   * site with none) has no status entry and is not a gap — the old isRelevant()
+   * check did this separately and is no longer needed, because applicableSteps
+   * already decided it in one place.
+   */
+  for (const s of sections) {
+    const st = completeness.statuses[s.stepKey];
+    if (st) {
+      s.status = st.status;
+      s.missing = st.missing;
+    } else {
+      // Not applicable: nothing required, so nothing outstanding.
+      s.status = 'COMPLETE';
+    }
+  }
+
+  const applicableKeys = new Set(Object.keys(completeness.statuses));
+
   return {
     site: {
       id: site.id,
@@ -265,30 +303,22 @@ export async function getCppDraft(
     },
     sections,
     drawings,
-    completeness: completenessFor(loaded as never),
+    completeness,
     meta: {
       generatedAt: new Date(),
       generatedByName: viewer.name,
       lastUpdatedAt: stamps[0]?.at ?? null,
       lastUpdatedByName: stamps[0]?.by ?? null,
     },
-    outstandingTitles: sections
-      .filter((s) => s.empty && isRelevant(s.key, loaded as never))
-      .map((s) => s.title),
+    outstanding: sections
+      .filter((s) => applicableKeys.has(s.stepKey) && s.status !== 'COMPLETE')
+      .map((s) => ({ title: s.title, status: s.status, missing: s.missing })),
   };
 }
 
-/**
- * A conditional section that doesn't apply to this site is not a gap. Reuses the
- * Phase 1 flags so the CPP and the wizard agree on what's relevant.
+/*
+ * isRelevant() was here. It re-derived the conditional flags to decide whether
+ * an empty section counted as a gap — a third opinion alongside `empty` and
+ * `cppReady`. applicableSteps() already answers that question for the wizard, so
+ * the CPP now reads the same answer instead of computing its own.
  */
-function isRelevant(
-  sectionKey: string,
-  site: Parameters<typeof deriveFlags>[0],
-): boolean {
-  const flags = deriveFlags(site);
-  if (sectionKey === 'high-risk') return flags.hasHighRiskActivities === true;
-  if (sectionKey === 'temporary-works') return flags.hasTemporaryWorks === true;
-  if (sectionKey === 'traffic') return flags.hasTrafficManagement === true;
-  return true;
-}
