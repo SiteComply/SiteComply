@@ -38,6 +38,16 @@ export interface SettingsArea {
 
 export const SETTINGS_AREAS: SettingsArea[] = [
   {
+    // CPP Tier 3A — company policy written once and inherited by every site's
+    // Construction Phase Plan. Listed first: it is authored content a Director
+    // owns, not a per-site switch.
+    key: 'arrangements',
+    label: 'Management arrangements',
+    href: '/platform/dashboard/settings/arrangements',
+    description:
+      'Health and safety file, management structure, worker consultation, contractor selection, public protection and incident reporting — inherited by every project.',
+  },
+  {
     key: 'config-templates',
     label: 'Configuration templates',
     href: '/platform/dashboard/settings/config-templates',

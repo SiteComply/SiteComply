@@ -6,6 +6,8 @@ import { getSiteRules } from '@/services/checklists/siteRulesService';
 import { getSitePpeRequirements } from '@/services/checklists/sitePpeService';
 import { getSiteServiceConfig } from '@/services/siteServices/siteServiceAvailability';
 import { getRiskRegister } from '@/services/sites/cppRiskService';
+import { resolveArrangements } from '@/services/sites/arrangementService';
+import { arrangementSourceLabel } from '@/services/sites/cppArrangements';
 import type {
   DerivedCompleteness,
   SectionStatus,
@@ -170,7 +172,7 @@ export async function getCppDraft(
    * the same single-source rule the setup sections follow. Nothing here is
    * captured for the CPP's benefit, and nothing here is stored.
    */
-  const [rules, ppe, serviceGroups, inductionCfg, accessReqs, ramsDocs, schedules, risks] =
+  const [rules, ppe, serviceGroups, inductionCfg, accessReqs, ramsDocs, schedules, risks, arrangements] =
     await Promise.all([
       getSiteRules(siteId),
       getSitePpeRequirements(siteId),
@@ -196,6 +198,7 @@ export async function getCppDraft(
         },
       }),
       getRiskRegister(siteId),
+      resolveArrangements(siteId),
     ]);
 
   const fmtDate = (d: Date | null | undefined) =>
@@ -379,6 +382,29 @@ export async function getCppDraft(
             .join('\n') || null,
       },
     ]),
+    /*
+     * MANAGEMENT ARRANGEMENTS — L153 Appendix 3 Section 2.
+     *
+     * Company standard, inherited, overridable per site. EVERY SECTION SAYS
+     * WHICH: a reviewer needs to know whether they are reading organisational
+     * policy or something written for this project, and blurring the two is how
+     * a plan comes to look considered when it is boilerplate.
+     *
+     * An arrangement nobody has written prints as not recorded rather than being
+     * omitted — the same rule the rest of the plan follows.
+     */
+    ...arrangements.map((a) =>
+      wired(
+        `arrangement-${a.key.toLowerCase()}`,
+        a.title,
+        `/platform/dashboard/sites/${siteId}/arrangements`,
+        [],
+        [
+          { label: arrangementSourceLabel(a.source), value: a.content },
+        ],
+      ),
+    ),
+
     /* ---- Wired: how people get on to this site, and on what basis. ---- */
     wired(
       'induction',

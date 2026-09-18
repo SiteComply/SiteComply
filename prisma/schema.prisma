@@ -470,6 +470,7 @@ model JobSite {
   /// SC-023 Phase 3 — competency and induction requirements for access.
   accessRequirements  SiteAccessRequirement[]
   riskTopics          SiteRiskTopic[]
+  arrangements        SiteArrangement[]
   /// SC-024 — generated project close-out packs.
   closeOutPacks       CloseOutPack[]
 
@@ -3031,6 +3032,69 @@ model CloseOutPackShareView {
   ipHash String?
 
   @@index([shareId, viewedAt])
+}
+
+/// CPP Tier 3A — the management arrangements a construction phase plan sets out.
+///
+/// Members match `key` in services/sites/cppArrangements.ts exactly; the
+/// verification suite asserts the two agree in both directions rather than
+/// trusting that they do.
+enum ArrangementKey {
+  MANAGEMENT_STRUCTURE
+  WORKER_CONSULTATION
+  CONTRACTOR_MANAGEMENT
+  PUBLIC_PROTECTION
+  INCIDENT_REPORTING
+  HS_FILE
+}
+
+/// CPP Tier 3A — the COMPANY-level arrangement, written once and inherited by
+/// every site.
+///
+/// One row per key for the whole organisation. These are company policy, not
+/// site detail: how contractors are selected, what happens after an incident,
+/// how workers are consulted are the same on every site a Principal Contractor
+/// runs. Storing them per site would mean authoring six documents on every
+/// project and watching them drift apart.
+model StandardArrangement {
+  id  String         @id @default(cuid())
+  key ArrangementKey @unique
+
+  content String
+
+  updatedByUserId String?
+  updatedByName   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// CPP Tier 3A — a SITE-SPECIFIC override of one arrangement.
+///
+/// ABSENT MEANS INHERIT. There is no row per site per key by default, and no
+/// "usesDefault" flag: the presence of the row IS the override, which makes
+/// "remove the override" a delete rather than a second piece of state that can
+/// disagree with the first.
+///
+/// The Construction Phase Plan labels each section as company standard or
+/// site-specific, because a reviewer needs to know whether they are reading the
+/// organisational default or something written for this project.
+model SiteArrangement {
+  id        String  @id @default(cuid())
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+
+  key     ArrangementKey
+  content String
+
+  updatedByUserId String?
+  updatedByName   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([jobSiteId, key])
+  @@index([jobSiteId])
 }
 
 /// CPP Tier 2 — the significant-risk topics from HSE L153 Appendix 3.
