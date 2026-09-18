@@ -102,3 +102,37 @@ export function buildRuleRows(
     }));
   return [...libraryRows, ...customRows];
 }
+
+/**
+ * Have the site's rules changed since an operative agreed to them?
+ *
+ * Compares the RULE TEXT an operative read, in order, against the text in force.
+ * Deliberately NOT a checklist version comparison: a checklist is re-versioned
+ * by any edit at all — a PPE row, a reworded question — and telling somebody
+ * their site rules had changed because a hard-hat item moved would be a false
+ * alarm. False alarms are how a real change gets ignored.
+ *
+ * Label AND help text both count: the help text is where a rule's actual
+ * obligation often lives ("...above 2 metres"), so a change there is a change to
+ * what the person agreed to. Order counts too — a renumbered list is a different
+ * list to someone told "rule 4".
+ *
+ * Whitespace is normalised, so re-saving an unchanged set never raises a notice.
+ *
+ * Pure, and here rather than in siteRulesService, so it can be proven without a
+ * database — this is the predicate that decides whether an operative is told to
+ * read the rules again.
+ */
+export function siteRulesChanged(
+  acknowledged: SiteRule[],
+  current: SiteRule[],
+): boolean {
+  const fingerprint = (rules: SiteRule[]) =>
+    JSON.stringify(
+      rules.map((r) => [
+        r.label.trim().replace(/\s+/g, ' '),
+        (r.helpText ?? '').trim().replace(/\s+/g, ' '),
+      ]),
+    );
+  return fingerprint(acknowledged) !== fingerprint(current);
+}

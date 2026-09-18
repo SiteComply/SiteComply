@@ -32,10 +32,12 @@ import {
   isLibraryRule,
   isOptionalTemplateRule,
   buildRuleRows,
+  siteRulesChanged,
   DEFAULT_SITE_RULES,
   SITE_RULE_LIBRARY,
   type MergeableItem,
 } from '../services/checklists/siteRulesService';
+import { readFileSync } from 'node:fs';
 
 let passed = 0;
 let failed = 0;
@@ -539,6 +541,169 @@ function main() {
   chk('[1e] the real editor call does offer the templates',
       buildRuleRows(DEFAULT_SITE_RULES, SITE_RULE_LIBRARY)
         .filter((r) => isOptionalTemplateRule(r.label)).length === 5);
+
+  // -----------------------------------------------------------------------
+  // [13] POST-INDUCTION REVIEW on Site information.
+  //
+  // The rules an operative acknowledged used to be readable afterwards in the
+  // induction record PDF and nowhere else; the "Site rules" card on Site
+  // information rendered the unrelated free-text field, and rendered nothing
+  // when that field was blank. Someone looking for their rules reached the right
+  // screen and found the section missing.
+  // -----------------------------------------------------------------------
+  console.log('\n[13] Site rules are reviewable after induction');
+
+  const page = readFileSync('app/worker/site-information/page.tsx', 'utf8');
+
+  chk('[13] Site information asks for the worker\'s rule view',
+      /getSiteRulesForWorker\(site\.id, worker\.id\)/.test(page));
+  chk('[13] and renders ONE site-rules section',
+      (page.match(/title="Site rules"/g) ?? []).length === 1,
+      `${(page.match(/title="Site rules"/g) ?? []).length} cards`);
+  chk('[13] the section does NOT depend on the free-text field',
+      /<SiteRulesSection view=\{siteRules\} notes=\{info\.siteRules\} \/>/.test(page));
+  chk('[13]   — it renders on rules alone',
+      /const hasRules = view\.rules\.length > 0;[\s\S]{0,120}if \(!hasRules && !notes\) return null;/.test(page));
+  chk('[13] rules lead, free text follows as supplementary notes',
+      page.indexOf('view.rules.map') < page.indexOf('<LongText value={notes} />'));
+  chk('[13] and the free text is labelled as additional, not as the rules',
+      /Additional site information/.test(page) && !/title="Site rules \(/.test(page));
+  chk('[13] the acknowledgement date is shown',
+      /You acknowledged these rules at your induction on/.test(page));
+  chk('[13] numbered like the induction, so it reads as the same list',
+      /<ol className="space-y-3">/.test(page));
+
+  // The changed-since predicate. This decides whether an operative is told to
+  // read the rules again, so it is proven both ways.
+  const setA: { label: string; helpText: string | null }[] = [
+    { label: 'Wear a hard hat', helpText: 'At all times.' },
+    { label: 'Report all accidents', helpText: null },
+  ];
+  chk('[13] an unchanged set raises no notice',
+      !siteRulesChanged(setA, setA.map((r) => ({ ...r }))));
+  chk('[13]   — nor does re-saving with stray whitespace',
+      !siteRulesChanged(setA, [
+        { label: '  Wear a hard   hat ', helpText: 'At all times. ' },
+        { label: 'Report all accidents', helpText: null },
+      ]));
+  chk('[13] a changed LABEL is a change',
+      siteRulesChanged(setA, [
+        { label: 'Wear a hard hat and boots', helpText: 'At all times.' },
+        { label: 'Report all accidents', helpText: null },
+      ]));
+  chk('[13] a changed HELP TEXT is a change — the obligation often lives there',
+      siteRulesChanged(setA, [
+        { label: 'Wear a hard hat', helpText: 'Except in the site office.' },
+        { label: 'Report all accidents', helpText: null },
+      ]));
+  chk('[13] an ADDED rule is a change',
+      siteRulesChanged(setA, [...setA, { label: 'No lone working', helpText: null }]));
+  chk('[13] a REMOVED rule is a change',
+      siteRulesChanged(setA, [setA[0]]));
+  chk('[13] a REORDERED set is a change — "rule 4" must mean rule 4',
+      siteRulesChanged(setA, [setA[1], setA[0]]));
+  chk('[13] null and empty help text are the same thing, not a change',
+      !siteRulesChanged(
+        [{ label: 'Wear a hard hat', helpText: null }],
+        [{ label: 'Wear a hard hat', helpText: '' }],
+      ));
+
+  // The service wrapper's two honest UNKNOWNs. Neither may raise a false alarm.
+  const svc = readFileSync('services/checklists/siteRulesService.ts', 'utf8');
+  chk('[13] the acknowledgement ignores a reused induction',
+      /inductionReused: false/.test(svc));
+  chk('[13] a worker who never inducted here is not told anything changed',
+      /if \(!induction\) \{\s*\n\s*return \{ rules, acknowledgedAt: null, changedSinceInduction: false \};/.test(svc));
+  chk('[13] a missing historic version is an unknown, not a change',
+      /answered\s*\?[\s\S]{0,80}: false,/.test(svc));
+  chk('[13] the rules shown are the ones IN FORCE, not the signed snapshot',
+      /const rules = checklist \? rulesOf\(checklist\.items\) : \[\];/.test(svc));
+
+  // -----------------------------------------------------------------------
+  // [13b] The panel cannot hide the rules.
+  //
+  // Site information is an opt-OUT panel. A site that switched it off was
+  // hiding site information — not the operative's own signed record. Rules they
+  // acknowledged stay reachable, on the same reasoning that keeps Attendance and
+  // Induction records always visible.
+  // -----------------------------------------------------------------------
+  console.log('\n[13b] Site rules survive the panel being switched off');
+
+  const shell = readFileSync('components/worker/WorkerShell.tsx', 'utf8');
+  const nav = readFileSync('components/worker/WorkerNav.tsx', 'utf8');
+
+  chk('[13b] the shell resolves it once, for every worker page',
+      /const siteRulesVisible = activeSiteId\s*\n?\s*\? await siteHasSiteRules\(activeSiteId\)/.test(shell));
+  chk('[13b]   — so no page can forget to pass it',
+      (shell.match(/siteRulesVisible/g) ?? []).length >= 2 &&
+      !/siteRulesVisible\?:/.test(shell));
+  chk('[13b] the nav shows Site information when the panel is off but rules exist',
+      /alsoWhenSiteRules: true/.test(nav) &&
+      /\(item\.alsoWhenSiteRules && siteRulesVisible\)/.test(nav));
+  chk('[13b]   — and the panel route still works on its own',
+      /item\.panels\.some\(\(p\) => panels\[p\]\)/.test(nav));
+  chk('[13b]   — the rules clause is an OR, never a new requirement',
+      /item\.panels\.some\(\(p\) => panels\[p\]\) \|\|\s*\n?\s*\(item\.alsoWhenSiteRules/.test(nav));
+  chk('[13b] only Site information opts in — this is not a global unhide',
+      (nav.match(/alsoWhenSiteRules: true/g) ?? []).length === 1);
+
+  chk('[13b] the page no longer redirects purely on the panel',
+      !/if \(!panels\.SITE_INFORMATION\) redirect/.test(page));
+  chk('[13b] it narrows to the rules instead of disappearing',
+      /const rulesOnly = !panels\.SITE_INFORMATION;/.test(page));
+  chk('[13b] panel off AND no rules is left exactly as it was',
+      /if \(rulesOnly && siteRules\.rules\.length === 0\) redirect\('\/worker\/dashboard'\);/.test(page));
+  chk('[13b] the narrowed page is titled for what it actually shows',
+      /title=\{rulesOnly \? 'Site rules' : 'Site information'\}/.test(page));
+  chk('[13b] and still carries the safety reminder',
+      (page.match(/<SafetyReminder \/>/g) ?? []).length === 2);
+
+  // The nav and the page must agree, or a visible link leads to a redirect.
+  chk('[13b] nav visibility and page visibility share one condition',
+      /siteHasSiteRules/.test(shell) &&
+      /siteRules\.rules\.length === 0/.test(page));
+
+  const svcRules = readFileSync('services/checklists/siteRulesService.ts', 'utf8');
+  chk('[13b] the shell predicate reads the CURRENT checklist version',
+      /siteHasSiteRules[\s\S]{0,400}orderBy: \{ version: 'desc' \}/.test(svcRules));
+  chk('[13b]   — and counts rather than loading the checklist, it runs everywhere',
+      /siteHasSiteRules[\s\S]{0,600}prisma\.checklistItem\.count/.test(svcRules));
+
+  // -----------------------------------------------------------------------
+  // [14] The editor naming collision that caused this.
+  // -----------------------------------------------------------------------
+  console.log('\n[14] The two editors are distinguishable');
+
+  const exp = readFileSync('app/platform/dashboard/sites/[id]/experience/page.tsx', 'utf8');
+  const infoCfg = readFileSync('components/platform/SiteInformationConfig.tsx', 'utf8');
+  const wizard = readFileSync('components/platform/SiteSetupWizard.tsx', 'utf8');
+
+  chk('[14] the library tab names the induction',
+      /label: 'Site rules \(induction\)'/.test(exp));
+  chk('[14] the free-text field is no longer called "Site rules"',
+      !/label="Site rules"/.test(infoCfg));
+  chk('[14]   — it is called Additional site information',
+      /label="Additional site information"/.test(infoCfg));
+  chk('[14]   — and points at the right editor for actual rules',
+      /Site rules \(induction\)/.test(infoCfg));
+  chk('[14] the setup wizard agrees with the editor',
+      /label: 'Additional site information'/.test(wizard) &&
+      !/'siteRules', label: 'Site rules'/.test(wizard));
+  // The site setup wizard's step, which is where a manager FIRST meets this
+  // field. Its description actively claimed to be the induction rule set.
+  const setup = readFileSync('services/sites/siteSetupConstants.ts', 'utf8');
+  chk('[14] the setup step no longer claims to be the induction rules',
+      !/description: 'The rules every operative agrees to at induction\.'/.test(setup));
+  chk('[14]   — and is titled as supplementary information',
+      /key: 'rules',[\s\S]{0,500}title: 'Additional site information'/.test(setup));
+
+  // The completeness indicator, which reports this field as a missing section.
+  const infoConsts = readFileSync('services/sites/siteInformationConstants.ts', 'utf8');
+  chk('[14] the completeness indicator does not report "Site rules" missing',
+      /\{ key: 'siteRules', label: 'Additional site information' \}/.test(infoConsts));
+
+  chk('[14] no editor surface still labels the free text as the rule set',
+      !/label="Site rules"/.test(infoCfg) && !/label: 'Site rules',/.test(wizard));
 
   console.log(`\n== ${passed} passed, ${failed} failed ==`);
   if (failed > 0) process.exitCode = 1;

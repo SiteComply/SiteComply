@@ -100,8 +100,14 @@ export const SETUP_STEPS: SetupStep[] = [
   },
   {
     key: 'rules',
-    title: 'Site rules',
-    description: 'The rules every operative agrees to at induction.',
+    // This step edits the FREE-TEXT SiteInformation.siteRules field. Its old
+    // description — "the rules every operative agrees to at induction" — named
+    // the Site Rules Library instead, which is edited elsewhere and is what an
+    // operative actually acknowledges. A manager following this wizard would
+    // reasonably believe they had set the induction rules here. They had not.
+    title: 'Additional site information',
+    description:
+      'Supplementary notes shown to operatives beneath the induction site rules.',
     owner: 'SITE_MANAGER',
     cppRequired: true,
   },

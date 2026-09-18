@@ -1,4 +1,5 @@
 import { ChecklistItemType } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import {
   getCurrentChecklist,
   saveChecklist,
@@ -9,6 +10,7 @@ import {
   UK_SITE_RULES_DEFAULT,
 } from '@/services/checklists/ukSiteRulesLibrary';
 import { isSiteRulesAck } from '@/services/checklists/inductionFlow';
+import { siteRulesChanged } from '@/services/checklists/siteRuleRows';
 import type {
   SiteRule,
   LibraryRule,
@@ -45,6 +47,7 @@ import type {
  */
 export {
   buildRuleRows,
+  siteRulesChanged,
   type SiteRule,
   type LibraryRule,
   type RuleRow,
@@ -250,4 +253,120 @@ export async function saveSiteRules(
 
   const saved = await saveChecklist(siteId, merged);
   return { ok: true, version: saved.version, newVersion: saved.newVersion };
+}
+
+// ---------------------------------------------------------------------------
+// The operative's post-induction view
+// ---------------------------------------------------------------------------
+
+/**
+ * The site's rules as an operative reviews them AFTER induction, on Site
+ * information.
+ *
+ * WHY LIVE RULES AND NOT THE SNAPSHOT THEY SIGNED.
+ *
+ * The rules that matter to somebody standing on a site are the ones in force
+ * now. Showing the signed snapshot would let an operative read a superseded rule
+ * and believe they were current — the one failure mode this screen exists to
+ * prevent. So the list is live, exactly like every other section of Site
+ * information.
+ *
+ * That trades against honesty about what they agreed to, which is why the
+ * acknowledgement travels with it: when they agreed, and whether the rules have
+ * moved since. They get the current rules AND the truth about their signature,
+ * rather than one at the cost of the other.
+ *
+ * `changedSinceInduction` compares the RULE TEXT of the version they answered
+ * against the rule text in force, NOT the checklist version number. A checklist
+ * is re-versioned by any edit — a PPE item, a reworded question — and telling an
+ * operative their site rules had changed because somebody added a hard-hat row
+ * would be a false alarm, and false alarms are how a real change gets ignored.
+ */
+export interface WorkerSiteRulesView {
+  /** The rules in force now, in induction order. */
+  rules: SiteRule[];
+  /** When this worker last completed an induction here. Null if never. */
+  acknowledgedAt: Date | null;
+  /**
+   * True when the rule text in force differs from the set this worker actually
+   * acknowledged. False when they match, and false when there is nothing to
+   * compare against — an unknown is not a change.
+   */
+  changedSinceInduction: boolean;
+}
+
+function rulesOf(items: { type: ChecklistItemType; label: string; helpText: string | null }[]): SiteRule[] {
+  return items
+    .filter((i) => i.type === ChecklistItemType.SITE_RULE)
+    .map((i) => ({ label: i.label, helpText: i.helpText }));
+}
+
+export async function getSiteRulesForWorker(
+  siteId: string,
+  workerId: string,
+): Promise<WorkerSiteRulesView> {
+  const checklist = await getCurrentChecklist(siteId);
+  const rules = checklist ? rulesOf(checklist.items) : [];
+
+  // No rules in force means there is nothing to review and nothing to compare.
+  // Return early rather than bill a submission lookup for an empty section.
+  if (rules.length === 0) {
+    return { rules, acknowledgedAt: null, changedSinceInduction: false };
+  }
+
+  /*
+   * The induction they actually sat, not merely their latest check-in.
+   * `inductionReused` marks a check-in that rode on an earlier induction, and
+   * counting one of those would date the acknowledgement to a day they were
+   * never shown the rules.
+   */
+  const induction = await prisma.submission.findFirst({
+    where: { workerId, jobSiteId: siteId, inductionReused: false },
+    orderBy: { checkedInAt: 'desc' },
+    select: { checkedInAt: true, checklistVersion: true },
+  });
+  if (!induction) {
+    return { rules, acknowledgedAt: null, changedSinceInduction: false };
+  }
+
+  // The rules as they stood on the version this worker answered.
+  const answered = await prisma.complianceChecklist.findUnique({
+    where: { jobSiteId_version: { jobSiteId: siteId, version: induction.checklistVersion } },
+    select: { items: { orderBy: { order: 'asc' }, select: { type: true, label: true, helpText: true } } },
+  });
+
+  return {
+    rules,
+    acknowledgedAt: induction.checkedInAt,
+    // No stored version to compare against is an UNKNOWN, not a change.
+    changedSinceInduction: answered
+      ? siteRulesChanged(rulesOf(answered.items), rules)
+      : false,
+  };
+}
+
+/**
+ * Does this site have induction rules to review?
+ *
+ * Read by the worker shell on every page, to decide whether Site information
+ * stays reachable when a site has switched the SITE_INFORMATION panel off.
+ * Rules an operative signed for are not hideable by panel config — the same
+ * reasoning that keeps Attendance and Induction records always visible — but a
+ * site with the panel off AND no rules is left exactly as it was, rather than
+ * being given a nav item leading to an empty page.
+ *
+ * Two small indexed reads rather than loading the checklist: this runs on every
+ * worker page, and it only ever needs to know whether the count is zero.
+ */
+export async function siteHasSiteRules(siteId: string): Promise<boolean> {
+  const current = await prisma.complianceChecklist.findFirst({
+    where: { jobSiteId: siteId },
+    orderBy: { version: 'desc' },
+    select: { id: true },
+  });
+  if (!current) return false;
+  const count = await prisma.checklistItem.count({
+    where: { checklistId: current.id, type: ChecklistItemType.SITE_RULE },
+  });
+  return count > 0;
 }

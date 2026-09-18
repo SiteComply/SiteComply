@@ -7,6 +7,8 @@ import { formatDateTimeUK } from '@/lib/datetime';
 import { countUnreadBulletinsForWorker } from '@/services/bulletins/bulletinService';
 import { requireWorkerContext } from '@/services/workerDashboard/workerDashboardService';
 import { getWorkerSiteInformation } from '@/services/sites/siteInformationService';
+import { getSiteRulesForWorker } from '@/services/checklists/siteRulesService';
+import { formatDateUK } from '@/lib/datetime';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,12 +33,27 @@ export default async function WorkerSiteInformationPage() {
     activeSiteId,
     cscsRemediation,
   } = await requireWorkerContext();
-  if (!panels.SITE_INFORMATION) redirect('/worker/dashboard');
-
-  const [unread, data] = await Promise.all([
+  const [unread, data, siteRules] = await Promise.all([
     countUnreadBulletinsForWorker(site.id, worker.id),
     getWorkerSiteInformation(site.id),
+    getSiteRulesForWorker(site.id, worker.id),
   ]);
+
+  /*
+   * THE PANEL CAN HIDE THE SITE INFORMATION. IT CANNOT HIDE THE RULES.
+   *
+   * An operative acknowledged these rules and must be able to re-read them at
+   * any time without reopening their induction — so a site switching the
+   * SITE_INFORMATION panel off no longer takes them away. With the panel off,
+   * this page narrows to the rules alone rather than disappearing: the manager
+   * turned OFF site information, not the operative's own record.
+   *
+   * Panel off AND no rules is unchanged — nothing to show, so nothing to show
+   * it on. WorkerNav hides the link under exactly the same condition, so the
+   * two can never disagree.
+   */
+  const rulesOnly = !panels.SITE_INFORMATION;
+  if (rulesOnly && siteRules.rules.length === 0) redirect('/worker/dashboard');
 
   const { emergency, info } = data ?? {
     emergency: {
@@ -80,10 +97,20 @@ export default async function WorkerSiteInformationPage() {
       unreadBulletins={unread}
     >
       <WorkerPageHeader
-        title="Site information"
-        description="Everything for the site you’re checked into. Kept up to date by your site team."
+        title={rulesOnly ? 'Site rules' : 'Site information'}
+        description={
+          rulesOnly
+            ? 'The rules you agreed to at your induction for this site.'
+            : 'Everything for the site you’re checked into. Kept up to date by your site team.'
+        }
       />
 
+      {rulesOnly ? (
+        <div className="space-y-3">
+          <SiteRulesSection view={siteRules} notes={info.siteRules} />
+          <SafetyReminder />
+        </div>
+      ) : (
       <div className="space-y-3">
         {/* Address */}
         <PanelCard icon="building" tone="brand" title="Site address">
@@ -207,12 +234,10 @@ export default async function WorkerSiteInformationPage() {
           </PanelCard>
         )}
 
-        {/* Site rules */}
-        {info.siteRules && (
-          <PanelCard icon="clipboard" tone="brand" title="Site rules">
-            <LongText value={info.siteRules} />
-          </PanelCard>
-        )}
+        {/* Site rules — the induction rule set, plus any supplementary notes.
+            ONE section: two cards both titled "Site rules" is the confusion this
+            replaced. See SiteRulesSection. */}
+        <SiteRulesSection view={siteRules} notes={info.siteRules} />
 
         {/* Site map */}
         {info.hasSiteMap && (
@@ -257,18 +282,113 @@ export default async function WorkerSiteInformationPage() {
           </PanelCard>
         )}
 
-        {/* Safety reminder (matches the REV-1 footer note) */}
-        <div className="flex items-start gap-2.5 rounded-xl border border-line bg-surface-sunken p-4 text-sm text-ink-muted">
-          <span className="mt-0.5 shrink-0 text-brand-700">
-            <WorkerIcon name="shield" className="h-4 w-4" />
-          </span>
-          <p>
-            This information is provided for your safety. Please make yourself
-            familiar with all site information and rules while on site.
-          </p>
-        </div>
+        <SafetyReminder />
       </div>
+      )}
     </WorkerShell>
+  );
+}
+
+/**
+ * SITE RULES, as an operative reviews them after induction.
+ *
+ * The rules an operative acknowledged were previously readable in exactly one
+ * place afterwards: the induction record PDF. The card that used to sit here
+ * rendered the free-text `SiteInformation.siteRules` field instead — a different
+ * thing entirely — and rendered nothing at all when that field was blank. So
+ * somebody looking for their site rules navigated to the right screen and found
+ * the section missing.
+ *
+ * Now the induction rule set leads, presented as the numbered list they saw at
+ * induction so it is recognisable as the same thing, and the free text follows
+ * as supplementary notes. Two fields, two jobs, ONE section - the split belongs
+ * to the people editing it, not to the person reading it.
+ *
+ * Renders whenever there is either kind of content. Nothing about it depends on
+ * the free-text field being populated.
+ */
+function SiteRulesSection({
+  view,
+  notes,
+}: {
+  view: { rules: { label: string; helpText: string | null }[]; acknowledgedAt: Date | null; changedSinceInduction: boolean };
+  notes: string | null;
+}) {
+  const hasRules = view.rules.length > 0;
+  if (!hasRules && !notes) return null;
+
+  return (
+    <PanelCard icon="clipboard" tone="brand" title="Site rules">
+      {hasRules && (
+        <>
+          {/* The acknowledgement, stated before the rules rather than after:
+              it is the reason this person recognises the list. */}
+          {view.acknowledgedAt && (
+            <p className="mb-3 text-ink-subtle">
+              You acknowledged these rules at your induction on{' '}
+              {formatDateUK(view.acknowledgedAt)}.
+            </p>
+          )}
+          {/* Only when the rule TEXT actually moved - see changedSinceInduction.
+              A notice that cries wolf on every unrelated checklist edit is a
+              notice nobody reads. */}
+          {view.changedSinceInduction && (
+            <p className="mb-3 rounded-lg border border-hivis-400/50 bg-hivis-400/15 px-3 py-2 font-semibold text-ink">
+              These rules have been updated since your induction. Please read
+              them again.
+            </p>
+          )}
+          <ol className="space-y-3">
+            {view.rules.map((rule, i) => (
+              <li key={`${i}-${rule.label}`} className="flex gap-3">
+                <span
+                  className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-xs font-bold text-ink-muted"
+                  aria-hidden="true"
+                >
+                  {i + 1}
+                </span>
+                <span className="flex-1">
+                  <span className="block font-medium text-ink">
+                    {rule.label}
+                  </span>
+                  {rule.helpText && (
+                    <span className="mt-0.5 block text-sm text-ink-muted">
+                      {rule.helpText}
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+
+      {notes && (
+        <div className={hasRules ? 'mt-4 border-t border-line pt-4' : ''}>
+          {hasRules && (
+            <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-subtle">
+              Additional site information
+            </p>
+          )}
+          <LongText value={notes} />
+        </div>
+      )}
+    </PanelCard>
+  );
+}
+
+/** The REV-1 footer note. Shown on both the full page and the rules-only view. */
+function SafetyReminder() {
+  return (
+    <div className="flex items-start gap-2.5 rounded-xl border border-line bg-surface-sunken p-4 text-sm text-ink-muted">
+      <span className="mt-0.5 shrink-0 text-brand-700">
+        <WorkerIcon name="shield" className="h-4 w-4" />
+      </span>
+      <p>
+        This information is provided for your safety. Please make yourself
+        familiar with all site information and rules while on site.
+      </p>
+    </div>
   );
 }
 

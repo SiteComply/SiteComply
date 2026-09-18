@@ -195,11 +195,16 @@ export function SiteInformationConfig({
         disabled={!canEdit || busy}
         onChange={(e) => setWorkingHours(e.target.value)}
       />
+      {/* NOT the induction rule set. That lives in Site rules (induction) and
+          is what an operative acknowledges; this is longer reference material
+          shown beneath it on the same Site information section. The two were
+          both called "Site rules", on this very page, which is how a site ended
+          up with rules an operative could not find. */}
       <Textarea
-        label="Site rules"
+        label="Additional site information"
         rows={4}
         maxLength={SITE_TEXT_MAX}
-        hint="One rule per line reads best on a phone."
+        hint="Supplementary notes shown beneath the induction site rules. For the rules themselves, use Site rules (induction)."
         value={siteRules}
         disabled={!canEdit || busy}
         onChange={(e) => setSiteRules(e.target.value)}

@@ -128,8 +128,17 @@ function main() {
       !server.includes('Keep walkways, stairs and fire exits clear'));
 
   console.log('\n[4] The editor shipped');
+  // STRING LITERALS ONLY — this reads the compiled bundle, where source shape
+  // (`key: 'site-rules'`, quoting, whitespace) does not survive. An earlier fix
+  // here matched source shape and failed a perfectly good build; see the header.
   chk('the Site rules section label',
-      server.includes('The rules operatives are shown and agree to at induction.'));
+      server.includes('Site rules (induction)'));
+  chk('  and its description names the induction, not the free-text field',
+      server.includes('The numbered rules operatives agree to at induction'));
+  // The free-text field's new name must ship too, or the two are still
+  // indistinguishable to the manager editing them.
+  chk('  and the free-text field is labelled separately',
+      all.includes('Additional site information'));
   chk('the PUT endpoint the editor calls',
       client.includes('/rules') && client.includes('Could not save the site rules.'));
   chk('the "Site-specific" badge for a custom rule',
@@ -180,6 +189,24 @@ function main() {
   chk('no per-rule acknowledgement copy was introduced',
       !all.includes('Acknowledge each rule') &&
       !all.includes('Tick each rule'));
+
+  console.log('\n[8] The post-induction review shipped');
+  // The whole point of the feature: an operative can read the rules they
+  // acknowledged on Site information, without reopening their induction record.
+  const siteInfoPage = readFileSync(
+    join(SERVER, 'app/worker/site-information/page.js'),
+    'utf8',
+  );
+  chk('the Site information page carries the acknowledgement line',
+      siteInfoPage.includes('You acknowledged these rules at your induction on'));
+  chk('  and the updated-since-induction notice',
+      siteInfoPage.includes('These rules have been updated since your induction'));
+  chk('  and labels the free text as supplementary, not as the rules',
+      siteInfoPage.includes('Additional site information'));
+  // CONTROL: proves the three checks above are reading the right file, and that
+  // the page still renders the section heading they sit under.
+  chk('CONTROL — the section heading is in that same page chunk',
+      siteInfoPage.includes('Site rules'));
 
   console.log(`\n== ${passed} passed, ${failed} failed ==`);
   if (failed > 0) process.exitCode = 1;

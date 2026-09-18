@@ -36,7 +36,10 @@ export const SITE_MAP_ACCEPT_HINT = 'JPG, PNG or WebP image — up to 20 MB.';
  */
 export const SITE_INFO_SECTIONS = [
   { key: 'workingHours', label: 'Working hours' },
-  { key: 'siteRules', label: 'Site rules' },
+  // The FREE-TEXT field, not the Site Rules Library. Labelled to match the
+  // editor: a manager who had filled in the induction rules was otherwise told
+  // "Site rules" was still missing, which is the confusion this naming removes.
+  { key: 'siteRules', label: 'Additional site information' },
   { key: 'welfareFacilities', label: 'Welfare facilities' },
   { key: 'siteHazards', label: 'Site-specific hazards' },
   { key: 'emergencyProcedures', label: 'Emergency procedures' },

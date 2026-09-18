@@ -176,7 +176,11 @@ const FIELDS: Record<
     { name: 'welfareFacilities', label: 'Welfare facilities', kind: 'area' },
     { name: 'workingHours', label: 'Working hours', kind: 'area' },
   ],
-  rules: [{ name: 'siteRules', label: 'Site rules', kind: 'area' }],
+  // The free-text field, not the Site Rules Library. Named to match
+  // SiteInformationConfig so the wizard and the editor agree.
+  rules: [
+    { name: 'siteRules', label: 'Additional site information', kind: 'area' },
+  ],
   hazards: [
     { name: 'siteHazards', label: 'Site-specific hazards', kind: 'area' },
     {

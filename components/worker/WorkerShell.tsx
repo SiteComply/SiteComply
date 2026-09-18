@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Logo } from '@/components/brand/Logo';
 import { formatDateTimeUK } from '@/lib/datetime';
 import type { PanelVisibility } from '@/services/workerDashboard/dashboardPanels';
+import { siteHasSiteRules } from '@/services/checklists/siteRulesService';
 import { WorkerNav } from './WorkerNav';
 import { SiteSwitcher, type SwitcherSite } from './SiteSwitcher';
 import { SiteControlChrome } from './SiteControlChrome';
@@ -21,7 +22,7 @@ import { CheckOutOfSiteButton } from './CheckOutOfSiteButton';
  * When the worker is checked into more than one site at once, a site switcher
  * replaces the static site name so they can move between their sites (SC-004).
  */
-export function WorkerShell({
+export async function WorkerShell({
   children,
   siteName,
   checkedInAt,
@@ -59,6 +60,20 @@ export function WorkerShell({
   submissionId?: string;
 }) {
   const multiSite = sites.length > 1 && activeSiteId;
+  /*
+   * Site rules outlive the panel that normally carries them.
+   *
+   * An operative acknowledged these rules and must be able to re-read them at
+   * any time, so a site switching SITE_INFORMATION off cannot take them away —
+   * the same rule that keeps Attendance and Induction records always visible.
+   * Resolved HERE rather than threaded from eleven pages: every one of them
+   * already passes activeSiteId, and a page that forgot a new prop would hide
+   * the link on that screen alone, which is exactly the kind of silent
+   * inconsistency this avoids.
+   */
+  const siteRulesVisible = activeSiteId
+    ? await siteHasSiteRules(activeSiteId)
+    : false;
   return (
     <div className="flex min-h-dvh flex-col bg-surface-sunken">
       <a
@@ -220,7 +235,11 @@ export function WorkerShell({
         <aside className="shrink-0 md:w-52">
           <div className="space-y-4 md:sticky md:top-6">
             <div className="rounded-xl border border-line bg-surface p-2 shadow-card">
-              <WorkerNav panels={panels} unreadBulletins={unreadBulletins} />
+              <WorkerNav
+              panels={panels}
+              unreadBulletins={unreadBulletins}
+              siteRulesVisible={siteRulesVisible}
+            />
             </div>
             <div className="hidden rounded-xl border border-line bg-surface p-4 shadow-card md:block">
               <p className="flex items-center gap-2 text-sm font-semibold text-ink">

@@ -40,6 +40,8 @@ const WORKER_NAV: {
   icon: WorkerIconName;
   /** Panels that keep this item visible — shown if ANY of them is enabled. */
   panels: WorkerDashboardPanelValue[];
+  /** Also visible when the site has site rules, whatever the panels say. */
+  alsoWhenSiteRules?: boolean;
 }[] = [
   {
     href: '/worker/dashboard',
@@ -80,6 +82,10 @@ const WORKER_NAV: {
     shortLabel: 'Site info',
     icon: 'building',
     panels: ['SITE_INFORMATION'],
+    // ...and also whenever the site has induction rules, panel or no panel.
+    // The rules an operative acknowledged are their own record and stay
+    // reachable; see WorkerShell, which resolves this.
+    alsoWhenSiteRules: true,
   },
   // Then the operational modules, in the order a task tends to need them.
   {
@@ -147,13 +153,19 @@ function Chevron({ direction }: { direction: 'left' | 'right' }) {
 export function WorkerNav({
   panels,
   unreadBulletins = 0,
+  siteRulesVisible = false,
 }: {
   panels: PanelVisibility;
   unreadBulletins?: number;
+  /** The site has induction rules an operative may re-read. See WorkerShell. */
+  siteRulesVisible?: boolean;
 }) {
   const pathname = usePathname();
   const items = WORKER_NAV.filter(
-    (item) => item.panels.length === 0 || item.panels.some((p) => panels[p]),
+    (item) =>
+      item.panels.length === 0 ||
+      item.panels.some((p) => panels[p]) ||
+      (item.alsoWhenSiteRules && siteRulesVisible),
   );
 
   const scrollerRef = useRef<HTMLElement>(null);
