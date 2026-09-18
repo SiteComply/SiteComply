@@ -2,6 +2,9 @@ import { prisma } from '@/lib/prisma';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { completenessFor } from '@/services/sites/siteSetupService';
+import { getSiteRules } from '@/services/checklists/siteRulesService';
+import { getSitePpeRequirements } from '@/services/checklists/sitePpeService';
+import { getSiteServiceConfig } from '@/services/siteServices/siteServiceAvailability';
 import type {
   DerivedCompleteness,
   SectionStatus,
@@ -32,12 +35,33 @@ export interface CppEntry {
   value: string | null;
 }
 
+/** A listed item — a rule, a PPE requirement, a RAMS document, a permit type. */
+export interface CppItem {
+  label: string;
+  detail: string | null;
+}
+
 export interface CppSection {
   key: string;
   title: string;
   /** Which wizard step fills this section, for the "complete this" link. */
-  stepKey: string;
+  stepKey: string | null;
+  /** Where this content is maintained, when it is not a setup step. */
+  manageHref: string | null;
   entries: CppEntry[];
+  /** List content, where the section is a register rather than prose. */
+  items: CppItem[];
+  /**
+   * Whether this section's state feeds the completion figure.
+   *
+   * TRUE for the setup-owned sections, which is where completion has always
+   * lived. FALSE for sections wired from elsewhere in the platform — PPE, RAMS,
+   * permits, induction, competence, monitoring. Those are REFERENCE content:
+   * they make the plan a fuller document without changing what a site must do
+   * to be "complete", so adding them cannot move anybody's percentage. Promoting
+   * any of them to a requirement is a deliberate, separate decision.
+   */
+  gatesCompletion: boolean;
   /**
    * The section's real state, from the SAME computation the wizard and the
    * completeness figure use. Previously this was `empty`, derived here from
@@ -74,6 +98,30 @@ export interface CppDraft {
 /** Documents that belong in a CPP appendix — drawings and emergency plans. */
 const DRAWING_TITLE_HINTS = ['drawing', 'layout', 'plan', 'emergency'];
 
+/**
+ * Access requirements in the language of a construction phase plan.
+ *
+ * The enum names are internal; a duty holder reading the plan needs to know what
+ * is actually enforced at the gate, in words they would use themselves.
+ */
+/** Schedule frequencies in plain words, for the printed plan. */
+/** The four ScheduleFrequency values, and only those — see prisma/schema. */
+const FREQUENCY_LABELS: Record<string, string> = {
+  DAILY: 'Daily',
+  WEEKLY: 'Weekly',
+  MONTHLY: 'Monthly',
+  CUSTOM: 'To a custom schedule',
+};
+
+const ACCESS_REQUIREMENT_LABELS: Record<string, string> = {
+  CSCS_VERIFIED:
+    'A valid CSCS/ECS card, verified against the CSCS Smart Check service',
+  CSCS_IN_DATE: 'A card that is in date',
+  KNOWLEDGE_CHECK_PASSED: 'A passed site knowledge check',
+  INDUCTION_VALID: 'A current, valid site induction',
+  SIGNATURE_ON_FILE: 'A signed induction declaration on file',
+};
+
 export async function getCppDraft(
   viewer: PlatformViewer,
   siteId: string,
@@ -106,6 +154,42 @@ export async function getCppDraft(
   const cdm = site.cdmDutyHolders;
   const proj = site.projectDetails;
 
+  /*
+   * TIER 1 — content that already exists in the platform, surfaced here instead
+   * of being asked for a second time.
+   *
+   * Every one of these is maintained on its own screen by the people who own it,
+   * so the plan stays current without anybody retyping it into a CPP field —
+   * the same single-source rule the setup sections follow. Nothing here is
+   * captured for the CPP's benefit, and nothing here is stored.
+   */
+  const [rules, ppe, serviceGroups, inductionCfg, accessReqs, ramsDocs, schedules] =
+    await Promise.all([
+      getSiteRules(siteId),
+      getSitePpeRequirements(siteId),
+      getSiteServiceConfig(viewer, siteId),
+      prisma.siteInductionConfig.findUnique({ where: { jobSiteId: siteId } }),
+      prisma.siteAccessRequirement.findMany({
+        where: { jobSiteId: siteId, enabled: true },
+        select: { requirement: true },
+      }),
+      prisma.document.findMany({
+        where: { jobSiteId: siteId, category: 'RAMS' },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, title: true, fileName: true, createdAt: true },
+      }),
+      prisma.complianceSchedule.findMany({
+        where: { jobSiteId: siteId, active: true },
+        orderBy: { title: 'asc' },
+        select: {
+          title: true,
+          frequency: true,
+          assignedRole: true,
+          auditTemplate: { select: { name: true } },
+        },
+      }),
+    ]);
+
   const fmtDate = (d: Date | null | undefined) =>
     d ? d.toLocaleDateString('en-GB') : null;
   const clean = (v: string | null | undefined) => {
@@ -124,6 +208,7 @@ export async function getCppDraft(
    * headline figure printed above it — which is precisely the contradiction
    * this change exists to remove.
    */
+  /** A setup-owned section. Its status comes from the setup completion model. */
   const section = (
     key: string,
     title: string,
@@ -133,9 +218,41 @@ export async function getCppDraft(
     key,
     title,
     stepKey,
+    manageHref: null,
     entries,
+    items: [],
     status: 'EMPTY',
     missing: [],
+    gatesCompletion: true,
+  });
+
+  /**
+   * A section wired from data maintained elsewhere in the platform.
+   *
+   * Reference content: it never gates completion, so surfacing it cannot move a
+   * site's percentage. Its status is simply whether there is anything to show —
+   * an honest "none recorded" rather than a silent omission, which is the same
+   * rule the setup sections have always followed.
+   */
+  const wired = (
+    key: string,
+    title: string,
+    manageHref: string | null,
+    items: CppItem[],
+    entries: CppEntry[] = [],
+  ): CppSection => ({
+    key,
+    title,
+    stepKey: null,
+    manageHref,
+    entries,
+    items,
+    status:
+      items.length > 0 || entries.some((e) => e.value !== null)
+        ? 'COMPLETE'
+        : 'EMPTY',
+    missing: [],
+    gatesCompletion: false,
   });
 
   const sections: CppSection[] = [
@@ -196,6 +313,81 @@ export async function getCppDraft(
             .join('\n') || null,
       },
     ]),
+    /* ---- Wired: how people get on to this site, and on what basis. ---- */
+    wired(
+      'induction',
+      'Site induction arrangements',
+      `/platform/dashboard/sites/${siteId}/experience`,
+      [],
+      [
+        {
+          label: 'Induction',
+          value:
+            'Every operative completes a site induction before first access, delivered and recorded in SiteComply.',
+        },
+        {
+          label: 'Knowledge check',
+          value: inductionCfg
+            ? inductionCfg.knowledgeCheckEnabled
+              ? `Required — ${inductionCfg.questionsPerAttempt} question${inductionCfg.questionsPerAttempt === 1 ? '' : 's'} per attempt, all must be answered correctly.`
+              : 'Not used on this site.'
+            : null,
+        },
+        {
+          label: 'Signed declaration',
+          value: inductionCfg
+            ? inductionCfg.inductionSignatureRequired
+              ? 'Required — the operative signs the induction record, which is retained.'
+              : 'Not required on this site.'
+            : null,
+        },
+        {
+          label: 'Manager approval',
+          value: inductionCfg
+            ? inductionCfg.requireManagerApproval
+              ? 'A site manager approves each operative before access is granted.'
+              : 'Not required on this site.'
+            : null,
+        },
+        {
+          label: 'Re-induction',
+          value: inductionCfg
+            ? inductionCfg.inductionValidityDays
+              ? `Induction is valid for ${inductionCfg.inductionValidityDays} days, after which the operative is re-inducted.`
+              : 'Induction is confirmed at every check-in.'
+            : null,
+        },
+      ],
+    ),
+    /*
+     * COMPETENCE. Stated as what is ENFORCED at the gate, not as an aspiration —
+     * these are the checks a worker actually has to pass, read from the site's
+     * own access requirements rather than described in prose that could drift
+     * from them.
+     */
+    wired(
+      'competence',
+      'Competence and site access requirements',
+      `/platform/dashboard/sites/${siteId}/access`,
+      accessReqs.map((r) => ({
+        label: ACCESS_REQUIREMENT_LABELS[r.requirement] ?? r.requirement,
+        detail: null,
+      })),
+      [
+        {
+          label: 'Card checking',
+          value:
+            'CSCS/ECS card details are captured at induction and verified against the CSCS Smart Check service.',
+        },
+        {
+          label: 'Enforcement',
+          value:
+            accessReqs.length === 0
+              ? 'No access requirements are enforced on this site — card details are recorded but do not block access.'
+              : null,
+        },
+      ],
+    ),
     section('emergency', 'Emergency arrangements', 'emergency', [
       { label: 'Fire assembly point', value: clean(site.fireAssemblyPoint) },
       { label: 'Fire arrangements', value: clean(info?.fireArrangements) },
@@ -210,9 +402,49 @@ export async function getCppDraft(
       { label: 'Welfare facilities', value: clean(info?.welfareFacilities) },
       { label: 'Working hours', value: clean(info?.workingHours) },
     ]),
-    section('rules', 'Site rules', 'rules', [
-      { label: 'Site rules', value: clean(info?.siteRules) },
-    ]),
+    /*
+     * SITE RULES COME FROM THE LIBRARY.
+     *
+     * This printed `SiteInformation.siteRules` — the free-text field that was
+     * renamed "Additional site information" precisely because it is NOT the
+     * rule set. A site using the Library correctly produced a plan with an empty
+     * rules section, while a site with no published rules could look complete.
+     * The Library items are what an operative is shown and acknowledges at
+     * induction, so they are what the plan states; the free text follows as
+     * supplementary notes, exactly as it does on the worker's screen.
+     */
+    {
+      ...wired(
+        'rules',
+        'Site rules',
+        `/platform/dashboard/sites/${siteId}/experience`,
+        rules.map((r) => ({ label: r.label, detail: r.helpText })),
+        [{ label: 'Additional site information', value: clean(info?.siteRules) }],
+      ),
+      // Kept pointing at the setup step so "complete this" still leads somewhere
+      // sensible, without gating completion on it.
+      stepKey: null,
+    },
+    wired(
+      'ppe',
+      'Personal protective equipment',
+      `/platform/dashboard/sites/${siteId}/experience`,
+      ppe.map((r) => ({
+        label: r.label,
+        detail: [r.required ? 'Mandatory' : 'As required by task', r.helpText]
+          .filter(Boolean)
+          .join(' — ') || null,
+      })),
+      [
+        {
+          label: 'Confirmation',
+          value:
+            ppe.length > 0
+              ? 'Each operative confirms they hold and will wear the PPE listed above as part of their site induction.'
+              : null,
+        },
+      ],
+    ),
     section('hazards', 'Hazards and existing site risks', 'hazards', [
       { label: 'Site-specific hazards', value: clean(info?.siteHazards) },
       { label: 'Existing site risks', value: clean(info?.existingSiteRisks) },
@@ -236,12 +468,71 @@ export async function getCppDraft(
         value: clean(info?.utilitiesIsolation),
       },
     ]),
+    wired(
+      'permits',
+      'Permit-to-work arrangements',
+      `/platform/dashboard/sites/${siteId}/experience`,
+      (serviceGroups ?? [])
+        .filter((g) => g.kind === 'PERMIT_TYPE')
+        .flatMap((g) => g.items)
+        .filter((i) => i.enabled)
+        .map((i) => ({ label: i.name, detail: i.description })),
+      [
+        {
+          label: 'Arrangements',
+          value:
+            'Work of the types listed above may not begin until a permit has been requested through SiteComply and approved. Each permit records who requested it, who approved it and when.',
+        },
+      ],
+    ),
+    wired(
+      'rams',
+      'Risk assessments and method statements',
+      `/platform/dashboard/sites/${siteId}/documents`,
+      ramsDocs.map((d) => ({
+        label: d.title,
+        detail: `${d.fileName} · filed ${d.createdAt.toLocaleDateString('en-GB')}`,
+      })),
+      [
+        {
+          label: 'Arrangements',
+          value:
+            ramsDocs.length > 0
+              ? 'The risk assessments and method statements listed above are held in the site document register and are available to operatives on site.'
+              : null,
+        },
+      ],
+    ),
     section('environment', 'Environmental controls', 'environment', [
       {
         label: 'Environmental controls',
         value: clean(info?.environmentalControls),
       },
     ]),
+    wired(
+      'monitoring',
+      'Monitoring and inspection arrangements',
+      `/platform/dashboard/sites/${siteId}/compliance`,
+      schedules.map((sch) => ({
+        label: sch.title,
+        detail: [
+          sch.auditTemplate?.name,
+          FREQUENCY_LABELS[sch.frequency] ?? sch.frequency,
+          sch.assignedRole ? `assigned to ${sch.assignedRole}` : null,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+      })),
+      [
+        {
+          label: 'Arrangements',
+          value:
+            schedules.length > 0
+              ? 'The inspections above are scheduled in SiteComply, which raises each one when due and records the result. Findings raise actions with an owner and a due date, tracked to closure.'
+              : 'No recurring inspections are scheduled for this site.',
+        },
+      ],
+    ),
   ];
 
   // Site layout drawings and emergency plans live in the Documents register
@@ -280,12 +571,15 @@ export async function getCppDraft(
    * already decided it in one place.
    */
   for (const s of sections) {
+    // A wired section decided its own status when it was built, from whether
+    // there is anything to show. Completion belongs to the setup steps.
+    if (!s.gatesCompletion || s.stepKey === null) continue;
     const st = completeness.statuses[s.stepKey];
     if (st) {
       s.status = st.status;
       s.missing = st.missing;
     } else {
-      // Not applicable: nothing required, so nothing outstanding.
+      // Not applicable to this site: nothing required, so nothing outstanding.
       s.status = 'COMPLETE';
     }
   }
@@ -311,7 +605,13 @@ export async function getCppDraft(
       lastUpdatedByName: stamps[0]?.by ?? null,
     },
     outstanding: sections
-      .filter((s) => applicableKeys.has(s.stepKey) && s.status !== 'COMPLETE')
+      .filter(
+        (s) =>
+          s.gatesCompletion &&
+          s.stepKey !== null &&
+          applicableKeys.has(s.stepKey) &&
+          s.status !== 'COMPLETE',
+      )
       .map((s) => ({ title: s.title, status: s.status, missing: s.missing })),
   };
 }

@@ -196,14 +196,42 @@ export default async function SiteCppPage({
               <h3 className="text-base font-bold text-ink">
                 {idx + 1}. {s.title}
               </h3>
-              {s.entries.every((e) => e.value === null) ? (
+              {/* A REGISTER, where the section has one — site rules, PPE,
+                  permit types, RAMS, inspections. Listed rather than squeezed
+                  into prose, because that is what a reader scans for. */}
+              {s.items.length > 0 && (
+                <ul className="mt-2 space-y-1.5">
+                  {s.items.map((it, i) => (
+                    <li key={`${i}-${it.label}`} className="flex gap-2 text-sm">
+                      <span aria-hidden className="text-ink-subtle">
+                        •
+                      </span>
+                      <span>
+                        <span className="text-ink">{it.label}</span>
+                        {it.detail && (
+                          <span className="block text-xs text-ink-muted">
+                            {it.detail}
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {s.items.length === 0 &&
+              s.entries.every((e) => e.value === null) ? (
                 <p className="mt-1 text-sm italic text-ink-subtle">
-                  Not yet recorded.{' '}
+                  {/* A wired section is not a setup gap, so it must not send the
+                      reader to the wizard for something the wizard cannot fix. */}
+                  {s.gatesCompletion ? 'Not yet recorded.' : 'None recorded.'}{' '}
                   <Link
-                    href={setupHref}
+                    href={s.manageHref ?? setupHref}
                     className="font-semibold text-brand-700 underline print:hidden"
                   >
-                    Complete in Project setup
+                    {s.gatesCompletion
+                      ? 'Complete in Project setup'
+                      : 'Manage this'}
                   </Link>
                 </p>
               ) : (
