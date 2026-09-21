@@ -4,6 +4,7 @@ import { Chivo, Crimson_Pro } from 'next/font/google';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
 import { PrintButton } from '@/components/worker/PrintButton';
+import { buttonClasses } from '@/components/ui/Button';
 import { requirePlatformViewer } from '@/services/platformUsers/platformAccess';
 import { getCppDraft } from '@/services/sites/cppService';
 import {
@@ -202,24 +203,34 @@ export default async function SiteCppPage({
             Edit in Project setup
           </Link>
           {/* THE CONTROLLED ARTEFACT vs A WORKING VIEW.
-             
-              An ISSUED revision is downloaded as a server-rendered PDF: real
-              running heads, true page numbers, and none of the browser's own
+
+              An ISSUED revision downloads the server-rendered PDF: real running
+              heads, true page numbers, and none of the browser's own
               URL/title/timestamp furniture, which is a print-dialog setting no
               stylesheet can reach.
 
-              A DRAFT still prints from the browser, and the label says so. It is
-              a working view, not something to send a client — giving it a
-              download that looked identical to an approved plan is exactly what
-              document control exists to prevent. */}
+              A DRAFT prints from the browser. It is a working view, not
+              something to send a client — giving it a download that looked
+              identical to an approved plan is exactly what document control
+              exists to prevent.
+
+              ONE SLOT, ONE CONTROL, and the SAME secondary weight for both.
+              Download used to be a solid dark button, which made the routine
+              act of fetching a document read as the page's primary purpose —
+              louder than Edit beside it. It is now the same secondary treatment
+              as Print, because they are the same KIND of action.
+
+              The label is just "Download". The masthead two lines below already
+              states the revision, and the file announces itself as a PDF; a
+              button repeating both was noise. */}
           {viewingRevision &&
           (viewingRevision.status === 'ISSUED' ||
             viewingRevision.status === 'SUPERSEDED') ? (
             <a
               href={`/api/platform/sites/${cpp.site.id}/cpp-revisions/${viewingRevision.id}/pdf`}
-              className="touch-target rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-ink/90"
+              className={buttonClasses({ variant: 'secondary', size: 'md' })}
             >
-              {`Download Revision ${String(viewingRevision.version).padStart(2, '0')} (PDF)`}
+              Download
             </a>
           ) : (
             /* A standard secondary button at its natural width — the same

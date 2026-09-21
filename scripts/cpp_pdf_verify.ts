@@ -348,6 +348,23 @@ async function main() {
     'app/platform/dashboard/sites/[id]/cpp/revisions/page.tsx', 'utf8');
   chk('[12] an issued revision offers the server-rendered PDF',
     /cpp-revisions\/\$\{viewingRevision\.id\}\/pdf/.test(code(page)));
+  // Download and Print are the same KIND of action and carry the same weight.
+  // Download was a solid dark button, which made fetching a document read as
+  // the page's primary purpose — louder than Edit beside it.
+  const dl = (code(page).match(/<a\s+href=\{`\/api\/platform\/sites[\s\S]*?<\/a>/) || [''])[0];
+  chk('[12] CONTROL — the download control was located', dl.includes('/pdf'));
+  chk('[12] it takes the shared secondary treatment, not a bespoke one',
+    /buttonClasses\(\{ variant: 'secondary'/.test(dl));
+  chk('[12]   and is no longer a solid primary-weight button',
+    !/bg-ink/.test(dl) && !/font-semibold/.test(dl));
+  chk('[12]   with the same weight as Print, which is also secondary by default',
+    /variant = 'secondary'/.test(readFileSync('components/worker/PrintButton.tsx', 'utf8')) &&
+    !/variant=/.test((code(page).match(/<PrintButton[^>]*\/>/) || [''])[0]));
+  // The revision and the format are already stated on the page and by the file.
+  chk('[12]   and a label that repeats neither the revision nor the format',
+    />\s*Download\s*</.test(dl) && !/Revision|PDF/.test(dl.split('>').pop() ?? ''));
+  chk('[12] both document actions sit in the same right-hand group',
+    code(page).indexOf('Edit in Project setup') < code(page).indexOf('/pdf'));
   chk('[12] the register offers it per issued revision too',
     /cpp-revisions\/\$\{r\.id\}\/pdf/.test(code(register)));
   chk('[12] neither offers one for a draft',
