@@ -85,12 +85,39 @@ function main() {
   chk('[5] the PC\'s name leads the document',
     /cpp\.site\.principalContractor/.test(page) &&
     page.indexOf('cpp-issuer') < page.indexOf('cpp-doctype'));
-  chk('[5] SiteComply appears once, as provenance',
-    (page.match(/Prepared and issued in SiteComply/g) ?? []).length === 1);
-  chk('[5]   in the colophon, not the masthead',
-    page.indexOf('Prepared and issued in SiteComply') > page.indexOf('cpp-doctype'));
-  chk('[5] the mark is small and monochrome',
-    /\.cpp-foot svg \{ width: 14px/.test(doc) && /stroke="#71767c"/.test(page));
+  // The approved branding gives the colophon a two-tone mark and a set wordmark,
+  // so "appears once" and "monochrome" no longer describe it. What must remain
+  // true is that the identity lives ONLY in the colophon, and carries by weight
+  // rather than by scale.
+  const betweenHeadAndFoot = page.slice(
+    page.indexOf('cpp-brandrule'),
+    page.indexOf('cpp-foot'),
+  );
+  chk('[5] CONTROL — that slice covers the whole document body',
+    betweenHeadAndFoot.includes('cpp-doctype') && betweenHeadAndFoot.includes('cpp-approval'));
+  chk('[5] SiteComply appears NOWHERE between the head rule and the colophon',
+    !betweenHeadAndFoot.includes('SiteComply'));
+  chk('[5] the mark is small — 15px, not a logo at scale',
+    /\.cpp-foot svg \{ width: 15px; height: 15px/.test(doc));
+  chk('[5] the wordmark carries by weight, not size',
+    /\.cpp-foot \.wordmark \{\s*\n?\s*font-weight: 700;/.test(doc) &&
+    !/\.cpp-foot \.wordmark \{[^}]*font-size/.test(doc));
+  chk('[5] provenance still states where the document was produced',
+    /prepared and issued in SiteComply/i.test(page));
+
+  console.log('\n[5b] The approved branding treatment');
+  chk('[5b] a head rule exists', /\.cpp-brandrule \{/.test(doc) && /cpp-brandrule/.test(page));
+  chk('[5b]   and sits ABOVE the contractor\'s own rule',
+    page.indexOf('cpp-brandrule') < page.indexOf('cpp-issuer'));
+  chk('[5b] document control is tinted', /\.cpp-control \{[^}]*background: var\(--cpp-tint\)/.test(doc));
+  chk('[5b]   with a BORDER that survives print, not only a background',
+    /\.cpp-control \{[^}]*border-left: 2px solid var\(--cpp-accent\)/.test(doc));
+  chk('[5b] the brand tones are SiteComply\'s own',
+    /--cpp-brand: #00aeef/.test(doc) && /--cpp-brand-mid: #00638f/.test(doc));
+  chk('[5b] no coloured status banner was introduced',
+    !/\.cpp-status \{[^}]*background:/.test(doc));
+  chk('[5b] the contractor still leads the document',
+    page.indexOf('cpp.site.principalContractor') < page.indexOf('cpp-doctype'));
   chk('[5] the footer is softened — no uppercase shouting',
     !/\.cpp-foot\s*\{[^}]*text-transform: uppercase/.test(doc));
 

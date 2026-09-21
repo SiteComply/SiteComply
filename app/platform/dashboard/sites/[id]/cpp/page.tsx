@@ -251,6 +251,13 @@ export default async function SiteCppPage({
       <article
         className={`cpp-doc ${chivo.variable} ${crimson.variable} mx-auto max-w-4xl border border-line px-12 py-12 shadow-card print:max-w-none print:border-0 print:p-0 print:shadow-none`}
       >
+        {/* The only brand mark above the fold. It sits ABOVE the contractor's
+            rule rather than competing with it, and is a background so it drops
+            from print unless the reader turns background graphics on — on paper
+            the contractor's rule and the colophon carry identity, which is the
+            right emphasis for a document the contractor issues. */}
+        <div className="cpp-brandrule" aria-hidden="true" />
+
         <header>
           {/* The document is the Principal Contractor's. Their name leads it. */}
           <div className="cpp-issuer">
@@ -552,18 +559,23 @@ export default async function SiteCppPage({
               produced here. */}
           <div className="cpp-foot">
             <span className="mark">
+              {/* Two-tone, and 15px. An SVG stroke prints where a background
+                  does not, so this is what carries the identity on paper. */}
               <svg viewBox="0 0 32 32" aria-hidden="true">
-                <circle cx="16" cy="16" r="14" fill="none" stroke="#71767c" strokeWidth="3" />
+                <circle cx="16" cy="16" r="14" fill="none" stroke="#00aeef" strokeWidth="3" />
                 <path
                   d="M9.5 16.6l4.4 4.4 8.6-9.2"
                   fill="none"
-                  stroke="#16181a"
+                  stroke="#003a54"
                   strokeWidth="3.4"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
               </svg>
-              Prepared and issued in SiteComply
+              <span className="wordmark">
+                Site<em>Comply</em>
+              </span>
+              <span>· prepared and issued in SiteComply</span>
             </span>
             <span>
               {cpp.site.jobReference}

@@ -144,6 +144,15 @@
   --cpp-accent: #003a54; /* SiteComply brand-900 — the darkest brand blue */
   --cpp-flag: #7a5410;
 
+  /* Approved branding treatment. Three additions, each doing structural work:
+     the head rule, the document-control ground, and the colophon wordmark.
+     SiteComply is a SUPPORTING identity here — the Principal Contractor's name
+     leads the document and nothing below may outrank it. */
+  --cpp-brand: #00aeef;      /* SiteComply logo blue */
+  --cpp-brand-mid: #00638f;  /* brand-700, for type that must stay legible */
+  --cpp-tint: #f2fafd;
+  --cpp-tint-rule: #d7ebf4;
+
   background: var(--cpp-paper);
   color: var(--cpp-ink);
   font-family: var(--cpp-serif), Georgia, 'Times New Roman', serif;
@@ -152,6 +161,17 @@
 }
 .cpp-doc .cpp-sans {
   font-family: var(--cpp-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* The only brand mark above the fold: a 2px rule, dark blue running into logo
+   blue, sitting ABOVE the contractor's own rule rather than competing with it.
+   It is a background, so browsers drop it from print unless the reader enables
+   background graphics — deliberately not forced. On paper the contractor's rule
+   and the colophon carry identity, which is the right emphasis for a document
+   the contractor issues. */
+.cpp-doc .cpp-brandrule {
+  height: 2px;
+  background: linear-gradient(90deg, var(--cpp-accent) 0 62%, var(--cpp-brand) 62% 100%);
 }
 
 /* ── Masthead ───────────────────────────────────────────────────── */
@@ -199,14 +219,20 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Document control: two columns of ruled rows. No cells, no chips. */
+/* Document control: two columns of ruled rows on a tinted ground.
+   THE TINT IS THE PIECE DOING REAL WORK — it separates what this document IS
+   from what it SAYS, which is a legibility gain that happens to carry brand
+   colour. The left rule is a BORDER, not a background, so the block stays
+   delineated on paper even when the tint is dropped from print. */
 .cpp-doc .cpp-control {
-  margin: 0; padding: 22px 0 0;
-  display: grid; grid-template-columns: 1fr 1fr; gap: 0 46px;
+  margin: 22px 0 0; padding: 16px 20px 6px;
+  background: var(--cpp-tint);
+  border-left: 2px solid var(--cpp-accent);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0 40px;
 }
 .cpp-doc .cpp-control .row {
-  display: grid; grid-template-columns: 152px 1fr; gap: 0 14px;
-  padding: 8px 0; border-bottom: 1px solid var(--cpp-rule-2);
+  display: grid; grid-template-columns: 150px 1fr; gap: 0 14px;
+  padding: 8px 0; border-bottom: 1px solid var(--cpp-tint-rule);
 }
 .cpp-doc .cpp-control dt {
   font-family: var(--cpp-sans), sans-serif;
@@ -309,8 +335,16 @@
   font-family: var(--cpp-sans), sans-serif;
   font-size: 12px; font-weight: 400; color: var(--cpp-ink-3); letter-spacing: .01em;
 }
-.cpp-doc .cpp-foot .mark { display: flex; align-items: center; gap: 7px; }
-.cpp-doc .cpp-foot svg { width: 14px; height: 14px; flex: none; }
+.cpp-doc .cpp-foot .mark { display: flex; align-items: center; gap: 8px; }
+.cpp-doc .cpp-foot svg { width: 15px; height: 15px; flex: none; }
+/* The wordmark. Set, not shouted: the same size as the surrounding footer type,
+   weight carrying the identity rather than scale or colour. */
+.cpp-doc .cpp-foot .wordmark {
+  font-weight: 700; letter-spacing: -.01em; color: var(--cpp-ink-2);
+}
+.cpp-doc .cpp-foot .wordmark em {
+  font-style: normal; font-weight: 400; color: var(--cpp-brand-mid);
+}
 
 @media (max-width: 760px) {
   .cpp-doc { font-size: 16.5px; }
@@ -385,7 +419,7 @@
   font-family: var(--cpp-sans), sans-serif;
   font-size: 12px; font-weight: 700; letter-spacing: .21em; text-transform: uppercase;
   color: var(--cpp-ink); margin: 0 0 18px; padding-bottom: 7px;
-  border-bottom: 2px solid var(--cpp-ink);
+  border-bottom: 2px solid var(--cpp-accent);
 }
 .cpp-doc .cpp-contents ol { margin: 0; padding: 0; list-style: none; max-width: 62ch; }
 .cpp-doc .cpp-contents li {
