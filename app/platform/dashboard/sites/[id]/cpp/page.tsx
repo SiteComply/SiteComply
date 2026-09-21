@@ -251,13 +251,6 @@ export default async function SiteCppPage({
       <article
         className={`cpp-doc ${chivo.variable} ${crimson.variable} mx-auto max-w-4xl border border-line px-12 py-12 shadow-card print:max-w-none print:border-0 print:p-0 print:shadow-none`}
       >
-        {/* The only brand mark above the fold. It sits ABOVE the contractor's
-            rule rather than competing with it, and is a background so it drops
-            from print unless the reader turns background graphics on — on paper
-            the contractor's rule and the colophon carry identity, which is the
-            right emphasis for a document the contractor issues. */}
-        <div className="cpp-brandrule" aria-hidden="true" />
-
         <header>
           {/* The document is the Principal Contractor's. Their name leads it. */}
           <div className="cpp-issuer">
@@ -557,31 +550,31 @@ export default async function SiteCppPage({
           {/* COLOPHON. The branding, and all of it: a small mark and one line of
               provenance. The document is the Principal Contractor's; it was
               produced here. */}
+          {/* COLOPHON — a publisher's imprint, and the whole of the SiteComply
+              identity in this document. The reference sits left, the producing
+              mark right.
+
+              THE GENUINE ARTWORK, not a drawn substitute. The mark previously
+              here was a closed blue ring with a dark blue tick — wrong
+              construction and wrong colours against the real logo, which is the
+              lowercase wordmark with an OPEN ring and a green tick. This is
+              `public/sitecomply-logo.png`, the same asset the Logo component
+              uses across the platform.
+
+              A plain <img> rather than next/image: this is a fixed-height mark
+              in a document that must print predictably, and the wrapper markup
+              next/image adds earns nothing here. */}
           <div className="cpp-foot">
-            <span className="mark">
-              {/* Two-tone, and 15px. An SVG stroke prints where a background
-                  does not, so this is what carries the identity on paper. */}
-              <svg viewBox="0 0 32 32" aria-hidden="true">
-                <circle cx="16" cy="16" r="14" fill="none" stroke="#00aeef" strokeWidth="3" />
-                <path
-                  d="M9.5 16.6l4.4 4.4 8.6-9.2"
-                  fill="none"
-                  stroke="#003a54"
-                  strokeWidth="3.4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <span className="wordmark">
-                Site<em>Comply</em>
-              </span>
-              <span>· prepared and issued in SiteComply</span>
-            </span>
-            <span>
-              {cpp.site.jobReference}
+            <span className="ref">
+              {cpp.site.jobReference} · Construction Phase Plan
               {viewingRevision
                 ? ` · Revision ${String(viewingRevision.version).padStart(2, '0')}`
                 : ' · Working draft'}
+            </span>
+            <span className="imprint">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/sitecomply-logo.png" alt="SiteComply" width={58} height={26} />
+              <span>Prepared and issued in SiteComply</span>
             </span>
           </div>
         </main>

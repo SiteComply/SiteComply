@@ -144,12 +144,9 @@
   --cpp-accent: #003a54; /* SiteComply brand-900 — the darkest brand blue */
   --cpp-flag: #7a5410;
 
-  /* Approved branding treatment. Three additions, each doing structural work:
-     the head rule, the document-control ground, and the colophon wordmark.
-     SiteComply is a SUPPORTING identity here — the Principal Contractor's name
-     leads the document and nothing below may outrank it. */
-  --cpp-brand: #00aeef;      /* SiteComply logo blue */
-  --cpp-brand-mid: #00638f;  /* brand-700, for type that must stay legible */
+  /* The document-control ground. The head rule and the coloured wordmark that
+     also lived here are gone — identity is the colophon's job now, and the body
+     takes no colour accent beyond the existing dark blue on document control. */
   --cpp-tint: #f2fafd;
   --cpp-tint-rule: #d7ebf4;
 
@@ -163,16 +160,11 @@
   font-family: var(--cpp-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
-/* The only brand mark above the fold: a 2px rule, dark blue running into logo
-   blue, sitting ABOVE the contractor's own rule rather than competing with it.
-   It is a background, so browsers drop it from print unless the reader enables
-   background graphics — deliberately not forced. On paper the contractor's rule
-   and the colophon carry identity, which is the right emphasis for a document
-   the contractor issues. */
-.cpp-doc .cpp-brandrule {
-  height: 2px;
-  background: linear-gradient(90deg, var(--cpp-accent) 0 62%, var(--cpp-brand) 62% 100%);
-}
+/* The head rule was here — a 2px gradient, dark blue stopping at 62% into logo
+   blue. It read as a rendering fault rather than a device: a gradient that stops
+   partway gives a viewer no reason they can infer. Removed. Provenance now lives
+   entirely in the colophon, which is where a publisher's imprint belongs.
+   ───────────────────────────────────────────────────────────────────── */
 
 /* ── Masthead ───────────────────────────────────────────────────── */
 .cpp-doc .cpp-issuer {
@@ -329,22 +321,32 @@
 /* ── Colophon. Softened: sentence case, light, unobtrusive. The branding is a
    small mark and one line of provenance — the document is the Principal
    Contractor's, produced here. ── */
+/* ── Colophon: a publisher's imprint ─────────────────────────────────────
+   Document reference on the left, the producing mark on the right. The whole of
+   the SiteComply identity in this document lives here.
+
+   ON THE LOGO'S SIZE, measured rather than guessed: the artwork carries almost
+   no whitespace (3.4% of its height), so trimming it would gain nothing. Its
+   lettering band is only 29% of its height — the ring and tick are roughly
+   three and a half times taller than the word — so making the letters
+   independently readable would need a ~40px mark, which is more presence than
+   this document should give it. The ATTRIBUTION LINE beneath carries the name
+   legibly instead; the mark carries recognition. That is the right division of
+   labour for an imprint and it keeps the mark small. */
 .cpp-doc .cpp-foot {
-  margin-top: 42px; padding-top: 13px; border-top: 1px solid var(--cpp-rule);
-  display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  margin-top: 42px; padding-top: 14px; border-top: 1px solid var(--cpp-rule);
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 20px; flex-wrap: wrap;
   font-family: var(--cpp-sans), sans-serif;
   font-size: 12px; font-weight: 400; color: var(--cpp-ink-3); letter-spacing: .01em;
 }
-.cpp-doc .cpp-foot .mark { display: flex; align-items: center; gap: 8px; }
-.cpp-doc .cpp-foot svg { width: 15px; height: 15px; flex: none; }
-/* The wordmark. Set, not shouted: the same size as the surrounding footer type,
-   weight carrying the identity rather than scale or colour. */
-.cpp-doc .cpp-foot .wordmark {
-  font-weight: 700; letter-spacing: -.01em; color: var(--cpp-ink-2);
+.cpp-doc .cpp-foot .ref { font-variant-numeric: tabular-nums; }
+.cpp-doc .cpp-foot .imprint {
+  display: flex; flex-direction: column; align-items: flex-end;
+  gap: 6px; text-align: right;
 }
-.cpp-doc .cpp-foot .wordmark em {
-  font-style: normal; font-weight: 400; color: var(--cpp-brand-mid);
-}
+.cpp-doc .cpp-foot .imprint img { display: block; height: 26px; width: auto; }
+.cpp-doc .cpp-foot .imprint span { font-size: 11.5px; color: var(--cpp-ink-3); }
 
 @media (max-width: 760px) {
   .cpp-doc { font-size: 16.5px; }
