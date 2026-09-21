@@ -124,6 +124,18 @@ export default async function CppRevisionsPage({
                         ? 'Superseded'
                         : 'Draft'}
                   </span>
+                  {/* The controlled artefact, straight from the register — the
+                      place someone comes when they need to send a client the
+                      plan that was in force on a given date. Drafts have no PDF
+                      by design. */}
+                  {(r.status === 'ISSUED' || r.status === 'SUPERSEDED') && (
+                    <a
+                      href={`/api/platform/sites/${params.id}/cpp-revisions/${r.id}/pdf`}
+                      className="touch-target rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken"
+                    >
+                      PDF
+                    </a>
+                  )}
                   <Link
                     href={`${base}?revision=${r.id}`}
                     className="touch-target rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken"

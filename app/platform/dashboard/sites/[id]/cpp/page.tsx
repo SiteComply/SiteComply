@@ -48,10 +48,19 @@ export const dynamic = 'force-dynamic';
 /**
  * SC-019 Phase 2 — Construction Phase Plan DRAFT.
  *
- * A structured, print-optimised view assembled entirely from data already
- * captured in Project Setup and Site Information. No server-side PDF engine: the
- * whole product prints to PDF through the browser (permits, induction records),
- * and a CPP is no different.
+ * A structured view assembled entirely from data already captured in Project
+ * Setup and Site Information.
+ *
+ * THIS SCREEN IS THE WORKING VIEW, NOT THE CONTROLLED DOCUMENT. An issued
+ * revision is downloaded as a server-rendered PDF — see
+ * services/sites/cppPdf — because window.print() stamps the browser's own page
+ * title, URL, timestamp and page count onto the output, and those are a setting
+ * in each reader's print dialog that no stylesheet can reach.
+ *
+ * (This comment previously said "No server-side PDF engine: the whole product
+ * prints to PDF through the browser (permits, induction records)". That stopped
+ * being true when the induction record got a real PDF, and the CPP's approach
+ * was still resting on it.)
  *
  * Read-only. There is no editing here at all, which is how the Phase 1
  * Director/Site Manager ownership split is preserved — you change a section by
@@ -192,9 +201,31 @@ export default async function SiteCppPage({
           >
             Edit in Project setup
           </Link>
-          <div className="w-44">
-            <PrintButton label="Print / save as PDF" />
-          </div>
+          {/* THE CONTROLLED ARTEFACT vs A WORKING VIEW.
+             
+              An ISSUED revision is downloaded as a server-rendered PDF: real
+              running heads, true page numbers, and none of the browser's own
+              URL/title/timestamp furniture, which is a print-dialog setting no
+              stylesheet can reach.
+
+              A DRAFT still prints from the browser, and the label says so. It is
+              a working view, not something to send a client — giving it a
+              download that looked identical to an approved plan is exactly what
+              document control exists to prevent. */}
+          {viewingRevision &&
+          (viewingRevision.status === 'ISSUED' ||
+            viewingRevision.status === 'SUPERSEDED') ? (
+            <a
+              href={`/api/platform/sites/${cpp.site.id}/cpp-revisions/${viewingRevision.id}/pdf`}
+              className="touch-target rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-ink/90"
+            >
+              {`Download Revision ${String(viewingRevision.version).padStart(2, '0')} (PDF)`}
+            </a>
+          ) : (
+            <div className="w-44">
+              <PrintButton label="Print draft (browser)" />
+            </div>
+          )}
         </div>
       </div>
 
