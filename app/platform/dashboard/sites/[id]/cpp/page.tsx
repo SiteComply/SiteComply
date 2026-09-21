@@ -222,9 +222,15 @@ export default async function SiteCppPage({
               {`Download Revision ${String(viewingRevision.version).padStart(2, '0')} (PDF)`}
             </a>
           ) : (
-            <div className="w-44">
-              <PrintButton label="Print draft (browser)" />
-            </div>
+            /* A standard secondary button at its natural width — the same
+               treatment as every other secondary control in the app. It was a
+               full-width w-44 block, which gave a convenience the footprint of
+               a primary action.
+
+               The label is just "Print". Whether the bytes come from the
+               browser or from a server-rendered document is our problem, not
+               something to put in front of a user. */
+            <PrintButton label="Print" fullWidth={false} />
           )}
         </div>
       </div>

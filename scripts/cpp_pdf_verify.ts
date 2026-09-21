@@ -31,11 +31,22 @@ function chk(name: string, cond: boolean, detail = '') {
   else { failed++; console.log(`  FAIL ${name}${detail ? ` — ${detail}` : ''}`); }
 }
 
+/**
+ * Source with comments removed, for assertions that must not match their own
+ * documentation — a trap this project has fallen into repeatedly.
+ *
+ * Block comments are stripped as BLOCKS, not line by line. A line-prefix filter
+ * misses the continuation lines of a /* … *\/ whose inner lines do not begin
+ * with an asterisk, and those are exactly the lines that tend to name the thing
+ * being asserted absent.
+ */
 const code = (src: string) =>
-  src.split('\n').filter((l) => {
-    const t = l.trim();
-    return !t.startsWith('*') && !t.startsWith('//') && !t.startsWith('///') && !t.startsWith('/*');
-  }).join('\n');
+  src
+    .replace(/\{\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter((l) => !l.trim().startsWith('//'))
+    .join('\n');
 
 const doc = readFileSync('services/sites/cppPdf/CppPdfDocument.tsx', 'utf8');
 const render = readFileSync('services/sites/cppPdf/renderCppPdf.ts', 'utf8');
@@ -342,8 +353,28 @@ async function main() {
   chk('[12] neither offers one for a draft',
     /status === 'ISSUED' \|\|/.test(code(page)) &&
     /r\.status === 'ISSUED' \|\| r\.status === 'SUPERSEDED'/.test(code(register)));
-  chk('[12] a draft still prints, and the label says it is the browser',
-    /Print draft \(browser\)/.test(page));
+  // The label is not pinned to one wording — that expired once already. What
+  // endures: the draft can still be printed, and its control is QUIET, so it
+  // cannot be mistaken for the way the plan is produced.
+  chk('[12] a draft can still be printed', /<PrintButton/.test(page));
+  const printBtn = (page.match(/<PrintButton[^>]*\/>/) || [''])[0];
+  chk('[12] CONTROL — the print control markup was located', printBtn.includes('label='));
+  // Sized like every other secondary control, not stretched to a fixed block.
+  // Comments stripped: the note explaining the removal names the class it
+  // removed, and a raw scan reads its own documentation as a violation.
+  chk('[12]   at its natural width, not a full-width block',
+    /fullWidth=\{false\}/.test(printBtn) && !/w-44/.test(code(page)));
+  chk('[12]   and it takes the standard secondary treatment',
+    !/variant=/.test(printBtn));
+  // The LABEL is not pinned to a wording — that assertion expired twice. What
+  // endures is that it names no mechanism: a user does not need to know whether
+  // the bytes come from the browser or from a server-rendered document.
+  chk('[12]   with no mechanism named in the label',
+    !/browser|print-to|window\.print|PDF/i.test((printBtn.match(/label="([^"]*)"/) || ['', ''])[1]),
+    (printBtn.match(/label="([^"]*)"/) || ['', '?'])[1]);
+  chk('[12] CONTROL — the other print callers keep the original treatment',
+    /variant = 'secondary'/.test(readFileSync('components/worker/PrintButton.tsx', 'utf8')) &&
+    /fullWidth = true/.test(readFileSync('components/worker/PrintButton.tsx', 'utf8')));
   chk('[12] the old "Print / save as PDF" claim is gone from the plan',
     !/Print \/ save as PDF/.test(page));
 
