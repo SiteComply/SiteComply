@@ -99,7 +99,7 @@ function main() {
   // The claim is that an UNAPPROVED document shows unsigned lines and says so —
   // not the exact sentence, which the redesign reworded.
   chk('[5] a working draft still shows blank lines — nothing was approved',
-    /This is a working draft\./.test(page) && /cpp-sigline/.test(page));
+    /has not been approved or issued/.test(page) && /cpp-sigline/.test(page));
   chk('[5] approver, position and date are printed',
     /<dt>Approved by<\/dt>/.test(page) && /<dt>Position<\/dt>/.test(page) &&
     /<dt>Date<\/dt>/.test(page));

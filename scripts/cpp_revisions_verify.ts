@@ -179,7 +179,7 @@ function main() {
   chk('[5] the unconditional "Draft" banner is gone',
     !/Draft — for duty holder review and approval/.test(page));
   chk('[5] a working draft is still identified as one',
-    /'Working draft'/.test(page) && /not an approved plan/.test(page));
+    /'Working draft'/.test(page) && /'Not yet issued'/.test(page));
   chk('[5] live completeness is hidden against a frozen revision',
     /\{!viewingRevision && \(/.test(page));
   chk('[5] the gap list too', /!viewingRevision && cpp\.outstanding\.length > 0/.test(page));

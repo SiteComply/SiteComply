@@ -144,7 +144,7 @@ function main() {
   // must survive is that a working draft is identified as one and does not
   // present itself as approved.
   chk('[7] the document still says plainly when it is only a draft',
-    /'Working draft'/.test(page) && /It is not an approved plan/.test(page));
+    /'Working draft'/.test(page) && /has not been approved or issued/.test(page));
 
   console.log('\n[8] The bar guides rather than reports');
   chk('[8] it computes one action', /recommendNextAction\(\{/.test(bar));

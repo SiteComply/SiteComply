@@ -341,17 +341,18 @@ export default async function SiteCppPage({
             )}
           </dl>
 
-          {/* The draft caveat, kept. Software can assemble a plan; it cannot
-              warrant that the plan is adequate — that is the Principal
-              Contractor's duty under CDM 2015, and the document says so. */}
-          {!viewingRevision && (
-            <p className="cpp-flag" style={{ marginTop: '22px' }}>
-              This is a working draft assembled from the information recorded for
-              this project. It is not an approved plan. The Principal Contractor
-              remains responsible for ensuring the construction phase plan is
-              suitable, sufficient and kept up to date.
-            </p>
-          )}
+          {/* The amber draft callout was here. It said three things the opening
+              already says — the heading reads "Working draft", the status line
+              reads "Not yet issued", and the control block shows no approver —
+              and it put a coloured block at the top of a document that earns its
+              authority from restraint.
+
+              ONE SENTENCE OF IT WAS NOT DUPLICATED: the CDM 2015 duty, that the
+              Principal Contractor remains responsible for the plan being
+              suitable and sufficient. Software can assemble a plan; it cannot
+              warrant that the plan is adequate, and the document must keep
+              saying so. That sentence moved into the approval block, which is
+              where approval and responsibility are already being discussed. */}
         </header>
 
         {/* CONTENTS. Part of the document, not chrome: a real issued plan has
@@ -532,8 +533,10 @@ export default async function SiteCppPage({
             ) : (
               <>
                 <p className="cpp-decl">
-                  This is a working draft. The Principal Contractor approves and
-                  issues the plan, and the approval is recorded here.
+                  This plan has not been approved or issued. The Principal
+                  Contractor remains responsible for ensuring the construction
+                  phase plan is suitable, sufficient and kept up to date; the
+                  approval is recorded here once a revision is issued.
                 </p>
                 <dl className="cpp-who">
                   <div><dt>Approved by</dt><dd className="cpp-sigline" /></div>

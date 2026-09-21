@@ -110,10 +110,18 @@ function main() {
     /chivo\.variable\} \$\{crimson\.variable\}/.test(page));
 
   console.log('\n[7] The document still tells the truth about itself');
-  chk('[7] a working draft says it is not an approved plan',
-    /It is not an approved plan/.test(page));
+  // The amber callout carrying this was removed as duplicated messaging. The
+  // claims survive it: the opening still identifies a draft, and the CDM duty
+  // moved into the approval block rather than being dropped.
+  chk('[7] a working draft is identified as one',
+    /'Working draft'/.test(page) && /'Not yet issued'/.test(page));
+  chk('[7]   and says plainly that it is not approved',
+    /has not been approved or issued/.test(page));
   chk('[7] the CDM duty is still stated',
-    /Principal Contractor\s*\n?\s*remains responsible/.test(page));
+    /remains responsible for ensuring the construction/.test(page) &&
+    /suitable, sufficient and kept up to date/.test(page));
+  chk('[7] no coloured callout at the top of the document',
+    !/cpp-flag[^>]*marginTop/.test(page));
   chk('[7] live completeness is hidden against a frozen revision',
     /\{!viewingRevision && \(/.test(page));
   chk('[7] an unapproved document shows unsigned rules, not a claim',
