@@ -419,6 +419,74 @@ async function main() {
   chk('[13] CONTROL — the imprint is still there',
     /Prepared and issued in SiteComply/.test(doc));
 
+  console.log('\n[14] Pagination — the first page earns its place');
+  /*
+   * The masthead used to have a sheet to itself and the contents another. On a
+   * small project that produced two sparse pages before the plan had started,
+   * and the opening read as unfinished. Both forced breaks are gone.
+   *
+   * Removing only the contents break moved the gap rather than closing it: the
+   * contents spilled a few rows onto sheet two and the body's break left the
+   * rest of that sheet blank. So the plan follows the contents directly, and
+   * the part heading is bound to its first section instead.
+   */
+  chk('[14] the contents does not force its own sheet',
+    !/marginTop: 26 \}\} break/.test(code(doc)));
+  chk('[14] nor does the plan body', !/^\s*<View break>/m.test(code(doc)));
+  chk('[14] the part heading is bound to its first section, not left to chance',
+    /<View wrap=\{false\}>\s*<Text style=\{s\.part\}>/.test(code(doc)));
+  // minPresenceAhead was tried here and did NOT hold. If someone swaps the
+  // grouping back for it, this fails.
+  chk('[14] and NOT by minPresenceAhead, which was measured and did not work',
+    !/minPresenceAhead/.test(code(doc)));
+  chk('[14] the contents keeps air beneath it, so the two blocks stay distinct',
+    /marginTop: 26, marginBottom: 30/.test(code(doc)));
+  // Scoped to the NUMBERED sections by their key. A looser match was satisfied
+  // by the drawings block, which carries the same style and its own
+  // wrap={false} — so removing it from every numbered section still passed.
+  chk('[14] numbered sections are still never split across a sheet',
+    /style=\{s\.section\} key=\{sec\.key\} wrap=\{false\}/.test(code(doc)));
+  chk('[14]   and neither is the drawings block',
+    /style=\{s\.section\} wrap=\{false\}/.test(code(doc)));
+  chk('[14]   nor the approval, which must keep its signature',
+    /style=\{s\.approval\} wrap=\{false\}/.test(code(doc)));
+
+  // Rendered proof, at a small and a large project. A source assertion cannot
+  // tell you which page anything landed on.
+  for (const [label, count] of [['small', 3], ['large', 20]] as [string, number][]) {
+    const many = fixture();
+    const doc2 = {
+      ...many,
+      sections: Array.from({ length: count }, (_, i) => ({
+        ...many.sections[0], key: `s${i}`, title: `Section ${i + 1} — arrangements`,
+      })),
+    } as typeof many;
+    const buf = await renderCppPdf(doc2);
+    const f = `/tmp/cpp_pag_${count}.pdf`;
+    writeFileSync(f, buf);
+    const p1 = textOf(f, 1, 1);
+    const total = Number((textOf(f).match(/Page \d+ of (\d+)/) || [])[1] || 0);
+    chk(`[14] ${label}: the contents begins on page 1`,
+      squash(p1).includes('CONTENTS'), `${count} sections, ${total} pages`);
+    // Not a line count — long wrapped paragraphs produce few, long lines, so a
+    // threshold measures the fixture's prose rather than the pagination. The
+    // claim is that the contents ITSELF starts here, not merely its heading.
+    chk(`[14] ${label}: the contents entries start on page 1, not just the heading`,
+      /\b1\.0\b/.test(p1) && p1.includes('Section 1'));
+    chk(`[14] ${label}: the masthead no longer owns the sheet alone`,
+      squash(p1).includes('CONTENTS') && p1.trim().length > 900,
+      `${p1.trim().length} chars`);
+    // The heading must never be the last thing on any sheet.
+    let orphan = 0;
+    for (let n = 1; n <= total; n++) {
+      const lines = textOf(f, n, n).split('\n').filter((l) => l.trim());
+      const last = lines[lines.length - 2] ?? '';
+      if (squash(last).includes(squash('CONSTRUCTION PHASE PLAN'))) orphan = n;
+    }
+    chk(`[14] ${label}: the part heading is never stranded at a page foot`,
+      orphan === 0, orphan ? `stranded on page ${orphan}` : 'none');
+  }
+
   console.log(`\n== ${passed} passed, ${failed} failed ==`);
   if (failed > 0) process.exitCode = 1;
 }

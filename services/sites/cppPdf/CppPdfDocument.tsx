@@ -272,6 +272,58 @@ export function CppPdfDocument({ data }: { data: CppPdfData }): React.ReactEleme
   const state = revision.status === 'ISSUED' ? 'Current revision' : 'Superseded';
   const docRef = `${site.jobReference} · Construction Phase Plan · ${revLabel}`;
 
+  /**
+   * One numbered section.
+   *
+   * Pulled out of the map so the part heading can be rendered INSIDE the same
+   * wrap={false} group as the first section — the heading must never be left
+   * alone at the foot of a sheet.
+   */
+  const renderSection = (sec: CppPdfData['sections'][number], i: number) => {
+    const valued = sec.entries.filter((e) => e.value !== null);
+    const showOrigin = !sec.gatesCompletion && valued.length > 0;
+    const entries = valued.filter(
+      (e) => sec.gatesCompletion || sec.items.length > 0 || e !== sec.entries[0],
+    );
+    const blank = sec.items.length === 0 && valued.length === 0;
+    return (
+      <View style={s.section} key={sec.key} wrap={false} {...outline(`${i + 1}.0  ${sec.title}`)}>
+        <Text style={s.sectionNo}>{`${i + 1}.0`}</Text>
+        <View style={s.sectionBody}>
+          <Text style={s.h2}>{sec.title}</Text>
+          {showOrigin && sec.entries[0]?.value ? (
+            <Text style={s.origin}>{sec.entries[0].label}</Text>
+          ) : null}
+          {sec.items.map((it, n) => (
+            <View style={s.itemRow} key={`${n}-${it.label}`}>
+              <Text style={s.itemBullet}>·</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.itemLabel}>{it.label}</Text>
+                {it.detail ? <Text style={s.itemDetail}>{it.detail}</Text> : null}
+              </View>
+            </View>
+          ))}
+          {entries.map((e) => (
+            <View key={e.label} style={{ marginTop: 6 }}>
+              <Text style={s.label}>{e.label}</Text>
+              <Text style={s.para}>{e.value}</Text>
+            </View>
+          ))}
+          {blank ? (
+            <Text style={s.na}>
+              {sec.gatesCompletion ? 'Not yet recorded.' : 'None recorded.'}
+            </Text>
+          ) : null}
+          {sec.status === 'PARTIAL' && sec.missing.length > 0 ? (
+            <Text style={s.flag}>
+              {`Section incomplete. Still required: ${sec.missing.join(', ')}.`}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    );
+  };
+
   return (
     <Document
       title={`Construction Phase Plan — ${site.name} — ${revLabel}`}
@@ -369,7 +421,16 @@ export function CppPdfDocument({ data }: { data: CppPdfData }): React.ReactEleme
             citing a page the document then contradicts is a document-control
             defect — the same rule the screen view follows. The PDF outline below
             gives a reader real, clickable navigation instead. */}
-        <View style={{ marginTop: 26 }} break>
+        {/* CONTENTS BEGINS ON PAGE 1, directly under document control.
+            It used to force its own sheet, which left the masthead page two
+            thirds empty and — on a small project — produced a contents page
+            carrying six rows. Two sparse sheets before the plan had started. */}
+        {/* The bottom margin is the piece that matters now the plan follows
+            directly: without it the part heading's rule sits hard against the
+            last contents row and the two blocks read as one. It belongs HERE
+            rather than on the heading, which would otherwise push the heading
+            down whenever it does land at the top of a sheet. */}
+        <View style={{ marginTop: 26, marginBottom: 30 }}>
           <Text style={s.contentsTitle}>Contents</Text>
           {sections.map((sec, i) => (
             <View style={s.contentsRow} key={sec.key}>
@@ -388,52 +449,27 @@ export function CppPdfDocument({ data }: { data: CppPdfData }): React.ReactEleme
         </View>
 
         {/* ── THE PLAN ── */}
-        <View break>
-          <Text style={s.part}>Construction Phase Plan</Text>
-          {sections.map((sec, i) => {
-            const valued = sec.entries.filter((e) => e.value !== null);
-            const showOrigin = !sec.gatesCompletion && valued.length > 0;
-            const entries = valued.filter(
-              (e) => sec.gatesCompletion || sec.items.length > 0 || e !== sec.entries[0],
-            );
-            const blank = sec.items.length === 0 && valued.length === 0;
-            return (
-              <View style={s.section} key={sec.key} wrap={false} {...outline(`${i + 1}.0  ${sec.title}`)}>
-                <Text style={s.sectionNo}>{`${i + 1}.0`}</Text>
-                <View style={s.sectionBody}>
-                  <Text style={s.h2}>{sec.title}</Text>
-                  {showOrigin && sec.entries[0]?.value ? (
-                    <Text style={s.origin}>{sec.entries[0].label}</Text>
-                  ) : null}
-                  {sec.items.map((it, n) => (
-                    <View style={s.itemRow} key={`${n}-${it.label}`}>
-                      <Text style={s.itemBullet}>·</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.itemLabel}>{it.label}</Text>
-                        {it.detail ? <Text style={s.itemDetail}>{it.detail}</Text> : null}
-                      </View>
-                    </View>
-                  ))}
-                  {entries.map((e) => (
-                    <View key={e.label} style={{ marginTop: 6 }}>
-                      <Text style={s.label}>{e.label}</Text>
-                      <Text style={s.para}>{e.value}</Text>
-                    </View>
-                  ))}
-                  {blank ? (
-                    <Text style={s.na}>
-                      {sec.gatesCompletion ? 'Not yet recorded.' : 'None recorded.'}
-                    </Text>
-                  ) : null}
-                  {sec.status === 'PARTIAL' && sec.missing.length > 0 ? (
-                    <Text style={s.flag}>
-                      {`Section incomplete. Still required: ${sec.missing.join(', ')}.`}
-                    </Text>
-                  ) : null}
-                </View>
-              </View>
-            );
-          })}
+        {/* NO FORCED BREAK. Making only the contents flow simply moved the gap:
+            on a 20-section plan the contents spilled five rows onto sheet two
+            and the break then left the rest of that sheet blank. The plan now
+            follows the contents directly, and the part heading's own weight and
+            rule do the dividing a page break was doing.
+
+            THE HEADING IS BOUND TO ITS FIRST SECTION, in a wrap={false} pair.
+            `minPresenceAhead` was tried here first and did NOT hold — an
+            8-section plan still ended sheet one with the heading stranded and
+            Section 1 overleaf. Grouping is structural and cannot be ignored by
+            the layout engine. */}
+        <View>
+          {sections.length > 0 ? (
+            <View wrap={false}>
+              <Text style={s.part}>Construction Phase Plan</Text>
+              {renderSection(sections[0], 0)}
+            </View>
+          ) : (
+            <Text style={s.part}>Construction Phase Plan</Text>
+          )}
+          {sections.slice(1).map((sec, i) => renderSection(sec, i + 1))}
 
           {/* Drawings */}
           <View style={s.section} wrap={false} {...outline(`${sections.length + 1}.0  Drawings and emergency plans`)}>
