@@ -24,6 +24,11 @@ function chk(name: string, cond: boolean, detail = '') {
 const page = readFileSync('app/platform/dashboard/sites/[id]/cpp/page.tsx', 'utf8');
 const css = readFileSync('app/globals.css', 'utf8');
 const doc = css.slice(css.indexOf('.cpp-doc {'));
+// Screen and print rules must be checked separately: several properties are
+// deliberately set twice with different values, so a whole-file scan cannot
+// tell which one it matched.
+const printCss = css.slice(css.indexOf('@media print {'));
+const screenCss = doc.slice(0, doc.indexOf('@media print {'));
 
 function main() {
   console.log('== CPP ISSUED DOCUMENT ==\n');
@@ -111,7 +116,11 @@ function main() {
   chk('[5] provenance still states where the document was produced',
     /prepared and issued in SiteComply/i.test(page));
 
-  console.log('\n[5b] No branding above the colophon');
+  // [5b] WAS "No branding above the colophon". That is no longer the rule: a
+  // provenance mark now sits above the masthead by decision. What endures is
+  // the narrower claim — the only branding above the colophon is that ONE
+  // mark, and it is an image, never a rule, banner, tint or coloured block.
+  console.log('\n[5b] Above the colophon: one mark, and no decoration');
   chk('[5b] the head rule is gone', !/cpp-brandrule/.test(page) && !/\.cpp-brandrule \{/.test(doc));
   chk('[5b] no brand-blue variables remain in the document',
     !/--cpp-brand:/.test(doc) && !/--cpp-brand-mid:/.test(doc));
@@ -121,6 +130,50 @@ function main() {
     !/\.cpp-status \{[^}]*background:/.test(doc));
   chk('[5b] the contractor still leads the document',
     page.indexOf('cpp.site.principalContractor') < page.indexOf('cpp-doctype'));
+
+  console.log('\n[5c] The provenance mark');
+  // PLACE. The mark must sit above the contractor's rule and outside the
+  // masthead proper — level with or ahead of the contractor it would read as
+  // the ISSUER, and a CPP is the Principal Contractor's statutory document.
+  chk('[5c] the mark is above the contractor, not beside or below',
+    page.indexOf('cpp-provenance') < page.indexOf('cpp-issuer'));
+  chk('[5c]   and the contractor still leads the masthead proper',
+    page.indexOf('cpp-issuer') < page.indexOf('cpp-doctype'));
+  chk('[5c] it is the GENUINE artwork', /cpp-provenance[\s\S]{0,240}?src="\/sitecomply-logo\.png"/.test(page));
+  // SIZE, on screen and on paper. Both are asserted because print rescales the
+  // title: a mark pinned to one height grows relative to everything around it.
+  chk('[5c] 30px on screen', /\.cpp-doc \.cpp-provenance img \{\s*display: block; height: 30px/.test(screenCss));
+  chk('[5c] 22px in print, so it scales with the shrinking title',
+    /\.cpp-doc \.cpp-provenance img \{ height: 22px; \}/.test(printCss));
+  chk('[5c]   and the print title it is sized against is still 24pt',
+    /\.cpp-doc h1\.cpp-title \{ font-size: 24pt; \}/.test(printCss));
+  chk('[5c] the mark stays below the title it must not compete with',
+    /h1\.cpp-title \{[\s\S]{0,200}?font-size: 42px/.test(screenCss));
+  // RESTRAINT. The wrapper positions the mark and does nothing else: no rule,
+  // no background, no tint, no border. This is the assertion that stops a
+  // "small improvement" turning the corner into a letterhead.
+  chk('[5c] the wrapper draws nothing — no rule, background, tint or border',
+    !/\.cpp-doc \.cpp-provenance \{[^}]*(background|border|box-shadow)/.test(doc));
+  // Comments are stripped first: the colophon's own comment names
+  // `public/sitecomply-logo.png` while explaining what lives there, and a raw
+  // count reads that mention as a second mark.
+  const aboveFoot = page
+    .slice(0, page.indexOf('cpp-foot'))
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+  chk('[5c] one mark above the colophon, not several',
+    (aboveFoot.match(/sitecomply-logo\.png/g) || []).length === 1);
+  // Scoped to the wrapper's OWN markup. A loose window of characters after
+  // `cpp-provenance` runs straight into the masthead and matches its spans.
+  const provDiv = (() => {
+    const i = page.indexOf('<div className="cpp-provenance">');
+    return i < 0 ? '' : page.slice(i, page.indexOf('</div>', i));
+  })();
+  chk('[5c] CONTROL — the wrapper markup was located', provDiv.includes('sitecomply-logo.png'));
+  chk('[5c] the mark stands alone — no text beside it, the footer has the wording',
+    !/<span|<p\b|>[A-Za-z]/.test(provDiv.replace(/\{\/\*[\s\S]*?\*\/\}/g, '')));
+  // The footer imprint is untouched, as asked.
+  chk('[5c] the footer imprint is unchanged at 26px',
+    /\.cpp-foot \.imprint img \{ display: block; height: 26px/.test(doc));
 
   console.log('\n[6] The webfonts never reach an operative');
   chk('[6] fonts are declared on this route, not the root layout',

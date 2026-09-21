@@ -13,10 +13,16 @@
 #   - The colophon becomes a PUBLISHER'S IMPRINT: reference left, mark above its
 #     attribution right. That is the whole of the SiteComply identity here.
 #
-# ON THE MARK'S SIZE, measured rather than guessed: the artwork carries 3.4%
-# whitespace, so trimming gains nothing; its lettering band is 29% of its height,
-# so legible letters would need a ~40px mark. The attribution line carries the
-# name instead and the mark stays at 26px.
+# ON THE MARK'S SIZE: the artwork carries 3.4% whitespace, so trimming gains
+# nothing, and the mark stays at 26px with the attribution line beside it.
+#
+# CORRECTION, recorded here because this script asserted the original figure:
+# the lettering band was reported as 29% of the artwork's height. It is 51%
+# (y 93-287 of 382). The 26px imprint is unaffected — it has an attribution line
+# doing the work either way — but the conclusion drawn from the wrong number,
+# that a legible word needs a ~40px mark or the ring cropped away, was false.
+# See scripts/cppprovenance_deploy.sh, which sizes the header mark on the real
+# figure.
 #
 # No colour accent is added to the body. Document control keeps the tint and the
 # dark blue it already had.

@@ -252,6 +252,29 @@ export default async function SiteCppPage({
         className={`cpp-doc ${chivo.variable} ${crimson.variable} mx-auto max-w-4xl border border-line px-12 py-12 shadow-card print:max-w-none print:border-0 print:p-0 print:shadow-none`}
       >
         <header>
+          {/* PROVENANCE MARK. Where the document was produced — not who issues
+              it. It sits ABOVE the contractor's rule, outside the masthead
+              proper, because a mark placed level with or ahead of the
+              contractor reads as the issuer, and a Construction Phase Plan is
+              the Principal Contractor's statutory document.
+
+              30px: the wordmark's lettering is 51% of the artwork's height, so
+              at 30px the word stands about 15px and clears the contractor's own
+              12px line — enough to register at a glance. It stays far short of
+              the 42px title and the 23px revision number, which keep the page.
+
+              Full colour deliberately. The artwork is blue and green; a greyed
+              brand mark reads as a printing fault rather than restraint. This
+              is not a banner, rule or tint, and nothing else was added with it.
+
+              A plain <img> rather than next/image, for the same reason as the
+              colophon: a fixed-height mark in a document that must print
+              predictably. */}
+          <div className="cpp-provenance">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/sitecomply-logo.png" alt="SiteComply" width={67} height={30} />
+          </div>
+
           {/* The document is the Principal Contractor's. Their name leads it. */}
           <div className="cpp-issuer">
             <span>{cpp.site.principalContractor ?? cpp.site.name}</span>
@@ -547,9 +570,6 @@ export default async function SiteCppPage({
             )}
           </div>
 
-          {/* COLOPHON. The branding, and all of it: a small mark and one line of
-              provenance. The document is the Principal Contractor's; it was
-              produced here. */}
           {/* COLOPHON — a publisher's imprint, and the whole of the SiteComply
               identity in this document. The reference sits left, the producing
               mark right.

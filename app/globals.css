@@ -166,6 +166,18 @@
    entirely in the colophon, which is where a publisher's imprint belongs.
    ───────────────────────────────────────────────────────────────────── */
 
+/* ── Provenance mark ────────────────────────────────────────────
+   The producing mark, above the contractor's rule and outside the masthead
+   proper. NO height is set on the wrapper and no rule, tint or background is
+   drawn — the img's own attributes carry the size, and the only thing this
+   rule does is push the mark to the right and hold the air beneath it. */
+.cpp-doc .cpp-provenance {
+  display: flex; justify-content: flex-end; margin: 0 0 20px;
+}
+.cpp-doc .cpp-provenance img {
+  display: block; height: 30px; width: auto;
+}
+
 /* ── Masthead ───────────────────────────────────────────────────── */
 .cpp-doc .cpp-issuer {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -325,14 +337,17 @@
    Document reference on the left, the producing mark on the right. The whole of
    the SiteComply identity in this document lives here.
 
-   ON THE LOGO'S SIZE, measured rather than guessed: the artwork carries almost
-   no whitespace (3.4% of its height), so trimming it would gain nothing. Its
-   lettering band is only 29% of its height — the ring and tick are roughly
-   three and a half times taller than the word — so making the letters
-   independently readable would need a ~40px mark, which is more presence than
-   this document should give it. The ATTRIBUTION LINE beneath carries the name
-   legibly instead; the mark carries recognition. That is the right division of
-   labour for an imprint and it keeps the mark small. */
+   ON THE LOGO'S SIZE: the artwork carries almost no whitespace (3.4% of its
+   height), so trimming it would gain nothing. 26px is right here because the
+   ATTRIBUTION LINE beneath carries the name — the mark only has to carry
+   recognition, which is the right division of labour for an imprint.
+
+   CORRECTION. This comment previously put the lettering band at 29% of the
+   artwork's height and concluded that legible letters needed a ~40px mark. The
+   real figure is 51% (y 93-287 of 382), so the letters here stand about 13px,
+   not the ~7px implied. The 26px stands, for the reason above rather than the
+   one originally given. The header provenance mark is sized on the real figure
+   — see .cpp-provenance. */
 .cpp-doc .cpp-foot {
   margin-top: 42px; padding-top: 14px; border-top: 1px solid var(--cpp-rule);
   display: flex; align-items: flex-end; justify-content: space-between;
@@ -406,6 +421,13 @@
     font-size: 10.5pt;
     line-height: 1.5;
   }
+  /* THE PROVENANCE MARK SCALES WITH THE PAGE. The title drops from 42px to
+     24pt here, so a mark left at its 30px screen height would climb from 71%
+     of the title's height to 94% of it — dominant on paper, which is the one
+     thing this mark must not be. 22px holds the screen relationship (69%), and
+     print resolution carries the wordmark far better than a screen does. */
+  .cpp-doc .cpp-provenance img { height: 22px; }
+
   .cpp-doc h1.cpp-title { font-size: 24pt; }
   .cpp-doc h2.cpp-h { font-size: 12pt; }
   .cpp-doc .cpp-status .rev { font-size: 14pt; }
