@@ -84,14 +84,18 @@ async function main() {
      blocks(full, 'site').join(',') === 'project,description,notes,hours,team', blocks(full, 'site'));
   ok('the emergency screen: procedures, fire, contacts, first aid, reporting',
      blocks(full, 'emergency').join(',') === 'procedures,fire,contacts,firstaid,reporting', blocks(full, 'emergency'));
-  ok('the welfare screen: welfare, access, deliveries, traffic, map',
-     blocks(full, 'welfare').join(',') === 'welfare,access,deliveries,traffic,map', blocks(full, 'welfare'));
+  ok('the welfare screen: welfare, access, deliveries, map - traffic was "N/A", so it is not shown',
+     blocks(full, 'welfare').join(',') === 'welfare,access,deliveries,map', blocks(full, 'welfare'));
+  const traffic = composeBriefing(base({ info: { ...EMPTY_INFO, trafficManagement: 'Banksman for all reversing vehicles.' } }));
+  ok('real traffic management content IS shown',
+     blocks(traffic, 'welfare').join(',') === 'traffic', blocks(traffic, 'welfare'));
   ok('the hazards screen: hazards, high-risk, permits, risks, RAMS',
      blocks(full, 'hazards').join(',') === 'hazards,highrisk,permits,risks,rams', blocks(full, 'hazards'));
 
   const get = (screen: string, key: string) => full.find((s) => s.key === screen)!.blocks.find((b) => b.key === key)!;
-  ok('text is shown exactly as the site team wrote it, "N/A" included',
-     get('welfare', 'traffic').text === 'N/A');
+  ok('a placeholder entry ("N/A") is suppressed, not shown',
+     !full.find((x) => x.key === 'welfare')!.blocks.some((b) => b.key === 'traffic'), blocks(full, 'welfare'));
+  ok('real text is shown exactly as the site team wrote it', get('welfare', 'deliveries').text === 'Via Leamington St.');
   const firstAid = get('emergency', 'firstaid').people!;
   ok('a first aider held in BOTH places is shown once', firstAid.filter((p) => /fay aid/i.test(p.name)).length === 1, firstAid);
   ok('  and fire marshals are listed with first aid', firstAid.some((p) => p.role === 'Fire marshal'));
@@ -110,6 +114,35 @@ async function main() {
      /near miss/.test(get('emergency', 'reporting').text ?? ''));
   ok('the screens are plain data (serialisable to the client)',
      JSON.stringify(JSON.parse(JSON.stringify(full))) === JSON.stringify(full));
+
+  console.log('\n[2b] Placeholders are suppressed; real content is not');
+  const { isMeaningful } = require('../services/induction/inductionBriefing');
+  for (const p of ['N/A', 'n/a', 'NA', 'None', 'none.', 'TBC', 'tba', 'To be confirmed', '-', '--', '...', '?',
+                   'test', 'X', 'Normal', 'What\'s required here?', 'What is needed?', '  N/A  ']) {
+    ok(`suppressed: ${JSON.stringify(p)}`, isMeaningful(p) === false);
+  }
+  for (const r of ['N/A - no vehicles enter the site.', 'None of the site is open to the public.', '999',
+                   'Rear car park', 'Access via Oldham Road,', 'Normal site rules apply plus the client\'s own.',
+                   'Welfare is in the basement. Is the lift working? Check with the site manager before using it.',
+                   'Working at height & electrical permits required.']) {
+    ok(`kept: ${JSON.stringify(r)}`, isMeaningful(r) === true);
+  }
+  const placeholderSite = composeBriefing(base({
+    emergency: { fireAssemblyPoint: 'TBC', firstAiderName: 'N/A', firstAiderNumber: null, firstAiderLocation: null,
+                 nearestHospital: '-', emergencyNumber: 'n/a' },
+    info: { ...EMPTY_INFO, emergencyProcedures: "What's required here?", trafficManagement: 'N/A', siteHazards: 'None' },
+  }));
+  ok('a site whose entries are all placeholders gets NO briefing screens', placeholderSite.length === 0,
+     placeholderSite.map((x) => x.key));
+  const mixed = composeBriefing(base({
+    emergency: { fireAssemblyPoint: 'Rear car park', firstAiderName: 'TBC', firstAiderNumber: null, firstAiderLocation: null,
+                 nearestHospital: null, emergencyNumber: null },
+    info: { ...EMPTY_INFO, emergencyProcedures: "What's required here?" },
+  }));
+  ok('a placeholder beside real content: only the real content shows',
+     mixed.length === 1 && blocks(mixed, 'emergency').join(',') === 'fire', blocks(mixed, 'emergency'));
+  ok('  and a first aider named "TBC" is not listed as a person',
+     !JSON.stringify(mixed).includes('TBC'));
 
   console.log('\n[3] The briefing comes BEFORE anything is confirmed');
   const items: FlowItem[] = [

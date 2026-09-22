@@ -9,8 +9,9 @@
  * plan, RAMS), but it reached operatives only after check-in, or never.
  *
  * READ ONLY, AND NOTHING NEW TO CAPTURE. Every block here is data a manager has
- * already entered somewhere in the platform. A block with no content is left
- * out, a screen with no blocks is left out, and a site with no briefing content
+ * already entered somewhere in the platform. Placeholder entries ("N/A",
+ * "TBC", a question left in the box) count as no content - see isMeaningful.
+ * A block with no content is left out, a screen with no blocks is left out, and a site with no briefing content
  * at all gets exactly the induction it had before.
  *
  * PURE. composeBriefing() takes plain data and returns plain, serialisable
@@ -111,10 +112,41 @@ export interface BriefingSource {
   ramsDocuments: { id: string; title: string }[];
 }
 
-/** Trimmed text, or undefined when there is nothing to say. */
-function t(value: string | null | undefined): string | undefined {
+/**
+ * Entries that stand in for content without being any. Matched against the
+ * WHOLE entry after normalising, never as a substring: "N/A" is suppressed,
+ * "N/A - no vehicles enter the site" is not, and "None of the site is open to
+ * the public" is real information.
+ */
+const PLACEHOLDERS = new Set([
+  'n/a', 'na', 'n.a', 'not applicable', 'none', 'nil', 'nothing', 'no',
+  'tbc', 'tba', 'tbd', 'to be confirmed', 'to be advised', 'to be decided',
+  'to follow', 'pending', 'todo', 'to do', 'test', 'testing', 'xxx', 'xx', 'x',
+  'see above', 'as above', 'as per', 'normal', 'standard', 'various', 'other',
+]);
+
+/**
+ * Whether an entry says something an operative can act on.
+ *
+ * Suppressed: blank; punctuation only ("-", "...", "?"); a known placeholder
+ * word or phrase; and a SHORT QUESTION - a prompt left in the box rather than
+ * an answer to it ("What's required here?"). Briefing content states things;
+ * a question of a sentence or less is the form's question, not the site's
+ * answer. A long entry that happens to end with "?" is kept.
+ */
+export function isMeaningful(value: string | null | undefined): boolean {
   const v = (value ?? '').trim();
-  return v ? v : undefined;
+  if (!v) return false;
+  if (!/[\p{L}\p{N}]/u.test(v)) return false;
+  const norm = v.toLowerCase().replace(/[.!:;,]+$/g, '').replace(/\s+/g, ' ').trim();
+  if (PLACEHOLDERS.has(norm)) return false;
+  if (v.endsWith('?') && v.length <= 60 && !/[.!]\s/.test(v)) return false;
+  return true;
+}
+
+/** Trimmed text, or undefined when there is nothing meaningful to say. */
+function t(value: string | null | undefined): string | undefined {
+  return isMeaningful(value) ? (value as string).trim() : undefined;
 }
 
 function rows(pairs: [string, string | null | undefined][]) {
