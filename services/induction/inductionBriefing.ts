@@ -58,14 +58,29 @@ export interface BriefingBlock {
   image?: { src: string; alt: string };
 }
 
-export type BriefingScreenKey = 'site' | 'emergency' | 'welfare' | 'hazards';
+export type BriefingGroupKey = 'site' | 'emergency' | 'hazards';
 
-export interface BriefingScreen {
-  key: BriefingScreenKey;
-  heading: string;
-  intro: string;
+/** A titled part of a screen. Untitled when it is the whole screen. */
+export interface BriefingSection {
+  key: BriefingGroupKey;
+  /** Shown as a subheading only when the screen combines several groups. */
+  title?: string;
   blocks: BriefingBlock[];
 }
+
+export interface BriefingScreen {
+  /** The group, or the groups joined with "+" when thin ones were combined. */
+  key: string;
+  heading: string;
+  intro: string;
+  sections: BriefingSection[];
+}
+
+/**
+ * The least a group must carry to stand as a screen of its own. Below this it
+ * is folded into a neighbour as a titled section: one card is not worth a tap.
+ */
+export const MIN_BLOCKS_PER_SCREEN = 2;
 
 /** Everything the briefing can draw on. All of it already stored. */
 export interface BriefingSource {
@@ -223,11 +238,11 @@ export function composeBriefing(src: BriefingSource): BriefingScreen[] {
     ),
   ];
 
-  const screens: BriefingScreen[] = [
+  const groups: { key: BriefingGroupKey; heading: string; intro: string; blocks: BriefingBlock[] }[] = [
     {
       key: 'site',
       heading: 'About this site',
-      intro: 'What this project is, where it is, and who runs it.',
+      intro: 'The project, the team, the facilities, and how to get on and around site.',
       blocks: [
         {
           key: 'project',
@@ -248,6 +263,12 @@ export function composeBriefing(src: BriefingSource): BriefingScreen[] {
         { key: 'hours', title: 'Working hours', icon: 'clock', tone: 'brand', text: t(info.workingHours) },
         { key: 'team', title: 'Site team', icon: 'user', tone: 'brand',
           people: siteTeam.length ? siteTeam : undefined },
+        { key: 'welfare', title: 'Welfare facilities', icon: 'shield', tone: 'teal', text: t(info.welfareFacilities) },
+        { key: 'access', title: 'Access and egress', icon: 'grid', tone: 'brand', text: t(info.accessEgress) },
+        { key: 'deliveries', title: 'Deliveries', icon: 'grid', tone: 'brand', text: t(info.deliveryProcedures) },
+        { key: 'traffic', title: 'Traffic management and pedestrian routes', icon: 'alert', tone: 'hivis', text: t(info.trafficManagement) },
+        { key: 'map', title: 'Site map', icon: 'doc', tone: 'brand',
+          image: info.hasSiteMap ? { src: briefingMapSrc(src.siteId), alt: `Site map for ${src.siteName}` } : undefined },
       ],
     },
     {
@@ -267,19 +288,6 @@ export function composeBriefing(src: BriefingSource): BriefingScreen[] {
           people: firstAid.length ? firstAid : undefined },
         { key: 'reporting', title: 'Reporting accidents and near misses', icon: 'clipboard', tone: 'brand',
           text: t(src.incidentReporting) },
-      ],
-    },
-    {
-      key: 'welfare',
-      heading: 'Welfare, access and traffic',
-      intro: 'Facilities, how to get on and off site, and vehicle and pedestrian movements.',
-      blocks: [
-        { key: 'welfare', title: 'Welfare facilities', icon: 'shield', tone: 'teal', text: t(info.welfareFacilities) },
-        { key: 'access', title: 'Access and egress', icon: 'grid', tone: 'brand', text: t(info.accessEgress) },
-        { key: 'deliveries', title: 'Deliveries', icon: 'grid', tone: 'brand', text: t(info.deliveryProcedures) },
-        { key: 'traffic', title: 'Traffic management and pedestrian routes', icon: 'alert', tone: 'hivis', text: t(info.trafficManagement) },
-        { key: 'map', title: 'Site map', icon: 'doc', tone: 'brand',
-          image: info.hasSiteMap ? { src: briefingMapSrc(src.siteId), alt: `Site map for ${src.siteName}` } : undefined },
       ],
     },
     {
@@ -310,13 +318,62 @@ export function composeBriefing(src: BriefingSource): BriefingScreen[] {
     },
   ];
 
-  return screens
-    .map((s) => ({ ...s, blocks: s.blocks.filter(hasContent) }))
-    // A screen made only of the identity rows every site has (name, address,
-    // reference) is not a briefing - it is what the previous page already said.
-    .filter((s) =>
-      s.key === 'site'
-        ? s.blocks.some((b) => b.key !== 'project') || Boolean(src.duty?.principalContractor || src.duty?.client)
-        : s.blocks.length > 0,
-    );
+  const present = groups
+    .map((g) => ({ ...g, blocks: g.blocks.filter(hasContent) }))
+    // The identity rows every site has (name, address, reference) are not a
+    // briefing on their own - the previous page already said them.
+    .map((g) =>
+      g.key === 'site' &&
+      g.blocks.every((b) => b.key === 'project') &&
+      !(src.duty?.principalContractor || src.duty?.client)
+        ? { ...g, blocks: [] }
+        : g,
+    )
+    .filter((g) => g.blocks.length > 0);
+
+  return condense(
+    present.map((g) => ({
+      key: g.key,
+      heading: g.heading,
+      intro: g.intro,
+      sections: [{ key: g.key, title: g.heading, blocks: g.blocks }],
+    })),
+  ).map(stripSoleTitle);
+}
+
+/**
+ * At most three screens, and none too thin to justify a tap.
+ *
+ * A screen with fewer than MIN_BLOCKS_PER_SCREEN blocks is folded into the
+ * screen before it (or after it, if it is first), keeping its own title as a
+ * subheading - so nothing is lost and nothing is buried without a label. Repeat
+ * until every screen stands on its own or only one is left.
+ */
+function condense(screens: BriefingScreen[]): BriefingScreen[] {
+  const out = screens.slice();
+  // The identity card (site, address, reference) does not count: the page
+  // before the induction already said it, so it cannot justify a screen.
+  const size = (x: BriefingScreen) =>
+    x.sections.reduce((n, sec) => n + sec.blocks.filter((b) => b.key !== 'project').length, 0);
+  for (;;) {
+    if (out.length < 2) return out;
+    const thin = out.findIndex((x) => size(x) < MIN_BLOCKS_PER_SCREEN);
+    if (thin === -1) return out;
+    const into = thin === 0 ? 1 : thin - 1;
+    const [a, b] = into < thin ? [out[into], out[thin]] : [out[thin], out[into]];
+    const merged: BriefingScreen = {
+      key: `${a.key}+${b.key}`,
+      heading: 'Before you start on site',
+      intro: 'What you need to know about this site.',
+      sections: [...a.sections, ...b.sections],
+    };
+    out.splice(Math.min(into, thin), 2, merged);
+  }
+}
+
+/** A screen of one section needs no subheading: the screen heading says it. */
+function stripSoleTitle(x: BriefingScreen): BriefingScreen {
+  return x.sections.length === 1
+    ? { ...x, sections: [{ key: x.sections[0].key, blocks: x.sections[0].blocks }] }
+    : x;
 }

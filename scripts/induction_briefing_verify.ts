@@ -39,8 +39,11 @@ const base = (over: Partial<BriefingSource> = {}): BriefingSource => ({
   keyPeople: [], info: EMPTY_INFO, incidentReporting: null, risks: [], permitTypes: [], ramsDocuments: [],
   ...over,
 });
-const blocks = (s: ReturnType<typeof composeBriefing>, key: string) =>
-  s.find((x) => x.key === key)?.blocks.map((b) => b.key) ?? [];
+type Screens = ReturnType<typeof composeBriefing>;
+const allBlocks = (x: Screens[number]) => x.sections.flatMap((sec) => sec.blocks);
+/** Block keys in the group `key`, wherever condensing put it. */
+const blocks = (s: Screens, key: string) =>
+  s.flatMap((x) => x.sections).find((sec) => sec.key === key)?.blocks.map((b) => b.key) ?? [];
 
 async function main() {
   console.log('== INDUCTION SITE BRIEFING ==\n');
@@ -78,23 +81,21 @@ async function main() {
     permitTypes: ['Hot works', 'Electrical isolation'],
     ramsDocuments: [{ id: 'doc1', title: 'Rewire RAMS' }],
   }));
-  ok('all four screens, in reading order: site, emergency, welfare, hazards',
-     full.map((s) => s.key).join(',') === 'site,emergency,welfare,hazards', full.map((s) => s.key));
-  ok('the site screen carries the project, the work, the team notes, hours and the team',
-     blocks(full, 'site').join(',') === 'project,description,notes,hours,team', blocks(full, 'site'));
+  ok('three screens at most, in reading order: site, emergency, hazards',
+     full.map((s) => s.key).join(',') === 'site,emergency,hazards', full.map((s) => s.key));
+  ok('the site screen: project, work, team notes, hours, team, welfare, access, deliveries, map - traffic was "N/A", so it is not shown',
+     blocks(full, 'site').join(',') === 'project,description,notes,hours,team,welfare,access,deliveries,map', blocks(full, 'site'));
   ok('the emergency screen: procedures, fire, contacts, first aid, reporting',
      blocks(full, 'emergency').join(',') === 'procedures,fire,contacts,firstaid,reporting', blocks(full, 'emergency'));
-  ok('the welfare screen: welfare, access, deliveries, map - traffic was "N/A", so it is not shown',
-     blocks(full, 'welfare').join(',') === 'welfare,access,deliveries,map', blocks(full, 'welfare'));
   const traffic = composeBriefing(base({ info: { ...EMPTY_INFO, trafficManagement: 'Banksman for all reversing vehicles.' } }));
-  ok('real traffic management content IS shown',
-     blocks(traffic, 'welfare').join(',') === 'traffic', blocks(traffic, 'welfare'));
+  ok('real traffic management content IS shown, on the site screen',
+     blocks(traffic, 'site').includes('traffic'), blocks(traffic, 'site'));
   ok('the hazards screen: hazards, high-risk, permits, risks, RAMS',
      blocks(full, 'hazards').join(',') === 'hazards,highrisk,permits,risks,rams', blocks(full, 'hazards'));
 
-  const get = (screen: string, key: string) => full.find((s) => s.key === screen)!.blocks.find((b) => b.key === key)!;
-  ok('a placeholder entry ("N/A") is suppressed, not shown',
-     !full.find((x) => x.key === 'welfare')!.blocks.some((b) => b.key === 'traffic'), blocks(full, 'welfare'));
+  const get = (screen: string, key: string) =>
+    full.flatMap((x) => x.sections).find((sec) => sec.key === (screen === 'welfare' ? 'site' : screen))!.blocks.find((b) => b.key === key)!;
+  ok('a placeholder entry ("N/A") is suppressed, not shown', !blocks(full, 'site').includes('traffic'));
   ok('real text is shown exactly as the site team wrote it', get('welfare', 'deliveries').text === 'Via Leamington St.');
   const firstAid = get('emergency', 'firstaid').people!;
   ok('a first aider held in BOTH places is shown once', firstAid.filter((p) => /fay aid/i.test(p.name)).length === 1, firstAid);
@@ -141,6 +142,43 @@ async function main() {
   }));
   ok('a placeholder beside real content: only the real content shows',
      mixed.length === 1 && blocks(mixed, 'emergency').join(',') === 'fire', blocks(mixed, 'emergency'));
+
+  console.log('\n[2c] At most three screens, none too thin to stand alone');
+  const rich = { ...EMPTY_INFO, workingHours: '08:00-17:00', welfareFacilities: 'Ground floor.', accessEgress: 'Via Oldham Rd.',
+                 siteHazards: 'Public in work area.', highRiskActivities: 'Working at height.' };
+  const thinEmergency = composeBriefing(base({ info: rich, permitTypes: ['Hot works'],
+    emergency: { fireAssemblyPoint: 'Rear car park', firstAiderName: null, firstAiderNumber: null, firstAiderLocation: null,
+                 nearestHospital: null, emergencyNumber: null } }));
+  ok('a one-card emergency group does not get a screen of its own',
+     thinEmergency.length === 2, thinEmergency.map((x) => x.key));
+  ok('  it is folded into the screen BEFORE it', thinEmergency[0].key === 'site+emergency', thinEmergency[0].key);
+  ok('  keeping its own heading as a subheading - nothing buried unlabelled',
+     thinEmergency[0].sections.map((sec) => sec.title).join('|') === 'About this site|Emergencies and first aid',
+     thinEmergency[0].sections.map((sec) => sec.title));
+  ok('  and the combined screen has its own heading', thinEmergency[0].heading === 'Before you start on site');
+  ok('  a screen that stands alone has no subheading', thinEmergency[1].sections.every((sec) => sec.title === undefined));
+
+  const thinSite = composeBriefing(base({ info: { ...EMPTY_INFO, workingHours: '08:00-17:00', emergencyProcedures: 'Raise the alarm.',
+    siteHazards: 'Public.', highRiskActivities: 'Height.' },
+    emergency: { fireAssemblyPoint: 'Car park', firstAiderName: null, firstAiderNumber: null, firstAiderLocation: null, nearestHospital: null, emergencyNumber: '999' } }));
+  ok('a thin FIRST group folds forward into the next', thinSite[0].key === 'site+emergency', thinSite.map((x) => x.key));
+
+  const allThin = composeBriefing(base({ info: { ...EMPTY_INFO, workingHours: '08:00-17:00', emergencyProcedures: 'Raise the alarm.', siteHazards: 'Public.' } }));
+  ok('three one-card groups become ONE screen', allThin.length === 1 && allThin[0].sections.length === 3, allThin.map((x) => x.key));
+
+  const everything = composeBriefing(base({ info: { ...rich, emergencyProcedures: 'Raise the alarm.', fireArrangements: 'Muster rear.' },
+    permitTypes: ['Hot works'] }));
+  ok('never more than three screens', everything.length <= 3 && full.length <= 3);
+  const count = (x: Screens) => x.reduce((n, sc) => n + allBlocks(sc).length, 0);
+  // thinEmergency: site 4 (project, hours, welfare, access) + fire 1 + hazards 3 (hazards, high-risk, permits).
+  // allThin: site 2 (project, hours) + procedures 1 + hazards 1.
+  ok('condensing never loses a block',
+     count(thinEmergency) === 8 && count(allThin) === 4, { thinEmergency: count(thinEmergency), allThin: count(allThin) });
+  ok('the identity card alone does not justify a screen (it repeats the previous page)',
+     thinSite[0].key === 'site+emergency');
+  ok('every screen that remains has at least two cards beyond the identity card, unless it is the only one',
+     [full, thinEmergency, thinSite, everything].every((x) => x.length === 1 ||
+       x.every((sc) => allBlocks(sc).filter((b) => b.key !== 'project').length >= 2)));
   ok('  and a first aider named "TBC" is not listed as a person',
      !JSON.stringify(mixed).includes('TBC'));
 

@@ -80,7 +80,7 @@ echo "[6/8] Confirming the BUILD, not just the source..."
 for r in "app/api/worker/induction/[siteId]/site-map/route.js" "app/api/worker/induction/[siteId]/documents/[documentId]/route.js"; do
   test -f ".next/server/$r" || fail "missing from the build: $r"
 done
-for t in "Emergencies and first aid" "Welfare, access and traffic" "Hazards and controls" "Work that needs a permit here" "Reporting accidents and near misses" "to be confirmed"; do
+for t in "Emergencies and first aid" "Before you start on site" "Hazards and controls" "Work that needs a permit here" "Reporting accidents and near misses" "to be confirmed"; do
   grep -rqF "$t" .next/server 2>/dev/null || fail "missing from the build: $t"
 done
 grep -rqF "Site briefing" .next/static 2>/dev/null || fail "the briefing screen is not in the client bundle"
