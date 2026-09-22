@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * PATCH /api/platform/sites/[id]/worker-access
- *   { action: 'invite', mobile, fullName, company }
+ *   { action: 'invite', mobile, firstName, surname, company }
  *   { action: 'approve' | 'suspend' | 'reinstate' | 'remove', assignmentId }
  *   { action: 'setDetails', assignmentId, startDate?, endDate? }
  *   { action: 'transfer', assignmentId, toSiteId }
@@ -70,7 +70,8 @@ async function PATCHHandler(
     case 'invite':
       result = await inviteWorker(viewer, params.id, {
         mobile: String(body.mobile ?? ''),
-        fullName: String(body.fullName ?? ''),
+        firstName: String(body.firstName ?? ''),
+        surname: String(body.surname ?? ''),
         company: String(body.company ?? ''),
       });
       break;

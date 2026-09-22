@@ -37,6 +37,7 @@ const chk = (t: string, ok: boolean, d = '') => {
 
 const MOBILE_NEW = '+447700900901';
 const MOBILE_EXISTING = '+447700900902';
+const MOBILE_REFUSED = '+447700900903';
 const made: string[] = [];
 
 async function main() {
@@ -49,7 +50,7 @@ async function main() {
   console.log(`  site: ${site.name}   inviter: ${viewer.name} (${viewer.role})\n`);
 
   // Clean slate for the two mobiles this script owns.
-  for (const m of [MOBILE_NEW, MOBILE_EXISTING]) {
+  for (const m of [MOBILE_NEW, MOBILE_EXISTING, MOBILE_REFUSED]) {
     const w = await prisma.worker.findUnique({ where: { mobile: m }, select: { id: true } });
     if (w) { await prisma.workerSiteAssignment.deleteMany({ where: { workerId: w.id } });
              await prisma.workerAssignmentEvent.deleteMany({ where: { workerId: w.id } });
@@ -60,12 +61,14 @@ async function main() {
   console.log('[1] Inviting a mobile SiteComply has never seen');
   outbox.length = 0;
   const r1 = await svc.inviteWorker(viewer, site.id, {
-    mobile: MOBILE_NEW, fullName: 'Ada Bricklayer', company: 'Bricks Ltd',
+    mobile: MOBILE_NEW, firstName: 'Ada', surname: 'Bricklayer', company: 'Bricks Ltd',
   });
   chk('the invitation succeeds', r1.ok === true, r1.ok ? '' : r1.error);
   const w1 = await prisma.worker.findUnique({ where: { mobile: MOBILE_NEW } });
   made.push(w1.id);
   chk('the invited name becomes the worker record', w1.fullName === 'Ada Bricklayer', w1.fullName);
+  chk('...with the first name stored as its own part', w1.firstName === 'Ada', w1.firstName);
+  chk('...and the surname stored as its own part', w1.surname === 'Bricklayer', w1.surname);
   chk('the invited company becomes the worker record', w1.company === 'Bricks Ltd', w1.company);
   chk('no existing-worker notice is raised', !r1.existingWorker);
 
@@ -85,6 +88,33 @@ async function main() {
   chk('it does not fall back to the placeholder wording', !/the SiteComply app/.test(body));
   chk('it names the project', body.includes(site.name));
 
+  /* ---------------- 2b. The name is asked for in two parts ---------------- */
+  console.log('\n[2b] First name and surname are both required, and nothing is split');
+  const noSurname = await svc.inviteWorker(viewer, site.id, {
+    mobile: MOBILE_REFUSED, firstName: 'Ada', surname: '  ', company: 'Bricks Ltd',
+  });
+  chk('an invitation without a surname is refused',
+      noSurname.ok === false && /surname/i.test(noSurname.error ?? ''), noSurname.error);
+  const noFirst = await svc.inviteWorker(viewer, site.id, {
+    mobile: MOBILE_REFUSED, firstName: '', surname: 'Bricklayer', company: 'Bricks Ltd',
+  });
+  chk('an invitation without a first name is refused',
+      noFirst.ok === false && /first name/i.test(noFirst.error ?? ''), noFirst.error);
+  const legacy = await svc.inviteWorker(viewer, site.id, {
+    mobile: MOBILE_REFUSED, fullName: 'Ada Bricklayer', company: 'Bricks Ltd',
+  } as never);
+  chk('a stale client sending only a full name is refused, not split', legacy.ok === false, legacy.error);
+  chk('...and no record was created for any refused invitation',
+      (await prisma.worker.findUnique({ where: { mobile: MOBILE_REFUSED } })) === null);
+
+  // What the operative then sees on "Your details": both parts, already split.
+  const { openingFirstName, nameNeedsChecking, composeFullName } = require('../services/workers/workerName');
+  chk('the details form opens with the invited first name', openingFirstName(w1) === 'Ada', openingFirstName(w1));
+  chk('...and the invited surname', (w1.surname ?? '') === 'Bricklayer');
+  chk('...with no "check your name" notice', nameNeedsChecking(w1) === false);
+  chk('saving it unchanged recomposes the same display name',
+      composeFullName(openingFirstName(w1), w1.surname) === w1.fullName);
+
   /* ---------------- 3. A worker already on SiteComply ---------------- */
   console.log('\n[3] Inviting a mobile that already belongs to a worker');
   const existing = await prisma.worker.create({
@@ -92,12 +122,14 @@ async function main() {
   });
   made.push(existing.id);
   const r2 = await svc.inviteWorker(viewer, site.id, {
-    mobile: MOBILE_EXISTING, fullName: 'Typed Name', company: 'Typed Co',
+    mobile: MOBILE_EXISTING, firstName: 'Typed', surname: 'Name', company: 'Typed Co',
   });
   chk('the invitation succeeds', r2.ok === true);
   const w2 = await prisma.worker.findUnique({ where: { mobile: MOBILE_EXISTING } });
   chk('the existing record is NOT overwritten', w2.fullName === 'Existing Name' && w2.company === 'Existing Co',
       `${w2.fullName} / ${w2.company}`);
+  chk('...including its name parts', w2.firstName === null && w2.surname === null,
+      `${w2.firstName} / ${w2.surname}`);
   chk('the manager is TOLD which details will be used',
       r2.existingWorker?.fullName === 'Existing Name' && r2.existingWorker?.company === 'Existing Co',
       JSON.stringify(r2.existingWorker));
@@ -111,7 +143,7 @@ async function main() {
     where: { id: a2.id },
     data: { status: WorkerAssignmentStatus.SUSPENDED, suspendedAt: new Date(), suspendedByName: 'Test' },
   });
-  const r3 = await svc.inviteWorker(viewer, site.id, { mobile: MOBILE_EXISTING, fullName: 'Re Invited', company: 'Re Co' });
+  const r3 = await svc.inviteWorker(viewer, site.id, { mobile: MOBILE_EXISTING, firstName: 'Re', surname: 'Invited', company: 'Re Co' });
   chk('the re-invitation itself succeeds', r3.ok === true, r3.ok ? '' : r3.error);
   const a3 = await prisma.workerSiteAssignment.findFirst({ where: { workerId: existing.id, jobSiteId: site.id } });
   chk('re-inviting a SUSPENDED worker does NOT restore access',
@@ -121,7 +153,7 @@ async function main() {
     where: { id: a2.id },
     data: { status: WorkerAssignmentStatus.REMOVED, removedAt: new Date() },
   });
-  const r4 = await svc.inviteWorker(viewer, site.id, { mobile: MOBILE_EXISTING, fullName: 'Re Invited', company: 'Re Co' });
+  const r4 = await svc.inviteWorker(viewer, site.id, { mobile: MOBILE_EXISTING, firstName: 'Re', surname: 'Invited', company: 'Re Co' });
   chk('the re-invitation itself succeeds', r4.ok === true, r4.ok ? '' : r4.error);
   const a4 = await prisma.workerSiteAssignment.findFirst({ where: { workerId: existing.id, jobSiteId: site.id } });
   chk('re-inviting a REMOVED worker does NOT restore access',
@@ -248,6 +280,10 @@ async function main() {
 }
 
 main().catch((e) => { console.error(e); process.exitCode = 1; }).finally(async () => {
+  // A refused invitation must create nothing - but if a regression lets one
+  // through, it must not be left behind on the roster either.
+  const leaked = await prisma.worker.findUnique({ where: { mobile: MOBILE_REFUSED }, select: { id: true } });
+  if (leaked) made.push(leaked.id);
   for (const id of made) {
     await prisma.workerAssignmentEvent.deleteMany({ where: { workerId: id } });
     await prisma.workerSiteAssignment.deleteMany({ where: { workerId: id } });

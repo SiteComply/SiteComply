@@ -8,7 +8,7 @@ import { getWorkerByMobile } from '@/services/workers/workerService';
 import { getWorkerContext } from '@/services/workerDashboard/workerDashboardService';
 import { formatUkMobileForDisplay } from '@/lib/phone';
 import { toDateInputValue } from '@/lib/datetime';
-import { openingFirstName } from '@/services/workers/workerName';
+import { nameNeedsChecking, openingFirstName } from '@/services/workers/workerName';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,6 +46,7 @@ export default async function CheckInDetailsPage() {
       <IdentityForm
         recognised={recognised}
         verificationLive={verificationLive}
+        checkName={worker ? nameNeedsChecking(worker) : false}
         initial={{
           // Opened, not parsed: the stored firstName where there is one, an EXACT
           // suffix match where a surname is known, and otherwise the whole existing

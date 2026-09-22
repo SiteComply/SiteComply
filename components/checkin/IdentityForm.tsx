@@ -11,6 +11,7 @@ import {
   schemesAreUsable,
   SCHEME_LIST_EXHAUSTIVE,
 } from '@/services/cscs/schemes';
+import { firstNameRepeatsSurname } from '@/services/workers/workerName';
 
 export interface IdentityInitial {
   /** Given name. The display name is derived from this plus the surname. */
@@ -49,9 +50,16 @@ export function IdentityForm({
   initial,
   recognised,
   verificationLive,
+  checkName = false,
 }: {
   initial: IdentityInitial;
   recognised: boolean;
+  /**
+   * The record cannot say which part of the name is the surname - typically an
+   * operative invited before invitations asked for the two parts separately,
+   * whose whole name is in the First name box. See nameNeedsChecking().
+   */
+  checkName?: boolean;
   /** Whether a real CSCS check will actually run on save. */
   verificationLive: boolean;
 }) {
@@ -68,6 +76,9 @@ export function IdentityForm({
   );
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Set once the operative has been told their first name already ends with
+  // their surname. A second press saves as typed: it is their name.
+  const [repeatWarned, setRepeatWarned] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Restore a local draft if the server didn't already recognise the worker.
@@ -113,6 +124,7 @@ export function IdentityForm({
     // Any edit invalidates a prior verification result — re-verify on next save.
     setSaved(false);
     setVerification(null);
+    if (key === 'firstName' || key === 'surname') setRepeatWarned(false);
     setForm((f) => ({ ...f, [key]: value }));
   }
 
@@ -145,6 +157,18 @@ export function IdentityForm({
      */
     if (!form.firstName.trim()) {
       toast.error('Please enter your first name.');
+      return;
+    }
+    /*
+     * A FIRST NAME THAT ENDS WITH THE SURNAME would be saved as "Jordan Smith
+     * Smith" on every register, report, signature and PDF. It is what an old
+     * invitation led to: the whole name offered as the first name, the surname
+     * then typed into the empty box. Asked once, not refused - a second press
+     * saves exactly what was typed.
+     */
+    if (!repeatWarned && firstNameRepeatsSurname(form.firstName, form.surname)) {
+      setRepeatWarned(true);
+      toast.error('Your first name already ends with your surname.');
       return;
     }
     /*
@@ -227,10 +251,17 @@ export function IdentityForm({
         if (!busy) submit();
       }}
     >
-      {recognised && (
+      {recognised && !checkName && (
         <p className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-ink">
           Welcome back — we’ve filled in your details. Check they’re still
           correct.
+        </p>
+      )}
+      {recognised && checkName && (
+        <p className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-ink">
+          We’ve filled in your details. Please check your name: put your first
+          name in <span className="font-semibold">First name</span> and your
+          surname in <span className="font-semibold">Surname</span>.
         </p>
       )}
 
@@ -246,6 +277,11 @@ export function IdentityForm({
         placeholder="e.g. Jordan"
         value={form.firstName}
         onChange={(e) => update('firstName', e.target.value)}
+        error={
+          repeatWarned
+            ? `This already ends with “${form.surname.trim()}”. Remove your surname from this box, or press continue again if this is correct.`
+            : undefined
+        }
       />
 
       {/* Surname, ASKED rather than derived.

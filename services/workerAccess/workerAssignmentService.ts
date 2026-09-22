@@ -28,6 +28,7 @@ import {
   type WindowState,
 } from '@/services/workerAccess/assignmentWindow';
 import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
+import { composeFullName } from '@/services/workers/workerName';
 
 /**
  * SC-023 Phase 1 — worker invitation and site assignment.
@@ -432,7 +433,7 @@ async function recordEvent(
 export async function inviteWorker(
   viewer: PlatformViewer,
   siteId: string,
-  input: { mobile: string; fullName: string; company: string },
+  input: { mobile: string; firstName: string; surname: string; company: string },
 ): Promise<AssignmentResult> {
   const g = await guard(viewer, siteId);
   if (!g.ok) return g;
@@ -445,13 +446,43 @@ export async function inviteWorker(
       error: 'Enter a valid UK mobile number.',
     };
   }
-  const fullName = (input.fullName ?? '').trim();
+  /*
+   * FIRST NAME AND SURNAME, ASKED SEPARATELY - the same two parts the details
+   * form asks for, with fullName derived from them exactly as it is there.
+   *
+   * An invitation used to store one typed "Full name" and nothing else. The
+   * details form then had no surname to reopen, so it offered the operative
+   * their WHOLE name as the first name beside an empty Surname box; typing the
+   * surname into that box composed "Jordan Smith Smith". Nothing is split here
+   * either: the manager types each part.
+   *
+   * Both are required. Unlike the operative at a gate, the manager is entering
+   * a name they already know in full - it used to be one required box - and
+   * the surname is what CSCS Smart Check will look the card up by.
+   */
+  const firstName = (input.firstName ?? '').trim();
+  const surname = (input.surname ?? '').trim();
   const company = (input.company ?? '').trim();
+  if (!firstName) {
+    return {
+      ok: false,
+      reason: 'invalid',
+      error: 'Enter the operative’s first name.',
+    };
+  }
+  if (!surname) {
+    return {
+      ok: false,
+      reason: 'invalid',
+      error: 'Enter the operative’s surname.',
+    };
+  }
+  const fullName = composeFullName(firstName, surname);
   if (fullName.length < 2) {
     return {
       ok: false,
       reason: 'invalid',
-      error: 'Enter the operative’s full name.',
+      error: 'Enter the operative’s name.',
     };
   }
   if (company.length < 2) {
@@ -487,7 +518,7 @@ export async function inviteWorker(
   // dialog can say which details will actually be used.
   const worker = await prisma.worker.upsert({
     where: { mobile: mobile.e164 },
-    create: { mobile: mobile.e164, fullName, company },
+    create: { mobile: mobile.e164, fullName, firstName, surname, company },
     update: {},
     select: { id: true, fullName: true },
   });

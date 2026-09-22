@@ -8,7 +8,12 @@
  * changes.
  */
 import { readFileSync } from 'fs';
-import { composeFullName, openingFirstName } from '../services/workers/workerName';
+import {
+  composeFullName,
+  firstNameRepeatsSurname,
+  nameNeedsChecking,
+  openingFirstName,
+} from '../services/workers/workerName';
 
 let pass = 0;
 let fail = 0;
@@ -59,6 +64,78 @@ const read = (p: string) => readFileSync(p, 'utf8');
   // A bare substring must NOT match - only a whole trailing word.
   ok('a partial word is not treated as a suffix',
     openingFirstName({ surname: 'mith', fullName: 'Jordan Smith' }) === 'Jordan Smith');
+}
+
+// ── the invite defect: a whole name in the First name box ────────────────
+{
+  /*
+   * Before invitations asked for two parts they stored ONE full name, so the
+   * details form offered "Jordan Smith" as the first name beside an empty
+   * Surname box, and typing "Smith" there saved "Jordan Smith Smith".
+   */
+  const invitedBefore = { fullName: 'Jordan Smith', firstName: null, surname: null };
+  ok('an old invite still opens with the whole name - nothing is split',
+    openingFirstName(invitedBefore) === 'Jordan Smith');
+  ok('  and the operative is asked to check it', nameNeedsChecking(invitedBefore) === true);
+
+  const savedUntouched = { fullName: 'Jordan Smith', firstName: 'Jordan Smith', surname: null };
+  ok('a whole name SAVED as the first name is still flagged', nameNeedsChecking(savedUntouched) === true);
+
+  const repeated = { fullName: 'Jordan Smith Smith', firstName: 'Jordan Smith', surname: 'Smith' };
+  ok('a repeated surname reopens without the repeat',
+    openingFirstName(repeated) === 'Jordan', openingFirstName(repeated));
+  ok('  so saving it unchanged repairs the display name',
+    composeFullName(openingFirstName(repeated), repeated.surname) === 'Jordan Smith');
+  ok('  and the operative is told why the box changed', nameNeedsChecking(repeated) === true);
+  ok('  a compound surname repeat is removed whole',
+    openingFirstName({ firstName: 'Anna van der Berg', surname: 'van der Berg', fullName: 'x' }) === 'Anna');
+
+  // What must NOT be flagged or touched.
+  ok('an invite with both parts is not flagged',
+    nameNeedsChecking({ fullName: 'Ada Bricklayer', firstName: 'Ada', surname: 'Bricklayer' }) === false);
+  ok('a one-word name with no surname is not flagged',
+    nameNeedsChecking({ fullName: 'Jordan', firstName: 'Jordan', surname: null }) === false);
+  ok('an empty record is not flagged', nameNeedsChecking({}) === false);
+  ok('a first name EQUAL to the surname is left alone ("Owen Owen")',
+    openingFirstName({ firstName: 'Owen', surname: 'Owen', fullName: 'Owen Owen' }) === 'Owen');
+  ok('  and not flagged', nameNeedsChecking({ firstName: 'Owen', surname: 'Owen', fullName: 'Owen Owen' }) === false);
+  ok('a family-name-first record is still not mangled',
+    openingFirstName({ firstName: 'Zhang Wei', surname: 'Zhang', fullName: 'Zhang Wei Zhang' }) === 'Zhang Wei');
+  ok('a partial-word ending is not a repeat',
+    openingFirstName({ firstName: 'Jo Goldsmith', surname: 'Smith', fullName: 'x' }) === 'Jo Goldsmith');
+
+  ok('the submit check spots a repeat', firstNameRepeatsSurname('Jordan Smith', 'Smith') === true);
+  ok('  case-insensitively, with stray spaces', firstNameRepeatsSurname(' Jordan SMITH ', ' smith') === true);
+  ok('  but not a plain first name', firstNameRepeatsSurname('Jordan', 'Smith') === false);
+  ok('  nor an empty surname', firstNameRepeatsSurname('Jordan Smith', '') === false);
+  ok('  nor "Owen" + "Owen"', firstNameRepeatsSurname('Owen', 'Owen') === false);
+}
+
+// ── the invitation asks for the same two parts ────────────────────────────
+{
+  const dialog = read('components/platform/InviteWorkerDialog.tsx');
+  ok('the invite dialog has a First name box', />\s*First name\s*</.test(dialog));
+  ok('  and a Surname box', />\s*Surname\s*</.test(dialog));
+  ok('  and no Full name box', !/>\s*Full name\s*</.test(dialog), 'still one box');
+  ok('  and cannot send without both', /form\.firstName\.trim\(\) !== '' &&\s*form\.surname\.trim\(\) !== ''/.test(dialog));
+
+  const svcSrc = read('services/workerAccess/workerAssignmentService.ts');
+  ok('the invite service derives fullName the same way the profile does',
+    /const fullName = composeFullName\(firstName, surname\);/.test(svcSrc));
+  ok('  and stores both parts on create',
+    /create: \{ mobile: mobile\.e164, fullName, firstName, surname, company \}/.test(svcSrc));
+  ok('  and still never overwrites an existing worker', /update: \{\},/.test(svcSrc));
+  const apiSrc = read('app/api/platform/sites/[id]/worker-access/route.ts');
+  ok('the API passes the two parts through, and no typed fullName',
+    /firstName: String\(body\.firstName/.test(apiSrc) && /surname: String\(body\.surname/.test(apiSrc)
+      && !/body\.fullName/.test(apiSrc));
+
+  const form = read('components/checkin/IdentityForm.tsx');
+  ok('the details form asks before saving a repeated surname',
+    /!repeatWarned && firstNameRepeatsSurname\(form\.firstName, form\.surname\)/.test(form));
+  const page = read('app/check-in/details/page.tsx');
+  ok('the details page asks the operative to check an unsplit name',
+    /checkName=\{worker \? nameNeedsChecking\(worker\) : false\}/.test(page));
 }
 
 // ── fullName survives, and is derived ─────────────────────────────────────

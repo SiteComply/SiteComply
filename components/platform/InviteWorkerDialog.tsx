@@ -36,7 +36,7 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ fullName: '', company: '', mobile: '' });
+  const [form, setForm] = useState({ firstName: '', surname: '', company: '', mobile: '' });
   const [sent, setSent] = useState<{
     name: string;
     autoApproved: boolean;
@@ -58,7 +58,7 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
     setOpen(false);
     setSent(null);
     setError(null);
-    setForm({ fullName: '', company: '', mobile: '' });
+    setForm({ firstName: '', surname: '', company: '', mobile: '' });
   }, []);
 
   // Focus the first field so a manager can type immediately.
@@ -77,7 +77,8 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
   }, [open, close]);
 
   const canSubmit =
-    form.fullName.trim() !== '' &&
+    form.firstName.trim() !== '' &&
+    form.surname.trim() !== '' &&
     form.company.trim() !== '' &&
     form.mobile.trim() !== '';
 
@@ -97,11 +98,11 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
         return;
       }
       setSent({
-        name: form.fullName.trim(),
+        name: `${form.firstName.trim()} ${form.surname.trim()}`,
         autoApproved: data.autoApproved === true,
         existing: (data.existingWorker as { fullName: string; company: string | null } | null) ?? null,
       });
-      setForm({ fullName: '', company: '', mobile: '' });
+      setForm({ firstName: '', surname: '', company: '', mobile: '' });
       // Refresh so the roster and the assignment list pick the worker up.
       router.refresh();
     } catch {
@@ -223,19 +224,41 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <div className="space-y-1">
-                      <label htmlFor="invite-full-name" className={label}>
-                        Full name
-                      </label>
-                      <input
-                        id="invite-full-name"
-                        ref={nameRef}
-                        value={form.fullName}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, fullName: e.target.value }))
-                        }
-                        className={field}
-                      />
+                    {/* First name and surname, asked separately - the same
+                        two parts the operative's details form asks for. One
+                        "Full name" box left the details form with no surname,
+                        so it offered the whole name as the first name and a
+                        surname typed beside it was repeated. */}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <label htmlFor="invite-first-name" className={label}>
+                          First name
+                        </label>
+                        <input
+                          id="invite-first-name"
+                          ref={nameRef}
+                          value={form.firstName}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, firstName: e.target.value }))
+                          }
+                          autoComplete="off"
+                          className={field}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label htmlFor="invite-surname" className={label}>
+                          Surname
+                        </label>
+                        <input
+                          id="invite-surname"
+                          value={form.surname}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, surname: e.target.value }))
+                          }
+                          autoComplete="off"
+                          className={field}
+                        />
+                      </div>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="space-y-1">
