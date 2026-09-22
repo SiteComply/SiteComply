@@ -190,7 +190,10 @@ export default async function WorkerDetailPage({
               {/* Validate against a real card without switching the live
                 provider for every operative. Placed with the CSCS details
                 it acts on, not in a toolbar away from them. */}
-              {!worker.cscsExempt && worker.cscsCardNumber && (
+              {/* Only where the server will honour it: the route asks for the
+                same 'export' permission, so the button is never offered to a
+                role it would refuse. */}
+              {!worker.cscsExempt && worker.cscsCardNumber && canSeeMobile && (
                 <CscsCheckNowButton workerId={worker.id} />
               )}
               {/* The exempt test account, said plainly.

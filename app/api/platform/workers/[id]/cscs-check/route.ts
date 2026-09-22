@@ -7,6 +7,7 @@ import { SmartCheckCscsProvider } from '@/services/cscs/smartCheckProvider';
 import { getCscsRuntimeConfig } from '@/services/cscs/cscsConfigService';
 import { isCscsExemptMobile } from '@/services/cscs/cscsExemptAccounts';
 import { withClosedProjectHandling } from '@/lib/routeErrors';
+import { getWorkerDetailForViewer } from '@/services/workers/workerDetailService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -40,12 +41,32 @@ async function POSTHandler(
   { params }: { params: { id: string } },
 ) {
   const viewer = await requirePlatformViewer();
-  // Operatives are reached through check-ins, so that is the module that
-  // governs them. 'edit' rather than 'view': this writes a competency record.
-  if (!permits(viewer.role, 'checkins', 'edit')) {
+  /*
+   * 'export', the same verb that shows an operative's mobile on their record.
+   *
+   * It asked for 'edit', which no role holds on check-ins - every role is V or
+   * VX - so this refused EVERYONE, while the page showed the button to anyone
+   * who could open the record. The check writes only an audit row; it does not
+   * change the operative's standing. Whoever may already see and export their
+   * personal details may ask CSCS about their card. Engineers (V) still cannot.
+   */
+  if (!permits(viewer.role, 'checkins', 'export')) {
     return NextResponse.json(
       { ok: false, error: 'You do not have permission to run a card check.' },
       { status: 403 },
+    );
+  }
+
+  /*
+   * SCOPE. The operative must be one this viewer can see - the same rule the
+   * record page applies. Looked up by id alone, a manager could ask CSCS about
+   * any operative on the platform by guessing an id. Out of scope reads as not
+   * found, so an id's existence is not disclosed either.
+   */
+  if (!(await getWorkerDetailForViewer(viewer, params.id))) {
+    return NextResponse.json(
+      { ok: false, error: 'Operative not found.' },
+      { status: 404 },
     );
   }
 
