@@ -8,6 +8,7 @@ import { getActiveSiteWithChecklist } from '@/services/sites/siteService';
 import { canWorkerCheckIn } from '@/services/workerAccess/workerAssignmentService';
 import { getInductionSignatureRequired } from '@/services/inductionSignature/signatureService';
 import type { FlowItem } from '@/services/checklists/inductionFlow';
+import { getInductionBriefing } from '@/services/induction/inductionBriefingService';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,7 +48,12 @@ export default async function InductionPage({
   }));
 
   // SC-011: does this site require a digital signature to complete the induction?
-  const signatureRequired = await getInductionSignatureRequired(site.id);
+  const [signatureRequired, briefing] = await Promise.all([
+    getInductionSignatureRequired(site.id),
+    // The site briefing, shown before the acknowledgements that refer to it.
+    // Built only from data already held; nothing new is asked of the manager.
+    getInductionBriefing(site.id, site.name),
+  ]);
 
   return (
     <AppShell>
@@ -59,6 +65,7 @@ export default async function InductionPage({
         workerName={worker.fullName}
         inductionVersion={site.checklist?.version ?? 1}
         signatureRequired={signatureRequired}
+        briefing={briefing}
       />
     </AppShell>
   );

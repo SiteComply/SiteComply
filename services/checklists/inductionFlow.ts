@@ -10,6 +10,8 @@
  * only ever receives plain, serialisable data.
  */
 
+import type { BriefingScreen } from '@/services/induction/inductionBriefing';
+
 export type InductionItemType =
   | 'ACKNOWLEDGEMENT'
   | 'YES_NO'
@@ -218,6 +220,12 @@ export type InductionStep =
    * statement left to agree to.
    */
   | { kind: 'rules'; items: FlowItem[] }
+  /**
+   * A site briefing screen: information to READ, before anything is confirmed.
+   * Nothing to tick - the acknowledgements that follow are what the operative
+   * agrees to, and they now come after what they refer to.
+   */
+  | { kind: 'briefing'; screen: BriefingScreen }
   | { kind: 'gdpr' };
 
 /** A single answer value, keyed in the answers map by checklist item id. */
@@ -225,8 +233,20 @@ export type AnswerValue = boolean | 'yes' | 'no';
 export type InductionAnswers = Record<string, AnswerValue>;
 
 /** Build the ordered list of induction steps for a checklist. */
-export function buildInductionSteps(items: FlowItem[]): InductionStep[] {
-  const steps: InductionStep[] = [];
+export function buildInductionSteps(
+  items: FlowItem[],
+  /**
+   * The site briefing, read first. Every screen comes BEFORE the first
+   * acknowledgement: "I have received and understood the site induction" is
+   * only a fair thing to ask once the induction has been shown. Empty for a
+   * site with nothing to brief, which leaves the flow exactly as it was.
+   */
+  briefing: BriefingScreen[] = [],
+): InductionStep[] {
+  const steps: InductionStep[] = briefing.map((screen) => ({
+    kind: 'briefing' as const,
+    screen,
+  }));
   let ppeRun: FlowItem[] = [];
 
   // SITE RULES LIBRARY. Gathered up front and never given a screen of their own:
@@ -356,6 +376,9 @@ export function isStepComplete(
       return step.items
         .filter((i) => i.required)
         .every((i) => answers[i.id] === true);
+    case 'briefing':
+      // Read, not answered.
+      return true;
     case 'rules':
       // Nothing to answer. A rule is read, not ticked - the acknowledgement that
       // covers the set is a separate item on a separate screen, and this step only

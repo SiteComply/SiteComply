@@ -43,7 +43,7 @@ require('fs').mkdirSync(OUT, { recursive: true });
     const s = await pg.evaluate(() => {
       const t = document.body.innerText;
       return {
-        progress: (t.match(/Check\s+\d+\s+of\s+\d+/i) || [])[0] || null,
+        progress: (t.match(/(?:Check|Step)\s+\d+\s+of\s+\d+/i) || [])[0] || null,
         heading: (document.querySelector('h1,h2') || {}).innerText || '',
         toggles: Array.from(document.querySelectorAll('button[aria-pressed]'))
           .map((b) => (b.innerText || '').trim().split('\n')[0]).filter(Boolean),

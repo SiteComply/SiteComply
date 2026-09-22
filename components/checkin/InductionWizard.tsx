@@ -14,6 +14,8 @@ import {
   type InductionAnswers,
 } from '@/services/checklists/inductionFlow';
 import { KnowledgeCheck } from '@/components/checkin/KnowledgeCheck';
+import { BriefingStep } from '@/components/checkin/BriefingStep';
+import type { BriefingScreen } from '@/services/induction/inductionBriefing';
 import {
   LocationCheck,
   type ConfirmLocation,
@@ -33,7 +35,13 @@ interface InductionWizardProps {
   inductionVersion: number;
   /** SC-011: whether this site requires a digital signature to complete. */
   signatureRequired: boolean;
+  /** The site briefing, read before any acknowledgement. Empty = none. */
+  briefing?: BriefingScreen[];
 }
+
+// One stable empty value, so a site with no briefing does not rebuild the steps
+// on every render.
+const NO_BRIEFING: BriefingScreen[] = [];
 
 interface PersistedState {
   answers: InductionAnswers;
@@ -57,10 +65,14 @@ export function InductionWizard({
   workerName,
   inductionVersion,
   signatureRequired,
+  briefing = NO_BRIEFING,
 }: InductionWizardProps) {
   const router = useRouter();
   const toast = useToast();
-  const steps = useMemo(() => buildInductionSteps(items), [items]);
+  const steps = useMemo(
+    () => buildInductionSteps(items, briefing),
+    [items, briefing],
+  );
   const storageKey = `sitecomply.induction.${siteId}`;
 
   const [answers, setAnswers] = useState<InductionAnswers>({});
@@ -309,7 +321,7 @@ export function InductionWizard({
         <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-ink-subtle">
           <span>{siteName}</span>
           <span>
-            Check {stepIndex + 1} of {total}
+            Step {stepIndex + 1} of {total}
           </span>
         </div>
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
@@ -345,6 +357,8 @@ export function InductionWizard({
             onToggle={(id) => setAnswer(id, answers[id] === true ? false : true)}
           />
         )}
+
+        {step.kind === 'briefing' && <BriefingStep screen={step.screen} />}
 
         {step.kind === 'rules' && <RulesOnlyStep items={step.items} />}
 
