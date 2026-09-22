@@ -23,9 +23,17 @@ export function buildCscsProvider(
 ): CscsProvider {
   switch (providerId.toLowerCase()) {
     case 'smartcheck':
+      // ALL FOUR. V2.6 signs in with username + password + key before it will
+      // validate a card. Passing only the URL and key left the provider to find
+      // the other two in env vars that production does not set - the stored
+      // credentials live in CscsConfig - so every operative's check failed with
+      // "not configured", while the admin test and "Check this card now" (which
+      // build the provider themselves, with all four) kept working and hid it.
       return new SmartCheckCscsProvider({
         apiUrl: settings.apiUrl,
         apiKey: settings.apiKey,
+        username: settings.username,
+        password: settings.password,
       });
     case 'mock':
       // `mockReason` is how the exemption branch below says WHY it chose the
@@ -85,6 +93,8 @@ export async function resolveCscsProvider(
   return buildCscsProvider(config.providerId, {
     apiUrl: config.apiUrl ?? '',
     apiKey: config.apiKey ?? '',
+    username: config.username ?? '',
+    password: config.password ?? '',
   });
 }
 
