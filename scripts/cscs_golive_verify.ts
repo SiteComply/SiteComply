@@ -87,8 +87,14 @@ const read = (p: string) => readFileSync(p, 'utf8');
   const route = read('app/api/platform/workers/[id]/cscs-check/route.ts');
   ok('the action is POST-only and platform-guarded',
     /requirePlatformViewer\(\)/.test(route) && /permits\(viewer\.role/.test(route), 'unguarded');
-  ok('  requiring edit rights, because it writes a competency record',
-    /'checkins', 'edit'/.test(route), 'view-only would be wrong');
+  ok('  requiring EXPORT rights - the verb that already shows the operative\'s mobile',
+    /'checkins', 'export'/.test(route) && !/'checkins', 'edit'/.test(route),
+    /*
+     * This used to assert 'edit', and in doing so held the route to a verb NO
+     * role holds on check-ins: the guard passed while the button refused
+     * everyone. A permission assertion must name one some role actually has.
+     */
+    'not export, or still edit');
   ok('it builds the LIVE provider explicitly, not whatever is configured',
     /new SmartCheckCscsProvider\(/.test(route), 'would run the mock');
   // Asserted on CODE, not the file. The comment above that line explains why
@@ -123,7 +129,7 @@ const read = (p: string) => readFileSync(p, 'utf8');
 
   const page = read('app/platform/dashboard/workers/[id]/page.tsx');
   ok('the button is offered only for a worker WITH a card',
-    /!worker\.cscsExempt && worker\.cscsCardNumber && \(/.test(page), 'offered without a card');
+    /!worker\.cscsExempt && worker\.cscsCardNumber && canSeeMobile && \(/.test(page), 'offered without a card, or to a role the route refuses');
   ok('  and never for the exempt account', /!worker\.cscsExempt/.test(page));
 
   const btn = read('components/platform/CscsCheckNowButton.tsx');
