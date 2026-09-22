@@ -47,12 +47,19 @@ grep -q 'update: {},' "$SVC" || fail "a re-invite could now overwrite an existin
 echo "  ok   source asserts pass"
 
 echo "[4/8] Running the verification suites..."
-npx tsx scripts/worker_name_verify.ts | tail -1 | grep -q ", 0 failed" || fail "worker_name_verify has failures"
-npx tsx scripts/inviteflow_verify.ts | grep -q "== [0-9]* passed, 0 failed ==" || fail "inviteflow_verify has failures"
-for s in cscs_golive_verify smartcheck_capture_verify; do
-  npx tsx "scripts/$s.ts" | tail -1 | grep -q ", 0 failed" || fail "$s has failures"
-done
-npx tsx scripts/cscs_phase1_verify.ts | grep -q "passed, 0 failed" || fail "cscs_phase1_verify has failures"
+# Output is CAPTURED before it is checked. Piping straight into `grep -q` closes
+# the pipe at the first match, and a suite still logging its cleanup then dies of
+# EPIPE - which read as a failing suite on the first run of this script.
+suite() {  # suite <script> <pattern>
+  local out; out=$(npx tsx "scripts/$1.ts" 2>&1)
+  echo "$out" | grep -qE "$2" || { echo "$out" | tail -15; fail "$1 has failures"; }
+  echo "  ok   $1: $(echo "$out" | grep -oE '[0-9]+ passed, 0 failed' | tail -1)"
+}
+suite worker_name_verify        ", 0 failed"
+suite inviteflow_verify         "== [0-9]+ passed, 0 failed =="
+suite cscs_golive_verify        ", 0 failed"
+suite smartcheck_capture_verify ", 0 failed"
+suite cscs_phase1_verify        "passed, 0 failed"
 echo "  ok   suites green"
 
 echo "[5/8] Type-checking and building..."
