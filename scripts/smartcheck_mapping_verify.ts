@@ -172,24 +172,71 @@ const read = (p: string) => readFileSync(p, 'utf8');
   ok('  so it is never VALID', mapSmartCheckResponse(
     card({ cancelled: 'false', expired: 'false' }) as never, 'x').verified === false);
 
-  // No cards is an ANSWER; several cards is not one we can resolve.
+  // No cards is an ANSWER.
   const none = mapSmartCheckResponse(
     { responseData: { cards: [], scheme: { schemeName: 'CSCS' } } } as never, 'x');
   ok('an empty cards array is NOT_FOUND', none.status === 'NOT_FOUND', none.status);
   ok('  and still reports the scheme', none.scheme === 'CSCS', none.scheme);
 
-  const two = mapSmartCheckResponse({
-    responseData: {
-      cards: [
-        { expired: false, cancelled: false, cardColour: 'Gold', customerName: 'A' },
-        { expired: false, cancelled: false, cardColour: 'Blue', customerName: 'B' },
-      ],
-      scheme: { schemeName: 'CSCS' },
-    },
-  } as never, 'x');
-  ok('two matching cards is ERROR, not a guess', two.status === 'ERROR', two.status);
+  /*
+   * SEVERAL CARDS, ONE HOLDER. The published test record returns more than one
+   * card, and so will anyone with a renewal or two card types. This used to be
+   * ERROR for every such holder - which is why VALID had never been seen live.
+   */
+  const set = (cards: object[]) => mapSmartCheckResponse(
+    { responseData: { cards, scheme: { schemeName: 'CSCS' } } } as never, 'x');
+  const cur = (colour: string, name = 'WEI ZHANG') => ({ expired: false, cancelled: false, cardColour: colour, customerName: name });
+  const exp = (colour: string, name = 'WEI ZHANG') => ({ expired: true, cancelled: false, cardColour: colour, customerName: name });
+  const can = (colour: string, name = 'WEI ZHANG') => ({ expired: false, cancelled: true, cardColour: colour, customerName: name });
+
+  const renewed = set([exp('Blue'), cur('Blue')]);
+  ok('a renewal (old expired + new current) is VALID', renewed.status === 'VALID' && renewed.verified, renewed.status);
+  ok('  recording the current card\'s type', renewed.cardType === 'BLUE_SKILLED', renewed.cardType);
+  ok('  and the holder', renewed.holderName === 'WEI ZHANG', renewed.holderName);
+  ok('  with an audit note naming each card\'s standing',
+    renewed.note === '2 cards returned: expired Blue; current Blue', renewed.note);
+  ok('  that carries no name, serial or photo', !/ZHANG|serial|photo/i.test(renewed.note ?? ''), renewed.note);
+
+  const upgraded = set([exp('Blue'), cur('Gold')]);
+  ok('an expired Blue beside a current Gold records GOLD, not the lapsed card',
+    upgraded.status === 'VALID' && upgraded.cardType === 'GOLD_SUPERVISORY', upgraded.cardType);
+
+  const twoCurrent = set([cur('Gold'), cur('Blue')]);
+  ok('two CURRENT cards of different types is VALID', twoCurrent.status === 'VALID', twoCurrent.status);
+  ok('  and does NOT guess a type - the declared one stands', twoCurrent.cardType === null, twoCurrent.cardType);
+  const twoSame = set([cur('Gold'), cur('Gold')]);
+  ok('two current cards of the SAME type record it', twoSame.cardType === 'GOLD_SUPERVISORY', twoSame.cardType);
+
+  const cancelledBeside = set([can('Gold'), cur('Blue')]);
+  ok('a cancelled card does not void a separate current one', cancelledBeside.status === 'VALID', cancelledBeside.status);
+  ok('  and the cancelled card\'s type is not recorded', cancelledBeside.cardType === 'BLUE_SKILLED', cancelledBeside.cardType);
+
+  const allExpired = set([exp('Blue'), exp('Gold')]);
+  ok('every card expired -> EXPIRED', allExpired.status === 'EXPIRED' && !allExpired.verified, allExpired.status);
+  const expiredAndCancelled = set([exp('Blue'), can('Gold')]);
+  ok('none current, one cancelled -> REVOKED (the graver fact)', expiredAndCancelled.status === 'REVOKED', expiredAndCancelled.status);
+
+  const unreadable = set([exp('Blue'), { cancelled: 'no', expired: 'no', cardColour: 'Gold', customerName: 'WEI ZHANG' }]);
+  ok('an UNREADABLE card beside an expired one is ERROR - it might be the current one',
+    unreadable.status === 'ERROR' && !unreadable.verified, unreadable.status);
+  const unreadableButCurrent = set([cur('Blue'), { cancelled: null, expired: null, customerName: 'WEI ZHANG' }]);
+  ok('a clearly current card is VALID even beside an unreadable one',
+    unreadableButCurrent.status === 'VALID', unreadableButCurrent.status);
+
+  const two = set([cur('Gold', 'A'), cur('Blue', 'B')]);
+  ok('cards naming DIFFERENT holders is ERROR, not a guess', two.status === 'ERROR', two.status);
   ok('  and picks neither', two.cardType === null && two.holderName === null, two);
-  ok('  saying why, in words an admin can act on', /more than one card/i.test(two.message), two.message);
+  ok('  saying why, in words an admin can act on', /different people/i.test(two.message), two.message);
+  ok('holder names differing only in case or spacing are ONE holder',
+    set([cur('Blue', 'Wei  Zhang'), exp('Blue', 'WEI ZHANG')]).status === 'VALID');
+
+  ok('a single card carries no note', set([cur('Blue')]).note === undefined);
+
+  const svc = read('services/cscs/cscsVerificationService.ts');
+  ok('the note reaches the audit log', /result\.note \?\? null/.test(svc));
+  const profile = read('app/api/worker/profile/route.ts');
+  ok('...and NOT the operative: the profile response is an allow-list without it',
+    /verification: verification\s*\?\s*\{[\s\S]*?message: verification\.message,[\s\S]*?\}/.test(profile) && !/note:/.test(profile));
 
   // Every CSCS colour resolves.
   for (const [colour, expected] of [

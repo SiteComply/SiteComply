@@ -396,12 +396,36 @@ export function mapV26CardResponse(
   }
 
   /*
-   * MORE THAN ONE CARD is not something this integration can resolve. We asked
-   * about one scheme, surname and serial; if the scheme returns several we do
-   * not know which one the worker is holding, and picking the first would be a
-   * guess with a competency record attached to it.
+   * SEVERAL CARDS, ONE HOLDER.
+   *
+   * CSCS returns every card held under the registration number and surname we
+   * asked about - a renewed card beside the one it replaced, or two card types
+   * held by the same person. The published test record alone returns more than
+   * one. Treating that as ERROR meant no such holder could EVER verify, which is
+   * why VALID had never been seen in production.
+   *
+   * THE RULE, the same one a person would apply holding the cards:
+   *   - VALID when at least one card is neither cancelled nor expired. A lapsed
+   *     old card does not make a current one less current.
+   *   - otherwise REVOKED if any card is cancelled (the graver fact), else
+   *     EXPIRED - but only when every card's flags were readable. A card we
+   *     cannot read might be the current one, so that is ERROR, never a verdict.
+   *   - cards naming DIFFERENT holders is not one person's set: ERROR. That is
+   *     not something to resolve by picking one.
+   *
+   * WHAT IS RECORDED from a VALID set comes from the CURRENT cards only. Their
+   * type is recorded when they agree; when two current cards disagree the
+   * operative's own declared type is left standing (null here) rather than
+   * guessed - card type is display only and grants no access anywhere.
    */
-  if (cards.length > 1) {
+  const holders = new Set(
+    cards
+      .map((c) => str(c.customerName))
+      .filter((n): n is string => Boolean(n))
+      .map((n) => n.replace(/\s+/g, ' ').trim().toLowerCase()),
+  );
+  const summary = cards.length > 1 ? describeCards(cards) : undefined;
+  if (holders.size > 1) {
     return {
       status: 'ERROR',
       verified: false,
@@ -413,12 +437,24 @@ export function mapV26CardResponse(
       holderName: null,
       qualifications: [],
       message:
-        'More than one card matched these details, so it is not clear which one to record. Contact the card scheme.',
+        'The cards found for these details name different people, so none has been recorded. Contact the card scheme.',
+      note: summary,
     };
   }
 
-  const card = cards[0] as V26Card;
-  const status = statusFromV26Flags(card);
+  const standings = cards.map((c) => statusFromV26Flags(c));
+  const current = cards.filter((_, i) => standings[i] === 'VALID');
+  const status: CscsVerificationStatus = current.length
+    ? 'VALID'
+    : standings.includes('ERROR')
+      ? 'ERROR'
+      : standings.includes('REVOKED')
+        ? 'REVOKED'
+        : 'EXPIRED';
+
+  const basis = current.length ? current : cards;
+  const types = new Set(basis.map((c) => mapCardType(c.cardColour)));
+  const cardType = types.size === 1 ? [...types][0] : null;
 
   return {
     status,
@@ -430,13 +466,29 @@ export function mapV26CardResponse(
     // No date is available in this contract. Null, not a guess - the worker's
     // own typed expiry is left standing rather than overwritten with nothing.
     expiry: null,
-    cardType: mapCardType(card.cardColour),
-    holderName: str(card.customerName),
+    cardType,
+    holderName: str(basis[0].customerName),
     // Not present in this contract. Empty, not absent, so callers do not have
     // to distinguish "no qualifications" from "we did not look".
     qualifications: [],
     message: messageForStatus(status, null),
+    note: summary,
   };
+}
+
+/**
+ * One line per card for the audit log - standing and colour, in the order
+ * returned. Never the name, the serial or the photo.
+ */
+export function describeCards(cards: V26Card[]): string {
+  const parts = cards.map((c) => {
+    const st = statusFromV26Flags(c);
+    const word =
+      st === 'VALID' ? 'current' : st === 'REVOKED' ? 'cancelled' : st === 'EXPIRED' ? 'expired' : 'unreadable';
+    const colour = str(c.cardColour);
+    return colour ? `${word} ${colour}` : word;
+  });
+  return `${cards.length} cards returned: ${parts.join('; ')}`;
 }
 
 export function mapSmartCheckResponse(

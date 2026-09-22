@@ -121,7 +121,13 @@ export async function verifyCscsCard(
       provider: provider.name,
       status: result.status,
       verified: result.verified,
-      errorReason: result.status === 'ERROR' ? result.message : null,
+      // ERROR keeps its reason; any other outcome may carry an audit note -
+      // e.g. which of several returned cards were current - so a result can be
+      // explained later without re-running it.
+      errorReason:
+        [result.status === 'ERROR' ? result.message : null, result.note ?? null]
+          .filter(Boolean)
+          .join(' | ') || null,
       durationMs: Date.now() - startedAt,
     });
     return result;

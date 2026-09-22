@@ -76,6 +76,11 @@ export interface CscsVerificationResult {
   checkedAt: Date;
   /** Short human-readable summary, safe to show the worker. */
   message: string;
+  /**
+   * For the audit log only, never shown to the operative: e.g. how many cards
+   * the scheme returned and the standing of each.
+   */
+  note?: string;
 }
 
 export interface CscsProvider {
