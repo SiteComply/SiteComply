@@ -8,6 +8,7 @@ import { getWorkerDocuments } from '@/services/workerDashboard/workerDashboardSe
 import {
   composeBriefing,
   type BriefingScreen,
+  type BriefingSource,
 } from '@/services/induction/inductionBriefing';
 
 const CPP_RISK_INDEX = new Map(CPP_RISK_TOPICS.map((m, i) => [m.key, i]));
@@ -21,6 +22,22 @@ const CPP_RISK_INDEX = new Map(CPP_RISK_TOPICS.map((m, i) => [m.key, i]));
  * The caller has already decided the operative may take this site's induction;
  * this function does not re-check access.
  */
+/**
+ * The site's briefing data, loaded once.
+ *
+ * SPLIT OUT so the induction VIDEO's scene rules read exactly the same source
+ * as the briefing an operative is shown. Two loaders would drift, and the video
+ * would eventually narrate something the induction screens do not say.
+ */
+export async function loadBriefingSource(
+  siteId: string,
+  siteName: string,
+  siteCompanyId: string | null = null,
+): Promise<BriefingSource | null> {
+  const built = await buildSource(siteId, siteName, siteCompanyId);
+  return built;
+}
+
 export async function getInductionBriefing(
   siteId: string,
   siteName: string,
@@ -30,6 +47,15 @@ export async function getInductionBriefing(
    */
   siteCompanyId: string | null = null,
 ): Promise<BriefingScreen[]> {
+  const src = await buildSource(siteId, siteName, siteCompanyId);
+  return src ? composeBriefing(src) : [];
+}
+
+async function buildSource(
+  siteId: string,
+  siteName: string,
+  siteCompanyId: string | null,
+): Promise<BriefingSource | null> {
   const [
     base,
     info,
@@ -69,7 +95,7 @@ export async function getInductionBriefing(
       select: { inductionContent: true },
     }),
   ]);
-  if (!base) return [];
+  if (!base) return null;
 
   // The plan's own order (L153 Appendix 3), not whatever order rows came back in.
   const riskOrder = (key: string) => {
@@ -77,7 +103,7 @@ export async function getInductionBriefing(
     return meta ? CPP_RISK_INDEX.get(meta.key) ?? 999 : 999;
   };
 
-  return composeBriefing({
+  return {
     siteId,
     siteName,
     address: base.address,
@@ -117,5 +143,5 @@ export async function getInductionBriefing(
       })),
     permitTypes: permitTypes.map((p) => p.name),
     ramsDocuments: rams.map((d) => ({ id: d.id, title: d.title })),
-  });
+  };
 }

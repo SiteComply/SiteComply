@@ -1,3 +1,4 @@
+import { runQueuedScriptJobs } from '@/services/inductionVideo/inductionVideoService';
 import { NextRequest, NextResponse } from 'next/server';
 import { SchedulerTrigger } from '@prisma/client';
 import { runScheduledGeneration } from '@/services/compliance/schedulerRunner';
@@ -45,10 +46,27 @@ async function POSTHandler(req: NextRequest) {
     manual ? SchedulerTrigger.MANUAL : SchedulerTrigger.TIMER,
   );
 
+  /*
+   * INDUCTION VIDEO JOBS ride the same tick.
+   *
+   * The platform has one background mechanism - this endpoint, called by the
+   * scheduler - so script generation drains its queue here rather than
+   * introducing a second worker to operate, secure and monitor. It is deliberately
+   * AFTER the compliance run and in its own try: a model outage must not stop
+   * compliance occurrences being created.
+   */
+  let scriptsGenerated = 0;
+  try {
+    scriptsGenerated = await runQueuedScriptJobs();
+  } catch {
+    // Already recorded against the job row; the tick itself still succeeded.
+  }
+
   // 200 even on a recorded failure: the timer should not retry-storm, and the
   // failure is already visible on the calendar's status line and in SchedulerRun.
   return NextResponse.json({
     ok: result.ok,
+    scriptsGenerated,
     runId: result.runId,
     sitesConsidered: result.sitesConsidered,
     occurrencesCreated: result.occurrencesCreated,

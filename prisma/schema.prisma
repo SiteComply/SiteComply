@@ -466,6 +466,7 @@ model JobSite {
   /// SC-023 — worker assignments to this site.
   workerAssignments   WorkerSiteAssignment[]
   companies           SiteCompany[]
+  inductionVideos     InductionVideo[]
   /// SC-023 Phase 2 — per-worker panel overrides on this site.
   workerPanelSettings WorkerPanelSetting[]
   /// SC-023 Phase 3 — competency and induction requirements for access.
@@ -3568,4 +3569,193 @@ model ErrorEvent {
   @@index([fingerprint])
   @@index([digest])
   @@index([portal, lastSeenAt])
+}
+
+/// ---------------------------------------------------------------------------
+/// INDUCTION VIDEOS — Phase 1: the script pipeline.
+///
+/// An induction video is BUILT FROM THE SITE'S OWN RECORDS, not written. A
+/// deterministic rules engine decides which scenes a site requires; the model is
+/// allowed to turn those verified facts into narration and nothing else. The
+/// stages after approval (narration, render, publication) are Phase 2 and 3, and
+/// the statuses they use exist here already so the workflow is one machine
+/// rather than two.
+/// ---------------------------------------------------------------------------
+
+enum InductionVideoStatus {
+  DRAFT //                 created, nothing generated yet
+  INFORMATION_REQUIRED //  the rules engine found required facts missing
+  SCRIPT_GENERATING //     a generation job is in flight (also the lock)
+  SCRIPT_READY //          a script exists and awaits review
+  SCRIPT_APPROVED //       approved; Phase 2 picks it up from here
+  VIDEO_GENERATING //      Phase 2
+  VIDEO_READY //           Phase 2
+  PUBLISHED //             Phase 2
+  GENERATION_FAILED //     the job failed; the error is on the job row
+}
+
+enum InductionVideoJobKind {
+  SCRIPT //     Phase 1
+  NARRATION //  Phase 2
+  RENDER //     Phase 2
+}
+
+enum InductionVideoJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+/// One version of a site's induction video.
+///
+/// SUPERSEDED VERSIONS ARE KEPT, by the owner's decision: a video an operative
+/// was inducted with is evidence, and deleting it would leave a signed induction
+/// pointing at nothing. A new version supersedes rather than overwrites.
+model InductionVideo {
+  id        String  @id @default(cuid())
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+
+  /// 1, 2, 3… per site. The highest is the current one.
+  version Int
+  status  InductionVideoStatus @default(DRAFT)
+
+  /// What the site's data said when this version was generated. A later change
+  /// to the site makes the version stale without rewriting what was approved.
+  sourceHash String?
+
+  /// The model's own account of what it was given, for the audit trail.
+  provider      String?
+  model         String?
+  promptVersion String?
+
+  generatedAt     DateTime?
+  generatedByName String?
+
+  approvedAt       DateTime?
+  approvedByUserId String?
+  approvedByName   String?
+
+  publishedAt     DateTime?
+  publishedByName String?
+
+  supersededAt DateTime?
+
+  /// Set when the rules engine blocked generation: which facts are missing.
+  blockingReasons Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  scenes InductionVideoScene[]
+  jobs   InductionVideoJob[]
+  events InductionVideoEvent[]
+
+  @@unique([jobSiteId, version])
+  @@index([jobSiteId, status])
+}
+
+/// One scene of one version: what it is, what it says, and where the facts came
+/// from. `sourceRefs` names the fields the narration was built from, so a
+/// reviewer can check a sentence against the record that produced it.
+model InductionVideoScene {
+  id      String         @id @default(cuid())
+  video   InductionVideo @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  videoId String
+
+  /// From the scene catalogue (WELCOME, ASBESTOS, EMERGENCY…).
+  sceneType String
+  order     Int
+  heading   String
+  narration String
+
+  /// Phase 2/3: which branded template renders this scene.
+  visualTemplate String?
+
+  /// Field paths the rules engine supplied, e.g. ["info.welfareFacilities"].
+  sourceRefs Json?
+
+  /// True when the rules engine REQUIRED this scene: it may not be deleted.
+  required Boolean @default(false)
+
+  /// Phase 2 fills these in.
+  audioBlobPath   String?
+  audioDurationMs Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([videoId, order])
+}
+
+/// A unit of background work. The existing scheduler drains this table; nothing
+/// long-running happens inside an HTTP request.
+model InductionVideoJob {
+  id      String         @id @default(cuid())
+  video   InductionVideo @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  videoId String
+
+  kind     InductionVideoJobKind
+  status   InductionVideoJobStatus @default(QUEUED)
+  attempts Int                     @default(0)
+
+  /// The provider's own id for this piece of work (Phase 2: render id).
+  providerJobId String?
+  error         String?
+
+  requestedByName String?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([videoId, createdAt])
+}
+
+/// Append-only history: generated, edited, approved, published, superseded.
+/// Denormalised names, like the access-history trail: an audit that disappears
+/// when a user is deleted is worthless exactly when it is needed.
+model InductionVideoEvent {
+  id      String         @id @default(cuid())
+  video   InductionVideo @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  videoId String
+
+  action    String
+  detail    String?
+  actorName String
+  createdAt DateTime @default(now())
+
+  @@index([videoId, createdAt])
+}
+
+/// What a generation cost, in the provider's own units.
+///
+/// Separate from AiSummary, which logs one product's summaries. This counts
+/// tokens, speech characters and render seconds for anything the video pipeline
+/// spends, so a site's induction video has a traceable cost.
+model AiUsageEvent {
+  id String @id @default(cuid())
+
+  jobSiteId String?
+  videoId   String?
+
+  /// 'script' | 'narration' | 'render'
+  purpose  String
+  provider String
+  model    String?
+
+  tokensPrompt   Int?
+  tokensOutput   Int?
+  speechChars    Int?
+  renderSeconds  Int?
+  /// Estimated pence, from the rates configured at the time.
+  estimatedPence Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([jobSiteId, createdAt])
+  @@index([purpose, createdAt])
 }
