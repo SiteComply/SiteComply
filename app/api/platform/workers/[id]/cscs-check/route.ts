@@ -6,6 +6,7 @@ import { verifyCscsCard } from '@/services/cscs/cscsVerificationService';
 import { SmartCheckCscsProvider } from '@/services/cscs/smartCheckProvider';
 import { getCscsRuntimeConfig } from '@/services/cscs/cscsConfigService';
 import { isCscsExemptMobile } from '@/services/cscs/cscsExemptAccounts';
+import { isKnownScheme } from '@/services/cscs/schemes';
 import { withClosedProjectHandling } from '@/lib/routeErrors';
 import { getWorkerDetailForViewer } from '@/services/workers/workerDetailService';
 
@@ -100,7 +101,9 @@ async function POSTHandler(
   const missing = [
     worker.cscsCardNumber ? null : 'card number',
     worker.surname ? null : 'surname',
-    worker.cscsSchemeId ? null : 'card scheme',
+    // The sentinel is an answer, not a scheme: "my scheme is not listed" leaves
+    // nothing to ask CSCS about, exactly like no scheme at all.
+    isKnownScheme(worker.cscsSchemeId) ? null : 'card scheme',
   ].filter((m): m is string => m !== null);
   if (missing.length) {
     return NextResponse.json({

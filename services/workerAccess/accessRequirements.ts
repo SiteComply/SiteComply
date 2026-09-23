@@ -1,5 +1,6 @@
 import { AccessRequirement } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { isKnownScheme } from '@/services/cscs/schemes';
 import { isCscsExemptMobile } from '@/services/cscs/cscsExemptAccounts';
 import { formatDateUK } from '@/lib/datetime';
 import { getInductionValidity } from '@/services/induction/inductionValidityService';
@@ -103,6 +104,13 @@ export interface UnmetRequirement {
 export function cscsRefusalAction(
   status: string | null | undefined,
   hasCard: boolean,
+  /**
+   * Whether the card's scheme is one Smart Check can be asked about. False
+   * when the operative answered "my scheme is not listed": telling them to go
+   * back and confirm their scheme would send them round a loop with no correct
+   * answer at the end of it. It is the site manager's call instead.
+   */
+  schemeKnown = true,
 ): string {
   switch ((status ?? '').toUpperCase()) {
     case 'REVOKED':
@@ -114,6 +122,9 @@ export function cscsRefusalAction(
     case 'ERROR':
       return 'Your card could not be checked just now. Try again in a few minutes, or ask your site manager.';
     default:
+      if (hasCard && !schemeKnown) {
+        return 'Your card scheme is not one we can check automatically yet. Ask your site manager to confirm your card.';
+      }
       return hasCard
         ? 'Your CSCS card has not been verified yet. Open Your Details to confirm your surname and card scheme, then save.'
         : 'No CSCS card is recorded for you. Add your card details in Your Details.';
@@ -150,6 +161,7 @@ export async function evaluateRequirements(
         cscsVerified: true,
         cscsExpiry: true,
         cscsCardNumber: true,
+        cscsSchemeId: true,
         cscsVerificationStatus: true,
         // Only to honour the exempt allow-list. Nothing else reads it here.
         mobile: true,
@@ -215,6 +227,7 @@ export async function evaluateRequirements(
             action: cscsRefusalAction(
               worker.cscsVerificationStatus,
               Boolean(worker.cscsCardNumber),
+              isKnownScheme(worker.cscsSchemeId),
             ),
           });
         }

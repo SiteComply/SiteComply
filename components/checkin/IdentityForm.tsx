@@ -10,6 +10,7 @@ import {
   CSCS_SCHEMES,
   schemesAreUsable,
   SCHEME_LIST_EXHAUSTIVE,
+  SCHEME_NOT_LISTED,
 } from '@/services/cscs/schemes';
 import { firstNameRepeatsSurname } from '@/services/workers/workerName';
 
@@ -219,7 +220,15 @@ export function IdentityForm({
         setVerification(v);
         setSaved(true);
         if (v.verified) toast.success('CSCS card verified.');
-        else toast.error(v.message ?? 'Card could not be verified.');
+        else if (v.status === 'UNVERIFIED') {
+          /*
+           * NOT A FAILURE. "Your scheme is not one we can check automatically"
+           * and "checking is switched off" are normal outcomes for a card that
+           * was accepted and stored. In danger-red they read as a rejection at
+           * the gate, which is what the operative is anxious about.
+           */
+          toast.success(v.message ?? 'Card details recorded.');
+        } else toast.error(v.message ?? 'Card could not be verified.');
         return; // let the worker see the Smart Check result before continuing
       }
 
@@ -384,14 +393,24 @@ export function IdentityForm({
                       {scheme.name}
                     </option>
                   ))}
+                  {/* The list holds 17 of the 38 CSCS Alliance schemes, so a
+                      holder of one of the others - ECS among them - needs an
+                      answer that is true. Without it they picked a scheme that
+                      did not issue their card and were told it was not found. */}
+                  {!SCHEME_LIST_EXHAUSTIVE && (
+                    <option value={SCHEME_NOT_LISTED}>
+                      My scheme is not listed
+                    </option>
+                  )}
                 </select>
                 <p className="text-xs text-ink-subtle">
                   The scheme that issued your card. Needed to check it against
                   CSCS.{' '}
                   {!SCHEME_LIST_EXHAUSTIVE && (
                     <>
-                      If yours is not listed, leave this blank — your card is
-                      still recorded, it just will not be checked automatically.
+                      If yours is not listed, choose “My scheme is not listed” —
+                      your card is still recorded, it just will not be checked
+                      automatically.
                     </>
                   )}
                 </p>
@@ -461,9 +480,11 @@ export function IdentityForm({
                   operative, including while the mock provider was active and
                   checking nothing. */}
               <p className="text-xs text-ink-subtle">
-                {verificationLive
-                  ? 'We’ll verify your card against the CSCS Smart Check service.'
-                  : 'Your card details are recorded with your check-in. Automatic CSCS checking is not switched on yet.'}
+                {form.cscsSchemeId === SCHEME_NOT_LISTED
+                  ? 'Your card is recorded with your check-in. We cannot check this scheme automatically, so your site manager will confirm it.'
+                  : verificationLive
+                    ? 'We’ll verify your card against the CSCS Smart Check service.'
+                    : 'Your card details are recorded with your check-in. Automatic CSCS checking is not switched on yet.'}
               </p>
             </div>
 

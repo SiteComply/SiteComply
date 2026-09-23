@@ -18,7 +18,11 @@ import {
   CARD_IMAGE_MAX_BYTES,
 } from '@/services/cscs/cardImageStorage';
 import { withClosedProjectHandling } from '@/lib/routeErrors';
-import { isKnownScheme } from '@/services/cscs/schemes';
+import {
+  isKnownScheme,
+  isSchemeNotListed,
+  SCHEME_NOT_LISTED,
+} from '@/services/cscs/schemes';
 import { composeFullName } from '@/services/workers/workerName';
 
 export const runtime = 'nodejs';
@@ -148,8 +152,12 @@ async function POSTHandler(req: NextRequest) {
    * well as in the form: the form can be bypassed, and this is the boundary that
    * decides what gets stored.
    */
+  const schemeNotListed = isSchemeNotListed(fields.cscsSchemeId);
   if (fields.cscsCardNumber.trim()) {
-    if (!isKnownScheme(fields.cscsSchemeId)) {
+    // A known scheme, or the explicit "not listed" answer. Still not blank:
+    // the operative has to say which, because "not listed" is a statement about
+    // their card and silence is not.
+    if (!isKnownScheme(fields.cscsSchemeId) && !schemeNotListed) {
       return bad('Please choose the scheme that issued your card.');
     }
   }
@@ -199,7 +207,13 @@ async function POSTHandler(req: NextRequest) {
    * operative reads as a rejected card. Silently ignoring it leaves the worker
    * unverified, which is the honest outcome for a value we do not recognise.
    */
-  const schemeId = isKnownScheme(fields.cscsSchemeId) ? fields.cscsSchemeId : '';
+  // A known scheme, or the operative's "not listed" answer, or nothing. The
+  // sentinel is stored but never sent: the lookup is skipped for it.
+  const schemeId = isKnownScheme(fields.cscsSchemeId)
+    ? fields.cscsSchemeId
+    : schemeNotListed
+      ? SCHEME_NOT_LISTED
+      : '';
 
   // Verify against CSCS Smart Check when we have a usable card number.
   let verification: CscsVerificationResult | null = null;
@@ -215,7 +229,9 @@ async function POSTHandler(req: NextRequest) {
       // rather than improvising one, which is what keeps a missing surname from
       // being reported to an operative as a rejected card.
       surname: fields.surname?.trim() || null,
-      schemeId: schemeId || null,
+      schemeId: isKnownScheme(schemeId) ? schemeId : null,
+      // Said plainly by the operative: no lookup is possible, so none is made.
+      schemeNotListed,
       holderName: fullName,
       cardTypeHint: cscsCardType,
       expiryHint: cscsExpiry,

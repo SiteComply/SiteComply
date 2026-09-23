@@ -71,6 +71,27 @@ export function schemesAreUsable(): boolean {
   return CSCS_SCHEMES.length > 1;
 }
 
+/**
+ * The operative's answer when their scheme is not on the list.
+ *
+ * A DELIBERATE ANSWER, not a blank. The list holds 17 of the 38 CSCS Alliance
+ * schemes, so a holder of one of the other 21 - ECS among them - has no correct
+ * option. Requiring a choice from the list forced them to name a scheme that
+ * did not issue their card, and the lookup then answered "no matching card":
+ * a valid card reported as a bad one, and a wrong scheme stored against them.
+ *
+ * Chosen here, the card is recorded and honestly left unverified until the
+ * scheme can be checked. STORED, so the record keeps the difference between
+ * "told us their scheme is not on the list" and "has not answered yet": the
+ * first is nothing the operative can fix, the second is. Never sent to Smart
+ * Check - every lookup path asks isKnownScheme first.
+ */
+export const SCHEME_NOT_LISTED = 'NOT_LISTED';
+
+export function isSchemeNotListed(id: string | null | undefined): boolean {
+  return (id ?? '').trim().toUpperCase() === SCHEME_NOT_LISTED;
+}
+
 /** Look one up. Returns undefined for an id we do not know. */
 export function schemeById(id: string | null | undefined): CscsScheme | undefined {
   if (!id) return undefined;

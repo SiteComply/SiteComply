@@ -12,7 +12,7 @@ import {
 import { permits } from '@/services/platformUsers/platformPermissions';
 import { getWorkerDetailForViewer } from '@/services/workers/workerDetailService';
 import { CSCS_CARD_LABELS, cscsVerificationLabel } from '@/lib/cscs';
-import { schemeById } from '@/services/cscs/schemes';
+import { isKnownScheme, isSchemeNotListed, schemeById } from '@/services/cscs/schemes';
 import { ManualCheckOutNote } from '@/components/platform/ManualCheckOutNote';
 import { CscsCheckNowButton } from '@/components/platform/CscsCheckNowButton';
 
@@ -224,18 +224,31 @@ export default async function WorkerDetailPage({
                   <Detail
                     label="Card scheme"
                     value={
-                      schemeById(worker.cscsSchemeId)?.name ??
-                      worker.cscsSchemeId ??
-                      'Not provided'
+                      isSchemeNotListed(worker.cscsSchemeId)
+                        ? 'Not listed — the operative says their scheme is not one we offer'
+                        : (schemeById(worker.cscsSchemeId)?.name ??
+                          worker.cscsSchemeId ??
+                          'Not provided')
                     }
                   />
-                  {(!worker.surname || !worker.cscsSchemeId) && (
+                  {isSchemeNotListed(worker.cscsSchemeId) ? (
+                    /* Nothing for the operative to supply: their scheme is not
+                       one of the seventeen SiteComply can ask CSCS about, so
+                       this card can only be confirmed by looking at it. */
                     <div className="rounded-lg bg-surface-sunken px-3 py-2 text-xs text-ink-muted">
-                      CSCS Smart Check needs the scheme, surname and card number
-                      together. This card cannot be checked until the operative
-                      supplies the missing details — they are asked on their
-                      next check-in.
+                      This operative says their card scheme is not one we can
+                      check automatically. The card cannot be verified with CSCS
+                      Smart Check — confirm the physical card instead.
                     </div>
+                  ) : (
+                    (!worker.surname || !isKnownScheme(worker.cscsSchemeId)) && (
+                      <div className="rounded-lg bg-surface-sunken px-3 py-2 text-xs text-ink-muted">
+                        CSCS Smart Check needs the scheme, surname and card
+                        number together. This card cannot be checked until the
+                        operative supplies the missing details — they are asked
+                        on their next check-in.
+                      </div>
+                    )
                   )}
                 </>
               )}

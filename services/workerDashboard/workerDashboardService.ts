@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { DocumentCategory } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { isKnownScheme } from '@/services/cscs/schemes';
 import {
   needsCscsRemediation,
   remediationHeading,
@@ -220,6 +221,7 @@ export async function getWorkerContext(): Promise<WorkerContext | null> {
         action: cscsRefusalAction(
           worker.cscsVerificationStatus,
           Boolean(worker.cscsCardNumber),
+          isKnownScheme(worker.cscsSchemeId),
         ),
         dismissKey: remediationDismissKey(
           worker.id,

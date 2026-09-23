@@ -15,6 +15,7 @@
  * operative sees should be switchable off in a minute, not a release.
  */
 import { isCscsExemptMobile } from './cscsExemptAccounts';
+import { isSchemeNotListed } from '@/services/cscs/schemes';
 
 /** Whether the remediation prompt is switched on at all. */
 export function remediationIsEnabled(): boolean {
@@ -24,6 +25,8 @@ export function remediationIsEnabled(): boolean {
 export interface RemediationSubject {
   mobile?: string | null;
   cscsCardNumber?: string | null;
+  /** SCHEME_NOT_LISTED when the operative said theirs is not on the list. */
+  cscsSchemeId?: string | null;
   cscsVerificationStatus?: string | null;
 }
 
@@ -49,6 +52,15 @@ export function needsCscsRemediation(worker: RemediationSubject): boolean {
   if (!remediationIsEnabled()) return false;
   if (isCscsExemptMobile(worker.mobile)) return false;
   if (!worker.cscsCardNumber?.trim()) return false;
+  /*
+   * "MY SCHEME IS NOT LISTED" is not the operative's to fix. None of the
+   * seventeen issued their card; prompting them to review their details would
+   * loop on a question with no right answer, the same reason ERROR is not
+   * prompted below. An operative who simply has not answered yet IS prompted -
+   * that one they can fix - which is why the answer is stored rather than left
+   * as an empty scheme.
+   */
+  if (isSchemeNotListed(worker.cscsSchemeId)) return false;
 
   switch ((worker.cscsVerificationStatus ?? '').toUpperCase()) {
     case 'REVOKED':

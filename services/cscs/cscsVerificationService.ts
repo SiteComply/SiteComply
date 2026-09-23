@@ -79,10 +79,40 @@ export async function verifyCscsCard(
      * discarding it would leave the screen disagreeing with the audit log.
      */
     providerOverride?: CscsProvider;
+    /**
+     * The operative answered "my scheme is not listed". No lookup is possible -
+     * Smart Check identifies a card by SCHEME + surname + number - so none is
+     * attempted, and saying so is the honest outcome. Recorded like any other
+     * attempt so the audit log shows why this card is unverified.
+     */
+    schemeNotListed?: boolean;
   },
 ): Promise<CscsVerificationResult> {
   const startedAt = Date.now();
   const config = await getCscsRuntimeConfig();
+
+  if (input.schemeNotListed) {
+    const result: CscsVerificationResult = {
+      status: 'UNVERIFIED',
+      verified: false,
+      scheme: null,
+      providerName: config.providerId,
+      checkedAt: new Date(),
+      message:
+        'Your card scheme is not one we can check automatically yet, so your card has been recorded but not verified. Your site manager can confirm it.',
+    };
+    await log({
+      workerId: input.workerId,
+      cardNumber: input.cardNumber,
+      scheme: null,
+      provider: config.providerId,
+      status: result.status,
+      verified: false,
+      errorReason: 'scheme not listed - no lookup attempted',
+      durationMs: Date.now() - startedAt,
+    });
+    return result;
+  }
 
   // The master switch. Distinct from a provider that is configured but failing:
   // this says no check was attempted, which is what UNVERIFIED means.
