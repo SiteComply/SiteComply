@@ -62,6 +62,7 @@ suite() {  # suite <script> <pattern>
   echo "$out" | grep -qE "$2" || { echo "$out" | tail -15; fail "$1 has failures"; }
   echo "  ok   $1: $(echo "$out" | grep -oE '[0-9]+ passed, 0 failed' | tail -1)"
 }
+suite rams_company_verify       "== [0-9]+ passed, 0 failed =="
 suite accesswindow_visibility_verify "== [0-9]+ passed, 0 failed =="
 suite cscs_scheme_notlisted_verify "== [0-9]+ passed, 0 failed =="
 suite cscs_remediation_verify   ", 0 failed"
