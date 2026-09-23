@@ -9,6 +9,7 @@ import { canWorkerCheckIn } from '@/services/workerAccess/workerAssignmentServic
 import { getInductionSignatureRequired } from '@/services/inductionSignature/signatureService';
 import type { FlowItem } from '@/services/checklists/inductionFlow';
 import { getInductionBriefing } from '@/services/induction/inductionBriefingService';
+import { companyForAssignment } from '@/services/companies/siteCompanyService';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,11 +49,14 @@ export default async function InductionPage({
   }));
 
   // SC-011: does this site require a digital signature to complete the induction?
+  // Their employer on this project: the briefing links their company's RAMS and
+  // anything site-wide, never another contractor's.
+  const siteCompany = await companyForAssignment(worker.id, site.id);
   const [signatureRequired, briefing] = await Promise.all([
     getInductionSignatureRequired(site.id),
     // The site briefing, shown before the acknowledgements that refer to it.
     // Built only from data already held; nothing new is asked of the manager.
-    getInductionBriefing(site.id, site.name),
+    getInductionBriefing(site.id, site.name, siteCompany?.id ?? null),
   ]);
 
   return (

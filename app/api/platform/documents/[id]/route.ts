@@ -41,7 +41,7 @@ async function PATCHHandler(
     return NextResponse.json({ ok: false, error: 'Invalid request.' }, { status: 400 });
   }
 
-  const result = validateDocumentMeta(body, viewer);
+  const result = await validateDocumentMeta(body, viewer);
   if (!result.ok) {
     return NextResponse.json({ ok: false, errors: result.errors }, { status: 400 });
   }

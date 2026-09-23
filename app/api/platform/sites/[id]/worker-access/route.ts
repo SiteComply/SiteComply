@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * PATCH /api/platform/sites/[id]/worker-access
- *   { action: 'invite', mobile, firstName, surname, company }
+ *   { action: 'invite', mobile, firstName, surname, company, siteCompanyId }
  *   { action: 'approve' | 'suspend' | 'reinstate' | 'remove', assignmentId }
  *   { action: 'setDetails', assignmentId, startDate?, endDate? }
  *   { action: 'transfer', assignmentId, toSiteId }
@@ -72,6 +72,7 @@ async function PATCHHandler(
         mobile: String(body.mobile ?? ''),
         firstName: String(body.firstName ?? ''),
         surname: String(body.surname ?? ''),
+        siteCompanyId: body.siteCompanyId ? String(body.siteCompanyId) : null,
         company: String(body.company ?? ''),
       });
       break;

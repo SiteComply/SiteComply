@@ -44,9 +44,14 @@ export default async function WorkerDashboardPage() {
     openCheckIns,
     activeSiteId,
     cscsRemediation,
+    siteCompany,
   } = await requireWorkerContext();
 
-  const counts = await getWorkerDashboardCounts(site.id, worker.id);
+  const counts = await getWorkerDashboardCounts(
+    site.id,
+    worker.id,
+    siteCompany?.id ?? null,
+  );
 
   // SC-010: this week's attendance at a glance (across all the worker's sites).
   const weekAttendance = summarise(

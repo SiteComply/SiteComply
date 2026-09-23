@@ -24,6 +24,11 @@ const CPP_RISK_INDEX = new Map(CPP_RISK_TOPICS.map((m, i) => [m.key, i]));
 export async function getInductionBriefing(
   siteId: string,
   siteName: string,
+  /**
+   * The company the operative is engaged by on this project. Their RAMS are
+   * their own plus anything site-wide; null shows site-wide only.
+   */
+  siteCompanyId: string | null = null,
 ): Promise<BriefingScreen[]> {
   const [
     base,
@@ -58,7 +63,7 @@ export async function getInductionBriefing(
     }),
     resolveArrangements(siteId),
     listActivePermitTypes(siteId),
-    getWorkerDocuments(siteId, { category: DocumentCategory.RAMS }),
+    getWorkerDocuments(siteId, { category: DocumentCategory.RAMS, siteCompanyId }),
     prisma.jobSite.findUnique({
       where: { id: siteId },
       select: { inductionContent: true },

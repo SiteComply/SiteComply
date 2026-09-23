@@ -202,7 +202,9 @@ async function main() {
 
   console.log('\n[4] The page and wizard use it');
   const page = readFileSync('app/check-in/site/[siteId]/induction/page.tsx', 'utf8');
-  ok('the induction page loads the briefing', /getInductionBriefing\(site\.id, site\.name\)/.test(page));
+  ok('the induction page loads the briefing, for THIS operative\'s company',
+    /getInductionBriefing\(site\.id, site\.name, siteCompany\?\.id \?\? null\)/.test(page),
+    'briefing not company-scoped');
   ok('  and passes it to the wizard', /briefing=\{briefing\}/.test(page));
   const wiz = readFileSync('components/checkin/InductionWizard.tsx', 'utf8');
   ok('the wizard builds its steps WITH the briefing', /buildInductionSteps\(items, briefing\)/.test(wiz));

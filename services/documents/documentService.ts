@@ -38,6 +38,11 @@ export interface DocumentMetaInput {
   jobSiteId?: string;
   /** Optional expiry as a yyyy-mm-dd date string (empty = no expiry). */
   expiresAt?: string;
+  /**
+   * Which company this document belongs to. Empty means it applies to EVERYONE
+   * on site, which is the default and what every existing document is.
+   */
+  siteCompanyId?: string;
 }
 
 export interface ValidatedDocumentMeta {
@@ -46,6 +51,8 @@ export interface ValidatedDocumentMeta {
   category: DocumentCategory;
   jobSiteId: string;
   expiresAt: Date | null;
+  /** Null = applies to everyone on site. See documentVisibility.ts. */
+  siteCompanyId: string | null;
 }
 
 export type DocumentFieldErrors = Partial<
@@ -57,12 +64,13 @@ export type DocumentFieldErrors = Partial<
  * site the viewer can access, so a user cannot file a document to a site they
  * don't have.
  */
-export function validateDocumentMeta(
+export async function validateDocumentMeta(
   input: DocumentMetaInput,
   viewer: PlatformViewer,
-):
+): Promise<
   | { ok: true; value: ValidatedDocumentMeta }
-  | { ok: false; errors: DocumentFieldErrors } {
+  | { ok: false; errors: DocumentFieldErrors }>
+{
   const errors: DocumentFieldErrors = {};
   const text = (v?: string) => (v ?? '').trim();
 
@@ -98,6 +106,20 @@ export function validateDocumentMeta(
     }
   }
 
+  /*
+   * The company must belong to the SITE this document is being filed against -
+   * otherwise a document could be owned by a company on another project, and
+   * nobody on either site would see it.
+   */
+  const siteCompanyId = text(input.siteCompanyId) || null;
+  if (siteCompanyId && jobSiteId) {
+    const company = await prisma.siteCompany.findFirst({
+      where: { id: siteCompanyId, jobSiteId },
+      select: { id: true },
+    });
+    if (!company) errors.siteCompanyId = 'That company is not on this project.';
+  }
+
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return {
     ok: true,
@@ -107,6 +129,7 @@ export function validateDocumentMeta(
       category: category as DocumentCategory,
       jobSiteId,
       expiresAt,
+      siteCompanyId,
     },
   };
 }
@@ -302,6 +325,19 @@ export async function createDocument(
         category: meta.category,
         jobSiteId: meta.jobSiteId,
         expiresAt: meta.expiresAt,
+        /*
+         * AN ANNOTATED COPY INHERITS ITS ORIGINAL'S OWNER. The copy supersedes
+         * the original and the pair collapses to one row, so taking the form's
+         * value here would quietly turn a company's marked-up RAMS site-wide.
+         */
+        siteCompanyId: annotation?.originalDocumentId
+          ? ((
+              await prisma.document.findUnique({
+                where: { id: annotation.originalDocumentId },
+                select: { siteCompanyId: true },
+              })
+            )?.siteCompanyId ?? meta.siteCompanyId)
+          : meta.siteCompanyId,
         fileName: file.fileName,
         mimeType: file.mimeType,
         sizeBytes: file.size,
@@ -345,6 +381,9 @@ export async function updateDocument(
       category: meta.category,
       jobSiteId: meta.jobSiteId,
       expiresAt: meta.expiresAt,
+      // Re-filing a document under a company - or back to site-wide - is a
+      // deliberate edit like any other field here.
+      siteCompanyId: meta.siteCompanyId,
     },
     select: { id: true },
   });

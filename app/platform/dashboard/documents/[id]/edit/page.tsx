@@ -66,6 +66,9 @@ export default async function EditDocumentPage({
           description: doc.description ?? '',
           category: doc.category,
           jobSiteId: doc.jobSiteId,
+          // Blank = everyone on site, which is how every document filed before
+          // company ownership existed still behaves.
+          siteCompanyId: doc.siteCompanyId ?? '',
           // Pre-fill the date input in yyyy-mm-dd (UTC) form.
           expiresAt: doc.expiresAt ? doc.expiresAt.toISOString().slice(0, 10) : '',
         }}

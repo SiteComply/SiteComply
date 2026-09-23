@@ -465,6 +465,7 @@ model JobSite {
 
   /// SC-023 — worker assignments to this site.
   workerAssignments   WorkerSiteAssignment[]
+  companies           SiteCompany[]
   /// SC-023 Phase 2 — per-worker panel overrides on this site.
   workerPanelSettings WorkerPanelSetting[]
   /// SC-023 Phase 3 — competency and induction requirements for access.
@@ -899,6 +900,14 @@ model Document {
 
   // SC-017 photo annotation. The ORIGINAL upload is never overwritten: an
   // annotated copy is stored as its own row linked back here, so an audit record
+  /// Who this document belongs to. NULL means it applies to everyone on site -
+  /// site rules, site-wide RAMS, anything issued by the principal contractor.
+  ///
+  /// Set, it reaches only operatives engaged by that company. Restrict on
+  /// delete: a company holding documents cannot be removed from under them.
+  siteCompany   SiteCompany? @relation(fields: [siteCompanyId], references: [id], onDelete: Restrict)
+  siteCompanyId String?
+
   // always retains what the camera actually captured.
   annotated          Boolean @default(false)
   originalDocumentId String?
@@ -2737,6 +2746,35 @@ enum WorkerSiteRole {
 ///
 /// The missing spine: before this, a worker's relationship to a site was merely
 /// "they checked in once", so there was nothing for an invitation, approval or
+/// A company working on one project — the employer an operative is engaged by
+/// HERE, and the owner of the RAMS that company brings.
+///
+/// PER PROJECT, not global. The same firm on two projects is two rows, so one
+/// project's tidying can never rewrite another's roster. Names are compared
+/// case- and spacing-insensitively for uniqueness (a unique index on the
+/// normalised name, in the migration) but are STORED as typed: "RS Electrical"
+/// is the company's own name, not ours to re-case.
+///
+/// NEVER MERGED AUTOMATICALLY. "RS Elec - Test" and "RS Electrical" may be one
+/// firm or two, and only a person on that project knows. They are created as
+/// separate companies and merged deliberately, or not at all.
+model SiteCompany {
+  id        String  @id @default(cuid())
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+  name      String
+
+  createdByUserId String?
+  createdByName   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  assignments WorkerSiteAssignment[]
+  documents   Document[]
+
+  @@index([jobSiteId])
+}
+
 /// suspension to attach to.
 model WorkerSiteAssignment {
   id        String  @id @default(cuid())
@@ -2782,6 +2820,16 @@ model WorkerSiteAssignment {
   /// assignments have no known role and defaulting would assert something
   /// untrue about real people.
   role WorkerSiteRole?
+
+  /// The company this operative is engaged by ON THIS PROJECT.
+  ///
+  /// On the assignment rather than the Worker: agency and subcontract operatives
+  /// legitimately appear under different employers on different projects. It is
+  /// also what decides which RAMS they are shown, so it is set by a manager from
+  /// the project's company list - never typed by the operative, who must not be
+  /// able to change which safety documents reach them.
+  siteCompany   SiteCompany? @relation(fields: [siteCompanyId], references: [id], onDelete: Restrict)
+  siteCompanyId String?
 
   /// SC-023 Phase 2 — the access window. NULL means unrestricted, so existing
   /// assignments are unaffected.

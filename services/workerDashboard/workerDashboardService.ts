@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { DocumentCategory } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { documentCompanyWhere } from '@/services/documents/documentVisibility';
 import { isKnownScheme } from '@/services/cscs/schemes';
 import {
   needsCscsRemediation,
@@ -43,6 +44,15 @@ export interface WorkerCheckIn {
 
 export interface WorkerContext {
   worker: { id: string; fullName: string; company: string };
+  /**
+   * The company this operative is engaged by ON THIS PROJECT, from their
+   * assignment - not the company they typed on their details screen.
+   *
+   * Resolved once here because three screens need it to decide which documents
+   * to show, and an operative must see the same list on each. Null means no
+   * company is recorded, which shows site-wide documents only.
+   */
+  siteCompany: { id: string; name: string } | null;
   /**
    * Set when this operative should be asked to review their card details.
    *
@@ -230,12 +240,18 @@ export async function getWorkerContext(): Promise<WorkerContext | null> {
       }
     : undefined;
 
+  const assignment = await prisma.workerSiteAssignment.findUnique({
+    where: { workerId_jobSiteId: { workerId: worker.id, jobSiteId: active.jobSiteId } },
+    select: { siteCompany: { select: { id: true, name: true } } },
+  });
+
   return {
     worker: {
       id: worker.id,
       fullName: worker.fullName,
       company: worker.company,
     },
+    siteCompany: assignment?.siteCompany ?? null,
     cscsRemediation,
     submission: {
       id: active.id,
@@ -318,6 +334,8 @@ export interface WorkerDashboardCounts {
 export async function getWorkerDashboardCounts(
   siteId: string,
   workerId: string,
+  /** The operative's company on this project; null shows site-wide only. */
+  siteCompanyId: string | null = null,
 ): Promise<WorkerDashboardCounts> {
   const [
     unreadBulletins,
@@ -332,8 +350,8 @@ export async function getWorkerDashboardCounts(
       where: { jobSiteId: siteId, active: true, reads: { none: { workerId } } },
     }),
     prisma.siteBulletin.count({ where: { jobSiteId: siteId, active: true } }),
-    countWorkerDocuments(siteId, { category: DocumentCategory.RAMS }),
-    countWorkerDocuments(siteId, { excludeRams: true }),
+    countWorkerDocuments(siteId, { category: DocumentCategory.RAMS, siteCompanyId }),
+    countWorkerDocuments(siteId, { excludeRams: true, siteCompanyId }),
     prisma.action.count({
       where: { jobSiteId: siteId, status: { in: ['OPEN', 'IN_PROGRESS'] } },
     }),
@@ -430,13 +448,23 @@ function pairAnnotated<T extends { id: string; annotated: boolean; originalDocum
  */
 export async function getWorkerDocuments(
   siteId: string,
-  opts: { category?: DocumentCategory; excludeRams?: boolean } = {},
+  opts: {
+    category?: DocumentCategory;
+    excludeRams?: boolean;
+    /**
+     * The company the operative is engaged by ON THIS PROJECT. Omitted or null,
+     * they are shown site-wide documents only - the safe answer, and what an
+     * operative with no company recorded gets. See documentVisibility.ts.
+     */
+    siteCompanyId?: string | null;
+  } = {},
 ): Promise<WorkerDocument[]> {
   const rows = await prisma.document.findMany({
     where: {
       jobSiteId: siteId,
       ...(opts.category ? { category: opts.category } : {}),
       ...(opts.excludeRams ? { category: { not: DocumentCategory.RAMS } } : {}),
+      ...documentCompanyWhere(opts.siteCompanyId),
     },
     orderBy: [{ category: 'asc' }, { createdAt: 'desc' }],
     select: {
@@ -469,13 +497,19 @@ export async function getWorkerDocuments(
  */
 export async function countWorkerDocuments(
   siteId: string,
-  opts: { category?: DocumentCategory; excludeRams?: boolean } = {},
+  opts: {
+    category?: DocumentCategory;
+    excludeRams?: boolean;
+    /** As getWorkerDocuments: null means site-wide only. */
+    siteCompanyId?: string | null;
+  } = {},
 ): Promise<number> {
   const rows = await prisma.document.findMany({
     where: {
       jobSiteId: siteId,
       ...(opts.category ? { category: opts.category } : {}),
       ...(opts.excludeRams ? { category: { not: DocumentCategory.RAMS } } : {}),
+      ...documentCompanyWhere(opts.siteCompanyId),
     },
     select: { id: true, annotated: true, originalDocumentId: true },
   });

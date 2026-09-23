@@ -23,12 +23,16 @@ export default async function WorkerDocumentsPage() {
     openCheckIns,
     activeSiteId,
     cscsRemediation,
+    siteCompany,
   } = await requireWorkerContext();
   if (!panels.SITE_DOCUMENTS) redirect('/worker/dashboard');
 
   const [unread, documents] = await Promise.all([
     countUnreadBulletinsForWorker(site.id, worker.id),
-    getWorkerDocuments(site.id, { excludeRams: true }),
+    getWorkerDocuments(site.id, {
+      excludeRams: true,
+      siteCompanyId: siteCompany?.id ?? null,
+    }),
   ]);
 
   return (

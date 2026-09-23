@@ -3,6 +3,7 @@ import { DocumentCategory } from '@prisma/client';
 import { WorkerShell } from '@/components/worker/WorkerShell';
 import { WorkerPageHeader } from '@/components/worker/PanelCard';
 import { WorkerDocumentList } from '@/components/worker/WorkerDocumentList';
+import { documentScopeNote } from '@/services/documents/documentVisibility';
 import { countUnreadBulletinsForWorker } from '@/services/bulletins/bulletinService';
 import {
   requireWorkerContext,
@@ -21,12 +22,18 @@ export default async function WorkerRamsPage() {
     openCheckIns,
     activeSiteId,
     cscsRemediation,
+    siteCompany,
   } = await requireWorkerContext();
   if (!panels.RAMS) redirect('/worker/dashboard');
 
   const [unread, documents] = await Promise.all([
     countUnreadBulletinsForWorker(site.id, worker.id),
-    getWorkerDocuments(site.id, { category: DocumentCategory.RAMS }),
+    getWorkerDocuments(site.id, {
+      category: DocumentCategory.RAMS,
+      // Their company's RAMS plus anything site-wide - never another
+      // contractor's method statements.
+      siteCompanyId: siteCompany?.id ?? null,
+    }),
   ]);
 
   return (
@@ -42,7 +49,7 @@ export default async function WorkerRamsPage() {
     >
       <WorkerPageHeader
         title="RAMS"
-        description="Risk assessments and method statements for this site."
+        description={documentScopeNote(siteCompany?.name)}
       />
       <WorkerDocumentList
         documents={documents}

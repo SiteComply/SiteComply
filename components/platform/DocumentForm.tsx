@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
@@ -28,6 +28,8 @@ interface Values {
   description: string;
   category: string;
   jobSiteId: string;
+  /** '' = applies to everyone on site, which is the default. */
+  siteCompanyId: string;
   expiresAt: string; // yyyy-mm-dd, or '' for no expiry
 }
 
@@ -58,9 +60,33 @@ export function DocumentForm({
     description: initial?.description ?? '',
     category: initial?.category ?? '',
     jobSiteId: initial?.jobSiteId ?? (sites.length === 1 ? sites[0].id : ''),
+    siteCompanyId: initial?.siteCompanyId ?? '',
     expiresAt: initial?.expiresAt ?? '',
   });
   const [file, setFile] = useState<File | undefined>();
+  // The companies on the chosen site, fetched when it changes: a document can
+  // only belong to a company on its own project.
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    if (!values.jobSiteId) {
+      setCompanies([]);
+      return;
+    }
+    fetch(`/api/platform/sites/${values.jobSiteId}/companies`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.ok) return;
+        setCompanies(d.companies as { id: string; name: string }[]);
+      })
+      .catch(() => {
+        /* the field simply stays "Everyone on this site" */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [values.jobSiteId]);
+
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
@@ -105,6 +131,7 @@ export function DocumentForm({
         fd.set('description', values.description);
         fd.set('category', values.category);
         fd.set('jobSiteId', values.jobSiteId);
+        fd.set('siteCompanyId', values.siteCompanyId);
         fd.set('expiresAt', values.expiresAt);
         fd.set('file', file as File);
         res = await fetch('/api/platform/documents', {
@@ -146,6 +173,7 @@ export function DocumentForm({
         fd2.set('description', values.description);
         fd2.set('category', values.category);
         fd2.set('jobSiteId', values.jobSiteId);
+        fd2.set('siteCompanyId', values.siteCompanyId);
         fd2.set('expiresAt', values.expiresAt);
         fd2.set(
           'file',
@@ -260,6 +288,29 @@ export function DocumentForm({
             {sites.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name} · {s.jobReference}
+              </option>
+            ))}
+          </Select>
+          {/* WHO IT REACHES. Left as everyone, this behaves exactly as every
+              document did before company ownership existed. Narrowed to a
+              company, only operatives engaged by that company on this project
+              see it - which is the point: a scaffolder should not be handed an
+              electrical contractor's method statement at induction. */}
+          <Select
+            label="Applies to"
+            value={values.siteCompanyId}
+            onChange={(e) => set('siteCompanyId', e.target.value)}
+            error={errors.siteCompanyId}
+            hint={
+              companies.length === 0
+                ? 'No companies are recorded on this project yet, so this applies to everyone.'
+                : 'Everyone, or one company working on this project.'
+            }
+          >
+            <option value="">Everyone on this site</option>
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
               </option>
             ))}
           </Select>

@@ -31,12 +31,27 @@ import { useRouter } from 'next/navigation';
  * This is the ONLY invite implementation. It owns the same PATCH call, the same
  * validation and the same invitation-code result the inline form used to.
  */
-export function InviteWorkerDialog({ siteId }: { siteId: string }) {
+export function InviteWorkerDialog({
+  siteId,
+  companies,
+}: {
+  siteId: string;
+  /**
+   * The companies on this project. Chosen, never typed: free text is how one
+   * roster ends up holding "RS Electrical", "RS Elec - Test" and "test", which
+   * cannot decide whose RAMS an operative sees. A company missing from the list
+   * is ADDED here, which creates the record.
+   */
+  companies: { id: string; name: string }[];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ firstName: '', surname: '', company: '', mobile: '' });
+  const [form, setForm] = useState({ firstName: '', surname: '', siteCompanyId: '', mobile: '' });
+  const [known, setKnown] = useState(companies);
+  const [addingCompany, setAddingCompany] = useState('');
+  const [companyBusy, setCompanyBusy] = useState(false);
   const [sent, setSent] = useState<{
     name: string;
     autoApproved: boolean;
@@ -58,7 +73,8 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
     setOpen(false);
     setSent(null);
     setError(null);
-    setForm({ firstName: '', surname: '', company: '', mobile: '' });
+    setForm({ firstName: '', surname: '', siteCompanyId: '', mobile: '' });
+    setAddingCompany('');
   }, []);
 
   // Focus the first field so a manager can type immediately.
@@ -79,8 +95,38 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
   const canSubmit =
     form.firstName.trim() !== '' &&
     form.surname.trim() !== '' &&
-    form.company.trim() !== '' &&
+    form.siteCompanyId !== '' &&
     form.mobile.trim() !== '';
+
+  async function addCompany() {
+    const name = addingCompany.trim();
+    if (name.length < 2 || companyBusy) return;
+    setCompanyBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/platform/sites/${siteId}/companies`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'add', name }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) {
+        setError(data?.error ?? 'Could not add that company.');
+        return;
+      }
+      const company = data.company as { id: string; name: string };
+      setKnown((list) =>
+        [...list, company].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      setForm((f) => ({ ...f, siteCompanyId: company.id }));
+      setAddingCompany('');
+      router.refresh();
+    } catch {
+      setError('Network problem. Please try again.');
+    } finally {
+      setCompanyBusy(false);
+    }
+  }
 
   async function submit() {
     if (!canSubmit || busy) return;
@@ -90,7 +136,14 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
       const res = await fetch(`/api/platform/sites/${siteId}/worker-access`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'invite', ...form }),
+        // `company` is the NAME, kept on the operative's own record for display
+        // and export; `siteCompanyId` is the record that decides which RAMS
+        // they see. Both come from the same choice, so they cannot disagree.
+        body: JSON.stringify({
+          action: 'invite',
+          ...form,
+          company: known.find((c) => c.id === form.siteCompanyId)?.name ?? '',
+        }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.ok) {
@@ -102,7 +155,7 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
         autoApproved: data.autoApproved === true,
         existing: (data.existingWorker as { fullName: string; company: string | null } | null) ?? null,
       });
-      setForm({ firstName: '', surname: '', company: '', mobile: '' });
+      setForm({ firstName: '', surname: '', siteCompanyId: '', mobile: '' });
       // Refresh so the roster and the assignment list pick the worker up.
       router.refresh();
     } catch {
@@ -265,14 +318,24 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
                         <label htmlFor="invite-company" className={label}>
                           Company
                         </label>
-                        <input
+                        <select
                           id="invite-company"
-                          value={form.company}
+                          value={form.siteCompanyId}
                           onChange={(e) =>
-                            setForm((f) => ({ ...f, company: e.target.value }))
+                            setForm((f) => ({ ...f, siteCompanyId: e.target.value }))
                           }
                           className={field}
-                        />
+                        >
+                          <option value="">Select company…</option>
+                          {known.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-ink-subtle">
+                          Decides which RAMS this operative is shown.
+                        </p>
                       </div>
                       <div className="space-y-1">
                         <label htmlFor="invite-mobile" className={label}>
@@ -289,6 +352,32 @@ export function InviteWorkerDialog({ siteId }: { siteId: string }) {
                         />
                       </div>
                     </div>
+                    {/* A company missing from the list is added HERE rather
+                        than typed into the invitation: it becomes a record on
+                        this project, which is what the RAMS rule matches on. */}
+                    <div className="rounded-lg border border-line bg-surface-sunken px-3 py-2">
+                      <label htmlFor="invite-new-company" className="block text-xs font-semibold text-ink">
+                        Company not listed? Add it to this project
+                      </label>
+                      <div className="mt-1 flex gap-2">
+                        <input
+                          id="invite-new-company"
+                          value={addingCompany}
+                          onChange={(e) => setAddingCompany(e.target.value)}
+                          placeholder="Company name"
+                          className={field}
+                        />
+                        <button
+                          type="button"
+                          disabled={addingCompany.trim().length < 2 || companyBusy}
+                          onClick={addCompany}
+                          className="shrink-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink disabled:opacity-40"
+                        >
+                          {companyBusy ? 'Adding…' : 'Add'}
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="flex flex-wrap justify-end gap-2 pt-1">
                       <button
                         type="button"

@@ -26,6 +26,8 @@ import {
   listSiteRequirements,
 } from '@/services/workerAccess/workerAssignmentService';
 import { assignmentStatusLabel } from '@/services/workerAccess/assignmentLabels';
+import { listSiteCompanies } from '@/services/companies/siteCompanyService';
+import { SiteCompaniesManager } from '@/components/platform/SiteCompaniesManager';
 import { WorkerAssignmentActions } from '@/components/platform/WorkerAssignmentActions';
 
 export const dynamic = 'force-dynamic';
@@ -54,6 +56,11 @@ export default async function SiteWorkersPage({
   const access = canManageWorkerAccess(viewer.role)
     ? await listSiteAssignments(viewer, params.id)
     : null;
+  // The companies working on this project: the invite picker chooses from them,
+  // and the roster names the one each operative is engaged by.
+  const companies = canManageWorkerAccess(viewer.role)
+    ? await listSiteCompanies(params.id)
+    : [];
   // SC-023 Phase 3 — requirements with live "who would be blocked" counts.
   const requirements = canManageWorkerAccess(viewer.role)
     ? ((await listSiteRequirements(viewer, params.id)) ?? [])
@@ -316,7 +323,7 @@ export default async function SiteWorkersPage({
                 >
                   Export CSV
                 </a>
-                <InviteWorkerDialog siteId={params.id} />
+                <InviteWorkerDialog siteId={params.id} companies={companies} />
               </div>
             </div>
           ) : undefined
@@ -493,7 +500,13 @@ export default async function SiteWorkersPage({
               selecting them in the list above.
             </span>
           </summary>
-          <div className="border-t border-line p-4">
+          <div className="space-y-6 border-t border-line p-4">
+            {/* Who is on this project, before what they must satisfy: an
+                operative is invited into a company, and a company owns the RAMS
+                it brings. */}
+            {canManageWorkerAccess(viewer.role) && (
+              <SiteCompaniesManager siteId={params.id} companies={companies} />
+            )}
             <WorkerAccessManager
               siteId={params.id}
               canManage={canManageWorkerAccess(viewer.role)}

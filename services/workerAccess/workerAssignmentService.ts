@@ -433,7 +433,18 @@ async function recordEvent(
 export async function inviteWorker(
   viewer: PlatformViewer,
   siteId: string,
-  input: { mobile: string; firstName: string; surname: string; company: string },
+  input: {
+    mobile: string;
+    firstName: string;
+    surname: string;
+    company: string;
+    /**
+     * The company on THIS project that the operative is engaged by, chosen from
+     * the project's list. It decides which RAMS reach them, so it is a record
+     * and not free text - see siteCompanyService.
+     */
+    siteCompanyId?: string | null;
+  },
 ): Promise<AssignmentResult> {
   const g = await guard(viewer, siteId);
   if (!g.ok) return g;
@@ -496,6 +507,26 @@ export async function inviteWorker(
   // Read BEFORE the upsert: whether this mobile is already known decides what
   // the manager is told, and the existing assignment's status decides whether
   // this invitation can grant access outright.
+  /*
+   * The company must be one on THIS project. A stale id, or one belonging to
+   * another site, would leave the operative attached to a company nobody on
+   * this roster can see - and showing them documents accordingly.
+   */
+  const siteCompanyId = (input.siteCompanyId ?? '').trim() || null;
+  if (siteCompanyId) {
+    const known = await prisma.siteCompany.findFirst({
+      where: { id: siteCompanyId, jobSiteId: siteId },
+      select: { id: true },
+    });
+    if (!known) {
+      return {
+        ok: false,
+        reason: 'invalid',
+        error: 'Choose a company from this project’s list.',
+      };
+    }
+  }
+
   const priorWorker = await prisma.worker.findUnique({
     where: { mobile: mobile.e164 },
     select: { id: true, fullName: true, company: true },
@@ -569,6 +600,7 @@ export async function inviteWorker(
       status,
       invitedByUserId: viewer.id,
       invitedByName: viewer.name,
+      siteCompanyId,
       ...approval,
     },
     update: {
@@ -576,6 +608,9 @@ export async function inviteWorker(
       invitedByUserId: viewer.id,
       invitedByName: viewer.name,
       invitedAt: new Date(),
+      // A re-invitation may name a different employer; keep the existing one
+      // when none is given rather than clearing it.
+      ...(siteCompanyId ? { siteCompanyId } : {}),
       /*
        * A RE-INVITATION IS A FRESH GRANT, so the access window starts empty -
        * the same rule a transfer already applied to the receiving site.

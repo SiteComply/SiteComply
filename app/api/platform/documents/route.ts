@@ -62,8 +62,10 @@ async function POSTHandler(req: NextRequest) {
     category: (form.get('category') as string) ?? undefined,
     jobSiteId: (form.get('jobSiteId') as string) ?? undefined,
     expiresAt: (form.get('expiresAt') as string) ?? undefined,
+    // Empty = applies to everyone on site, which is the default.
+    siteCompanyId: (form.get('siteCompanyId') as string) ?? undefined,
   };
-  const result = validateDocumentMeta(meta, viewer);
+  const result = await validateDocumentMeta(meta, viewer);
   if (!result.ok) {
     return NextResponse.json(
       { ok: false, errors: result.errors },
