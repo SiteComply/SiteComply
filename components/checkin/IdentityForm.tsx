@@ -394,8 +394,8 @@ export function IdentityForm({
                     </option>
                   ))}
                   {/* The list holds 17 of the 38 CSCS Alliance schemes, so a
-                      holder of one of the others - ECS among them - needs an
-                      answer that is true. Without it they picked a scheme that
+                      holder of one of the others needs an answer that is
+                      true. Without it they picked a scheme that
                       did not issue their card and were told it was not found. */}
                   {!SCHEME_LIST_EXHAUSTIVE && (
                     <option value={SCHEME_NOT_LISTED}>

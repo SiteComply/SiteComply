@@ -84,11 +84,16 @@ const read = (p: string) => readFileSync(p, 'utf8');
   // Those are different questions and conflating them would either hide a
   // working picker or claim a completeness nobody stated.
   ok('the list is not claimed to be exhaustive', SCHEME_LIST_EXHAUSTIVE === false);
-  ok('  but it IS usable — seventeen is a real choice', schemesAreUsable() === true);
-  ok('all seventeen supplied schemes are present', CSCS_SCHEMES.length === 17, CSCS_SCHEMES.length);
+  ok('  but it IS usable — nineteen is a real choice', schemesAreUsable() === true);
+  ok('the seventeen supplied schemes plus both ECS schemes are present',
+    CSCS_SCHEMES.length === 19, CSCS_SCHEMES.length);
   // Transcribed, not remembered. A single wrong character fails silently.
   const SUPPLIED: [string, string][] = [
-    ['C4T', 'CSCS'], ['OUQ', 'JIB PMES'], ['Z2T', 'ECITB ACE'], ['9ZA', 'BESA'],
+    ['C4T', 'CSCS'],
+    // From the Smart Check Supported Schemes documentation: ECS (JIB) is "ECS",
+    // ECS (SJIB) is "CFW". Placed after CSCS on purpose - see schemes.ts.
+    ['ECS', 'ECS (JIB)'], ['CFW', 'ECS (SJIB)'],
+    ['OUQ', 'JIB PMES'], ['Z2T', 'ECITB ACE'], ['9ZA', 'BESA'],
     ['ROT', 'IPAF'], ['R7S', 'PASMA'], ['HEZ', 'EUSR'], ['P5Y', 'NPORS'],
     ['4UC', 'Lantra TTM'], ['JHW', 'AMI'], ['U19', 'ALLMI'], ['MRD', 'TICA'],
     ['WKN', 'ACAD'], ['62O', 'GEA'], ['WP8', 'ICATS'], ['3W0', 'CSR'],
@@ -97,7 +102,12 @@ const read = (p: string) => readFileSync(p, 'utf8');
   ok('every id and name matches what was supplied, character for character',
     SUPPLIED.every(([id, name], i) => CSCS_SCHEMES[i]?.id === id && CSCS_SCHEMES[i]?.name === name),
     CSCS_SCHEMES);
-  ok('  in the order supplied', CSCS_SCHEMES[0]?.id === 'C4T' && CSCS_SCHEMES[16]?.id === 'LO7');
+  ok('  in the order supplied, with ECS after CSCS',
+    CSCS_SCHEMES[0]?.id === 'C4T' && CSCS_SCHEMES[1]?.id === 'ECS' &&
+    CSCS_SCHEMES[2]?.id === 'CFW' && CSCS_SCHEMES[18]?.id === 'LO7');
+  ok('  the two ECS schemes are distinct - JIB and SJIB are not interchangeable',
+    schemeById('ECS')?.name === 'ECS (JIB)' && schemeById('CFW')?.name === 'ECS (SJIB)',
+    [schemeById('ECS'), schemeById('CFW')]);
   ok('the O/0 pairs are preserved distinctly',
     schemeById('62O')?.name === 'GEA' && schemeById('3W0')?.name === 'CSR' &&
     schemeById('620') === undefined && schemeById('3WO') === undefined,
