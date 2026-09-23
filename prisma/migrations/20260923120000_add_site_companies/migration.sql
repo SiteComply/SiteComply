@@ -25,10 +25,16 @@ CREATE TABLE IF NOT EXISTS "SiteCompany" (
 
 CREATE INDEX IF NOT EXISTS "SiteCompany_jobSiteId_idx" ON "SiteCompany"("jobSiteId");
 
--- Uniqueness on the NORMALISED name: one "RS Electrical" per project however it
--- is typed next time. The stored name keeps the company's own capitalisation.
+-- Uniqueness on the EXACT trimmed name, NOT the normalised one.
+--
+-- A normalised index looks tidier and is wrong here: a roster already holding
+-- "test" and "Test" on one site would have to merge them to migrate at all, and
+-- merging is exactly what nobody but a person on that project may decide. The
+-- database therefore keeps whatever the roster holds; the application refuses a
+-- NEW company whose name differs only in case or spacing, which stops the
+-- problem growing without rewriting history.
 CREATE UNIQUE INDEX IF NOT EXISTS "SiteCompany_jobSiteId_name_key"
-  ON "SiteCompany"("jobSiteId", lower(btrim(regexp_replace("name", '\s+', ' ', 'g'))));
+  ON "SiteCompany"("jobSiteId", btrim("name"));
 
 ALTER TABLE "WorkerSiteAssignment" ADD COLUMN IF NOT EXISTS "siteCompanyId" TEXT;
 ALTER TABLE "Document"             ADD COLUMN IF NOT EXISTS "siteCompanyId" TEXT;

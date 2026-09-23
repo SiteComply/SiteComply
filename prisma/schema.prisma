@@ -2750,10 +2750,15 @@ enum WorkerSiteRole {
 /// HERE, and the owner of the RAMS that company brings.
 ///
 /// PER PROJECT, not global. The same firm on two projects is two rows, so one
-/// project's tidying can never rewrite another's roster. Names are compared
-/// case- and spacing-insensitively for uniqueness (a unique index on the
-/// normalised name, in the migration) but are STORED as typed: "RS Electrical"
-/// is the company's own name, not ours to re-case.
+/// project's tidying can never rewrite another's roster. Names are STORED as
+/// typed: "RS Electrical" is the company's own name, not ours to re-case.
+///
+/// UNIQUE ON THE EXACT TRIMMED NAME, not the normalised one. A normalised index
+/// reads tidier and cannot represent a roster that already holds "test" and
+/// "Test" on one site - it would have forced a merge to migrate at all, and
+/// merging is precisely what only a person on that project may decide. The
+/// APPLICATION refuses a NEW company differing only in case or spacing, so the
+/// problem cannot grow, while history is left as it is.
 ///
 /// NEVER MERGED AUTOMATICALLY. "RS Elec - Test" and "RS Electrical" may be one
 /// firm or two, and only a person on that project knows. They are created as
