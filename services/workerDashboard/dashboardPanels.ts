@@ -67,8 +67,20 @@ export const WORKER_DASHBOARD_PANELS: WorkerDashboardPanelMeta[] = [
     label: 'Active permits',
     description:
       'Let operatives request Permits to Work and track their approval.',
-    // Real feature as of SC-009, but ships dark: a manager opts each site in.
-    defaultEnabled: false,
+    /*
+     * ON BY DEFAULT since 2026-09-23, by the owner's decision. It shipped dark
+     * under SC-009 so each site could opt in, and that turned out to be the
+     * wrong default in a way nobody could see: a site with permit types
+     * configured and the panel never switched on gave operatives no way to
+     * request one, and told neither them nor the manager. Permit to work is a
+     * core control, not an extra.
+     *
+     * TURNING IT OFF IS STILL POSSIBLE and still respected: a stored setting
+     * always beats this default, so a site that deliberately switched permits
+     * off stays off. This only decides what a site that has never been asked
+     * does - which is now "show them".
+     */
+    defaultEnabled: true,
   },
   {
     value: 'RAMS',
