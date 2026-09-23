@@ -142,9 +142,23 @@ export async function generateScript(
     system: SYSTEM_PROMPT,
     user,
     schema: SCRIPT_SCHEMA as unknown as Record<string, unknown>,
-    maxOutputTokens: 2000,
-    // Low, not zero: narration should read naturally, but the facts are fixed.
-    temperature: 0.3,
+    /*
+     * GENEROUS, because a reasoning model spends a large and variable share of
+     * this budget on hidden reasoning BEFORE any narration appears. An
+     * induction runs to a dozen scenes of 100-150 words; 2,000 would have been
+     * spent thinking, and every scene would have quietly fallen back to its
+     * bare facts - working, but flat, and for a reason nobody could see.
+     */
+    maxOutputTokens: 8000,
+    /*
+     * NO TEMPERATURE. The production deployment is a reasoning model, which
+     * rejects any value but the default with a 400 - the same constraint the
+     * knowledge-check bank documents. The provider only forwards a temperature
+     * when a caller sets one, so setting none is what works on both.
+     *
+     * It costs nothing here: the facts are fixed by the manifest, and a scene
+     * the model declines to phrase falls back to those facts.
+     */
   });
 
   const returned = parseScenes(result.json ?? safeParse(result.text));

@@ -157,6 +157,15 @@ function main() {
   ok('  and the fallback closes each fact, so a list is not one breathless run',
     /\/\[\.!\?\]\$\/\.test\(f\) \? f : `\$\{f\}\.`/.test(script));
   ok('narration is length-capped', /MAX_NARRATION_CHARS/.test(script));
+  /*
+   * PRODUCTION RUNS A REASONING MODEL, which rejects any temperature but the
+   * default with a 400. The first live generation failed on exactly that. The
+   * knowledge-check bank had documented it; this asserts it.
+   */
+  ok('the token budget leaves room for a reasoning model to think first',
+    /maxOutputTokens: (8000|[1-9]\d{4,})/.test(script), 'budget too small for hidden reasoning');
+  ok('no temperature is sent - the live model rejects any but the default',
+    !/temperature:\s*[0-9]/.test(script), 'a temperature is set again');
 
   console.log('\n[7] Workflow: approval, versioning, audit');
   const svc = read('services/inductionVideo/inductionVideoService.ts');
