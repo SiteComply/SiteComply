@@ -576,6 +576,19 @@ export async function inviteWorker(
       invitedByUserId: viewer.id,
       invitedByName: viewer.name,
       invitedAt: new Date(),
+      /*
+       * A RE-INVITATION IS A FRESH GRANT, so the access window starts empty -
+       * the same rule a transfer already applied to the receiving site.
+       *
+       * Carried over, an access period from a previous stint silently outlives
+       * it: an operative removed in August and re-invited in September was
+       * approved, shown as Active on the roster, and still refused at the gate
+       * with "Access ended 26/08/2026". The manager had granted access; the
+       * dates said otherwise; nobody could see why. A manager who wants dates
+       * sets them after inviting, as they did the first time.
+       */
+      startDate: null,
+      endDate: null,
       suspendedAt: null,
       suspendedByName: null,
       removedAt: null,

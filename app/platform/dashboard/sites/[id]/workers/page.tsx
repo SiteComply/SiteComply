@@ -11,7 +11,7 @@ import {
   selectedRowClass,
   resolveSelected,
 } from '@/components/platform/WorkSurface';
-import { formatDateTimeUK } from '@/lib/datetime';
+import { formatDateTimeUK, formatDateUK } from '@/lib/datetime';
 import {
   requirePlatformViewer,
   assertModuleView,
@@ -129,6 +129,11 @@ export default async function SiteWorkersPage({
 
   const ROSTER_STATE_ORDER = [
     'on-site',
+    // Ahead of the ordinary states: an assignment outside its window refuses
+    // the worker at the gate, and a manager reading the roster should meet that
+    // before the people who are simply off site today.
+    'access-ended',
+    'access-pending',
     'checked-out',
     'assigned',
     'invited',
@@ -141,7 +146,7 @@ export default async function SiteWorkersPage({
   const rosterState = (r: {
     checkedInAt: Date | null;
     checkedOutAt: Date | null;
-    assignment: { status: string } | null;
+    assignment: { status: string; windowState?: string | null } | null;
   }): RosterState => {
     if (r.checkedInAt && !r.checkedOutAt) return 'on-site';
     if (r.assignment) {
@@ -149,6 +154,9 @@ export default async function SiteWorkersPage({
       if (st === 'SUSPENDED') return 'suspended';
       if (st === 'REMOVED') return 'removed';
       if (st === 'INVITED') return 'invited';
+      // ACTIVE but outside its dates: approved, and still refused at the gate.
+      if (r.assignment.windowState === 'expired') return 'access-ended';
+      if (r.assignment.windowState === 'pending') return 'access-pending';
       if (r.checkedOutAt) return 'checked-out';
       return 'assigned';
     }
@@ -157,6 +165,8 @@ export default async function SiteWorkersPage({
 
   const ROSTER_STATE_LABEL: Record<RosterState, string> = {
     'on-site': 'On site',
+    'access-ended': 'Access ended',
+    'access-pending': 'Access not started',
     'checked-out': 'Checked out',
     assigned: 'Off site',
     invited: 'Invited',
@@ -166,6 +176,8 @@ export default async function SiteWorkersPage({
   };
   const ROSTER_STATE_TONE: Record<RosterState, string> = {
     'on-site': 'bg-safe-50 text-safe-700',
+    'access-ended': 'bg-danger-50 text-danger-700',
+    'access-pending': 'bg-hivis-500/10 text-ink-muted',
     'checked-out': 'border border-line bg-surface-sunken text-ink-muted',
     assigned: 'bg-brand-50 text-brand-700',
     invited: 'bg-hivis-400/25 text-ink',
@@ -210,6 +222,14 @@ export default async function SiteWorkersPage({
   const invitedCount = assignments.filter((r) => r.status === 'ACTIVE' && !r.arrivedAt).length;
   const awaitingCount = assignments.filter((r) => r.status === 'INVITED').length;
   const expiring = assignments.filter((r) => r.expiringSoon);
+  /*
+   * ALREADY EXPIRED, which the "expiring soon" banner never covered: it looks
+   * only seven days ahead, so a window that lapsed weeks ago was invisible and
+   * the roster showed the worker as Active while the gate refused them.
+   */
+  const accessEnded = assignments.filter(
+    (r) => r.status === 'ACTIVE' && r.windowState === 'expired',
+  );
   const otherSites = viewer.sites
     .filter((x) => x.id !== params.id && x.status === 'ACTIVE')
     .map((x) => ({ id: x.id, name: x.name }));
@@ -222,6 +242,24 @@ export default async function SiteWorkersPage({
           learn about an expiry from this page, not from a worker being turned
           away on Monday morning. It used to sit inside the collapsed access
           panel, where it was only seen by someone who went looking. */}
+      {accessEnded.length > 0 ? (
+        <div className="mb-4 rounded-xl border border-danger-500/40 bg-danger-50 px-4 py-3">
+          <p className="text-sm font-semibold text-danger-700">
+            {accessEnded.length} operative{accessEnded.length === 1 ? '' : 's'}{' '}
+            cannot check in: their access period has ended
+          </p>
+          <p className="text-xs text-danger-700">
+            {accessEnded
+              .map(
+                (r) =>
+                  `${r.workerName}${r.endDate ? ` (ended ${formatDateUK(r.endDate)})` : ''}`,
+              )
+              .join(', ')}
+            . Set new access dates to let them back on site.
+          </p>
+        </div>
+      ) : null}
+
       {expiring.length > 0 ? (
         <div className="mt-4 rounded-xl border border-hivis-500/40 bg-hivis-500/10 px-4 py-3">
           <p className="text-sm font-semibold text-ink">
@@ -346,7 +384,9 @@ export default async function SiteWorkersPage({
                         )}${
                           selectedWorker.assignment.expiringSoon
                             ? ' · expiring soon'
-                            : ''
+                            : selectedWorker.assignment.windowState === 'expired'
+                              ? ' · ended, they cannot check in'
+                              : ''
                         }`}
                       />
                     )}

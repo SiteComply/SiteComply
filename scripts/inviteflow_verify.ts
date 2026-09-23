@@ -159,6 +159,52 @@ async function main() {
   chk('re-inviting a REMOVED worker does NOT restore access',
       a4.status === WorkerAssignmentStatus.INVITED && r4.autoApproved === false, `${a4.status}`);
 
+  /* ---------------- 4b. A re-invitation is a fresh grant ---------------- */
+  console.log('\n[4b] Re-inviting clears a stale access window');
+  // The reported defect: removed in August with an access period, re-invited in
+  // September, approved - and still refused at the gate with "Access ended",
+  // while the roster said Active. The dates outlived the assignment.
+  await prisma.workerSiteAssignment.update({
+    where: { workerId_jobSiteId: { workerId: existing.id, jobSiteId: site.id } },
+    data: {
+      status: WorkerAssignmentStatus.REMOVED,
+      startDate: new Date(Date.parse('2026-08-05T00:00:00Z')),
+      endDate: new Date(Date.parse('2026-08-26T00:00:00Z')),
+    },
+  });
+  const stale = await prisma.workerSiteAssignment.findFirst({
+    where: { workerId: existing.id, jobSiteId: site.id },
+    select: { startDate: true, endDate: true },
+  });
+  chk('(the window is set, and in the past)', stale.endDate !== null && stale.endDate < new Date());
+  const before = svc.evaluateAssignmentGate({
+    status: WorkerAssignmentStatus.ACTIVE, startDate: stale.startDate, endDate: stale.endDate });
+  chk('an expired window blocks even an ACTIVE assignment',
+      before.blocked === true && /access ended/i.test(before.short), before.short);
+
+  const r5 = await svc.inviteWorker(viewer, site.id, {
+    mobile: MOBILE_EXISTING, firstName: 'Re', surname: 'Invited', company: 'Re Co',
+  });
+  chk('the re-invitation succeeds', r5.ok === true, r5.ok ? '' : r5.error);
+  const a5 = await prisma.workerSiteAssignment.findFirst({
+    where: { workerId: existing.id, jobSiteId: site.id },
+    select: { status: true, startDate: true, endDate: true },
+  });
+  chk('re-inviting CLEARS the old access window', a5.startDate === null && a5.endDate === null,
+      `${a5.startDate} → ${a5.endDate}`);
+  chk('  so the gate no longer refuses on dates',
+      svc.evaluateAssignmentGate({ status: WorkerAssignmentStatus.ACTIVE, startDate: a5.startDate, endDate: a5.endDate }).blocked === false);
+  chk('  a previously REMOVED worker still needs approval, as before',
+      a5.status === WorkerAssignmentStatus.INVITED, a5.status);
+  // Dates a manager sets AFTER inviting are theirs and must survive.
+  await svc.setAssignmentDetails(viewer, site.id,
+    (await prisma.workerSiteAssignment.findFirst({ where: { workerId: existing.id, jobSiteId: site.id }, select: { id: true } })).id,
+    { startDate: '2026-10-01', endDate: '2026-10-31' });
+  const a6 = await prisma.workerSiteAssignment.findFirst({
+    where: { workerId: existing.id, jobSiteId: site.id }, select: { startDate: true, endDate: true } });
+  chk('dates set deliberately after the invitation are kept', a6.startDate !== null && a6.endDate !== null,
+      `${a6.startDate} → ${a6.endDate}`);
+
   /* ---------------- 5. Safety is unchanged ---------------- */
   console.log('\n[5] Auto-approval does not bypass competency or induction');
   // The gate takes only the assignment now: enforcement is unconditional.
