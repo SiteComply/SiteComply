@@ -90,6 +90,20 @@ export const PLATFORM_NAV: {
     group: 'projects',
   },
   {
+    /*
+     * Induction Videos sits with the projects, beside the check-ins it belongs
+     * to. Gated on the SITES module - the video is built from a project's own
+     * records - plus the roles that may actually work on one, so it is not
+     * advertised to an Engineer or a Client who could only look at it.
+     */
+    href: '/platform/dashboard/induction-videos',
+    label: 'Induction videos',
+    icon: 'clipboard',
+    module: 'sites',
+    group: 'projects',
+    roles: ['DIRECTOR', 'PROJECT_MANAGER', 'SITE_MANAGER', 'PRINCIPAL_CONTRACTOR'],
+  },
+  {
     href: '/platform/dashboard/submissions',
     label: 'Check-ins',
     icon: 'clipboard',

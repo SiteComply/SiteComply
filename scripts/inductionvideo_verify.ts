@@ -153,7 +153,9 @@ function main() {
   ok('the scenes returned are the MANIFEST\'s, whatever the model sent',
     /scenes: manifest\.scenes\.map\(\(scene\) => \(\{/.test(script));
   ok('a scene the model skipped falls back to its facts',
-    /if \(!text\) return scene\.facts\.join\(' '\);/.test(script));
+    /if \(!text\) \{[\s\S]{0,200}scene\.facts/.test(script));
+  ok('  and the fallback closes each fact, so a list is not one breathless run',
+    /\/\[\.!\?\]\$\/\.test\(f\) \? f : `\$\{f\}\.`/.test(script));
   ok('narration is length-capped', /MAX_NARRATION_CHARS/.test(script));
 
   console.log('\n[7] Workflow: approval, versioning, audit');

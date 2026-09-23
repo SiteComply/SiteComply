@@ -176,7 +176,19 @@ export async function generateScript(
  */
 function narrationFor(scene: SceneRequirement, candidate: string | undefined): string {
   const text = (candidate ?? '').trim().replace(/\s+/g, ' ');
-  if (!text) return scene.facts.join(' ');
+  /*
+   * The fallback must still be READABLE. Several scenes carry a list - permit
+   * types, site rules, PPE - and joining those raw produced "Hot Works
+   * Electrical Isolation Working at Height", which is not a sentence and would
+   * be narrated as one breathless run. Each fact is closed off instead.
+   */
+  if (!text) {
+    return scene.facts
+      .map((f) => f.trim())
+      .filter(Boolean)
+      .map((f) => (/[.!?]$/.test(f) ? f : `${f}.`))
+      .join(' ');
+  }
   return text.length > MAX_NARRATION_CHARS
     ? `${text.slice(0, MAX_NARRATION_CHARS).trimEnd()}…`
     : text;

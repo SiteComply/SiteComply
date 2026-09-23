@@ -1,3 +1,4 @@
+export {};
 /** Phase 1 end to end against the local DB, with a stubbed model. */
 process.env.AI_PROVIDER = 'mock';
 const stubPath = require.resolve('../services/ai/aiConfigService');
