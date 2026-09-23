@@ -3,6 +3,9 @@
 # among them) can say so: the card is recorded, no lookup is attempted, and the
 # gate points them at their site manager instead of an unanswerable field.
 #
+# Ships WITH the two ECS scheme identifiers from the Supported Schemes
+# documentation: ECS (JIB) = ECS, ECS (SJIB) = CFW.
+#
 # NO MIGRATION. The answer is stored in the existing cscsSchemeId column as the
 # sentinel NOT_LISTED; no schema change and no backfill.
 set -uo pipefail
@@ -34,6 +37,8 @@ echo "  ok   schema untouched, tree committed"
 
 echo "[3/8] Asserting the not-listed answer and the earlier fixes..."
 grep -q "export const SCHEME_NOT_LISTED = 'NOT_LISTED';" services/cscs/schemes.ts || fail "the sentinel is missing"
+grep -q "{ id: 'ECS', name: 'ECS (JIB)' }," services/cscs/schemes.ts || fail "ECS (JIB) is missing"
+grep -q "{ id: 'CFW', name: 'ECS (SJIB)' }," services/cscs/schemes.ts || fail "ECS (SJIB) is missing"
 grep -q "!isKnownScheme(fields.cscsSchemeId) && !schemeNotListed" "app/api/worker/profile/route.ts" || fail "the save path refuses the answer"
 grep -q "schemeId: isKnownScheme(schemeId) ? schemeId : null," "app/api/worker/profile/route.ts" || fail "the sentinel could reach Smart Check"
 grep -q "isKnownScheme(worker.cscsSchemeId) ? null : 'card scheme'" "app/api/platform/workers/[id]/cscs-check/route.ts" || fail "check-now could look up the sentinel"
@@ -78,10 +83,11 @@ echo "      new build id: ${NEW_BUILD}"
 [ "$NEW_BUILD" != "$PREV" ] || fail "new build id equals the deployed one"
 
 echo "[6/8] Confirming the BUILD, not just the source..."
-for t in "My scheme is not listed" "not one we can check automatically" "scheme not listed - no lookup attempted" "confirm the physical card instead"; do
+for t in "My scheme is not listed" "not one we can check automatically" "scheme not listed - no lookup attempted" "confirm the physical card instead" "ECS (JIB)" "ECS (SJIB)"; do
   grep -rqF "$t" .next/server 2>/dev/null || fail "missing from the build: $t"
 done
 grep -rqF "My scheme is not listed" .next/static 2>/dev/null || fail "the option is not in the client bundle"
+grep -rqF 'ECS (JIB)' .next/static 2>/dev/null || fail "ECS is not in the client bundle - the picker would not offer it"
 grep -rqF "cards returned: " .next/server 2>/dev/null || fail "the multi-card rule is missing from the build"
 echo "  ok   the not-listed answer and the earlier CSCS fixes are in the build"
 
