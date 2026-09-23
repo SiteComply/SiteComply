@@ -44,6 +44,8 @@ case "$SCHEMA_OK" in
   *) fail "could not check the production schema (firewall rule?) - refusing to deploy blind" ;;
 esac
 grep -q "export function documentCompanyWhere" services/documents/documentVisibility.ts || fail "the visibility rule is missing"
+grep -q "documentCompanyWhere(company?.id ?? null)," "app/api/worker/induction/[siteId]/documents/[documentId]/route.ts" || fail "the induction download is not company-scoped"
+grep -q "documentCompanyWhere(assignment?.siteCompanyId ?? null)," services/workerDashboard/workerDashboardService.ts || fail "the dashboard download is not company-scoped"
 grep -q "...documentCompanyWhere(opts.siteCompanyId)," services/workerDashboard/workerDashboardService.ts || fail "worker documents are not filtered"
 grep -q 'label="Applies to"' components/platform/DocumentForm.tsx || fail "the document form cannot set an owner"
 grep -q "Companies on this project" components/platform/SiteCompaniesManager.tsx || fail "the companies panel is missing"
