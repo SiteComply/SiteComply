@@ -115,7 +115,50 @@ async function main() {
     const countNone = await countWorkerDocuments(site.id, { category: 'RAMS', siteCompanyId: null });
     ok('the dashboard count matches the list it links to', countMine - countNone === 1, { countMine, countNone });
 
-    console.log('\n[4] Tidying up is deliberate');
+    console.log('\n[4] Retrieving by id obeys the same rule as listing');
+    /*
+     * The lists never link another company's RAMS - but a document id in a URL
+     * must not fetch one either, or the protection is only as good as nobody
+     * trying it.
+     */
+    const readerPath = require.resolve('../services/induction/inductionAccess');
+    let reader: { workerId: string } | null = null;
+    require.cache[readerPath] = { id: readerPath, filename: readerPath, loaded: true,
+      exports: { inductionReaderFor: async () => reader } } as never;
+    const blobPath = require.resolve('../services/documents/blobStorage');
+    require.cache[blobPath] = { id: blobPath, filename: blobPath, loaded: true,
+      exports: { downloadDocumentBlob: async () => Buffer.from('%PDF-1.4 test') } } as never;
+    const inductionRoute = require('../app/api/worker/induction/[siteId]/documents/[documentId]/route');
+    const fetchAs = async (worker: { id: string }, documentId: string) => {
+      reader = { workerId: worker.id };
+      const res = await inductionRoute.GET(new Request('http://x') as never, {
+        params: { siteId: site.id, documentId },
+      });
+      return res.status;
+    };
+    ok('an operative can fetch their OWN company\'s RAMS by id',
+      (await fetchAs(sparks, mine.id)) === 200);
+    ok('  and a site-wide one', (await fetchAs(sparks, shared.id)) === 200);
+    ok('another company\'s RAMS is NOT FOUND, even with the id',
+      (await fetchAs(sparks, theirs.id)) === 404);
+    ok('  and for an operative with no company, neither company\'s is',
+      (await fetchAs(nobody, mine.id)) === 404 && (await fetchAs(nobody, theirs.id)) === 404);
+    ok('  while the site-wide one still reaches them',
+      (await fetchAs(nobody, shared.id)) === 200);
+
+    // The dashboard download path resolves the company from the open check-in.
+    const { getDocumentForCheckedInWorker } = require('../services/workerDashboard/workerDashboardService');
+    const sub = await prisma.submission.create({ data: {
+      workerId: sparks.id, jobSiteId: site.id, checklistVersion: 1, status: 'COMPLIANT', gdprConsent: true } });
+    ok('the dashboard download serves their own company\'s document',
+      (await getDocumentForCheckedInWorker(sparks.id, mine.id)) !== null);
+    ok('  and the site-wide one',
+      (await getDocumentForCheckedInWorker(sparks.id, shared.id)) !== null);
+    ok('  but refuses another company\'s, by id',
+      (await getDocumentForCheckedInWorker(sparks.id, theirs.id)) === null);
+    await prisma.submission.delete({ where: { id: sub.id } });
+
+    console.log('\n[5] Tidying up is deliberate');
     const busy = await companies.removeSiteCompany(site.id, a.value.id);
     ok('a company with operatives or documents cannot be removed',
       busy.ok === false && /operative/.test(busy.error), busy);
@@ -129,7 +172,7 @@ async function main() {
       (await prisma.siteCompany.findUnique({ where: { id: b.value.id } })) === null);
     void sparks; void other; void nobody; void mine; void theirs; void shared;
 
-    console.log('\n[5] Wiring');
+    console.log('\n[6] Wiring');
     const svc = read('services/workerDashboard/workerDashboardService.ts');
     ok('the worker document query applies the rule', /\.\.\.documentCompanyWhere\(opts\.siteCompanyId\)/.test(svc));
     ok('the worker context resolves the company from the ASSIGNMENT, not the typed one',
@@ -142,6 +185,11 @@ async function main() {
     ok('  resolved for the operative before check-in', /companyForAssignment\(worker\.id, site\.id\)/.test(indPage));
     const docs = read('services/documents/documentService.ts');
     ok('an annotated copy inherits its original\'s owner', /annotation\?\.originalDocumentId[\s\S]{0,200}siteCompanyId: true/.test(docs));
+    const indDoc = read('app/api/worker/induction/[siteId]/documents/[documentId]/route.ts');
+    ok('the induction download applies the visibility rule',
+      /\.\.\.documentCompanyWhere\(company\?\.id \?\? null\)/.test(indDoc));
+    ok('the dashboard download applies it too',
+      /\.\.\.documentCompanyWhere\(assignment\?\.siteCompanyId \?\? null\)/.test(svc));
     ok('a document can only belong to a company on its own project',
       /That company is not on this project/.test(docs));
     const invite = read('services/workerAccess/workerAssignmentService.ts');

@@ -518,9 +518,13 @@ export async function countWorkerDocuments(
 
 /**
  * A document the worker is entitled to download: it must belong to the site of
- * their own open check-in. Returns null otherwise — this is the only check
- * standing between a worker session and a private site file, so it deliberately
+ * their own open check-in, AND be one they may see there - their own company's
+ * or site-wide. Returns null otherwise — this is the only check standing
+ * between a worker session and a private site file, so it deliberately
  * re-derives the check-in rather than trusting anything from the request.
+ *
+ * The company rule is repeated here rather than left to the lists: a document
+ * that is never shown to this operative must also refuse to be fetched by id.
  */
 export async function getDocumentForCheckedInWorker(
   workerId: string,
@@ -533,8 +537,19 @@ export async function getDocumentForCheckedInWorker(
   });
   if (!openCheckIn) return null;
 
+  const assignment = await prisma.workerSiteAssignment.findUnique({
+    where: {
+      workerId_jobSiteId: { workerId, jobSiteId: openCheckIn.jobSiteId },
+    },
+    select: { siteCompanyId: true },
+  });
+
   return prisma.document.findFirst({
-    where: { id: documentId, jobSiteId: openCheckIn.jobSiteId },
+    where: {
+      id: documentId,
+      jobSiteId: openCheckIn.jobSiteId,
+      ...documentCompanyWhere(assignment?.siteCompanyId ?? null),
+    },
     select: { blobPath: true, fileName: true, mimeType: true },
   });
 }

@@ -3,6 +3,8 @@ import { DocumentCategory } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { inductionReaderFor } from '@/services/induction/inductionAccess';
 import { downloadDocumentBlob } from '@/services/documents/blobStorage';
+import { documentCompanyWhere } from '@/services/documents/documentVisibility';
+import { companyForAssignment } from '@/services/companies/siteCompanyService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,14 +22,26 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: { siteId: string; documentId: string } },
 ) {
-  if (!(await inductionReaderFor(params.siteId))) {
+  const reader = await inductionReaderFor(params.siteId);
+  if (!reader) {
     return NextResponse.json({ ok: false, error: 'Document not found.' }, { status: 404 });
   }
+
+  /*
+   * THE SAME RULE THE LIST APPLIES, applied again here.
+   *
+   * The briefing only ever links this operative's own RAMS, but "not linked" is
+   * not "not reachable": a document id in a URL would otherwise fetch another
+   * contractor's method statement. Listing and retrieving must agree, or the
+   * protection is only as good as nobody trying.
+   */
+  const company = await companyForAssignment(reader.workerId, params.siteId);
   const doc = await prisma.document.findFirst({
     where: {
       id: params.documentId,
       jobSiteId: params.siteId,
       category: DocumentCategory.RAMS,
+      ...documentCompanyWhere(company?.id ?? null),
     },
     select: { blobPath: true, fileName: true, mimeType: true },
   });
