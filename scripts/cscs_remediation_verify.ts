@@ -16,6 +16,11 @@ import {
   remediationDismissKey,
 } from '../services/cscs/cscsRemediation';
 import { cscsRefusalAction } from '../services/workerAccess/accessRequirements';
+import {
+  CARD_FIX_HREF,
+  isCardFixRequest,
+  shouldLeaveCheckInDetails,
+} from '../services/cscs/cardFixFlow';
 
 let pass = 0;
 let fail = 0;
@@ -145,10 +150,52 @@ env(ON, () => {
 
   const banner = read('components/worker/CscsRemediationBanner.tsx');
   ok('the banner is dismissible', /Not now/.test(banner));
-  ok('  and offers the fix', /Check my card details/.test(banner) && /check-in\/details/.test(banner));
+  ok('  and offers the fix', /Check my card details/.test(banner) && /CARD_FIX_HREF/.test(banner));
   ok('  remembering the dismissal', /localStorage\.setItem\(dismissKey/.test(banner));
   ok('  and showing it when storage is unavailable', /catch \{[\s\S]{0,200}setShow\(true\)/.test(banner),
     'would hide itself on a storage failure');
+
+  /*
+   * ── THE BOUNCE ────────────────────────────────────────────────────────────
+   *
+   * Ryan pressed "Check my card details" and nothing appeared to happen. The
+   * link went to /check-in/details, which sends a CHECKED-IN worker to their
+   * dashboard - and the banner only ever appears to checked-in workers. Every
+   * person who could press it was returned to the page they pressed it on.
+   *
+   * These check the journey, not the two halves of it.
+   */
+  console.log('\n[5] Pressing the button actually goes somewhere');
+  ok('a worker fixing a card is NOT bounced back to their dashboard',
+    shouldLeaveCheckInDetails(true, true) === false);
+  ok('  even though a checked-in worker arriving any other way still is',
+    shouldLeaveCheckInDetails(true, false) === true);
+  ok('  and a worker who is not checked in is never bounced',
+    shouldLeaveCheckInDetails(false, true) === false &&
+      shouldLeaveCheckInDetails(false, false) === false);
+  ok('the prompt\'s link is recognised by the screen it points at',
+    isCardFixRequest(Object.fromEntries(
+      new URLSearchParams(CARD_FIX_HREF.split('?')[1]).entries(),
+    )) === true, CARD_FIX_HREF);
+  ok('  an ordinary visit is not mistaken for one', isCardFixRequest({}) === false);
+  ok('  and neither is a different value', isCardFixRequest({ fix: 'something' }) === false);
+
+  const details = read('app/check-in/details/page.tsx');
+  ok('the details screen asks the shared rule rather than redirecting blindly',
+    /shouldLeaveCheckInDetails\(Boolean\(await getWorkerContext\(\)\), fixingCard\)/.test(details),
+    'the page would bounce everybody the prompt sends');
+  ok('  and says why they are there', /Check the card details below/.test(details));
+  ok('  without numbering them through a check-in they are not doing',
+    /\{!fixingCard && <Steps/.test(details));
+
+  const form = read('components/checkin/IdentityForm.tsx');
+  ok('saving returns them where they came from, not into site selection',
+    (form.match(/router\.push\(fixingCard \? CARD_FIX_RETURN : '\/check-in\/site'\)/g) ?? []).length === 2,
+    form.match(/router\.push\([^)]*\)/g));
+  ok('  the button says so too', /'Back to my dashboard'/.test(form) && /Save & check my card again/.test(form));
+  ok('  the card section is open, not collapsed out of sight',
+    /fixingCard \|\| Boolean\(initial\.cscsCardNumber/.test(form));
+  ok('  and there is a way out that is not "save"', /Back without changes/.test(form));
 
   // EVERY page that renders the shell must pass it, or one screen silently never
   // shows the prompt.

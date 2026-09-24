@@ -13,6 +13,8 @@ import {
   SCHEME_NOT_LISTED,
 } from '@/services/cscs/schemes';
 import { firstNameRepeatsSurname } from '@/services/workers/workerName';
+import { CARD_FIX_RETURN } from '@/services/cscs/cardFixFlow';
+import Link from 'next/link';
 
 export interface IdentityInitial {
   /** Given name. The display name is derived from this plus the surname. */
@@ -52,9 +54,16 @@ export function IdentityForm({
   recognised,
   verificationLive,
   checkName = false,
+  fixingCard = false,
 }: {
   initial: IdentityInitial;
   recognised: boolean;
+  /**
+   * Sent here by the card-remediation prompt to correct a card that failed its
+   * check. They are already on site: saving returns them to their dashboard
+   * rather than pushing them into the check-in journey they are not walking.
+   */
+  fixingCard?: boolean;
   /**
    * The record cannot say which part of the name is the surname - typically an
    * operative invited before invitations asked for the two parts separately,
@@ -68,7 +77,9 @@ export function IdentityForm({
   const toast = useToast();
   const [form, setForm] = useState<IdentityInitial>(initial);
   const [showCscs, setShowCscs] = useState(
-    Boolean(initial.cscsCardNumber || initial.cscsCardType),
+    // Always open for someone who came to fix a card - the fields they were
+    // sent here for must not be behind a collapsed section.
+    fixingCard || Boolean(initial.cscsCardNumber || initial.cscsCardType),
   );
   const [cardImage, setCardImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -144,7 +155,7 @@ export function IdentityForm({
   async function submit() {
     // Second press after a verification result is shown → just continue.
     if (saved) {
-      router.push('/check-in/site');
+      router.push(fixingCard ? CARD_FIX_RETURN : '/check-in/site');
       return;
     }
 
@@ -233,7 +244,7 @@ export function IdentityForm({
       }
 
       toast.success('Details saved.');
-      router.push('/check-in/site');
+      router.push(fixingCard ? CARD_FIX_RETURN : '/check-in/site');
     } catch {
       toast.error('Network problem. Check your signal and try again.');
     } finally {
@@ -242,15 +253,26 @@ export function IdentityForm({
   }
 
   const hasCardNumber = form.cscsCardNumber.trim().length > 0;
+  /*
+   * THE BUTTON SAYS WHERE IT GOES. Someone sent here to fix a card is not
+   * heading for site selection, and telling them they are is how a screen stops
+   * being believed.
+   */
   const buttonLabel = busy
     ? 'Saving…'
     : saved
-      ? 'Continue to site selection'
+      ? fixingCard
+        ? 'Back to my dashboard'
+        : 'Continue to site selection'
       : // CSCS cutover Phase 1 — "Verify card" is a promise too. Do not make it
         // when no verification is going to run.
         hasCardNumber && verificationLive
-        ? 'Verify card & continue'
-        : 'Continue to site selection';
+        ? fixingCard
+          ? 'Save & check my card again'
+          : 'Verify card & continue'
+        : fixingCard
+          ? 'Save my details'
+          : 'Continue to site selection';
 
   return (
     <form
@@ -496,6 +518,20 @@ export function IdentityForm({
       <Button type="submit" size="lg" fullWidth disabled={busy}>
         {buttonLabel}
       </Button>
+
+      {/* A way out that is not "save". Someone who opened this from the prompt
+          and finds their details were right all along should not have to submit
+          a form to leave. */}
+      {fixingCard && !saved && (
+        <p className="text-center">
+          <Link
+            href={CARD_FIX_RETURN}
+            className="touch-target text-sm font-semibold text-ink-muted underline"
+          >
+            Back without changes
+          </Link>
+        </p>
+      )}
     </form>
   );
 }

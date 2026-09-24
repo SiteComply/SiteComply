@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { CARD_FIX_HREF } from '@/services/cscs/cardFixFlow';
 
 /**
  * Asks an operative to put their card details right, once, and lets them get on.
@@ -61,7 +62,7 @@ export function CscsRemediationBanner({
       <p className="mt-1 text-sm text-ink-muted">{action}</p>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <Link
-          href="/check-in/details?fix=cscs"
+          href={CARD_FIX_HREF}
           className="touch-target rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
         >
           Check my card details
