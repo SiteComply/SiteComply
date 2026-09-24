@@ -85,9 +85,15 @@ if [ ! -x "${VENDOR}/ffmpeg" ]; then
   cp "${SRC}/ffmpeg" "${SRC}/ffprobe" "$VENDOR/" || fail "could not vendor ffmpeg"
   chmod +x "${VENDOR}/ffmpeg" "${VENDOR}/ffprobe"
 fi
-"${VENDOR}/ffmpeg" -hide_banner -filters 2>/dev/null | grep -qw ass \
+# CAPTURE, THEN CHECK. Piping into `grep -q` closes the pipe at the first match,
+# ffmpeg dies of SIGPIPE, and `pipefail` reports the whole pipeline as failed -
+# so a perfectly good binary read as "no libass". The same trap that once made a
+# passing test suite look like a failing one; the same fix.
+FILTERS=$("${VENDOR}/ffmpeg" -hide_banner -filters 2>/dev/null)
+echo "$FILTERS" | grep -qw ass \
   || fail "the vendored ffmpeg has no libass - the frames would have no text"
-echo "  ok   $(du -sh "$VENDOR" | cut -f1) vendored, with libass"
+VER=$("${VENDOR}/ffmpeg" -hide_banner -version 2>/dev/null | head -1)
+echo "  ok   $(du -sh "$VENDOR" | cut -f1) vendored, with libass — ${VER}"
 
 echo "[6/9] Running the verification suites..."
 suite() {  # suite <script> <pattern>
