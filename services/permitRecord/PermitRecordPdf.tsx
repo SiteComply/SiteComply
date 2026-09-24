@@ -1,14 +1,15 @@
 import React from 'react';
-import path from 'path';
+import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import {
-  Document,
-  Page,
-  Text,
-  View,
-  Image,
-  StyleSheet,
-  Font,
-} from '@react-pdf/renderer';
+  DOC,
+  DocumentFooter,
+  Fact,
+  Masthead,
+  Section,
+  longDateTime,
+  pageStyle,
+  shortDateTime,
+} from '@/services/pdfKit/documentKit';
 import type {
   PermitRecordAnswer,
   PermitRecordData,
@@ -32,99 +33,29 @@ import type {
  * therefore authoritative; a permit that looks authoritative when it authorises
  * nothing is the failure mode that gets somebody hurt.
  *
- * ── THE SAME TYPE AS THE INDUCTION RECORD ─────────────────────────────────
+ * ── THE CHROME IS THE SHARED KIT'S ─────────────────────────────────────────
  *
- * Source Sans 3, matching services/inductionRecord. The two are the same KIND
- * of document - an operational record of something a person did or was allowed
- * to do - and they will sit in the same project file. The construction phase
- * plan is set differently on purpose: it is an issued, revision-controlled plan
- * rather than a record of an event.
+ * The masthead, the footer, the faces, the section rule and the date formats
+ * come from services/pdfKit. This file holds only what is particular to a
+ * permit: the verdict band, the validity window, the conditions and the
+ * authorisation trail. The kit also closes the four engine traps that each
+ * silently drop part of a document - see its notes.
  */
-
-const FONT_DIR = path.join(process.cwd(), 'assets', 'fonts');
-
-/**
- * Registered once per process. See the induction record for why the faces are
- * committed rather than resolved from node_modules: a document whose appearance
- * depends on the install tree is not a controlled document.
- */
-let registered = false;
-export function registerFonts(): void {
-  if (registered) return;
-  Font.register({
-    family: 'SourceSans3',
-    fonts: [
-      { src: path.join(FONT_DIR, 'SourceSans3-400.woff'), fontWeight: 400 },
-      { src: path.join(FONT_DIR, 'SourceSans3-600.woff'), fontWeight: 600 },
-      { src: path.join(FONT_DIR, 'SourceSans3-700.woff'), fontWeight: 700 },
-      {
-        src: path.join(FONT_DIR, 'SourceSans3-400-italic.woff'),
-        fontWeight: 400,
-        fontStyle: 'italic',
-      },
-    ],
-  });
-  // @react-pdf hyphenates by default, which breaks a permit reference or a
-  // postcode across a line and makes it unquotable.
-  Font.registerHyphenationCallback((word) => [word]);
-  registered = true;
-}
-
-const INK = '#1A1D21';
-const INK_MUTED = '#5B6570';
-const INK_SUBTLE = '#8A929B';
-const RULE = '#D8DDE2';
-const GREEN = '#2E8B3F';
-const RED = '#B3261E';
-const AMBER = '#8A6A0B';
 
 const s = StyleSheet.create({
-  page: {
-    fontFamily: 'SourceSans3',
-    fontSize: 9.5,
-    color: INK,
-    paddingTop: 48,
-    paddingBottom: 56,
-    paddingHorizontal: 46,
-    // NO lineHeight on the Page: a unitless value here silently stops every
-    // `render`-prop element resolving, which takes the page numbers with it.
-    // The induction record documents this trap; it is the same engine.
-  },
-
-  masthead: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  logo: { height: 26, marginBottom: 4, objectFit: 'contain' },
-  companyName: { fontSize: 11, fontWeight: 700 },
-  tagline: { fontSize: 8, color: INK_SUBTLE },
-  docTitle: { fontSize: 13, fontWeight: 700, letterSpacing: 1.1, textAlign: 'right' },
-  docRef: { fontSize: 9, color: INK_MUTED, textAlign: 'right', marginTop: 2, fontWeight: 600 },
-  brandRule: { height: 2, marginTop: 10 },
-
   // ── the answer ──────────────────────────────────────────────────────────
   verdict: { marginTop: 14, borderLeftWidth: 3, paddingLeft: 12 },
   verdictHeading: { fontSize: 15, fontWeight: 700, letterSpacing: 0.4 },
   verdictText: { fontSize: 10, marginTop: 3, lineHeight: 1.45 },
   window: { flexDirection: 'row', marginTop: 10, gap: 26 },
   windowCell: {},
-  windowLabel: { fontSize: 7.5, fontWeight: 700, letterSpacing: 1.2, color: INK_SUBTLE },
+  windowLabel: { fontSize: 7.5, fontWeight: 700, letterSpacing: 1.2, color: DOC.inkSubtle },
   windowValue: { fontSize: 11, fontWeight: 600, marginTop: 2 },
 
-  sectionLabel: { fontSize: 7.5, fontWeight: 700, letterSpacing: 1.2, marginBottom: 6 },
-  rule: { borderBottomWidth: 0.75, borderBottomColor: RULE },
-  // Tight on purpose: a permit that runs to two pages gets carried as one.
-  block: { marginTop: 10, paddingTop: 8 },
-
+  name: { fontSize: 11, fontWeight: 600 },
+  line: { fontSize: 9.5, color: DOC.inkMuted, lineHeight: 1.45 },
   cols: { flexDirection: 'row', gap: 28 },
   col: { flex: 1 },
-
-  name: { fontSize: 11, fontWeight: 600 },
-  line: { fontSize: 9.5, color: INK_MUTED, lineHeight: 1.45 },
-  fact: { flexDirection: 'row', marginTop: 2 },
-  factLabel: { width: 96, fontSize: 9.5, color: INK_SUBTLE },
-  factValue: { flex: 1, fontSize: 9.5, color: INK_MUTED, lineHeight: 1.45 },
 
   // ── conditions ──────────────────────────────────────────────────────────
   condition: { flexDirection: 'row', marginBottom: 3 },
@@ -141,107 +72,11 @@ const s = StyleSheet.create({
   conditionAnswer: { fontSize: 9.5, fontWeight: 600, marginTop: 1, lineHeight: 1.4 },
 
   historyRow: { flexDirection: 'row', marginBottom: 2 },
-  historyWhen: { width: 104, fontSize: 8.5, color: INK_SUBTLE },
-  historyWhat: { flex: 1, fontSize: 8.5, color: INK_MUTED, lineHeight: 1.45 },
+  historyWhen: { width: 104, fontSize: 8.5, color: DOC.inkSubtle },
+  historyWhat: { flex: 1, fontSize: 8.5, color: DOC.inkMuted, lineHeight: 1.45 },
 
-  note: { fontSize: 8.5, color: INK_SUBTLE, lineHeight: 1.45, marginTop: 6, fontStyle: 'italic' },
-
-  footer: {
-    /*
-     * PUSHED DOWN BY `marginTop: auto`, NOT POSITIONED ABSOLUTELY, and the rule
-     * is a border on this same element rather than a separate View.
-     *
-     * Both are measured, not preferred. An absolutely positioned footer renders
-     * perfectly in isolation and produced NOTHING AT ALL on a full page here -
-     * no rule, no text, no page number, no error. The induction record records
-     * the same finding; this document repeated the mistake before copying it.
-     */
-    marginTop: 'auto',
-    paddingTop: 8,
-    borderTopWidth: 0.75,
-    borderTopColor: RULE,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  footerLeft: { flex: 1 },
-  /*
-   * NO lineHeight HERE. A unitless lineHeight breaks a `render`-prop element
-   * exactly as one on the Page does: the page number resolved to nothing at
-   * all, on every page, while the rest of the footer printed normally. The
-   * working document has none either - that is why.
-   */
-  footerText: { fontSize: 7.5, color: INK_SUBTLE },
-  /*
-   * AN EXPLICIT WIDTH, or the page number vanishes. In a flex row whose left
-   * cell is `flex: 1`, a Text with no width is squeezed to nothing and prints
-   * silently as empty - the footer looks finished and the pagination is gone.
-   */
-  footerRight: { width: 92, textAlign: 'right' },
+  note: { fontSize: 8.5, color: DOC.inkSubtle, lineHeight: 1.45, marginTop: 6, fontStyle: 'italic' },
 });
-
-const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
-
-/**
- * Europe/London, always — a permit's times are site times, and a document that
- * silently printed UTC would be an hour out for half the year, on exactly the
- * field a reader relies on.
- */
-function parts(d: Date): { day: number; month: number; year: number; hh: string; mm: string } {
-  const f = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Europe/London',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hour12: false,
-  }).formatToParts(d);
-  const get = (t: string) => f.find((p) => p.type === t)?.value ?? '';
-  return {
-    day: Number(get('day')),
-    month: Number(get('month')),
-    year: Number(get('year')),
-    hh: get('hour'),
-    mm: get('minute'),
-  };
-}
-
-export function longDateTime(d: Date): string {
-  const p = parts(d);
-  return `${p.day} ${MONTHS[p.month - 1]} ${p.year} at ${p.hh}:${p.mm}`;
-}
-export function shortDateTime(d: Date): string {
-  const p = parts(d);
-  return `${String(p.day).padStart(2, '0')}/${String(p.month).padStart(2, '0')}/${p.year} ${p.hh}:${p.mm}`;
-}
-
-/**
- * A titled block.
- *
- * `minPresenceAhead` is the "keep with next" this engine gives us: a heading
- * with less than this much room under it moves to the next page instead of
- * sitting alone at the foot of this one. Without it the HISTORY heading printed
- * at the bottom of page one and every one of its rows on page two.
- */
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <View style={s.block} minPresenceAhead={56}>
-      <View style={s.rule} />
-      <View style={{ paddingTop: 8 }}>
-        <Text style={[s.sectionLabel, { color: INK_SUBTLE }]}>{title}</Text>
-        {children}
-      </View>
-    </View>
-  );
-}
-
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={s.fact}>
-      <Text style={s.factLabel}>{label}</Text>
-      <Text style={s.factValue}>{value}</Text>
-    </View>
-  );
-}
 
 /** Answers longer than this read badly squeezed into the right-hand column. */
 const SHORT_ANSWER = 24;
@@ -260,7 +95,7 @@ function Condition({ answer }: { answer: PermitRecordAnswer }) {
     return (
       <View style={s.condition} wrap={false}>
         <Text style={s.conditionLabel}>{answer.label}</Text>
-        <Text style={[s.conditionValue, answer.negative ? { color: RED } : {}]}>
+        <Text style={[s.conditionValue, answer.negative ? { color: DOC.red } : {}]}>
           {answer.value}
         </Text>
       </View>
@@ -269,7 +104,7 @@ function Condition({ answer }: { answer: PermitRecordAnswer }) {
   return (
     <View style={s.conditionBlock} wrap={false}>
       <Text style={s.conditionQuestion}>{answer.label}</Text>
-      <Text style={[s.conditionAnswer, answer.negative ? { color: RED } : {}]}>
+      <Text style={[s.conditionAnswer, answer.negative ? { color: DOC.red } : {}]}>
         {answer.value}
       </Text>
     </View>
@@ -278,7 +113,7 @@ function Condition({ answer }: { answer: PermitRecordAnswer }) {
 
 export function PermitRecordPdf({ data }: { data: PermitRecordData }) {
   const brand = data.company.primaryColor || '#00AEEF';
-  const tone = data.status.authorised ? GREEN : data.status.value === 'REJECTED' ? RED : AMBER;
+  const tone = data.status.authorised ? DOC.green : data.status.value === 'REJECTED' ? DOC.red : DOC.amber;
   const auth = data.authorisation;
 
   return (
@@ -289,25 +124,12 @@ export function PermitRecordPdf({ data }: { data: PermitRecordData }) {
       creator="SiteComply"
       producer="SiteComply"
     >
-      <Page size="A4" style={s.page}>
-        <View fixed>
-          <View style={s.masthead}>
-            <View>
-              {data.company.logo ? (
-                <Image style={s.logo} src={data.company.logo.bytes} />
-              ) : null}
-              <Text style={s.companyName}>{data.company.name}</Text>
-              {data.company.tagline ? (
-                <Text style={s.tagline}>{data.company.tagline}</Text>
-              ) : null}
-            </View>
-            <View>
-              <Text style={s.docTitle}>PERMIT TO WORK</Text>
-              <Text style={s.docRef}>{data.reference}</Text>
-            </View>
-          </View>
-          <View style={[s.brandRule, { backgroundColor: brand }]} />
-        </View>
+      <Page size="A4" style={pageStyle()}>
+        <Masthead
+          brand={data.company}
+          title="PERMIT TO WORK"
+          reference={data.reference}
+        />
 
         {/* ── The answer to the only question that matters here ── */}
         <View style={[s.verdict, { borderLeftColor: tone }]}>
@@ -442,30 +264,16 @@ export function PermitRecordPdf({ data }: { data: PermitRecordData }) {
         )}
 
         {/*
-          `fixed` so every page carries it, and the page-number Text below is a
-          DIRECT CHILD of this element - nested one level deeper, every other
-          footer line prints and the page number silently does not.
+          THE GENERATION TIME IS NOT DECORATION. A permit's state changes - it
+          expires, it can be cancelled - so a printed copy is only ever true as
+          at the moment it was produced, and the reader is told exactly when.
         */}
-        <View style={s.footer} fixed>
-          <View style={s.footerLeft}>
-            <Text style={s.footerText}>
-              {`${data.reference} · ${data.site.name} · ${data.work.permitTypeName}`}
-            </Text>
-            {/*
-              THE GENERATION TIME IS NOT DECORATION. A permit's state changes -
-              it expires, it can be cancelled - so a printed copy is only ever
-              true as at the moment it was produced, and the reader is told
-              exactly when that was.
-            */}
-            <Text style={s.footerText}>
-              {`Status shown as at ${shortDateTime(data.generatedAt)} · Produced by SiteComply`}
-            </Text>
-          </View>
-          <Text
-            style={[s.footerText, s.footerRight]}
-            render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`}
-          />
-        </View>
+        <DocumentFooter
+          lines={[
+            `${data.reference} · ${data.site.name} · ${data.work.permitTypeName}`,
+            `Status shown as at ${shortDateTime(data.generatedAt)} · Produced by SiteComply`,
+          ]}
+        />
       </Page>
     </Document>
   );

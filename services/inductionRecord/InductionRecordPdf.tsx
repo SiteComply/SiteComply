@@ -1,17 +1,22 @@
 import React from 'react';
-import path from 'node:path';
 import {
   Document,
   Page,
   Text,
   View,
   Image,
-  Font,
   StyleSheet,
   Svg,
   Path,
   Circle,
 } from '@react-pdf/renderer';
+import {
+  DocumentFooter,
+  Masthead,
+  registerDocumentFonts,
+  longDate,
+  timeOnly,
+} from '@/services/pdfKit/documentKit';
 import type { InductionRecordData } from '@/services/inductionRecord/inductionRecordData';
 
 /**
@@ -48,34 +53,6 @@ import type { InductionRecordData } from '@/services/inductionRecord/inductionRe
 // "system-ui" renders in whatever the reader substitutes, so the document would
 // look different for every recipient. That is exactly the inconsistency this
 // work exists to remove.
-const FONT_DIR = path.join(process.cwd(), 'assets', 'fonts');
-let fontsRegistered = false;
-export function registerFonts(): void {
-  if (fontsRegistered) return;
-  Font.register({
-    family: 'SourceSans3',
-    fonts: [
-      { src: path.join(FONT_DIR, 'SourceSans3-400.woff'), fontWeight: 400 },
-      { src: path.join(FONT_DIR, 'SourceSans3-600.woff'), fontWeight: 600 },
-      { src: path.join(FONT_DIR, 'SourceSans3-700.woff'), fontWeight: 700 },
-      // The italic face is NOT optional decoration. @react-pdf resolves a font
-      // by (family, weight, style) and THROWS when the combination is missing —
-      // it does not synthesise an oblique the way a browser would. The quoted
-      // declaration is set in italic, so this face has to exist or the whole
-      // document fails to render.
-      {
-        src: path.join(FONT_DIR, 'SourceSans3-400-italic.woff'),
-        fontWeight: 400,
-        fontStyle: 'italic',
-      },
-    ],
-  });
-  // Long site names and address lines must not be hyphenated mid-word: a broken
-  // postcode or job reference is worse than a short line.
-  Font.registerHyphenationCallback((word) => [word]);
-  fontsRegistered = true;
-}
-
 const INK = '#1A1D21';
 const INK_MUTED = '#5B6570';
 const INK_SUBTLE = '#8A929B';
@@ -193,27 +170,17 @@ const s = StyleSheet.create({
   footerText: { fontSize: 7.5, color: INK_SUBTLE },
 });
 
-const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
-
 /**
- * Dates are formatted here rather than by the app's `formatDateUK`, because that
- * helper renders for a browser in the viewer's locale. A document must read the
- * same to everyone who opens it, so the format is fixed and spelled out: "14
- * September 2026" can only be read one way, where "14/09/26" cannot.
+ * Dates come from the shared kit, and are formatted in EUROPE/LONDON.
+ *
+ * They used to be formatted here from the UTC parts of the Date. That is an
+ * hour out for half the year, and around midnight in summer it printed the
+ * WRONG DAY: an induction completed at 00:30 BST on 2 July was recorded as
+ * 1 July. On a document whose entire purpose is to record when somebody was
+ * inducted, that is not a formatting preference.
  */
-function longDate(d: Date): string {
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-}
 function shortDateTime(d: Date): string {
-  const hh = String(d.getUTCHours()).padStart(2, '0');
-  const mm = String(d.getUTCMinutes()).padStart(2, '0');
-  return `${longDate(d)}, ${hh}:${mm}`;
-}
-function timeOnly(d: Date): string {
-  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+  return `${longDate(d)}, ${timeOnly(d)}`;
 }
 
 /**
@@ -310,25 +277,13 @@ export function InductionRecordPdf({ data }: { data: InductionRecordData }) {
       producer="SiteComply"
     >
       <Page size="A4" style={s.page}>
-        {/* ── Masthead. `fixed` so a second page carries it too. ── */}
-        <View fixed>
-          <View style={s.masthead}>
-            <View>
-              {data.company.logo ? (
-                <Image style={s.logo} src={data.company.logo.bytes} />
-              ) : null}
-              <Text style={s.companyName}>{data.company.name}</Text>
-              {data.company.tagline ? (
-                <Text style={s.tagline}>{data.company.tagline}</Text>
-              ) : null}
-            </View>
-            <View>
-              <Text style={s.docTitle}>SITE INDUCTION RECORD</Text>
-              <Text style={s.docRef}>{data.documentReference}</Text>
-            </View>
-          </View>
-          <View style={[s.brandRule, { backgroundColor: brand }]} />
-        </View>
+        {/* The shared masthead: same logo, name and brand rule on every
+            SiteComply document, and the document reference set the same way. */}
+        <Masthead
+          brand={data.company}
+          title="SITE INDUCTION RECORD"
+          reference={data.documentReference}
+        />
 
         {/* ── Outcome, stated once and plainly ── */}
         <View style={s.status}>
@@ -487,23 +442,13 @@ export function InductionRecordPdf({ data }: { data: InductionRecordData }) {
           </Section>
         </View>
 
-        {/* ── Footer, on every page ── */}
-        <View style={s.footer} fixed>
-          <View style={s.footerLeft}>
-            <Text style={s.footerText}>
-              {`Induction version ${ind.version} · Check-in reference ${data.checkInReference}`}
-            </Text>
-            <Text style={s.footerText}>
-              {`${data.documentReference} · Generated ${shortDateTime(data.generatedAt)} · Produced by SiteComply`}
-            </Text>
-          </View>
-          <Text
-            style={[s.footerText, s.footerRight]}
-            render={({ pageNumber, totalPages }) =>
-              `Page ${pageNumber} of ${totalPages}`
-            }
-          />
-        </View>
+        {/* The shared footer, which is also where the page numbers live. */}
+        <DocumentFooter
+          lines={[
+            `Induction version ${ind.version} · Check-in reference ${data.checkInReference}`,
+            `${data.documentReference} · Generated ${shortDateTime(data.generatedAt)} · Produced by SiteComply`,
+          ]}
+        />
       </Page>
     </Document>
   );

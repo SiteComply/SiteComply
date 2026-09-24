@@ -276,6 +276,12 @@ export function longDateTime(d: Date): string {
   const p = parts(d);
   return `${longDate(d)} at ${p.hh}:${p.mm}`;
 }
+/** "08:42" — the time alone, still in site time. */
+export function timeOnly(d: Date): string {
+  const p = parts(d);
+  return `${p.hh}:${p.mm}`;
+}
+
 export function shortDateTime(d: Date): string {
   const p = parts(d);
   return `${String(p.day).padStart(2, '0')}/${String(p.month).padStart(2, '0')}/${p.year} ${p.hh}:${p.mm}`;

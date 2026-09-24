@@ -1,9 +1,7 @@
 import React from 'react';
 import { renderToBuffer } from '@react-pdf/renderer';
-import {
-  InductionRecordPdf,
-  registerFonts,
-} from '@/services/inductionRecord/InductionRecordPdf';
+import { InductionRecordPdf } from '@/services/inductionRecord/InductionRecordPdf';
+import { registerDocumentFonts } from '@/services/pdfKit/documentKit';
 import type { InductionRecordData } from '@/services/inductionRecord/inductionRecordData';
 
 /**
@@ -16,7 +14,7 @@ import type { InductionRecordData } from '@/services/inductionRecord/inductionRe
 export async function renderInductionRecordPdf(
   data: InductionRecordData,
 ): Promise<Buffer> {
-  registerFonts();
+  registerDocumentFonts();
   // The cast is @react-pdf's typing, not a correctness question: renderToBuffer
   // is declared as taking a ReactElement<DocumentProps>, but a component that
   // RETURNS a <Document> does not satisfy that shape. The element rendered is a

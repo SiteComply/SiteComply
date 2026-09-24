@@ -18,10 +18,8 @@ import {
   permitRecordFilename,
   type PermitRecordData,
 } from '../services/permitRecord/permitRecordData';
-import {
-  longDateTime,
-  shortDateTime,
-} from '../services/permitRecord/PermitRecordPdf';
+// The dates come from the shared kit now; the assertions follow the property.
+import { longDateTime, shortDateTime } from '../services/pdfKit/documentKit';
 import { renderPermitRecordPdf } from '../services/permitRecord/renderPermitRecord';
 
 let pass = 0;
@@ -119,24 +117,28 @@ async function main() {
   }));
   ok('a refused permit renders, with its reason', refused.length > 20_000);
 
-  console.log('\n[6] The traps that produce a plausible document with no pagination');
+  console.log('\n[6] The traps, now closed once in the shared kit');
   const doc = read('services/permitRecord/PermitRecordPdf.tsx');
-  // The PROPERTY, not the word: the style block carries a comment explaining
-  // why the property is absent, and matching that comment fails a correct file.
-  ok('no lineHeight on the Page — it silently kills every render prop',
-    !/page: \{[^}]*lineHeight:\s*[\d.]/s.test(doc));
+  const kit = read('services/pdfKit/documentKit.tsx');
+  ok('the permit takes its chrome from the kit rather than copying it',
+    /from '@\/services\/pdfKit\/documentKit'/.test(doc) &&
+      /<Masthead/.test(doc) && /<DocumentFooter/.test(doc));
+  ok('  and no longer registers its own faces',
+    !/Font\.register/.test(doc) && !/FONT_DIR/.test(doc));
+  ok('no lineHeight on the page style — it silently kills every render prop',
+    !/pageStyle[\s\S]{0,400}lineHeight:\s*[\d.]/.test(kit));
   ok('  nor on the footer text, which kills the page number the same way',
-    !/footerText: \{[^}]*lineHeight:\s*[\d.]/s.test(doc));
+    !/footerText: \{[^}]*lineHeight:\s*[\d.]/.test(kit));
   ok('the footer is pushed down by marginTop, not positioned absolutely',
-    /marginTop: 'auto'/.test(doc) && !/footer: \{[\s\S]{0,200}position: 'absolute'/.test(doc));
+    /marginTop: 'auto'/.test(kit) && !/footer: \{[\s\S]{0,200}position: 'absolute'/.test(kit));
   ok('the page-number Text has an explicit width, or it collapses to nothing',
-    /footerRight: \{ width: \d+/.test(doc));
+    /footerRight: \{ width: \d+/.test(kit));
   ok('the page number is a DIRECT child of the fixed footer',
-    /<View style=\{s\.footer\} fixed>[\s\S]{0,1400}render=\{\(\{ pageNumber, totalPages \}\)/.test(doc));
+    /<View style=\{s\.footer\} fixed>[\s\S]{0,400}render=\{\(\{ pageNumber, totalPages \}\)/.test(kit));
   ok('WOFF faces, not WOFF2 — WOFF2 reads fine and cannot be embedded',
-    /\.woff'/.test(doc) && !/\.woff2/.test(doc));
+    /\.woff'/.test(kit) && !/\.woff2/.test(kit));
   ok('hyphenation is off, so a reference is never broken across a line',
-    /registerHyphenationCallback/.test(doc));
+    /registerHyphenationCallback/.test(kit));
 
   console.log('\n[7] One permit, one document');
   const workerRoute = read('app/api/worker/permits/[id]/record/route.ts');
@@ -164,7 +166,7 @@ async function main() {
   ok('the state is derived as at generation, by the rule the screens use',
     /effectiveStatus\(\{/.test(data));
   ok('  and the document is stamped with when that was',
-    /Status shown as at/.test(doc));
+    /Status shown as at/.test(read('services/permitRecord/PermitRecordPdf.tsx')));
   ok('the permit keeps its own reference — no second number for one permit',
     /reference: permit\.reference/.test(data));
 

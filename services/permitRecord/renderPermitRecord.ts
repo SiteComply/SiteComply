@@ -1,9 +1,7 @@
 import React from 'react';
 import { renderToBuffer } from '@react-pdf/renderer';
-import {
-  PermitRecordPdf,
-  registerFonts,
-} from '@/services/permitRecord/PermitRecordPdf';
+import { PermitRecordPdf } from '@/services/permitRecord/PermitRecordPdf';
+import { registerDocumentFonts } from '@/services/pdfKit/documentKit';
 import type { PermitRecordData } from '@/services/permitRecord/permitRecordData';
 
 /**
@@ -16,7 +14,7 @@ import type { PermitRecordData } from '@/services/permitRecord/permitRecordData'
 export async function renderPermitRecordPdf(
   data: PermitRecordData,
 ): Promise<Buffer> {
-  registerFonts();
+  registerDocumentFonts();
   // The cast is @react-pdf's typing, not a correctness question: renderToBuffer
   // is declared as taking ReactElement<DocumentProps>, which a component that
   // RETURNS a <Document> does not satisfy. The element rendered is a Document.
