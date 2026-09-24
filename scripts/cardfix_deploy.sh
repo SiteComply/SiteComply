@@ -54,24 +54,29 @@ echo "  ok   source asserts pass"
 echo "[4/7] Running the verification suites..."
 # Output captured, then checked: `grep -q` closes the pipe and pipefail turns the
 # resulting SIGPIPE into a false failure.
+# ONE PATTERN FOR EVERY SUITE. The suites do not agree on how they print their
+# totals - some wrap it in "==", some do not - and a per-suite pattern is a
+# per-suite chance to mistake a passing run for a failing one, which is exactly
+# what happened on the first attempt at this deploy. "(^| )0 failed" also cannot
+# match "10 failed", which a bare "0 failed" would.
 suite() {
   local out; out=$(npx tsx "scripts/$1.ts" 2>&1)
-  echo "$out" | grep -qE "$2" || { echo "$out" | tail -15; fail "$1 has failures"; }
-  echo "  ok   $1: $(echo "$out" | grep -oE '([0-9]+ passed, )?0 failed' | tail -1)"
+  echo "$out" | grep -qE "(^| )0 failed" || { echo "$out" | tail -15; fail "$1 has failures"; }
+  echo "  ok   $1: $(echo "$out" | grep -oE '([0-9]+ passed, )?[0-9]+ failed' | tail -1)"
 }
 # This change's own suite first.
-suite cscs_remediation_verify      "== [0-9]+ passed, 0 failed =="
-suite cscs_access_gate_verify      "== [0-9]+ passed, 0 failed =="
-suite cscs_scheme_notlisted_verify "== [0-9]+ passed, 0 failed =="
-suite cscs_exempt_verify           ", 0 failed"
-suite smartcheck_mapping_verify    ", 0 failed"
-suite worker_name_verify           ", 0 failed"
-suite inviteflow_verify            "== [0-9]+ passed, 0 failed =="
-suite induction_grouping_verify    "== [0-9]+ passed, 0 failed =="
-suite induction_briefing_verify    ", 0 failed"
-suite inductionvideo_render_verify "== [0-9]+ passed, 0 failed =="
-suite inductionvideo_speech_verify "== [0-9]+ passed, 0 failed =="
-suite inductionvideo_verify        "== [0-9]+ passed, 0 failed =="
+suite cscs_remediation_verify
+suite cscs_access_gate_verify
+suite cscs_scheme_notlisted_verify
+suite cscs_exempt_verify
+suite smartcheck_mapping_verify
+suite worker_name_verify
+suite inviteflow_verify
+suite induction_grouping_verify
+suite induction_briefing_verify
+suite inductionvideo_render_verify
+suite inductionvideo_speech_verify
+suite inductionvideo_verify
 # The induction-video END-TO-END suites are deliberately not in this gate: they
 # spend money on a real speech service and render a video, and nothing in this
 # change touches that code. They ran on the deploy that shipped it.
