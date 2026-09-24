@@ -2,8 +2,13 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
+import {
+  InductionVideoWorkspace,
+  INDUCTION_VIDEO_AREAS,
+} from '@/components/platform/InductionVideoWorkspace';
 import { requirePlatformViewer } from '@/services/platformUsers/platformAccess';
 import { canManageInductionVideos } from '@/services/inductionVideo/inductionVideoPermissions';
+import { canViewInductionModules } from '@/services/inductionModules/inductionModuleService';
 import { prisma } from '@/lib/prisma';
 import { formatDateTimeUK } from '@/lib/datetime';
 import { InductionVideoStatusBadge } from '@/components/platform/InductionVideoStatusBadge';
@@ -45,19 +50,19 @@ export default async function InductionVideosPage() {
     },
   });
 
+  // The company-modules area is offered only to roles that may read it, so the
+  // navigator never shows a Principal Contractor a link that would redirect them.
+  const areas = INDUCTION_VIDEO_AREAS.filter(
+    (a) => a.key !== 'modules' || canViewInductionModules(viewer.role),
+  );
+
   return (
     <PlatformShell>
-      <Breadcrumbs
-        items={[{ label: 'Induction videos' }]}
-      />
-      <header className="mb-5 space-y-1">
-        <h1 className="text-2xl font-bold text-ink">Induction videos</h1>
-        <p className="text-sm text-ink-muted">
-          Built from each project’s own records: the site decides what the
-          induction must cover, and nothing is added that has not been entered.
-        </p>
-      </header>
-
+      <InductionVideoWorkspace
+        active="videos"
+        areas={areas}
+        breadcrumbs={<Breadcrumbs items={[{ label: 'Induction videos' }]} />}
+      >
       <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-line bg-surface-sunken text-xs uppercase tracking-wide text-ink-subtle">
@@ -112,6 +117,7 @@ export default async function InductionVideosPage() {
           </tbody>
         </table>
       </div>
+      </InductionVideoWorkspace>
     </PlatformShell>
   );
 }

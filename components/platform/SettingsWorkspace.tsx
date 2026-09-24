@@ -49,16 +49,25 @@ export const SETTINGS_AREAS: SettingsArea[] = [
   },
   {
     /*
-     * Company induction content, inherited by every project's induction the way
-     * arrangements are inherited by its plan. Listed next to them because it is
-     * the same KIND of thing - authored organisational content a Director owns -
-     * rather than a per-site switch.
+     * A POINTER, not an area. Company induction modules used to live here, on
+     * the grounds that they are authored company content inherited by every
+     * project - the same argument as Management arrangements above.
+     *
+     * The argument was wrong in one respect that matters: the construction phase
+     * plan has no area of its own, so arrangements are in Settings by necessity,
+     * whereas induction videos DO have one. Worse, the Settings nav entry is
+     * shown to Directors and Project Managers only, so a Site Manager - who may
+     * draft a module - had no route to the screen at all.
+     *
+     * The entry stays because removing it would silently strip the path a
+     * Director has already learned; it now links out to where the screen lives.
+     * The old URL redirects there too.
      */
     key: 'induction-modules',
     label: 'Induction modules',
-    href: '/platform/dashboard/settings/induction-modules',
+    href: '/platform/dashboard/induction-videos/modules',
     description:
-      'PPE expectations, behavioural standards, accident and near-miss reporting, housekeeping, manual handling and environmental awareness — the standard content every induction carries.',
+      'Now managed with Induction videos, alongside the videos they are included in — the standard content every induction carries.',
   },
   {
     key: 'config-templates',

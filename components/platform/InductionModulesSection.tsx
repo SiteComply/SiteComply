@@ -60,7 +60,7 @@ export function InductionModulesSection({
     setBusy(key);
     setError(null);
     try {
-      const res = await fetch('/api/platform/settings/induction-modules', {
+      const res = await fetch('/api/platform/induction-modules', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
