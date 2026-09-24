@@ -20,7 +20,21 @@ export const VIDEO_FORMAT = {
   aspect: '9:16',
   width: 1080,
   height: 1920,
-  fps: 30,
+  /*
+   * TEN, NOT THIRTY.
+   *
+   * Every frame of an induction scene is IDENTICAL - a colour, a heading, a few
+   * lines and the brand mark. Encoding thirty of them a second spends two and a
+   * half times the CPU to produce a slightly larger file that looks exactly the
+   * same. Measured: 20 seconds of video took 2,378 ms at thirty and 961 ms at
+   * ten, and the ten-frame file was smaller.
+   *
+   * That ratio matters because the encoder shares a small instance with every
+   * request the platform serves: on the production B1, fifteen seconds of video
+   * took ninety-five seconds to render at thirty frames. Nothing here moves, so
+   * nothing is lost.
+   */
+  fps: 10,
   /** Kept as a single source of truth for the renderer's output settings. */
   container: 'mp4',
 } as const;

@@ -248,6 +248,15 @@ export class FfmpegVideoRenderer implements VideoRenderer {
       '-filter_complex', filter,
       '-map', '[v]', '-map', '1:a',
       '-c:v', 'libx264', '-preset', PRESET, '-crf', CRF,
+      // The frame never changes; x264 is told so.
+      '-tune', 'stillimage',
+      /*
+       * A keyframe every two seconds. At ten frames a second the default
+       * interval is twenty-five SECONDS, and a player can only seek to a
+       * keyframe - an operative dragging the scrubber would jump in
+       * twenty-five-second steps and conclude the video was broken.
+       */
+      '-g', String(VIDEO_FORMAT.fps * 2),
       // yuv420p, or the file will not play on iOS at all.
       '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-b:a', '96k', '-ar', '44100',

@@ -161,6 +161,9 @@ function main() {
     /chmodSync\(path, 0o755\)/.test(ff) && /accessSync\(path, constants\.X_OK\)/.test(ff));
   ok('  and if it cannot be repaired the engine reports itself unavailable',
     /return false;\n\s*\}\n\s*\}\n\}/.test(ff));
+  ok('static frames are not encoded thirty times a second', VIDEO_FORMAT.fps === 10);
+  ok('  and a player can still seek: a keyframe every two seconds',
+    /'-g', String\(VIDEO_FORMAT\.fps \* 2\)/.test(ff));
   ok('a self-hosted render costs nothing per minute', estimateRenderPence(240_000, 0) === 0);
   ok('  a cloud one is priced by the minute', estimateRenderPence(240_000, 32) === 128);
 
