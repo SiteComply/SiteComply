@@ -1,6 +1,20 @@
 import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/platform/PageHeader';
 import { SectionWorkspace } from '@/components/platform/SectionWorkspace';
+import {
+  INDUCTION_VIDEO_AREAS,
+  INDUCTION_VIDEO_AREA_TITLE,
+  inductionVideoHref,
+  type InductionVideoArea,
+} from '@/services/inductionVideo/inductionVideoAreas';
+
+/*
+ * The areas are NOT defined here any more. They are shared with the Admin Centre
+ * so the two tiers cannot drift apart - see inductionVideoAreas.ts. Re-exported
+ * because pages already import them from this component.
+ */
+export { INDUCTION_VIDEO_AREAS };
+export type { InductionVideoArea };
 
 /**
  * The Induction Videos area as ONE workspace.
@@ -28,35 +42,6 @@ import { SectionWorkspace } from '@/components/platform/SectionWorkspace';
  * keeps its own gate regardless — a navigator that hides a link is not an
  * access control.
  */
-export interface InductionVideoArea {
-  key: string;
-  label: string;
-  href: string;
-  description: string;
-}
-
-export const INDUCTION_VIDEO_AREAS: InductionVideoArea[] = [
-  {
-    key: 'videos',
-    label: 'Videos',
-    href: '/platform/dashboard/induction-videos',
-    description:
-      'One row per project: which have an induction video, which are waiting on you, and which are missing information.',
-  },
-  {
-    /*
-     * Second, not first: a manager opens this area to work on a project's video,
-     * and company content is what that video is partly built FROM. Putting the
-     * company standard first would make the daily task the secondary one.
-     */
-    key: 'modules',
-    label: 'Company modules',
-    href: '/platform/dashboard/induction-videos/modules',
-    description:
-      'Standard content every induction carries, written once and issued centrally — included in every project alongside its own hazards and arrangements.',
-  },
-];
-
 export function InductionVideoWorkspace({
   active,
   areas = INDUCTION_VIDEO_AREAS,
@@ -70,12 +55,11 @@ export function InductionVideoWorkspace({
   children: ReactNode;
 }) {
   const current = areas.find((a) => a.key === active) ?? areas[0];
-  const byKey = new Map(areas.map((a) => [a.key, a.href]));
 
   return (
     <>
       <PageHeader
-        title="Induction videos"
+        title={INDUCTION_VIDEO_AREA_TITLE}
         description="Built from each project’s own records, plus the standard content the company issues for every site."
         breadcrumbs={breadcrumbs}
       />
@@ -88,9 +72,12 @@ export function InductionVideoWorkspace({
         }))}
         active={current?.key ?? ''}
         // Each area owns its own route, so the navigator links to it directly
-        // rather than to a query on this one — the same reason SettingsWorkspace
-        // looks an area up instead of building `?section=`.
-        hrefFor={(key) => byKey.get(key) ?? areas[0]?.href ?? '#'}
+        // rather than to a query on this one. The path comes from the shared
+        // helper, so the Platform and the Admin Centre cannot disagree about
+        // where an area lives.
+        hrefFor={(key) =>
+          inductionVideoHref('PLATFORM', key as InductionVideoArea['key'])
+        }
         navLabel="Induction video areas"
       >
         {children}

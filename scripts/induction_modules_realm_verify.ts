@@ -81,7 +81,9 @@ const director = { id: 'u1', name: 'Dee Director', role: 'DIRECTOR', siteIds: []
     const SEC = 'components/platform/InductionModulesSection.tsx';
     chk('the editor takes its endpoint as a prop', /endpoint: string/.test(read(SEC)));
     chk('the editor hard-codes no endpoint', !/fetch\('\/api\//.test(read(SEC)));
-    const adminPage = read('app/admin/(dashboard)/settings/induction-modules/page.tsx');
+    // Moved out of Settings into the Induction Videos area; the old path is now a
+    // redirect stub, so asserting against it would prove nothing.
+    const adminPage = read('app/admin/(dashboard)/induction-videos/modules/page.tsx');
     chk('the admin page renders the SAME editor',
       /InductionModulesSection/.test(adminPage) &&
       /endpoint="\/api\/admin\/induction-modules"/.test(adminPage));

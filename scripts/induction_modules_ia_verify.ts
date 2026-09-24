@@ -149,7 +149,13 @@ chk('videos first — it is the daily task', keys[0] === 'videos');
 chk('company modules second', keys[1] === 'modules');
 chk(
   'the modules area href matches the page route',
-  ws.INDUCTION_VIDEO_AREAS[1].href === NEW_HREF,
+  // Areas no longer carry a href: the path is derived per tier from the shared
+  // helper, so the Platform and Admin Centre cannot disagree about where an area
+  // lives. See induction_modules_admin_ia_verify.ts.
+  require('../services/inductionVideo/inductionVideoAreas').inductionVideoHref(
+    'PLATFORM',
+    'modules',
+  ) === NEW_HREF,
 );
 chk(
   'the listing hides the modules area from roles that may not read it',

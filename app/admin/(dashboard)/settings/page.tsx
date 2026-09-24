@@ -69,13 +69,6 @@ const SETTINGS_GROUPS: ReadonlyArray<{
     label: 'Organisation',
     areas: [
       {
-        href: '/admin/settings/induction-modules',
-        icon: 'clipboard',
-        title: 'Induction modules',
-        description:
-          'The standard content every operative hears on every project. Managed here or in Induction videos — the same modules either way.',
-      },
-      {
         href: '/admin/settings/company',
         icon: 'building',
         title: 'Company',

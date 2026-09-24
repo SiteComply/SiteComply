@@ -49,6 +49,16 @@ import { cn } from '@/lib/cn';
 export interface AdminTab {
   key: string;
   label: string;
+  /**
+   * An explicit destination, for a workspace whose areas are real routes rather
+   * than tabs on one page.
+   *
+   * The default remains `basePath?tab=key`, which is right when the tabs are
+   * views of a single screen. But the Induction Videos area mirrors the Platform,
+   * where each area owns its own route - so the same path shape works in both
+   * tiers and one can be read across to the other.
+   */
+  href?: string;
 }
 
 export function AdminTabs({
@@ -77,7 +87,7 @@ export function AdminTabs({
         return (
           <Link
             key={tab.key}
-            href={`${basePath}?${param}=${tab.key}`}
+            href={tab.href ?? `${basePath}?${param}=${tab.key}`}
             aria-current={isActive ? 'page' : undefined}
             className={cn(
               // -mb-px lifts the indicator onto the row's rule so the two are

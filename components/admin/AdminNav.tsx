@@ -13,6 +13,12 @@ export const ADMIN_NAV = [
   { href: '/admin/sites', label: 'Job sites' },
   { href: '/admin/on-site', label: 'On site now' },
   { href: '/admin/submissions', label: 'Check-ins' },
+  /*
+   * Its own area, deliberately NOT a Settings item. Company modules are part of
+   * the induction video product, and the label matches the Platform's nav exactly
+   * so an administrator moving between tiers reads the same word.
+   */
+  { href: '/admin/induction-videos', label: 'Induction videos' },
   { href: '/admin/platform-users', label: 'Users' },
   { href: '/admin/platform-access-requests', label: 'Access Requests' },
   { href: '/admin/settings', label: 'Settings' },
