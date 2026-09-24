@@ -96,6 +96,11 @@ VER=$("${VENDOR}/ffmpeg" -hide_banner -version 2>/dev/null | head -1)
 echo "  ok   $(du -sh "$VENDOR" | cut -f1) vendored, with libass — ${VER}"
 
 echo "[6/9] Running the verification suites..."
+# THE SUITES RENDER WITH THE BINARY THIS DEPLOY IS ABOUT TO SHIP, not with
+# whatever happens to be on the developer's PATH. If the vendored encoder cannot
+# produce a video here, it will not produce one in production either, and the
+# end-to-end suite is the place to find that out.
+export FFMPEG_PATH="${PWD}/${VENDOR}/ffmpeg"
 suite() {  # suite <script> <pattern>
   local out; out=$(npx tsx "scripts/$1.ts" 2>&1)
   echo "$out" | grep -qE "$2" || { echo "$out" | tail -15; fail "$1 has failures"; }
