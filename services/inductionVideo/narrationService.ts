@@ -25,6 +25,8 @@ import {
   transcriptPath,
   uploadMedia,
 } from '@/services/inductionVideo/mediaStorage';
+import { refuseIfOverBudget } from '@/services/inductionVideo/spendGuard';
+import { kickInductionJobs } from '@/services/inductionVideo/jobKicker';
 import {
   buildTranscript,
   buildVtt,
@@ -109,7 +111,8 @@ export async function requestNarration(
   if (!video || !canWorkOnVideoSite(viewer, video.jobSiteId)) {
     return { ok: false, error: 'Not available.' };
   }
-  if (!resolveSpeechSynthesiser()) {
+  const synthesiser = resolveSpeechSynthesiser();
+  if (!synthesiser) {
     return { ok: false, error: 'Narration is not configured on this deployment.' };
   }
   /*
@@ -143,6 +146,23 @@ export async function requestNarration(
     return { ok: false, error: 'Narration is already being generated for this version.' };
   }
 
+  /*
+   * Priced on WHAT WOULD ACTUALLY BE BOUGHT: a re-narration that reuses eleven
+   * of twelve scenes must not be refused as though it were a whole video.
+   */
+  const scenes = await prisma.inductionVideoScene.findMany({
+    where: { videoId },
+    select: { narration: true, audioHash: true, audioDurationMs: true },
+  });
+  const voice = synthesiser.voice;
+  const toBuy = scenes.filter(
+    (s) => !s.audioDurationMs || s.audioHash !== sceneAudioHash(s.narration, voice),
+  );
+  const overBudget = await refuseIfOverBudget(
+    estimateNarrationForScenes(toBuy.map((s) => s.narration)).pence,
+  );
+  if (overBudget) return { ok: false, error: overBudget };
+
   await prisma.$transaction([
     prisma.inductionVideo.update({
       where: { id: videoId },
@@ -164,6 +184,7 @@ export async function requestNarration(
       },
     }),
   ]);
+  kickInductionJobs();
   return { ok: true, value: { queued: true, scenes: video._count.scenes } };
 }
 

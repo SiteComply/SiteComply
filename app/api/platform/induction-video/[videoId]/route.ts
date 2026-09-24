@@ -8,6 +8,11 @@ import {
   supersedeEarlierVersions,
 } from '@/services/inductionVideo/inductionVideoService';
 import { requestNarration } from '@/services/inductionVideo/narrationService';
+import {
+  publishVideo,
+  requestRender,
+  withdrawVideo,
+} from '@/services/inductionVideo/renderService';
 import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
@@ -22,6 +27,10 @@ export const dynamic = 'force-dynamic';
  *   PATCH { action: 'approve' }                → Director or Site Manager
  *   PATCH { action: 'narrate' }                → queue narration of an approved
  *                                                script; the scheduler runs it
+ *   PATCH { action: 'render' }                 → queue the MP4 render
+ *   PATCH { action: 'publish' }                → Director or Site Manager; this
+ *                                                becomes the induction operatives see
+ *   PATCH { action: 'withdraw', reason }       → stop showing it, keep everything
  */
 async function GETHandler(_req: NextRequest, { params }: { params: { videoId: string } }) {
   const viewer = await getPlatformViewer();
@@ -69,6 +78,24 @@ async function PATCHHandler(req: NextRequest, { params }: { params: { videoId: s
     }
     case 'narrate': {
       const r = await requestNarration(viewer, params.videoId);
+      return r.ok
+        ? NextResponse.json({ ok: true })
+        : NextResponse.json({ ok: false, error: r.error }, { status: 400 });
+    }
+    case 'render': {
+      const r = await requestRender(viewer, params.videoId);
+      return r.ok
+        ? NextResponse.json({ ok: true })
+        : NextResponse.json({ ok: false, error: r.error }, { status: 400 });
+    }
+    case 'publish': {
+      const r = await publishVideo(viewer, params.videoId);
+      return r.ok
+        ? NextResponse.json({ ok: true })
+        : NextResponse.json({ ok: false, error: r.error }, { status: 400 });
+    }
+    case 'withdraw': {
+      const r = await withdrawVideo(viewer, params.videoId, str('reason'));
       return r.ok
         ? NextResponse.json({ ok: true })
         : NextResponse.json({ ok: false, error: r.error }, { status: 400 });

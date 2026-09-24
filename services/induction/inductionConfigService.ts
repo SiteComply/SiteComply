@@ -17,6 +17,8 @@ export interface StoredInductionValidity {
   invalidatedByName: string | null;
   /** SC-011: whether a digital signature is required to complete the induction. */
   signatureRequired: boolean;
+  /** Phase 3: whether the published induction video must be watched through. */
+  videoRequired: boolean;
 }
 
 export async function getValidityForViewer(
@@ -31,6 +33,7 @@ export async function getValidityForViewer(
       inductionsInvalidatedAt: true,
       invalidatedByName: true,
       inductionSignatureRequired: true,
+      inductionVideoRequired: true,
     },
   });
   return {
@@ -40,6 +43,7 @@ export async function getValidityForViewer(
       : null,
     invalidatedByName: row?.invalidatedByName ?? null,
     signatureRequired: row?.inductionSignatureRequired ?? false,
+    videoRequired: row?.inductionVideoRequired ?? false,
   };
 }
 
@@ -103,6 +107,40 @@ export async function saveSignatureRequired(
 
   const data = {
     inductionSignatureRequired: required,
+    updatedByUserId: viewer.id,
+    updatedByName: viewer.name,
+  };
+  await prisma.siteInductionConfig.upsert({
+    where: { jobSiteId: siteId },
+    create: { jobSiteId: siteId, ...data },
+    update: data,
+  });
+  return { ok: true };
+}
+
+/**
+ * Set whether the published induction video must be WATCHED THROUGH before an
+ * induction at this site can be completed.
+ *
+ * Ships dark, like the signature. A site adopts the video when it is ready to;
+ * turning this on before a video is published would simply have no effect, since
+ * the gate only applies when there is something published to watch.
+ */
+export async function saveVideoRequired(
+  viewer: PlatformViewer,
+  siteId: string,
+  required: boolean,
+): Promise<ValidityResult> {
+  if (!canManage(viewer, siteId)) return { ok: false, reason: 'forbidden' };
+
+  const site = await prisma.jobSite.findUnique({
+    where: { id: siteId },
+    select: { id: true },
+  });
+  if (!site) return { ok: false, reason: 'not_found' };
+
+  const data = {
+    inductionVideoRequired: required,
     updatedByUserId: viewer.id,
     updatedByName: viewer.name,
   };

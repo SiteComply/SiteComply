@@ -38,6 +38,7 @@ const describe = (s: ReturnType<typeof buildInductionSteps>[number]) =>
   : s.kind === 'rules' ? `rules(${s.items.length})`
   : s.kind === 'gdpr' ? 'gdpr'
   : s.kind === 'briefing' ? `briefing:${s.screen.key}`
+  : s.kind === 'video' ? `video:v${s.video.version}`
   : `${s.kind}:${s.item.label.slice(0, 28)}`;
 
 function main() {
@@ -64,7 +65,7 @@ function main() {
           ...s.items.map((i: FlowItem) => i.id),
           ...(s.kind === 'section' ? (s.rules ?? []) : []).map((i: FlowItem) => i.id),
         ]
-    : s.kind === 'gdpr' || s.kind === 'briefing' ? []
+    : s.kind === 'gdpr' || s.kind === 'briefing' || s.kind === 'video' ? []
     : s.kind === 'acknowledgement'
       ? [s.item.id, ...(s.rules ?? []).map((i: FlowItem) => i.id)]
       : [s.item.id]);

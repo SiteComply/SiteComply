@@ -353,6 +353,7 @@ export default async function SiteExperiencePage({
                 : null,
               invalidatedByName: inductionValidity.invalidatedByName,
               signatureRequired: inductionValidity.signatureRequired,
+              videoRequired: inductionValidity.videoRequired,
             }}
           />
         )}

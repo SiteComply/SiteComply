@@ -1,5 +1,7 @@
 import { runQueuedScriptJobs } from '@/services/inductionVideo/inductionVideoService';
 import { runQueuedNarrationJobs } from '@/services/inductionVideo/narrationService';
+import { runQueuedRenderJobs } from '@/services/inductionVideo/renderService';
+import { sweepUnpublishedRenders } from '@/services/inductionVideo/retentionService';
 import { NextRequest, NextResponse } from 'next/server';
 import { SchedulerTrigger } from '@prisma/client';
 import { runScheduledGeneration } from '@/services/compliance/schedulerRunner';
@@ -76,12 +78,35 @@ async function POSTHandler(req: NextRequest) {
     // Already recorded against the job row; the tick itself still succeeded.
   }
 
+  // Renders last: the longest job, and the one a failure of which must not
+  // delay the cheap work behind it.
+  let videosRendered = 0;
+  try {
+    videosRendered = await runQueuedRenderJobs();
+  } catch {
+    // Already recorded against the job row; the tick itself still succeeded.
+  }
+
+  /*
+   * Retention: removes the MP4s of superseded versions nobody published and
+   * nobody watched. Does nothing at all unless INDUCTION_MEDIA_RETENTION_DAYS is
+   * set - a policy about records is a decision, not a default.
+   */
+  let rendersRemoved = 0;
+  try {
+    rendersRemoved = (await sweepUnpublishedRenders()).removed;
+  } catch {
+    // Storage hiccup; the sweep is idempotent and runs again next hour.
+  }
+
   // 200 even on a recorded failure: the timer should not retry-storm, and the
   // failure is already visible on the calendar's status line and in SchedulerRun.
   return NextResponse.json({
     ok: result.ok,
     scriptsGenerated,
     narrationsGenerated,
+    videosRendered,
+    rendersRemoved,
     runId: result.runId,
     sitesConsidered: result.sitesConsidered,
     occurrencesCreated: result.occurrencesCreated,

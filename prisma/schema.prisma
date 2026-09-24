@@ -379,6 +379,7 @@ model Worker {
 
   @@index([company])
   @@index([cscsExpiry])
+  inductionVideoViews InductionVideoView[]
 }
 
 /// A construction site / job that workers induct onto and check in to.
@@ -1857,6 +1858,12 @@ model SiteInductionConfig {
   /// worker to complete the latest induction before their next check-in.
   inductionsInvalidatedAt DateTime?
   invalidatedByName       String?
+
+  /// INDUCTION VIDEO (Phase 3). When true, an operative at this site must watch
+  /// the published induction video through before their induction can be
+  /// completed. Ships dark - false means the video is offered and skippable, so
+  /// a site can adopt it without locking anybody out on day one.
+  inductionVideoRequired Boolean @default(false)
 
   /// Digital Induction Acceptance (SC-011). When true, a worker completing a FULL
   /// induction at this site must accept the declaration and provide a digital
@@ -3657,6 +3664,16 @@ model InductionVideo {
   captionsBlobPath   String?
   transcriptBlobPath String?
 
+  /// PHASE 3 - THE RENDERED VIDEO. The MP4 itself, what produced it, and the
+  /// fingerprint of the narration it was rendered from: a render whose hash no
+  /// longer matches the audio is stale and is re-rendered rather than published.
+  videoBlobPath  String?
+  videoDurationMs Int?
+  videoSizeBytes Int?
+  renderEngine   String?
+  renderedAt     DateTime?
+  renderHash     String?
+
   /// Set when the rules engine blocked generation: which facts are missing.
   blockingReasons Json?
 
@@ -3666,6 +3683,7 @@ model InductionVideo {
   scenes InductionVideoScene[]
   jobs   InductionVideoJob[]
   events InductionVideoEvent[]
+  views  InductionVideoView[]
 
   @@unique([jobSiteId, version])
   @@index([jobSiteId, status])
@@ -3747,6 +3765,47 @@ model InductionVideoEvent {
   createdAt DateTime @default(now())
 
   @@index([videoId, createdAt])
+}
+
+/// EVIDENCE THAT AN OPERATIVE WATCHED IT.
+///
+/// The point of the whole feature. A rendered video nobody can prove was
+/// watched is a training aid; a watched video with a record against the version
+/// and the person is an induction. One row per operative per VERSION, updated as
+/// they watch, because an operative inducted against version 2 must still show
+/// as having watched version 2 after version 3 exists.
+///
+/// `furthestMs` is the furthest point REACHED, not the current position: a
+/// player scrubbed back to re-hear the assembly point must not reduce what the
+/// record says was seen.
+model InductionVideoView {
+  id      String         @id @default(cuid())
+  video   InductionVideo @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  videoId String
+
+  worker   Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  workerId String
+  /// Denormalised, like every other audit name on this platform: a record that
+  /// empties itself when a worker is removed is worthless at a hearing.
+  workerName String
+  jobSiteId  String
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  /// Furthest point reached, in milliseconds.
+  furthestMs      Int  @default(0)
+  /// The video's length when it was watched, so "furthest" has a denominator.
+  videoDurationMs Int?
+
+  /// The check-in this watching belongs to, when it happened inside one.
+  submissionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([videoId, workerId])
+  @@index([jobSiteId, completedAt])
+  @@index([workerId, completedAt])
 }
 
 /// What a generation cost, in the provider's own units.

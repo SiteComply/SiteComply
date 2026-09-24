@@ -12,6 +12,8 @@ import {
 } from '@/services/inductionVideo/inductionVideoPermissions';
 import { manifestForSite, generateScript, loadVideoSource } from '@/services/inductionVideo/scriptService';
 import { deleteMedia } from '@/services/inductionVideo/mediaStorage';
+import { refuseIfOverBudget } from '@/services/inductionVideo/spendGuard';
+import { kickInductionJobs } from '@/services/inductionVideo/jobKicker';
 import { buildSceneManifest, manifestHash } from '@/services/inductionVideo/sceneRules';
 
 /**
@@ -38,6 +40,9 @@ import { buildSceneManifest, manifestHash } from '@/services/inductionVideo/scen
  */
 
 export type VideoResult<T> = { ok: true; value: T } | { ok: false; error: string };
+
+/** What a script has actually cost in production, rounded up. For the cap. */
+const SCRIPT_ESTIMATE_PENCE = 3;
 
 /**
  * THE access rule for induction videos: the right role, and this project in the
@@ -156,6 +161,13 @@ export async function requestScript(
   if (inFlight) {
     return { ok: false, error: 'A script is already being generated for this project.' };
   }
+  /*
+   * THE DAILY CEILING IS CHECKED BEFORE ANYTHING IS QUEUED. A script is only a
+   * few pence, but the cap protects one bill and every paid step answers to it -
+   * otherwise the cheap step becomes the way round the guard.
+   */
+  const overBudget = await refuseIfOverBudget(SCRIPT_ESTIMATE_PENCE);
+  if (overBudget) return { ok: false, error: overBudget };
 
   /*
    * A BLOCKED ATTEMPT IS NOT A VERSION.
@@ -235,6 +247,8 @@ export async function requestScript(
     },
   });
   await record(video.id, 'SCRIPT_REQUESTED', viewer.name, `Version ${version}`);
+  // Start it NOW rather than at five past the hour; the tick is the safety net.
+  kickInductionJobs();
   return { ok: true, value: { videoId: video.id, version } };
 }
 

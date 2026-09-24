@@ -10,6 +10,7 @@ import { getInductionSignatureRequired } from '@/services/inductionSignature/sig
 import type { FlowItem } from '@/services/checklists/inductionFlow';
 import { getInductionBriefing } from '@/services/induction/inductionBriefingService';
 import { companyForAssignment } from '@/services/companies/siteCompanyService';
+import { videoForOperative } from '@/services/inductionVideo/operativeVideoService';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,11 +53,19 @@ export default async function InductionPage({
   // Their employer on this project: the briefing links their company's RAMS and
   // anything site-wide, never another contractor's.
   const siteCompany = await companyForAssignment(worker.id, site.id);
-  const [signatureRequired, briefing] = await Promise.all([
+  const [signatureRequired, briefing, video] = await Promise.all([
     getInductionSignatureRequired(site.id),
     // The site briefing, shown before the acknowledgements that refer to it.
     // Built only from data already held; nothing new is asked of the manager.
     getInductionBriefing(site.id, site.name, siteCompany?.id ?? null),
+    /*
+     * The published induction video, if this project has one. It TAKES THE
+     * BRIEFING'S PLACE in the flow rather than adding a screen - both are built
+     * from the same records - and the briefing travels with it for an operative
+     * who would rather read. Null for every project that has not published one,
+     * which leaves the induction exactly as it was.
+     */
+    videoForOperative(worker.id, site.id),
   ]);
 
   return (
@@ -70,6 +79,7 @@ export default async function InductionPage({
         inductionVersion={site.checklist?.version ?? 1}
         signatureRequired={signatureRequired}
         briefing={briefing}
+        video={video}
       />
     </AppShell>
   );

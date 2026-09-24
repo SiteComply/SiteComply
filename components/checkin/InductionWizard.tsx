@@ -12,9 +12,11 @@ import {
   isStepComplete,
   type FlowItem,
   type InductionAnswers,
+  type InductionVideoStepInfo,
 } from '@/services/checklists/inductionFlow';
 import { KnowledgeCheck } from '@/components/checkin/KnowledgeCheck';
 import { BriefingStep } from '@/components/checkin/BriefingStep';
+import { InductionVideoStep } from '@/components/checkin/InductionVideoStep';
 import type { BriefingScreen } from '@/services/induction/inductionBriefing';
 import {
   LocationCheck,
@@ -37,6 +39,8 @@ interface InductionWizardProps {
   signatureRequired: boolean;
   /** The site briefing, read before any acknowledgement. Empty = none. */
   briefing?: BriefingScreen[];
+  /** The published induction video, when the project has one. */
+  video?: InductionVideoStepInfo | null;
 }
 
 // One stable empty value, so a site with no briefing does not rebuild the steps
@@ -66,12 +70,25 @@ export function InductionWizard({
   inductionVersion,
   signatureRequired,
   briefing = NO_BRIEFING,
+  video = null,
 }: InductionWizardProps) {
   const router = useRouter();
   const toast = useToast();
+  /*
+   * WATCHED IS SERVER STATE, held here so the step's completion rule can see it
+   * without rebuilding the flow from the network. It starts as whatever the
+   * server already knew - an operative who watched it and came back does not
+   * watch it again.
+   */
+  const [videoWatched, setVideoWatched] = useState(video?.completed ?? false);
   const steps = useMemo(
-    () => buildInductionSteps(items, briefing),
-    [items, briefing],
+    () =>
+      buildInductionSteps(
+        items,
+        briefing,
+        video ? { ...video, completed: videoWatched } : null,
+      ),
+    [items, briefing, video, videoWatched],
   );
   const storageKey = `sitecomply.induction.${siteId}`;
 
@@ -360,6 +377,26 @@ export function InductionWizard({
 
         {step.kind === 'briefing' && <BriefingStep screen={step.screen} />}
 
+        {step.kind === 'video' && (
+          <InductionVideoStep
+            siteId={siteId}
+            video={step.video}
+            onWatched={() => {
+              setShowError(false);
+              setVideoWatched(true);
+            }}
+            briefingFallback={
+              step.briefing.length > 0 ? (
+                <div className="space-y-6">
+                  {step.briefing.map((screen) => (
+                    <BriefingStep key={screen.key} screen={screen} />
+                  ))}
+                </div>
+              ) : undefined
+            }
+          />
+        )}
+
         {step.kind === 'rules' && <RulesOnlyStep items={step.items} />}
 
         {step.kind === 'yesno' && (
@@ -402,7 +439,9 @@ export function InductionWizard({
             role="alert"
             className="mt-4 rounded-xl border border-danger-500 bg-danger-50 px-4 py-3 text-sm font-medium text-danger-700"
           >
-            {step.kind === 'ppe'
+            {step.kind === 'video'
+              ? 'Please watch the induction video through to continue.'
+              : step.kind === 'ppe'
               ? 'Please confirm all required PPE to continue.'
               : step.kind === 'gdpr'
                 ? 'Please give your consent to continue.'

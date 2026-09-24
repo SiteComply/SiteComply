@@ -226,7 +226,33 @@ export type InductionStep =
    * agrees to, and they now come after what they refer to.
    */
   | { kind: 'briefing'; screen: BriefingScreen }
+  /**
+   * The site's induction video, when one is published.
+   *
+   * IT REPLACES THE BRIEFING SCREENS rather than joining them: both are built
+   * from the same records and say the same things, so showing both would tell an
+   * operative the same thing twice and make the induction longer. The written
+   * version travels with the step for anyone who would rather read it.
+   */
+  | { kind: 'video'; video: InductionVideoStepInfo; briefing: BriefingScreen[] }
   | { kind: 'gdpr' };
+
+/**
+ * What the wizard needs to know about a published video. Declared here, in a
+ * module with no server imports, so the flow, the wizard and the player all
+ * share one shape without a client bundle ever reaching for Prisma.
+ */
+export interface InductionVideoStepInfo {
+  videoId: string;
+  version: number;
+  durationMs: number;
+  hasCaptions: boolean;
+  /** The site requires it to be watched through before the induction completes. */
+  required: boolean;
+  /** How far this operative had already got, so the player resumes. */
+  furthestMs: number;
+  completed: boolean;
+}
 
 /** A single answer value, keyed in the answers map by checklist item id. */
 export type AnswerValue = boolean | 'yes' | 'no';
@@ -242,11 +268,12 @@ export function buildInductionSteps(
    * site with nothing to brief, which leaves the flow exactly as it was.
    */
   briefing: BriefingScreen[] = [],
+  /** The published induction video, when the project has one. */
+  video?: InductionVideoStepInfo | null,
 ): InductionStep[] {
-  const steps: InductionStep[] = briefing.map((screen) => ({
-    kind: 'briefing' as const,
-    screen,
-  }));
+  const steps: InductionStep[] = video
+    ? [{ kind: 'video' as const, video, briefing }]
+    : briefing.map((screen) => ({ kind: 'briefing' as const, screen }));
   let ppeRun: FlowItem[] = [];
 
   // SITE RULES LIBRARY. Gathered up front and never given a screen of their own:
@@ -379,6 +406,13 @@ export function isStepComplete(
     case 'briefing':
       // Read, not answered.
       return true;
+    case 'video':
+      /*
+       * A site that has not made it mandatory offers it; a site that has must
+       * have it watched. `completed` is the SERVER's answer, carried back into
+       * the step - the player never decides this for itself.
+       */
+      return !step.video.required || step.video.completed;
     case 'rules':
       // Nothing to answer. A rule is read, not ticked - the acknowledgement that
       // covers the set is a separate item on a separate screen, and this step only

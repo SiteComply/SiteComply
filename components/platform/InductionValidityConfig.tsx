@@ -20,6 +20,7 @@ export interface InductionValidityInitial {
   invalidatedByName: string | null;
   /** SC-011: require a digital signature to complete the induction. */
   signatureRequired: boolean;
+  videoRequired: boolean;
 }
 
 /**
@@ -67,7 +68,43 @@ export function InductionValidityConfig({
   const [signatureRequired, setSignatureRequired] = useState(
     initial.signatureRequired,
   );
+  const [videoRequired, setVideoRequired] = useState(initial.videoRequired);
+  const [videoBusy, setVideoBusy] = useState(false);
   const [sigBusy, setSigBusy] = useState(false);
+
+  /**
+   * Whether the published induction video must be watched through.
+   *
+   * Optimistic, and REVERTED on failure - a switch that stays on after the save
+   * failed would tell a manager their site requires something it does not.
+   */
+  async function toggleVideo(next: boolean) {
+    setVideoRequired(next);
+    setVideoBusy(true);
+    try {
+      const res = await fetch(`/api/platform/sites/${siteId}/induction-validity`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'video', required: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        setVideoRequired(!next);
+        toast.error(data.error ?? 'Could not save.');
+        return;
+      }
+      toast.success(
+        next
+          ? 'Operatives must now watch the induction video through.'
+          : 'The induction video is now optional for operatives.',
+      );
+    } catch {
+      setVideoRequired(!next);
+      toast.error('Network problem. Please try again.');
+    } finally {
+      setVideoBusy(false);
+    }
+  }
 
   async function toggleSignature(next: boolean) {
     setSignatureRequired(next);
@@ -262,6 +299,41 @@ export function InductionValidityConfig({
             className={cn(
               'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
               signatureRequired ? 'translate-x-[1.375rem]' : 'translate-x-0.5',
+            )}
+          />
+        </button>
+      </div>
+
+      {/* Phase 3: must the published induction video be watched through? */}
+      <div className="flex items-start justify-between gap-3 rounded-lg border border-line p-3">
+        <div>
+          <p className="text-sm font-semibold text-ink">
+            Require the induction video to be watched
+          </p>
+          <p className="text-xs text-ink-subtle">
+            Operatives must watch the published induction video through before
+            they can finish. Off by default, and it does nothing until a video is
+            published for this project.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={videoRequired}
+          aria-label="Require the induction video to be watched"
+          disabled={!canEdit || videoBusy}
+          onClick={() => toggleVideo(!videoRequired)}
+          className={cn(
+            'relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
+            videoRequired ? 'bg-safe-500' : 'bg-line',
+            !canEdit || videoBusy ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
+              videoRequired ? 'translate-x-[1.375rem]' : 'translate-x-0.5',
             )}
           />
         </button>

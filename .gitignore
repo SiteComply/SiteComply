@@ -32,3 +32,4 @@ azure/scheduler-function/node_modules/
 # Local backups of production rows taken before a data change.
 # Real data — never commit.
 .carry-backup/
+vendor/

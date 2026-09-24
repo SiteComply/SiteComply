@@ -5,6 +5,7 @@ import {
   saveValidity,
   invalidateInductions,
   saveSignatureRequired,
+  saveVideoRequired,
 } from '@/services/induction/inductionConfigService';
 import { withClosedProjectHandling } from '@/lib/routeErrors';
 
@@ -62,6 +63,15 @@ async function PATCHHandler(
         { ok: false, error: 'Could not save.' },
         { status },
       );
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (body.action === 'video') {
+    const result = await saveVideoRequired(viewer, params.id, Boolean(body.required));
+    if (!result.ok) {
+      const status = result.reason === 'forbidden' ? 403 : 404;
+      return NextResponse.json({ ok: false, error: 'Could not save.' }, { status });
     }
     return NextResponse.json({ ok: true });
   }
