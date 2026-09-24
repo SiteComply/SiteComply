@@ -2,14 +2,25 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 
 /**
- * Worker permit actions (SC-009): print the permit (browser print-to-PDF, so it
- * can be shown on site) and cancel it while it is still cancellable. No
- * server-generated PDF in v1 — the print dialog covers "available on site".
+ * Worker permit actions: open the permit as a document, and cancel it while it
+ * is still cancellable.
+ *
+ * THE PERMIT IS A SERVER-RENDERED PDF, not a browser print of this screen. A
+ * printed web page carries the reader's own browser header and footer - the
+ * page title, the URL, the date their device thinks it is - onto a document
+ * that authorises work, and no stylesheet can remove them because they come
+ * from a checkbox in each reader's print dialog. The same reason the
+ * construction phase plan and the induction record stopped doing it.
+ *
+ * It opens in a NEW TAB rather than downloading: this is shown to whoever asks
+ * at a work face, and a file that lands in a phone's Files app has to be found
+ * again first.
  */
 export function PermitActions({
   permitId,
@@ -44,9 +55,14 @@ export function PermitActions({
 
   return (
     <div className="space-y-3 print:hidden">
-      <Button variant="secondary" fullWidth onClick={() => window.print()}>
-        View / print permit
-      </Button>
+      <Link
+        href={`/api/worker/permits/${permitId}/record`}
+        target="_blank"
+        rel="noopener"
+        className="touch-target flex w-full items-center justify-center rounded-xl border border-line bg-surface px-4 py-3 text-sm font-semibold text-ink hover:bg-surface-sunken"
+      >
+        View permit (PDF)
+      </Link>
       {canCancel && (
         <Button
           variant="danger"

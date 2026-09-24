@@ -15,6 +15,7 @@ import {
 } from '@/services/permits/permitConstants';
 import { formatAnswer } from '@/services/permits/permitFlow';
 import { formatDateTimeUK } from '@/lib/datetime';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,7 +75,20 @@ export default async function PlatformPermitDetailPage({
              `closable` test the button was rendered behind before — and the
              server still enforces the permits "edit" permission on the request
              itself, exactly as it did. */
-          closable ? <PermitCloseButton permitId={permit.id} /> : undefined
+          /* The document sits beside the decision, because a reviewer who wants
+             the permit on paper - to file it, to send it, to take it out to the
+             work - should not have to print the screen they are reading. */
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href={`/api/platform/permits/${permit.id}/record`}
+              target="_blank"
+              rel="noopener"
+              className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink hover:bg-surface-sunken"
+            >
+              View permit (PDF)
+            </Link>
+            {closable ? <PermitCloseButton permitId={permit.id} /> : null}
+          </div>
         }
       />
 
