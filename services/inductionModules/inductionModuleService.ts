@@ -435,6 +435,18 @@ export async function resolveModulesForSite(siteId: string): Promise<ResolvedMod
   return resolved;
 }
 
+/**
+ * The issued revisions this project has departed from.
+ *
+ * Read live rather than stamped on the scene, so an override recorded after a
+ * script was generated shows as a departure straight away — a manager who has
+ * just made the decision should not have to regenerate to see it reflected.
+ */
+export async function overriddenRevisionIds(siteId: string): Promise<Set<string>> {
+  const modules = await resolveModulesForSite(siteId);
+  return new Set(modules.filter((m) => m.overridden).map((m) => m.revisionId));
+}
+
 /* ───────────────────────────── the seed set ───────────────────────────── */
 
 export interface SeedResult {

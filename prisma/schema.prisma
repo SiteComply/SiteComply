@@ -3713,6 +3713,13 @@ model InductionVideoScene {
   /// True when the rules engine REQUIRED this scene: it may not be deleted.
   required Boolean @default(false)
 
+  /// PHASE B. Set when this scene is a COMPANY INDUCTION MODULE: the issued
+  /// revision whose words these are. It is what lets an investigation ask which
+  /// revision of the manual-handling briefing a given operative actually heard,
+  /// and what makes a module scene locked in the script editor - a site may not
+  /// rewrite company policy in its own induction.
+  moduleRevisionId String?
+
   /// PHASE 2. The synthesised audio for this scene, its measured length, and
   /// the fingerprint of the narration + voice that produced it. An edited scene
   /// clears all three: audio that no longer matches the words must never play.

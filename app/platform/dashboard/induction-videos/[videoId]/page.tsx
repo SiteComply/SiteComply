@@ -16,6 +16,7 @@ import { RenderPanel } from '@/components/platform/RenderPanel';
 import { renderIsStale, renderingConfigured } from '@/services/inductionVideo/renderService';
 import { viewsForVideo } from '@/services/inductionVideo/operativeVideoService';
 import { spendForVideo, formatPence } from '@/services/inductionVideo/spendGuard';
+import { overriddenRevisionIds } from '@/services/inductionModules/inductionModuleService';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,6 +50,13 @@ export default async function InductionVideoPage({
   const lastRenderError =
     video.jobs.find((j) => j.kind === 'RENDER' && j.status === 'FAILED')?.error ?? null;
   const [views, spend] = await Promise.all([viewsForVideo(video.id), spendForVideo(video.id)]);
+  /*
+   * Which company modules this project has departed from. Read from the site's
+   * own decisions rather than stored on the scene: an override recorded after a
+   * script was generated should show as a departure the moment it is made, not
+   * only after the next regeneration.
+   */
+  const overriddenModuleRevisions = await overriddenRevisionIds(video.jobSiteId);
 
   return (
     <PlatformShell>
@@ -119,6 +127,8 @@ export default async function InductionVideoPage({
           narration: s.narration,
           required: s.required,
           sourceRefs: Array.isArray(s.sourceRefs) ? (s.sourceRefs as string[]) : [],
+          companyModule: Boolean(s.moduleRevisionId),
+          overridden: overriddenModuleRevisions.has(s.moduleRevisionId ?? ''),
         }))}
       />
 

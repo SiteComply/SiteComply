@@ -3,6 +3,7 @@ import { resolveAiProvider } from '@/services/ai/aiConfigService';
 import { loadBriefingSource } from '@/services/induction/inductionBriefingService';
 import { getSiteRules } from '@/services/checklists/siteRulesService';
 import { getSitePpeRequirements } from '@/services/checklists/sitePpeService';
+import { resolveModulesForSite } from '@/services/inductionModules/inductionModuleService';
 import {
   buildSceneManifest,
   manifestHash,
@@ -74,6 +75,8 @@ export interface GeneratedScript {
     required: boolean;
     sourceRefs: string[];
     visualTemplate: string;
+    /** Set on company-module scenes: the issued revision these words are. */
+    moduleRevisionId: string | null;
   }[];
   provider: string;
   model: string;
@@ -91,18 +94,38 @@ export async function loadVideoSource(siteId: string): Promise<VideoSource | nul
   });
   if (!site) return null;
 
-  const [briefing, rules, ppe] = await Promise.all([
+  const [briefing, rules, ppe, modules] = await Promise.all([
     // The SAME source the induction briefing screens are built from - see
     // loadBriefingSource. One loader, so the video cannot narrate something the
     // induction does not show.
     loadBriefingSource(site.id, site.name, null),
     getSiteRules(site.id),
     getSitePpeRequirements(site.id),
+    /*
+     * Company modules, already resolved for this project: which ones apply is
+     * company policy plus this site's own decision, and neither is the rules
+     * engine's to make. It only decides where they sit and whether the
+     * project's own records displace one.
+     */
+    resolveModulesForSite(site.id),
   ]);
   if (!briefing) return null;
 
   return {
     ...briefing,
+    modules: modules.map((m) => ({
+      moduleId: m.moduleId,
+      slug: m.slug,
+      title: m.title,
+      order: m.order,
+      revisionId: m.revisionId,
+      version: m.version,
+      heading: m.heading,
+      narration: m.narration,
+      replacesSceneType: m.replacesSceneType,
+      overridden: m.overridden,
+      overrideReason: m.overrideReason,
+    })),
     siteRules: rules.map((r) => r.label.trim()).filter(Boolean),
     ppe: ppe.map((p) => p.label.trim()).filter(Boolean),
   };
@@ -129,9 +152,19 @@ export async function generateScript(
   }
 
   const provider = await resolveAiProvider();
+  /*
+   * COMPANY MODULES ARE NOT SENT TO THE MODEL AT ALL.
+   *
+   * Their words were written and issued by a Director; a model that saw them
+   * might re-phrase company policy, and there is nothing for it to add. Keeping
+   * them out means the induction says exactly what was approved, the scenes
+   * cost no tokens, and the model's whole input remains "facts this project
+   * recorded" - which is the safety principle the feature was built on.
+   */
+  const siteScenes = manifest.scenes.filter((s) => s.source === 'SITE');
   const user = JSON.stringify({
     site: siteName,
-    scenes: manifest.scenes.map((s) => ({
+    scenes: siteScenes.map((s) => ({
       sceneType: s.sceneType,
       heading: s.heading,
       facts: s.facts,
@@ -167,10 +200,16 @@ export async function generateScript(
     scenes: manifest.scenes.map((scene) => ({
       sceneType: scene.sceneType,
       heading: scene.heading,
-      narration: narrationFor(scene, returned.get(scene.sceneType)),
+      // A module's words are used verbatim; a site scene's are the model's, or
+      // its own facts when the model returned nothing for it.
+      narration:
+        scene.source === 'MODULE'
+          ? (scene.narration ?? '').trim()
+          : narrationFor(scene, returned.get(scene.sceneType)),
       required: scene.required,
       sourceRefs: scene.sourceRefs,
       visualTemplate: scene.visualTemplate,
+      moduleRevisionId: scene.moduleRevisionId ?? null,
     })),
     provider: provider.name,
     model: result.model,

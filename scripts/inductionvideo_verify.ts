@@ -39,6 +39,9 @@ const base = (over: Partial<VideoSource> = {}): VideoSource => ({
   },
   keyPeople: [], info: { ...EMPTY_INFO, emergencyProcedures: 'Stop work, make safe, go to the assembly point.' },
   incidentReporting: null, risks: [], permitTypes: [], ramsDocuments: [],
+  // A site with no company modules resolved: Phase 1's rules are unchanged by
+  // their absence, which is the point of asserting it here.
+  modules: [],
   siteRules: ['Wear your hard hat at all times.'], ppe: ['Hard hat'],
   ...over,
 });
@@ -145,8 +148,15 @@ function main() {
   console.log('\n[6] The model writes; it does not decide');
   const script = read('services/inductionVideo/scriptService.ts');
   ok('the prompt forbids inventing facts', /Never add a hazard, precaution, location, name, telephone number, procedure or statistic/.test(script));
-  ok('the model is given ONLY the chosen scenes and their facts',
-    /scenes: manifest\.scenes\.map\(\(s\) => \(\{[\s\S]{0,120}facts: s\.facts/.test(script));
+  /*
+   * NARROWER SINCE PHASE B: the model is given only the chosen SITE scenes.
+   * Company induction modules carry words a Director issued and never reach it
+   * at all, so what the model sees is still exactly "facts this project
+   * recorded" - the property this assertion has always been about.
+   */
+  ok('the model is given ONLY the chosen site scenes and their facts',
+    /const siteScenes = manifest\.scenes\.filter\(\(s\) => s\.source === 'SITE'\)/.test(script) &&
+      /scenes: siteScenes\.map\(\(s\) => \(\{[\s\S]{0,120}facts: s\.facts/.test(script));
   ok('structured output is required, with a strict schema', /schema: SCRIPT_SCHEMA/.test(script));
   ok('generation refuses to run on a blocked manifest',
     /if \(!manifest\.canGenerate\)[\s\S]{0,120}throw new Error/.test(script));

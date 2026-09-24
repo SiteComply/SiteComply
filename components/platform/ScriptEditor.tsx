@@ -10,6 +10,13 @@ export interface EditableScene {
   narration: string;
   required: boolean;
   sourceRefs: string[];
+  /**
+   * A company induction module: issued centrally, identical on every project,
+   * and not this site's to rewrite. Shown read-only with where to go instead.
+   */
+  companyModule: boolean;
+  /** True when this project has recorded a departure from the company text. */
+  overridden: boolean;
 }
 
 /**
@@ -141,7 +148,11 @@ export function ScriptEditor({
           <article key={scene.id} className="rounded-xl border border-line bg-surface p-4 shadow-card">
             <div className="mb-2 flex flex-wrap items-baseline gap-2">
               <h3 className="text-sm font-bold text-ink">{scene.heading}</h3>
-              {scene.required ? (
+              {scene.companyModule ? (
+                <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+                  {scene.overridden ? 'Company standard · changed here' : 'Company standard'}
+                </span>
+              ) : scene.required ? (
                 <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
                   Required
                 </span>
@@ -159,11 +170,19 @@ export function ScriptEditor({
               value={draft ?? scene.narration}
               onChange={(e) => setDrafts((d) => ({ ...d, [scene.id]: e.target.value }))}
               rows={4}
-              readOnly={readOnly}
+              readOnly={readOnly || scene.companyModule}
               className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink read-only:bg-surface-sunken"
             />
 
-            {!readOnly && (
+            {scene.companyModule && (
+              <p className="mt-2 text-xs text-ink-subtle">
+                {scene.overridden
+                  ? 'Company induction content, changed for this project. The departure and its reason are recorded in the project’s induction settings.'
+                  : 'Company induction content, issued centrally and identical on every project. To change it here only, record an override in the project’s induction settings.'}
+              </p>
+            )}
+
+            {!readOnly && !scene.companyModule && (
               <div className="mt-2 flex flex-wrap gap-2">
                 <button
                   type="button"

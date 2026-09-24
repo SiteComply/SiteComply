@@ -62,7 +62,9 @@ export type SceneType =
   | 'RAMS'
   | 'SITE_RULES'
   | 'PPE'
-  | 'CLOSING';
+  | 'CLOSING'
+  /** A company induction module. Its words are authored, not generated. */
+  | 'COMPANY_MODULE';
 
 export interface SceneRequirement {
   sceneType: SceneType;
@@ -76,6 +78,48 @@ export interface SceneRequirement {
   facts: string[];
   /** Phase 2/3: which branded template renders it. */
   visualTemplate: string;
+
+  /*
+   * ── WHERE THIS SCENE CAME FROM ──────────────────────────────────────────
+   *
+   * SITE     derived from this project's own records. The model turns its
+   *          facts into narration.
+   * MODULE   company standard content, issued by a Director. Its words are
+   *          ALREADY WRITTEN and are never sent to the model - it cannot
+   *          re-phrase company policy, the scene costs no tokens, and what an
+   *          operative hears is exactly what was approved.
+   */
+  source: SceneSource;
+  /** MODULE scenes only: the issued revision whose words these are. */
+  moduleRevisionId?: string;
+  /** MODULE scenes only: the authored narration, used verbatim. */
+  narration?: string;
+  /** MODULE scenes only: this project has departed from the company text. */
+  overridden?: boolean;
+
+  /**
+   * Sort key. Site scenes take their place from SCENE_ORDER; company modules
+   * form a band between the project's own content and the closing scenes, each
+   * ordered within the band by the module's own `order`.
+   */
+  orderKey: number;
+}
+
+export type SceneSource = 'SITE' | 'MODULE';
+
+/** A company module, already resolved for this project. */
+export interface ResolvedModuleScene {
+  moduleId: string;
+  slug: string;
+  title: string;
+  order: number;
+  revisionId: string;
+  version: number;
+  heading: string;
+  narration: string;
+  replacesSceneType: string | null;
+  overridden: boolean;
+  overrideReason: string | null;
 }
 
 export interface MissingRequirement {
@@ -97,6 +141,14 @@ export interface SceneManifest {
 
 /** Everything the rules read. The briefing's own source, plus rules and PPE. */
 export interface VideoSource extends BriefingSource {
+  /**
+   * Company induction modules already resolved for this project — included,
+   * excluded or overridden — by resolveModulesForSite. The rules engine does
+   * not decide WHICH modules apply (that is company policy plus a site's own
+   * decision); it decides where they sit and whether the project's own records
+   * displace one.
+   */
+  modules: ResolvedModuleScene[];
   siteRules: string[];
   ppe: string[];
 }
@@ -104,13 +156,21 @@ export interface VideoSource extends BriefingSource {
 const t = (v: string | null | undefined): string | null =>
   isMeaningful(v) ? (v as string).trim() : null;
 
+/**
+ * What the rules below write. `source` and `orderKey` are stamped centrally by
+ * `push` rather than repeated on thirty literals - and stamping them in one
+ * place is also what stops a site scene ever being mislabelled as a company
+ * module, which is the distinction the whole feature rests on.
+ */
+type SiteSceneDraft = Omit<SceneRequirement, 'source' | 'orderKey'>;
+
 /** A scene that only exists when it has something to say. */
 function optional(
   sceneType: SceneType,
   heading: string,
   visualTemplate: string,
   entries: [string, string | null][],
-): SceneRequirement | null {
+): SiteSceneDraft | null {
   const facts = entries.filter(([, v]) => v).map(([, v]) => v as string);
   const refs = entries.filter(([, v]) => v).map(([ref]) => ref);
   if (facts.length === 0) return null;
@@ -122,15 +182,22 @@ export function buildSceneManifest(src: VideoSource): SceneManifest {
   const missing: MissingRequirement[] = [];
   const warnings: string[] = [];
   const info = src.info;
-  const push = (s: SceneRequirement | null) => {
-    if (s) scenes.push(s);
+  const push = (s: SiteSceneDraft | null) => {
+    if (!s) return;
+    scenes.push({
+      ...s,
+      source: 'SITE',
+      // Site scenes take their place from the running order below; the * 1000
+      // leaves room for the company band to sit between two of them.
+      orderKey: SCENE_ORDER.indexOf(s.sceneType) * 1000,
+    });
   };
 
   /*
    * REQUIRED, ALWAYS. An induction that does not say where it is, what to do in
    * an emergency, or where to muster is not an induction. These three block.
    */
-  scenes.push({
+  push({
     sceneType: 'WELCOME',
     heading: 'Welcome to this site',
     required: true,
@@ -147,7 +214,7 @@ export function buildSceneManifest(src: VideoSource): SceneManifest {
 
   const emergency = t(info.emergencyProcedures);
   if (emergency) {
-    scenes.push({
+    push({
       sceneType: 'EMERGENCY_PROCEDURES',
       heading: 'In an emergency',
       required: true,
@@ -171,7 +238,7 @@ export function buildSceneManifest(src: VideoSource): SceneManifest {
    */
   const assembly = t(src.emergency.fireAssemblyPoint);
   if (assembly) {
-    scenes.push({
+    push({
       sceneType: 'FIRE_MUSTER_POINT',
       heading: 'Fire and the assembly point',
       required: true,
@@ -217,7 +284,7 @@ export function buildSceneManifest(src: VideoSource): SceneManifest {
         }.`,
       );
     }
-    scenes.push({
+    push({
       sceneType: 'FIRST_AID',
       heading: 'First aid',
       required: true,
@@ -248,7 +315,7 @@ export function buildSceneManifest(src: VideoSource): SceneManifest {
     if (!risk) continue;
     const controls = t(risk.controls);
     if (controls) {
-      scenes.push({
+      push({
         sceneType: rule.sceneType,
         heading: rule.heading,
         required: true,
@@ -270,7 +337,7 @@ export function buildSceneManifest(src: VideoSource): SceneManifest {
     (r) => !riskRule.some((rule) => rule.match.test(r.label)) && t(r.controls),
   );
   if (otherRisks.length > 0) {
-    scenes.push({
+    push({
       sceneType: 'SIGNIFICANT_RISKS',
       heading: 'Significant risks and controls',
       required: true,
@@ -293,7 +360,7 @@ export function buildSceneManifest(src: VideoSource): SceneManifest {
    * what an operative agrees to, so the video must say them.
    */
   if (src.siteRules.length > 0) {
-    scenes.push({
+    push({
       sceneType: 'SITE_RULES',
       heading: 'Site rules',
       required: true,
@@ -305,7 +372,7 @@ export function buildSceneManifest(src: VideoSource): SceneManifest {
     warnings.push('No site rules are published for this site, so the induction has no rules scene.');
   }
   if (src.ppe.length > 0) {
-    scenes.push({
+    push({
       sceneType: 'PPE',
       heading: 'PPE you must wear',
       required: true,
@@ -388,7 +455,7 @@ export function buildSceneManifest(src: VideoSource): SceneManifest {
     });
   }
 
-  scenes.push({
+  push({
     sceneType: 'CLOSING',
     heading: 'Before you start work',
     required: true,
@@ -399,6 +466,51 @@ export function buildSceneManifest(src: VideoSource): SceneManifest {
     ],
     visualTemplate: 'brand-close',
   });
+
+  /*
+   * ── COMPANY MODULES ──────────────────────────────────────────────────────
+   *
+   * Already resolved for this project (included, excluded or overridden) before
+   * the rules engine sees them. Two things happen here and nowhere else:
+   *
+   * 1. THE PROJECT'S OWN WORDS WIN. When a module covers ground the site has
+   *    recorded its own arrangement for - accident reporting is the one that
+   *    does this today - the module is left out, because hearing the same
+   *    subject twice in one induction teaches an operative that half of it can
+   *    be ignored. The manager is told which module was dropped and why.
+   * 2. THEY ARE NEVER "MISSING". A module carries its own words, so it can
+   *    never block generation the way an unanswered site field does.
+   */
+  const emitted = new Set(scenes.map((s) => s.sceneType));
+  for (const m of src.modules) {
+    if (m.replacesSceneType && emitted.has(m.replacesSceneType as SceneType)) {
+      warnings.push(
+        `“${m.title}” was left out: this project records its own arrangement for it, and that is what the induction says.`,
+      );
+      continue;
+    }
+    scenes.push({
+      sceneType: 'COMPANY_MODULE',
+      heading: m.heading,
+      // A company standard is not a site's to drop, the same way a required
+      // site scene is not. Excluding one happens at the project's settings,
+      // with a reason, not in the script editor.
+      required: true,
+      sourceRefs: [`module.${m.slug}`],
+      facts: [],
+      visualTemplate: 'brand-standard',
+      source: 'MODULE',
+      moduleRevisionId: m.revisionId,
+      narration: m.narration,
+      overridden: m.overridden,
+      orderKey: companyBandOrderKey(m.order),
+    });
+    if (m.overridden) {
+      warnings.push(
+        `“${m.title}” has been changed for this project and no longer matches the company standard${m.overrideReason ? `: ${m.overrideReason}` : '.'}`,
+      );
+    }
+  }
 
   return {
     scenes: orderScenes(scenes),
@@ -444,10 +556,25 @@ const SCENE_ORDER: SceneType[] = [
   'CLOSING',
 ];
 
+/**
+ * WHERE THE COMPANY BAND SITS, by the owner's decision: after the project's own
+ * hazards, emergency arrangements and paperwork, and before site rules, PPE and
+ * the close.
+ *
+ * An operative hears where they are and what is dangerous HERE first, because
+ * that is what they cannot get anywhere else; the standards that apply on every
+ * site follow, and the induction ends on what to wear and where to go.
+ */
+const COMPANY_BAND_AFTER: SceneType = 'RAMS';
+
+function companyBandOrderKey(moduleOrder: number): number {
+  // Between RAMS and SITE_RULES. The * 1000 on site scenes leaves exactly this
+  // room, and the module's own order decides the sequence within the band.
+  return SCENE_ORDER.indexOf(COMPANY_BAND_AFTER) * 1000 + 500 + moduleOrder;
+}
+
 function orderScenes(scenes: SceneRequirement[]): SceneRequirement[] {
-  return scenes
-    .slice()
-    .sort((a, b) => SCENE_ORDER.indexOf(a.sceneType) - SCENE_ORDER.indexOf(b.sceneType));
+  return scenes.slice().sort((a, b) => a.orderKey - b.orderKey);
 }
 
 /**
@@ -458,7 +585,16 @@ function orderScenes(scenes: SceneRequirement[]): SceneRequirement[] {
  * what reached the scenes.
  */
 export function manifestHash(manifest: SceneManifest): string {
-  const payload = manifest.scenes.map((s) => [s.sceneType, s.heading, s.facts].join('|')).join('||');
+  /*
+   * THE MODULE REVISION IS PART OF THE FINGERPRINT. Issuing a new revision of a
+   * company module changes what every induction should say, so every video
+   * carrying it must read as out of date - which it does, for free, because
+   * staleness is already "the manifest no longer hashes to what this version
+   * was built from".
+   */
+  const payload = manifest.scenes
+    .map((s) => [s.sceneType, s.heading, s.facts, s.moduleRevisionId ?? '', s.narration ?? ''].join('|'))
+    .join('||');
   let h = 0;
   for (let i = 0; i < payload.length; i++) {
     h = (h * 31 + payload.charCodeAt(i)) | 0;

@@ -296,6 +296,7 @@ export async function runQueuedScriptJobs(limit = 2): Promise<number> {
             visualTemplate: s.visualTemplate,
             sourceRefs: s.sourceRefs as unknown as object,
             required: s.required,
+            moduleRevisionId: s.moduleRevisionId,
           })),
         }),
         prisma.inductionVideo.update({
@@ -393,6 +394,19 @@ export async function editScene(
       error: 'This version is being narrated. Wait for that to finish before editing it.',
     };
   }
+  /*
+   * A COMPANY MODULE IS NOT A SITE'S TO REWRITE. Its words were issued by a
+   * Director and apply to every project; a site that genuinely differs records
+   * an override against the module, with a reason, where the departure is
+   * visible - not quietly in one video's script.
+   */
+  if (scene.moduleRevisionId) {
+    return {
+      ok: false,
+      error:
+        'This is company induction content and is managed centrally. To change it for this project only, record an override in the project’s induction settings.',
+    };
+  }
 
   await prisma.inductionVideoScene.update({
     where: { id: sceneId },
@@ -454,6 +468,13 @@ export async function removeScene(
   });
   if (!scene || !guard(viewer, scene.video.jobSiteId)) {
     return { ok: false, error: 'Not available.' };
+  }
+  if (scene.moduleRevisionId) {
+    return {
+      ok: false,
+      error:
+        'This is company induction content. To leave it out of this project, exclude the module in the project’s induction settings — where the decision and its reason are recorded.',
+    };
   }
   if (scene.required) {
     return {
