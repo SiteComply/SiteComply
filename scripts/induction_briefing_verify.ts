@@ -207,7 +207,12 @@ async function main() {
     'briefing not company-scoped');
   ok('  and passes it to the wizard', /briefing=\{briefing\}/.test(page));
   const wiz = readFileSync('components/checkin/InductionWizard.tsx', 'utf8');
-  ok('the wizard builds its steps WITH the briefing', /buildInductionSteps\(items, briefing\)/.test(wiz));
+  // The call gained a third argument in Phase 3 (the published video, which
+  // REPLACES the briefing screens when one exists). The briefing must still be
+  // passed either way: a project with no video shows exactly what it always did.
+  ok('the wizard builds its steps WITH the briefing',
+    /buildInductionSteps\(\s*items,\s*briefing,/.test(wiz) ||
+      /buildInductionSteps\(items, briefing\)/.test(wiz));
   ok('  and renders the briefing screen', /step\.kind === 'briefing' && <BriefingStep/.test(wiz));
 
   console.log('\n[5] Map and RAMS before check-in - and who is refused');
