@@ -11,6 +11,11 @@ import {
 import { formatDateTimeUK } from '@/lib/datetime';
 import { InductionVideoStatusBadge } from '@/components/platform/InductionVideoStatusBadge';
 import { GenerateScriptButton } from '@/components/platform/GenerateScriptButton';
+import { SiteInductionModules } from '@/components/platform/SiteInductionModules';
+import {
+  canIssueInductionModule,
+  moduleDecisionsForSite,
+} from '@/services/inductionModules/inductionModuleService';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,6 +45,15 @@ export default async function SiteInductionVideoPage({
   if (!readiness || !videos) notFound();
 
   const { manifest, sourceSummary, siteName } = readiness;
+  /*
+   * The overlap note needs to know what this project's own records already
+   * produce — the readiness manifest is exactly that, so the panel and the
+   * generated script agree about which module is displaced.
+   */
+  const moduleDecisions = await moduleDecisionsForSite(
+    params.id,
+    manifest.scenes.map((s) => s.sceneType),
+  );
   const required = manifest.scenes.filter((s) => s.required);
   const optional = manifest.scenes.filter((s) => !s.required);
 
@@ -72,6 +86,15 @@ export default async function SiteInductionVideoPage({
           </ul>
         </section>
       )}
+
+      <SiteInductionModules
+        siteId={params.id}
+        modules={moduleDecisions.map((m) => ({
+          ...m,
+          state: m.state as 'INCLUDED' | 'EXCLUDED' | 'OVERRIDDEN' | null,
+        }))}
+        canOverride={canIssueInductionModule(viewer.role)}
+      />
 
       <section className="mb-5 rounded-xl border border-line bg-surface p-4 shadow-card">
         <h2 className="text-sm font-bold text-ink">What the video would be built from</h2>

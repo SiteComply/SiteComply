@@ -447,6 +447,176 @@ export async function overriddenRevisionIds(siteId: string): Promise<Set<string>
   return new Set(modules.filter((m) => m.overridden).map((m) => m.revisionId));
 }
 
+/* ─────────────── what one project has decided about each module ───────── */
+
+export interface SiteModuleDecision {
+  moduleId: string;
+  slug: string;
+  title: string;
+  mandatory: boolean;
+  /** Null when the module has no issued revision: it reaches nobody. */
+  issuedVersion: number | null;
+  /** The company's words, as issued. */
+  companyHeading: string;
+  companyNarration: string;
+  /** What this project has decided, or null when it follows the default. */
+  state: SiteInductionModuleState | null;
+  /** The effective answer once the default is applied. */
+  included: boolean;
+  overrideNarration: string | null;
+  reason: string | null;
+  decidedByName: string | null;
+  /** Set when the project records its own arrangement for the same subject. */
+  displacedBySiteContent: boolean;
+}
+
+/**
+ * Every module, and what this project has decided about it.
+ *
+ * Built from the SAME resolver the video uses, so the screen a manager reads
+ * and the induction an operative hears cannot disagree about what is included.
+ */
+export async function moduleDecisionsForSite(
+  siteId: string,
+  /** Scene types the project's own records already produce, for the overlap note. */
+  siteSceneTypes: string[] = [],
+): Promise<SiteModuleDecision[]> {
+  const [modules, rows, resolved] = await Promise.all([
+    prisma.inductionModule.findMany({
+      where: { active: true },
+      orderBy: { order: 'asc' },
+      include: {
+        revisions: {
+          where: { status: InductionModuleRevisionStatus.ISSUED },
+          orderBy: { version: 'desc' },
+          take: 1,
+        },
+      },
+    }),
+    prisma.siteInductionModule.findMany({ where: { jobSiteId: siteId } }),
+    resolveModulesForSite(siteId),
+  ]);
+  const decisions = new Map(rows.map((r) => [r.moduleId, r]));
+  const included = new Set(resolved.map((r) => r.moduleId));
+  const produced = new Set(siteSceneTypes);
+
+  return modules.map((m) => {
+    const issued = m.revisions[0];
+    const row = decisions.get(m.id);
+    return {
+      moduleId: m.id,
+      slug: m.slug,
+      title: m.title,
+      mandatory: m.mandatory,
+      issuedVersion: issued?.version ?? null,
+      companyHeading: issued?.heading ?? m.title,
+      companyNarration: issued?.narration ?? '',
+      state: row?.state ?? null,
+      included: included.has(m.id),
+      overrideNarration: row?.overrideNarration ?? null,
+      reason: row?.reason ?? null,
+      decidedByName: row?.decidedByName ?? null,
+      displacedBySiteContent: Boolean(
+        m.replacesSceneType && produced.has(m.replacesSceneType),
+      ),
+    };
+  });
+}
+
+export type SiteModuleInput =
+  | { state: 'DEFAULT' }
+  | { state: 'INCLUDED' }
+  | { state: 'EXCLUDED'; reason: string }
+  | { state: 'OVERRIDDEN'; reason: string; overrideNarration: string };
+
+/**
+ * Record what a project has decided about a company module.
+ *
+ * ── EXCLUDING AND OVERRIDING BOTH NEED A REASON ───────────────────────────
+ *
+ * Both are a project departing from what the company says every operative
+ * should hear. A departure with no recorded reason is indistinguishable from a
+ * mistake six months later, so neither is possible without one.
+ *
+ * ── AN OVERRIDE IS A DIRECTOR'S ───────────────────────────────────────────
+ *
+ * By the owner's decision. Leaving a module out is a judgement about relevance
+ * a Site Manager can make; REPLACING company safety wording with different
+ * words is a change to what the company says, and belongs with the people who
+ * issue it.
+ *
+ * ── WRITTEN BY ID, NOT BY COMPOUND KEY ────────────────────────────────────
+ *
+ * Deliberate: the closed-project guard resolves which project a write touches
+ * by re-querying the row, and it cannot do that through a compound-unique
+ * where clause. Reading first and updating by id keeps the guard able to
+ * enforce, and keeps a legitimate write from logging an error.
+ */
+export async function setSiteModuleDecision(
+  viewer: PlatformViewer,
+  siteId: string,
+  moduleId: string,
+  input: SiteModuleInput,
+): Promise<ModuleResult<{ state: string }>> {
+  const module = await prisma.inductionModule.findUnique({
+    where: { id: moduleId },
+    select: { id: true, title: true, mandatory: true, active: true },
+  });
+  if (!module) return { ok: false, error: 'That module does not exist.' };
+
+  if (input.state === 'OVERRIDDEN' && !canIssueInductionModule(viewer.role)) {
+    return {
+      ok: false,
+      error:
+        'Only a Director may change company induction wording for a project. A Site Manager can leave a module out, with a reason.',
+    };
+  }
+  if (input.state === 'EXCLUDED' && module.mandatory) {
+    return {
+      ok: false,
+      error: `“${module.title}” is required on every project and cannot be left out.`,
+    };
+  }
+  if (input.state === 'EXCLUDED' || input.state === 'OVERRIDDEN') {
+    if (input.reason.trim().length < 10) {
+      return { ok: false, error: 'Say why this project differs. It is kept on the record.' };
+    }
+  }
+  if (input.state === 'OVERRIDDEN' && input.overrideNarration.trim().length < 40) {
+    return { ok: false, error: 'The replacement wording is too short to be a briefing.' };
+  }
+
+  const existing = await prisma.siteInductionModule.findFirst({
+    where: { jobSiteId: siteId, moduleId },
+    select: { id: true },
+  });
+
+  // Back to the company standard: the row goes, rather than being kept as a
+  // third state meaning "no decision".
+  if (input.state === 'DEFAULT') {
+    if (existing) await prisma.siteInductionModule.delete({ where: { id: existing.id } });
+    return { ok: true, value: { state: 'DEFAULT' } };
+  }
+
+  const data = {
+    state: input.state as SiteInductionModuleState,
+    reason: 'reason' in input ? input.reason.trim() : null,
+    overrideNarration:
+      input.state === 'OVERRIDDEN' ? input.overrideNarration.trim() : null,
+    decidedByUserId: viewer.id,
+    decidedByName: viewer.name,
+  };
+
+  if (existing) {
+    await prisma.siteInductionModule.update({ where: { id: existing.id }, data });
+  } else {
+    await prisma.siteInductionModule.create({
+      data: { jobSiteId: siteId, moduleId, ...data },
+    });
+  }
+  return { ok: true, value: { state: input.state } };
+}
+
 /* ───────────────────────────── the seed set ───────────────────────────── */
 
 export interface SeedResult {
