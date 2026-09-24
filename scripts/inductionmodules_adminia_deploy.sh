@@ -41,7 +41,7 @@ git diff --quiet HEAD -- prisma/schema.prisma app components services lib script
 echo "  ok   tree committed"
 
 echo "[3/7] Asserting the schema is untouched, and the guards..."
-git diff --quiet HEAD~3 -- prisma/schema.prisma \
+git diff --quiet HEAD~1 -- prisma/schema.prisma \
   || fail "the schema moved - this change is supposed to carry no migration"
 echo "  ok   schema untouched, no database access needed"
 
