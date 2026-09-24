@@ -24,6 +24,26 @@ BASE="https://${APP}.azurewebsites.net"
 HEALTH="${BASE}/api/health"
 ZIP=/tmp/inductionmodulesbc_deploy.zip
 
+# The schema check needs to reach the database, and prod Postgres is Azure-only.
+# This script opens its own temporary firewall rule and removes it on the way
+# out, whatever happens - rather than depending on a rule somebody left behind.
+FW_RULE=devvm-modulesbc
+FW_IP=144.6.132.237
+FW_OPENED=""
+# NEVER HANG: without this, psql against a blocked port sits in TCP retry for
+# minutes and the deploy looks stuck rather than broken.
+export PGCONNECT_TIMEOUT=10
+
+cleanup() {
+  if [ -n "$FW_OPENED" ]; then
+    echo "      removing the temporary firewall rule..."
+    az postgres flexible-server firewall-rule delete -g "$RG" -s sitecomply-pg \
+      -n "$FW_RULE" --yes -o none 2>/dev/null && echo "      removed." \
+      || echo "      WARNING: could not remove ${FW_RULE} - remove it by hand"
+  fi
+}
+trap cleanup EXIT
+
 fail() { echo "  FAIL $1"; exit 1; }
 served_buildid() {
   curl -s --max-time 25 "${BASE}/" 2>/dev/null \
@@ -42,6 +62,19 @@ echo "  ok   tree committed"
 echo "[3/7] Asserting the migration landed, and the guards..."
 DB="$(az webapp config appsettings list -g "$RG" -n "$APP" -o tsv --query "[?name=='DATABASE_URL'].value" 2>/dev/null)"
 [ -n "$DB" ] || fail "could not read DATABASE_URL"
+if ! psql "$DB" -q -c 'SELECT 1' >/dev/null 2>&1; then
+  echo "      opening a temporary firewall rule for ${FW_IP}..."
+  az postgres flexible-server firewall-rule create -g "$RG" -s sitecomply-pg \
+    -n "$FW_RULE" --start-ip-address "$FW_IP" --end-ip-address "$FW_IP" -o none \
+    || fail "could not open the firewall rule"
+  FW_OPENED=yes
+  for _ in $(seq 1 12); do
+    psql "$DB" -q -c 'SELECT 1' >/dev/null 2>&1 && break
+    sleep 5
+  done
+  psql "$DB" -q -c 'SELECT 1' >/dev/null 2>&1 \
+    || fail "still cannot reach the database after opening the rule"
+fi
 COL=$(PGOPTIONS='-c default_transaction_read_only=on' psql "$DB" -X -tA -c "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='InductionVideoScene' AND column_name='moduleRevisionId')" 2>/dev/null)
 [ -n "$COL" ] || fail "could not check the production schema (firewall rule?) - refusing to deploy blind"
 [ "$COL" = "t" ] || fail "production has no InductionVideoScene.moduleRevisionId - run ~/scene_module_run.sh first"
@@ -49,6 +82,12 @@ COL=$(PGOPTIONS='-c default_transaction_read_only=on' psql "$DB" -X -tA -c "SELE
 TABLES=$(PGOPTIONS='-c default_transaction_read_only=on' psql "$DB" -X -tA -c "SELECT (to_regclass('\"InductionModule\"') IS NOT NULL)::int + (to_regclass('\"InductionModuleRevision\"') IS NOT NULL)::int + (to_regclass('\"InductionModuleEvent\"') IS NOT NULL)::int + (to_regclass('\"SiteInductionModule\"') IS NOT NULL)::int" 2>/dev/null)
 [ "$TABLES" = "4" ] || fail "production has $TABLES of the 4 module tables"
 echo "  ok   production has the column and all four tables"
+# Closed here rather than at exit: the schema check is the only thing that needs
+# it, and the rest of the deploy takes a quarter of an hour.
+if [ -n "$FW_OPENED" ]; then
+  cleanup
+  FW_OPENED=""
+fi
 
 SVC=services/inductionModules/inductionModuleService.ts
 RULES=services/inductionVideo/sceneRules.ts
