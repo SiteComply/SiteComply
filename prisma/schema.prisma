@@ -3587,10 +3587,12 @@ enum InductionVideoStatus {
   INFORMATION_REQUIRED //  the rules engine found required facts missing
   SCRIPT_GENERATING //     a generation job is in flight (also the lock)
   SCRIPT_READY //          a script exists and awaits review
-  SCRIPT_APPROVED //       approved; Phase 2 picks it up from here
-  VIDEO_GENERATING //      Phase 2
-  VIDEO_READY //           Phase 2
-  PUBLISHED //             Phase 2
+  SCRIPT_APPROVED //       approved; the words are now fixed and may be spoken
+  NARRATION_GENERATING //  Phase 2: the speech service is being called
+  NARRATION_READY //       Phase 2: audio + captions exist, awaiting a render
+  VIDEO_GENERATING //      Phase 3
+  VIDEO_READY //           Phase 3
+  PUBLISHED //             Phase 3
   GENERATION_FAILED //     the job failed; the error is on the job row
 }
 
@@ -3642,6 +3644,19 @@ model InductionVideo {
 
   supersededAt DateTime?
 
+  /// PHASE 2 - NARRATION. The voice that spoke this version, when it was
+  /// spoken, and the fingerprint of the words it was spoken from: audio whose
+  /// hash no longer matches the script is stale and is re-synthesised rather
+  /// than played.
+  voice               String?
+  narrationAt         DateTime?
+  narrationDurationMs Int?
+  narrationHash       String?
+
+  /// Captions and the written transcript, both built from the narration.
+  captionsBlobPath   String?
+  transcriptBlobPath String?
+
   /// Set when the rules engine blocked generation: which facts are missing.
   blockingReasons Json?
 
@@ -3679,9 +3694,12 @@ model InductionVideoScene {
   /// True when the rules engine REQUIRED this scene: it may not be deleted.
   required Boolean @default(false)
 
-  /// Phase 2 fills these in.
+  /// PHASE 2. The synthesised audio for this scene, its measured length, and
+  /// the fingerprint of the narration + voice that produced it. An edited scene
+  /// clears all three: audio that no longer matches the words must never play.
   audioBlobPath   String?
   audioDurationMs Int?
+  audioHash       String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

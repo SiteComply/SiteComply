@@ -11,6 +11,7 @@ import {
   canManageInductionVideos,
 } from '@/services/inductionVideo/inductionVideoPermissions';
 import { manifestForSite, generateScript, loadVideoSource } from '@/services/inductionVideo/scriptService';
+import { deleteMedia } from '@/services/inductionVideo/mediaStorage';
 import { buildSceneManifest, manifestHash } from '@/services/inductionVideo/sceneRules';
 
 /**
@@ -38,8 +39,18 @@ import { buildSceneManifest, manifestHash } from '@/services/inductionVideo/scen
 
 export type VideoResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
-function guard(viewer: PlatformViewer, siteId: string): boolean {
+/**
+ * THE access rule for induction videos: the right role, and this project in the
+ * viewer's assigned sites. Exported because Phase 2's media routes need exactly
+ * this test - a second, hand-written copy of it in a route file is how a
+ * download ends up readable by a manager from another project.
+ */
+export function canWorkOnVideoSite(viewer: PlatformViewer, siteId: string): boolean {
   return canManageInductionVideos(viewer.role) && viewer.siteIds.includes(siteId);
+}
+
+function guard(viewer: PlatformViewer, siteId: string): boolean {
+  return canWorkOnVideoSite(viewer, siteId);
 }
 
 async function record(
@@ -357,16 +368,41 @@ export async function editScene(
   if (scene.video.status === InductionVideoStatus.PUBLISHED) {
     return { ok: false, error: 'A published version cannot be edited. Generate a new version.' };
   }
+  /*
+   * NOT WHILE IT IS BEING SPOKEN. A scene edited mid-run would be synthesised
+   * from the old words or the new ones depending on where the job had got to,
+   * and nobody could tell which afterwards.
+   */
+  if (scene.video.status === InductionVideoStatus.NARRATION_GENERATING) {
+    return {
+      ok: false,
+      error: 'This version is being narrated. Wait for that to finish before editing it.',
+    };
+  }
 
   await prisma.inductionVideoScene.update({
     where: { id: sceneId },
-    data: { narration: text },
+    data: {
+      narration: text,
+      /*
+       * THE AUDIO NO LONGER SAYS THIS. Clearing it is what stops an operative
+       * hearing the old sentence while reading the new one; the next narration
+       * run pays for this one scene again and reuses the rest.
+       */
+      audioBlobPath: null,
+      audioDurationMs: null,
+      audioHash: null,
+    },
   });
+  if (scene.audioBlobPath) await deleteMedia(scene.audioBlobPath);
   /*
    * AN EDIT UNDOES AN APPROVAL. What was approved was the text as it stood; the
    * approval cannot survive its own subject being rewritten.
    */
-  if (scene.video.status === InductionVideoStatus.SCRIPT_APPROVED) {
+  if (
+    scene.video.status === InductionVideoStatus.SCRIPT_APPROVED ||
+    scene.video.status === InductionVideoStatus.NARRATION_READY
+  ) {
     await prisma.inductionVideo.update({
       where: { id: scene.video.id },
       data: {
@@ -374,6 +410,16 @@ export async function editScene(
         approvedAt: null,
         approvedByUserId: null,
         approvedByName: null,
+        /*
+         * The captions and the transcript were built from the whole script, so
+         * an edit invalidates them as surely as it invalidates the scene's own
+         * audio. Cleared rather than left to be served alongside new words.
+         */
+        narrationAt: null,
+        narrationDurationMs: null,
+        narrationHash: null,
+        captionsBlobPath: null,
+        transcriptBlobPath: null,
       },
     });
     await record(scene.video.id, 'APPROVAL_WITHDRAWN', viewer.name,
@@ -404,7 +450,35 @@ export async function removeScene(
   if (scene.video.status === InductionVideoStatus.PUBLISHED) {
     return { ok: false, error: 'A published version cannot be edited. Generate a new version.' };
   }
+  if (scene.video.status === InductionVideoStatus.NARRATION_GENERATING) {
+    return {
+      ok: false,
+      error: 'This version is being narrated. Wait for that to finish before editing it.',
+    };
+  }
   await prisma.inductionVideoScene.delete({ where: { id: sceneId } });
+  // Its audio is now unreachable and describes a scene that has gone.
+  if (scene.audioBlobPath) await deleteMedia(scene.audioBlobPath);
+  if (scene.video.status === InductionVideoStatus.NARRATION_READY) {
+    await prisma.inductionVideo.update({
+      where: { id: scene.video.id },
+      data: {
+        /*
+         * BACK TO APPROVED, not still "narration ready": the remaining scenes
+         * keep their audio, but the captions and transcript described an
+         * induction that included this scene. Re-narrating costs the captions
+         * only - every kept scene is reused - so the honest state is the one
+         * that asks for it.
+         */
+        status: InductionVideoStatus.SCRIPT_APPROVED,
+        narrationAt: null,
+        narrationDurationMs: null,
+        narrationHash: null,
+        captionsBlobPath: null,
+        transcriptBlobPath: null,
+      },
+    });
+  }
   await record(scene.video.id, 'SCENE_REMOVED', viewer.name, scene.heading);
   return { ok: true, value: { videoId: scene.video.id } };
 }

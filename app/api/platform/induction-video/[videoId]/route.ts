@@ -7,6 +7,7 @@ import {
   removeScene,
   supersedeEarlierVersions,
 } from '@/services/inductionVideo/inductionVideoService';
+import { requestNarration } from '@/services/inductionVideo/narrationService';
 import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
@@ -19,6 +20,8 @@ export const dynamic = 'force-dynamic';
  *   PATCH { action: 'editScene', sceneId, narration }
  *   PATCH { action: 'removeScene', sceneId }   → optional scenes only
  *   PATCH { action: 'approve' }                → Director or Site Manager
+ *   PATCH { action: 'narrate' }                → queue narration of an approved
+ *                                                script; the scheduler runs it
  */
 async function GETHandler(_req: NextRequest, { params }: { params: { videoId: string } }) {
   const viewer = await getPlatformViewer();
@@ -63,6 +66,12 @@ async function PATCHHandler(req: NextRequest, { params }: { params: { videoId: s
         await supersedeEarlierVersions(detail.video.jobSiteId, params.videoId, viewer.name);
       }
       return NextResponse.json({ ok: true });
+    }
+    case 'narrate': {
+      const r = await requestNarration(viewer, params.videoId);
+      return r.ok
+        ? NextResponse.json({ ok: true })
+        : NextResponse.json({ ok: false, error: r.error }, { status: 400 });
     }
     default:
       return NextResponse.json({ ok: false, error: 'Unknown action.' }, { status: 400 });

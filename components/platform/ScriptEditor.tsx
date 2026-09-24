@@ -45,7 +45,20 @@ export function ScriptEditor({
   const approved = status === 'SCRIPT_APPROVED';
   const published = status === 'PUBLISHED';
   const generating = status === 'SCRIPT_GENERATING';
-  const readOnly = published || generating;
+  /*
+   * LOCKED WHILE IT IS BEING SPOKEN. A scene edited mid-narration would be
+   * synthesised from whichever version of the words the job had reached, and
+   * nothing afterwards could say which. The service refuses it too.
+   */
+  const narrating = status === 'NARRATION_GENERATING';
+  const narrated = status === 'NARRATION_READY';
+  const readOnly = published || generating || narrating;
+  /*
+   * A NARRATED SCRIPT IS AN APPROVED ONE. Approval is what let it be narrated,
+   * so the button must not be offered again on a version past that point - the
+   * service refuses it, and a button that fails on press explains nothing.
+   */
+  const settled = approved || narrating || narrated;
 
   async function call(body: Record<string, unknown>, key: string) {
     if (busy) return;
@@ -103,6 +116,21 @@ export function ScriptEditor({
         <p className="rounded-lg border border-safe-500/40 bg-safe-50 px-3 py-2 text-sm text-safe-700">
           This script is approved. Editing a scene returns it to review, because
           what was approved would no longer be what is here.
+        </p>
+      )}
+
+      {narrating && (
+        <p className="rounded-lg border border-line bg-surface-sunken px-3 py-2 text-sm text-ink-muted">
+          This script is being narrated, so it cannot be edited until that
+          finishes.
+        </p>
+      )}
+
+      {narrated && (
+        <p className="rounded-lg border border-hivis-500/40 bg-hivis-400/10 px-3 py-2 text-sm text-ink">
+          This script has been narrated. Editing a scene clears that scene’s
+          audio and returns the script to review — the narration would otherwise
+          say something the script no longer does.
         </p>
       )}
 
@@ -177,7 +205,7 @@ export function ScriptEditor({
       {!published && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface p-4 shadow-card">
           <p className="text-sm text-ink-muted">
-            {approved
+            {settled
               ? 'Approved and ready for the next stage.'
               : canApprove
                 ? 'Approving records that you have read this script and accept it for this project.'
@@ -185,11 +213,11 @@ export function ScriptEditor({
           </p>
           <button
             type="button"
-            disabled={!canApprove || approved || busy !== null}
+            disabled={!canApprove || settled || busy !== null}
             onClick={() => call({ action: 'approve' }, 'approve')}
             className="ml-auto rounded-lg bg-safe-500 px-4 py-2 text-sm font-semibold text-white hover:bg-safe-600 disabled:opacity-40"
           >
-            {busy === 'approve' ? 'Approving…' : approved ? 'Approved' : 'Approve script'}
+            {busy === 'approve' ? 'Approving…' : settled ? 'Approved' : 'Approve script'}
           </button>
         </div>
       )}

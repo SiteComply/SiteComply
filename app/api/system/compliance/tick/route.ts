@@ -1,4 +1,5 @@
 import { runQueuedScriptJobs } from '@/services/inductionVideo/inductionVideoService';
+import { runQueuedNarrationJobs } from '@/services/inductionVideo/narrationService';
 import { NextRequest, NextResponse } from 'next/server';
 import { SchedulerTrigger } from '@prisma/client';
 import { runScheduledGeneration } from '@/services/compliance/schedulerRunner';
@@ -62,11 +63,25 @@ async function POSTHandler(req: NextRequest) {
     // Already recorded against the job row; the tick itself still succeeded.
   }
 
+  /*
+   * NARRATION RIDES THE SAME TICK, in its own try for the same reason. It is
+   * drained AFTER the scripts so a newly generated script can be narrated on the
+   * following hour rather than waiting on a queue behind one; and a speech
+   * outage must leave both the compliance run and script generation alone.
+   */
+  let narrationsGenerated = 0;
+  try {
+    narrationsGenerated = await runQueuedNarrationJobs();
+  } catch {
+    // Already recorded against the job row; the tick itself still succeeded.
+  }
+
   // 200 even on a recorded failure: the timer should not retry-storm, and the
   // failure is already visible on the calendar's status line and in SchedulerRun.
   return NextResponse.json({
     ok: result.ok,
     scriptsGenerated,
+    narrationsGenerated,
     runId: result.runId,
     sitesConsidered: result.sitesConsidered,
     occurrencesCreated: result.occurrencesCreated,

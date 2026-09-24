@@ -1,9 +1,9 @@
 import { cn } from '@/lib/cn';
 
 /**
- * The nine statuses of an induction video, in one place.
+ * Every status of an induction video, in one place.
  *
- * Phase 2's statuses are here already: the workflow is one state machine, and a
+ * Phase 3's statuses are here already: the workflow is one state machine, and a
  * badge that cannot render VIDEO_READY would be a second, quieter definition of
  * the same thing.
  */
@@ -13,6 +13,8 @@ const LABEL: Record<string, string> = {
   SCRIPT_GENERATING: 'Script generating',
   SCRIPT_READY: 'Ready for review',
   SCRIPT_APPROVED: 'Script approved',
+  NARRATION_GENERATING: 'Narration generating',
+  NARRATION_READY: 'Narrated',
   VIDEO_GENERATING: 'Video generating',
   VIDEO_READY: 'Video ready for review',
   PUBLISHED: 'Published',
@@ -25,6 +27,8 @@ const TONE: Record<string, string> = {
   SCRIPT_GENERATING: 'bg-brand-50 text-brand-700',
   SCRIPT_READY: 'bg-brand-50 text-brand-700',
   SCRIPT_APPROVED: 'bg-safe-50 text-safe-700',
+  NARRATION_GENERATING: 'bg-brand-50 text-brand-700',
+  NARRATION_READY: 'bg-safe-50 text-safe-700',
   VIDEO_GENERATING: 'bg-brand-50 text-brand-700',
   VIDEO_READY: 'bg-brand-50 text-brand-700',
   PUBLISHED: 'bg-safe-50 text-safe-700',

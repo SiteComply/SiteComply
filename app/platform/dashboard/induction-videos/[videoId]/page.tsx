@@ -7,6 +7,11 @@ import { getVideo } from '@/services/inductionVideo/inductionVideoService';
 import { formatDateTimeUK } from '@/lib/datetime';
 import { InductionVideoStatusBadge } from '@/components/platform/InductionVideoStatusBadge';
 import { ScriptEditor } from '@/components/platform/ScriptEditor';
+import { NarrationPanel } from '@/components/platform/NarrationPanel';
+import { estimateNarrationForScenes } from '@/services/inductionVideo/narrationService';
+import { resolveSpeechSynthesiser } from '@/services/inductionVideo/speechSynthesiser';
+import { mediaStorageConfigured } from '@/services/inductionVideo/mediaStorage';
+import { formatRunningTime } from '@/services/inductionVideo/captions';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +31,17 @@ export default async function InductionVideoPage({
   const blocking = Array.isArray(video.blockingReasons)
     ? (video.blockingReasons as { heading: string; message: string }[])
     : [];
+
+  /*
+   * NARRATION NEEDS BOTH A VOICE AND SOMEWHERE TO PUT THE AUDIO. Checking only
+   * the speech service would offer a button that fails on the upload, which is
+   * a worse explanation than a panel that says what is not set up.
+   */
+  const narrationConfigured = Boolean(resolveSpeechSynthesiser()) && mediaStorageConfigured();
+  // Only the scenes that would actually be bought: the rest are reused.
+  const unnarrated = video.scenes.filter((s) => !s.audioDurationMs).map((s) => s.narration);
+  const lastNarrationError =
+    video.jobs.find((j) => j.kind === 'NARRATION' && j.status === 'FAILED')?.error ?? null;
 
   return (
     <PlatformShell>
@@ -99,6 +115,24 @@ export default async function InductionVideoPage({
         }))}
       />
 
+      <NarrationPanel
+        videoId={video.id}
+        status={video.status}
+        configured={narrationConfigured}
+        scenes={video.scenes.map((s) => ({
+          id: s.id,
+          heading: s.heading,
+          duration: s.audioDurationMs ? clockLabel(s.audioDurationMs) : null,
+        }))}
+        totalLabel={video.narrationDurationMs ? formatRunningTime(video.narrationDurationMs) : null}
+        voice={video.voice}
+        narratedOn={video.narrationAt ? formatDateTimeUK(video.narrationAt) : null}
+        hasCaptions={Boolean(video.captionsBlobPath)}
+        hasTranscript={Boolean(video.transcriptBlobPath)}
+        estimatePence={estimateNarrationForScenes(unnarrated).pence}
+        lastError={lastNarrationError}
+      />
+
       <section className="mt-6 rounded-xl border border-line bg-surface p-4 shadow-card">
         <h2 className="text-sm font-bold text-ink">History</h2>
         <p className="mt-0.5 text-xs text-ink-subtle">
@@ -122,4 +156,10 @@ export default async function InductionVideoPage({
       </section>
     </PlatformShell>
   );
+}
+
+/** 0:42 — how long a single scene runs, in the form a player shows. */
+function clockLabel(ms: number): string {
+  const seconds = Math.round(ms / 1000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
