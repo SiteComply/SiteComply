@@ -495,6 +495,7 @@ model JobSite {
   appliedConfigTemplateBy   String?
 
   @@index([status])
+  inductionModules    SiteInductionModule[]
 }
 
 /// A Daily Bulletin (SC-002): an important site notice, announcement or safety
@@ -3765,6 +3766,163 @@ model InductionVideoEvent {
   createdAt DateTime @default(now())
 
   @@index([videoId, createdAt])
+}
+
+/// COMPANY INDUCTION MODULES — standard content, written once.
+///
+/// Housekeeping, PPE expectations, behavioural standards, manual handling,
+/// accident and near-miss reporting, environmental awareness: the topics every
+/// operative hears on every site, which do not change because the project does.
+///
+/// ── WHY THESE ARE VERSIONED AND THE CPP ARRANGEMENTS ARE NOT ─────────────
+///
+/// StandardArrangement is edited in place, which is safe because the CPP
+/// freezes it: every issued revision snapshots the text, so what was in force
+/// on a given date is recoverable from the plan. An induction video has no
+/// equivalent freeze for words SPOKEN TO EVERY OPERATIVE, so the module carries
+/// its own history instead. "What was the manual-handling briefing this
+/// operative heard in July?" has to be answerable years later.
+model InductionModule {
+  id   String @id @default(cuid())
+  /// Stable key, e.g. MANUAL_HANDLING. Free-form rather than an enum because
+  /// the set of topics grows; ArrangementKey is a fixed CDM list and is not.
+  slug String @unique
+
+  title    String
+  category InductionModuleCategory @default(SAFETY)
+
+  /// Where this sits within the company band of the induction.
+  order Int @default(0)
+
+  /// A site may NOT exclude a mandatory module — the same rule that stops an
+  /// editor deleting a required scene.
+  mandatory Boolean @default(false)
+  /// Included unless a site says otherwise.
+  defaultIncluded Boolean @default(true)
+
+  /// When the project's own records cover the same ground (e.g. its incident
+  /// reporting arrangement), the SITE's text wins and this module is left out.
+  replacesSceneType String?
+
+  active Boolean @default(true)
+
+  revisions InductionModuleRevision[]
+  sites     SiteInductionModule[]
+
+  createdByUserId String?
+  createdByName   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([active, order])
+}
+
+/// One version of a module's words. Mirrors CppRevision: draft, issued,
+/// superseded — nothing is ever overwritten.
+model InductionModuleRevision {
+  id       String          @id @default(cuid())
+  module   InductionModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  moduleId String
+
+  version Int
+  status  InductionModuleRevisionStatus @default(DRAFT)
+
+  /// Shown as the scene's title in the video.
+  heading String
+  /// The exact words spoken. AUTHORED, never generated: module narration is not
+  /// sent to the model at all, so it cannot be re-worded, costs nothing, and
+  /// says precisely what a Director approved.
+  narration String
+  /// Fingerprint of the words, so a video knows which revision it carries.
+  contentHash String
+
+  preparedByUserId String?
+  preparedByName   String
+  preparedAt       DateTime @default(now())
+
+  issuedByUserId String?
+  issuedByName   String?
+  issuedAt       DateTime?
+
+  /// Why this revision was issued — the note a reader wants years later.
+  issueNote String?
+
+  supersededAt DateTime?
+
+  events InductionModuleEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([moduleId, version])
+  @@index([moduleId, status])
+}
+
+/// Append-only history: drafted, edited, issued, superseded, withdrawn.
+/// Denormalised actor names, like every other audit trail here.
+model InductionModuleEvent {
+  id         String                  @id @default(cuid())
+  revision   InductionModuleRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  revisionId String
+
+  action    String
+  detail    String?
+  actorName String
+  createdAt DateTime @default(now())
+
+  @@index([revisionId, createdAt])
+}
+
+/// A project's departure from the company standard.
+///
+/// Mirrors SiteArrangement: the resolution rule is "site row wins, else the
+/// module's default, else not included", and it lives in ONE place so the
+/// settings screen, the site screen and the video cannot disagree.
+///
+/// An OVERRIDE is Director-only and must carry a reason, because it is a
+/// project choosing to say something other than company policy.
+model SiteInductionModule {
+  id        String  @id @default(cuid())
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+
+  module   InductionModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  moduleId String
+
+  state SiteInductionModuleState
+
+  /// Set only when state is OVERRIDDEN.
+  overrideNarration String?
+  /// Required for an exclusion or an override: why this project differs.
+  reason            String?
+
+  decidedByUserId String?
+  decidedByName   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([jobSiteId, moduleId])
+  @@index([jobSiteId])
+}
+
+enum InductionModuleCategory {
+  SAFETY
+  BEHAVIOUR
+  ENVIRONMENT
+  REPORTING
+}
+
+enum InductionModuleRevisionStatus {
+  DRAFT
+  ISSUED
+  SUPERSEDED
+}
+
+enum SiteInductionModuleState {
+  INCLUDED
+  EXCLUDED
+  OVERRIDDEN
 }
 
 /// EVIDENCE THAT AN OPERATIVE WATCHED IT.

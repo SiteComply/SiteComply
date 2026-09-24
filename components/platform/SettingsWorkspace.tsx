@@ -48,6 +48,19 @@ export const SETTINGS_AREAS: SettingsArea[] = [
       'Health and safety file, management structure, worker consultation, contractor selection, public protection and incident reporting — inherited by every project.',
   },
   {
+    /*
+     * Company induction content, inherited by every project's induction the way
+     * arrangements are inherited by its plan. Listed next to them because it is
+     * the same KIND of thing - authored organisational content a Director owns -
+     * rather than a per-site switch.
+     */
+    key: 'induction-modules',
+    label: 'Induction modules',
+    href: '/platform/dashboard/settings/induction-modules',
+    description:
+      'PPE expectations, behavioural standards, accident and near-miss reporting, housekeeping, manual handling and environmental awareness — the standard content every induction carries.',
+  },
+  {
     key: 'config-templates',
     label: 'Configuration templates',
     href: '/platform/dashboard/settings/config-templates',
