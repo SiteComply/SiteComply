@@ -1,6 +1,5 @@
 import { headers } from 'next/headers';
 import type { Metadata } from 'next';
-import { PrintButton } from '@/components/worker/PrintButton';
 import { CloseOutPackDocument } from '@/components/platform/CloseOutPackDocument';
 import { getCompanyBranding } from '@/services/company/companyConfigService';
 import { renderPack } from '@/services/closeOut/closeOutService';
@@ -120,7 +119,14 @@ export default async function SharedPackPage({
                 Download ZIP
               </a>
             ) : null}
-            <PrintButton label="Save as PDF (print)" />
+            {/* What the client keeps. A real document, not a web page they
+                have to print themselves. */}
+            <a
+              href={`/api/pack/${params.token}/pdf`}
+              className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+            >
+              Download the pack (PDF)
+            </a>
           </div>
         </div>
       </div>

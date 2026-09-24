@@ -9,18 +9,14 @@ import {
   uploadBlobStream,
 } from '@/services/documents/blobStorage';
 import { renderPack } from '@/services/closeOut/closeOutService';
-import { readStoredNarrative } from '@/services/closeOut/closeOutAi';
-import {
-  getCompanyBranding,
-  getCompanyLogo,
-  type CompanyBranding,
-} from '@/services/company/companyConfigService';
 import { PHOTO_LIMIT } from '@/services/closeOut/closeOutSections';
 import { supersededDocumentIds } from '@/services/documents/supersededDocuments';
 import {
   supersededEvidenceIdsForSite,
   excludeIds,
 } from '@/services/annotations/supersededEvidenceQuery';
+import { renderCloseOutPackPdf } from '@/services/closeOutPdf/renderCloseOutPack';
+import { packPdfData } from '@/services/closeOutPdf/closeOutPackPdfData';
 
 /**
  * SC-024 Phase 2 — the ZIP archive: the pack plus every original file.
@@ -68,6 +64,20 @@ interface ArchiveEntry {
  * the PDF cites "Appendix A3", and A3 is the filename in the zip. Without that
  * the two artefacts are unrelated piles of paper and files.
  */
+/**
+ * Just the appendix LABELS, for a document that lists them without carrying the
+ * files. Thin wrapper so the numbering cannot drift between the PDF and the
+ * archive: the same collector produces both, and "Appendix A3" means the same
+ * file in each.
+ */
+export async function collectAppendixLabels(
+  viewer: PlatformViewer,
+  siteId: string,
+): Promise<{ ref: string; title: string; source: string }[]> {
+  const { labels } = await collectAppendices(viewer, siteId);
+  return labels;
+}
+
 export async function collectAppendices(
   viewer: PlatformViewer,
   siteId: string,
@@ -164,114 +174,6 @@ export async function collectAppendices(
 }
 
 /** A self-contained HTML rendering of the pack, for the archive. */
-function packHtml(
-  pack: NonNullable<Awaited<ReturnType<typeof renderPack>>>,
-  labels: { ref: string; title: string; source: string }[],
-  company: CompanyBranding,
-  logoDataUri: string | null,
-): string {
-  // The archived copy carries the SAME AI labelling as the on-screen pack. This
-  // is the copy that gets filed and read years later, so unlabelled machine
-  // prose here would be worse than none.
-  const narrative = readStoredNarrative(
-    pack.aiSummary,
-    pack.sections.map((sec) => sec.id),
-  );
-  const esc = (v: string) =>
-    v.replace(/[&<>"]/g, (c) =>
-      c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&quot;',
-    );
-
-  const sections = pack.sections
-    .map((s, i) => {
-      const facts = s.facts
-        ? `<dl>${s.facts.map((f) => `<dt>${esc(f.label)}</dt><dd>${esc(f.value)}</dd>`).join('')}</dl>`
-        : '';
-      const rows =
-        s.rows && s.rows.length
-          ? `<table><thead><tr>${s.rows[0]!.map((c) => `<th>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${s.rows
-              .map(
-                (r) =>
-                  `<tr>${r.map((c) => `<td>${esc(c.value)}</td>`).join('')}</tr>`,
-              )
-              .join('')}</tbody></table>`
-          : '';
-      const photos = s.photos
-        ? `<ul>${s.photos.map((p) => `<li>${esc(p.caption)}</li>`).join('')}</ul>`
-        : '';
-      const capped = s.cappedNote
-        ? `<p class="note">${esc(s.cappedNote)}</p>`
-        : '';
-      const sectionNarrative = narrative?.sectionNarratives.find(
-        (x) => x.sectionId === s.id,
-      );
-      const ai = sectionNarrative
-        ? `<div class="ai"><span class="ai-badge">AI-generated</span><p>${esc(sectionNarrative.narrative)}</p></div>`
-        : '';
-      return `<section id="${s.id}"><h2>${i + 1}. ${esc(s.label)}</h2>${ai}${facts}${rows}${photos}${capped}</section>`;
-    })
-    .join('');
-
-  const appendix = labels.length
-    ? `<section><h2>Appendices</h2><table><thead><tr><th>Ref</th><th>Title</th><th>Source</th></tr></thead><tbody>${labels
-        .map(
-          (l) =>
-            `<tr><td>${l.ref}</td><td>${esc(l.title)}</td><td>${esc(l.source)}</td></tr>`,
-        )
-        .join(
-          '',
-        )}</tbody></table><p class="note">Each appendix is included in the <code>originals/</code> folder of this archive, named by its reference.</p></section>`
-    : '';
-
-  return `<!doctype html><html lang="en-GB"><head><meta charset="utf-8">
-<title>${esc(pack.title)}</title><style>
-body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#1a1a1a;max-width:900px;margin:2rem auto;padding:0 1.5rem;line-height:1.5}
-h1{font-size:1.6rem;text-transform:uppercase;text-align:center;margin:0}
-h2{font-size:1.05rem;margin:2rem 0 .5rem;border-bottom:1px solid #ddd;padding-bottom:.25rem}
-table{width:100%;border-collapse:collapse;font-size:.82rem}
-th{text-align:left;color:#555;border-bottom:1px solid #ddd;padding:.25rem .5rem .25rem 0}
-td{padding:.25rem .5rem .25rem 0;border-bottom:1px solid #f0f0f0;vertical-align:top}
-dl{display:grid;grid-template-columns:1fr 1fr;gap:.5rem 1rem;font-size:.85rem}
-dt{font-weight:600}dd{margin:0;color:#444;white-space:pre-line}
-.cover{text-align:center;border-bottom:2px solid ${esc(company.primaryColor)};padding-bottom:2rem;margin-bottom:2rem}
-.logo{max-height:64px;max-width:220px;margin:0 auto 1rem;display:block}
-.meta{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;text-align:left;max-width:620px;margin:1.5rem auto 0;font-size:.85rem}
-.note{background:#fff8e1;border:1px solid #f0d68a;padding:.5rem .75rem;font-size:.8rem}
-.ai{border:1px solid rgba(56,181,74,.35);background:rgba(56,181,74,.06);padding:.5rem .75rem;margin:.5rem 0;font-size:.85rem}
-.ai p{margin:.25rem 0 0}
-.ai-badge{display:inline-block;border:1px solid rgba(56,181,74,.5);color:#2f8f3c;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:.05rem .3rem}
-.ai-note{font-size:.72rem;color:#666;margin-top:.35rem}
-.footer{margin-top:3rem;font-size:.75rem;color:#666;border-top:1px solid #ddd;padding-top:1rem}
-@media print{section{break-before:page}.cover{break-before:auto}}
-</style></head><body>
-<div class="cover">
-${logoDataUri ? `<img class="logo" src="${logoDataUri}" alt="${esc(company.companyName)}">` : ''}
-<p style="font-weight:700;letter-spacing:.1em;color:${esc(company.primaryColor)}">${esc(company.companyName)}</p>
-${company.tagline ? `<p style="font-size:.8rem;color:#666">${esc(company.tagline)}</p>` : ''}
-<h1>${esc(pack.site.name)}</h1><p style="text-transform:uppercase;color:#555">Project Close-Out Pack</p>
-<div class="meta">
-<div><b>Project address</b><br>${esc(pack.site.address)}</div>
-<div><b>Job reference</b><br>${esc(pack.site.jobReference)}</div>
-<div><b>Prepared for</b><br>${esc(pack.preparedFor ?? '—')}</div>
-<div><b>Prepared by</b><br>${esc(pack.generatedByName)}</div>
-</div>
-<p style="font-size:.75rem;color:#666;margin-top:1.5rem">Generated on ${pack.generatedAt.toLocaleDateString('en-GB')} · Version ${pack.version}.0</p>
-</div>
-${
-  narrative
-    ? `<section><h2>Executive summary</h2><div class="ai"><span class="ai-badge">AI-generated</span><p>${esc(narrative.executiveSummary)}</p></div><p class="ai-note">This narrative was written automatically from the records held in this project and is a descriptive summary only. It is not an assessment, certification or approval of compliance. The project team remains responsible for the accuracy and completeness of this pack.</p></section>`
-    : ''
-}
-<h2>Contents</h2><ol>${pack.sections.map((s) => `<li><a href="#${s.id}">${esc(s.label)}</a></li>`).join('')}${labels.length ? '<li>Appendices</li>' : ''}</ol>
-${sections}${appendix}
-<p class="footer">This pack was compiled automatically from the records held in SiteComply for this project on ${pack.generatedAt.toLocaleDateString('en-GB')}. It is a record of what was captured, not an assessment or certification of compliance. The Principal Contractor remains responsible for the accuracy and completeness of project records under CDM 2015.<br><br>To save as PDF, open this file in a browser and print to PDF.${
-    narrative
-      ? '<br><br>Passages marked &ldquo;AI-generated&rdquo; were written automatically as descriptive summaries of the records above. They are not assessments, certifications or approvals of compliance.'
-      : ''
-  }</p>
-</body></html>`;
-}
-
 /**
  * Build the archive and store it against the project.
  *
@@ -291,16 +193,14 @@ export async function buildAndStoreArchive(
   });
   if (!row) return { ok: false, error: 'Pack not found.' };
 
-  const [{ entries, labels }, company, logo] = await Promise.all([
-    collectAppendices(viewer, row.jobSiteId),
-    getCompanyBranding(),
-    // Inlined as a data URI: the archived pack has to render off a memory stick
-    // years from now, with no network and no SiteComply to fetch the logo from.
-    getCompanyLogo(),
-  ]);
-  const logoDataUri = logo
-    ? `data:${logo.contentType};base64,${logo.bytes.toString('base64')}`
-    : null;
+  /*
+   * The branding and the logo are no longer loaded here: the PDF renderer
+   * fetches them itself through packPdfData, and the logo is EMBEDDED in the
+   * document rather than inlined as a data URI. The archived pack still has to
+   * open off a memory stick years from now with no network - a PDF carries its
+   * own images and faces, which is a stronger version of the same guarantee.
+   */
+  const { entries, labels } = await collectAppendices(viewer, row.jobSiteId);
 
   // The archiver typings expose the concrete archive classes rather than a
   // callable default, so the class is constructed directly.
@@ -360,9 +260,20 @@ export async function buildAndStoreArchive(
   );
   const uploadPromise = uploadBlobStream(blobPath, upload, 'application/zip');
 
-  archive.append(packHtml(pack, labels, company, logoDataUri), {
-    name: 'close-out-pack.html',
-  });
+  /*
+   * THE PACK ITSELF IS A PDF NOW, not an HTML file.
+   *
+   * This archive is handed to a client. A recipient who opened it found a web
+   * page to view in a browser and print themselves - complete with their own
+   * URL and timestamp across the top - which was the first impression the
+   * platform made on somebody who never logs into it.
+   */
+  archive.append(
+    await renderCloseOutPackPdf(
+      await packPdfData(pack, labels, { appendicesIncluded: true }),
+    ),
+    { name: 'close-out-pack.pdf' },
+  );
   fileCount += 1;
   await settled(fileCount);
 

@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
-import { PrintButton } from '@/components/worker/PrintButton';
 import {
   requirePlatformViewer,
   assertModuleView,
@@ -91,7 +90,14 @@ export default async function CloseOutPackPage({
             >
               ← Back to generator
             </Link>
-            <PrintButton label="Export as PDF (print)" />
+            {/* The document, not a print of this screen. Rendered on demand
+                from live records, like the page itself. */}
+            <a
+              href={`/api/platform/sites/${params.id}/close-out/${params.packId}/pdf`}
+              className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+            >
+              Download the pack (PDF)
+            </a>
           </div>
         </div>
       </div>
