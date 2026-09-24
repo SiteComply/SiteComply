@@ -27,11 +27,11 @@ APP=sitecomply-web
 BASE="https://${APP}.azurewebsites.net"
 HEALTH="${BASE}/api/health"
 ZIP=/tmp/inductionmodules_admin_deploy.zip
+# This deploy DOES need the database, to confirm the realm migration landed. The
+# rule is opened in step 3 and closed the moment that check is done.
+FW_RULE=devvm-modulesadmin
+FW_IP=144.6.132.237
 
-# NO DATABASE ACCESS. This change carries no migration, so the script opens no
-# firewall rule and needs no psql - deliberately, because a deploy that can reach
-# production Postgres when it has no reason to is a rule somebody forgets to
-# close.
 fail() { echo "  FAIL $1"; exit 1; }
 served_buildid() {
   curl -s --max-time 25 "${BASE}/" 2>/dev/null \
@@ -64,7 +64,7 @@ trap cleanup_fw EXIT
 if ! psql "$DB" -q -c 'SELECT 1' >/dev/null 2>&1; then
   echo "      opening a temporary firewall rule..."
   az postgres flexible-server firewall-rule create -g "$RG" -s sitecomply-pg \
-    -n "$FW_RULE" --start-ip-address 144.6.132.237 --end-ip-address 144.6.132.237 -o none \
+    -n "$FW_RULE" --start-ip-address "$FW_IP" --end-ip-address "$FW_IP" -o none \
     || fail "could not open the firewall rule"
   FW_OPENED=yes
   for _ in $(seq 1 12); do psql "$DB" -q -c 'SELECT 1' >/dev/null 2>&1 && break; sleep 5; done
@@ -95,8 +95,8 @@ test -f "app/api/platform/induction-modules/route.ts" \
   || fail "the moved API route is missing"
 test -f "app/api/platform/settings/induction-modules/route.ts" \
   && fail "the old settings-shaped API path is still there"
-grep -q "fetch('/api/platform/induction-modules'" components/platform/InductionModulesSection.tsx \
-  || fail "the editor still posts to the old API path"
+grep -qF 'endpoint="/api/platform/induction-modules"' "$MP" \
+  || fail "the Induction Videos page does not pass the platform endpoint"
 grep -qF "redirect('/platform/dashboard/induction-videos/modules')" \
   app/platform/dashboard/settings/induction-modules/page.tsx \
   || fail "the old URL does not redirect - it shipped to production"
