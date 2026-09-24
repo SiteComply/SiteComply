@@ -417,11 +417,17 @@ echo "        POST /api/admin/induction-modules -> HTTP ${C}"
 case "$C" in 401|403) ;; *) fail "the admin module API returned ${C}, expected 401/403" ;; esac
 
 echo "      the ADMIN video APIs must be GATED, not broken:"
-for A in "/api/admin/induction-video/x" "/api/admin/sites/x/induction-video"; do
-  C=$(curl -s -o /dev/null -w "%{http_code}" --max-time 25 -X POST -H 'content-type: application/json' \
-        -d '{"action":"publish"}' "${BASE}${A}" || echo 000)
-  echo "        POST ${A} -> HTTP ${C}"
-  case "$C" in 401|403|405) ;; *) fail "${A} returned ${C}, expected 401/403/405" ;; esac
+# Each with the method it actually implements. POSTing to a GET/PATCH route
+# returns 405, which proves the method list and NOTHING about the gate - the first
+# version of this check did exactly that and would have passed an open route.
+for SPEC in "PATCH /api/admin/induction-video/x" \
+            "GET /api/admin/induction-video/x" \
+            "POST /api/admin/sites/x/induction-video"; do
+  M="${SPEC%% *}"; A="${SPEC#* }"
+  C=$(curl -s -o /dev/null -w "%{http_code}" --max-time 25 -X "$M" \
+        -H 'content-type: application/json' -d '{"action":"publish"}' "${BASE}${A}" || echo 000)
+  echo "        ${M} ${A} -> HTTP ${C}"
+  case "$C" in 401|403) ;; *) fail "${M} ${A} returned ${C}, expected 401/403" ;; esac
 done
 
 echo "      route smoke test:"
