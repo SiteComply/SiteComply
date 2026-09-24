@@ -89,8 +89,13 @@ grep -q "siteIds" "$MP" \
   && fail "the modules page copied the listing's site-scope guard - company content is not site-scoped"
 grep -q "siteIds.length === 0) redirect" "$VP" \
   || fail "the videos listing lost its site-scope guard"
-grep -q "'DIRECTOR', 'PROJECT_MANAGER', 'SITE_MANAGER'\]" "$SVC" \
+# The platform role sets moved to moduleRoles.ts when authority moved to the
+# edge; the service itself must no longer contain a role list at all.
+ROLES=services/inductionModules/moduleRoles.ts
+grep -q "'DIRECTOR', 'PROJECT_MANAGER', 'SITE_MANAGER'\]" "$ROLES" \
   || fail "the module VIEW role set changed - a Project Manager must keep the read access they had"
+grep -q "'DIRECTOR', 'SITE_MANAGER'\]" "$ROLES" \
+  || fail "the module DRAFT role set changed"
 test -f "app/api/platform/induction-modules/route.ts" \
   || fail "the moved API route is missing"
 test -f "app/api/platform/settings/induction-modules/route.ts" \
@@ -153,14 +158,16 @@ SCRIPT=services/inductionVideo/scriptService.ts
 VID=services/inductionVideo/inductionVideoService.ts
 grep -q "if (!issued) continue; // a draft never reaches a site" "$SVC" \
   || fail "a DRAFT could reach a site"
-grep -q "return role === 'DIRECTOR';" "$SVC" \
-  || fail "issuing is no longer a Director's alone"
+grep -q "return role === 'DIRECTOR';" "$ROLES" \
+  || fail "issuing is no longer a Director's alone in the PLATFORM realm"
 grep -q "An issued revision cannot be edited" "$SVC" \
   || fail "an issued revision can be edited"
 grep -q "status: InductionModuleRevisionStatus.SUPERSEDED" "$SVC" \
   || fail "issuing no longer supersedes the previous revision"
-grep -q "input.state === 'OVERRIDDEN' && !canIssueInductionModule(viewer.role)" "$SVC" \
-  || fail "a Site Manager could override company wording"
+# Now expressed as a capability, so it holds in both realms: a platform Site
+# Manager has canIssue false, and so does an Admin VIEWER.
+grep -q "input.state === 'OVERRIDDEN' && !actor.canIssue" "$SVC" \
+  || fail "overriding company wording no longer requires issue authority"
 grep -q "input.state === 'EXCLUDED' && module.mandatory" "$SVC" \
   || fail "a MANDATORY module could be left out"
 grep -q "input.reason.trim().length < 10" "$SVC" \
