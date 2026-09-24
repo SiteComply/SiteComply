@@ -128,8 +128,14 @@ chk(
   'a settings/ API for a screen no longer in Settings is stale naming',
 );
 chk(
-  'the editor posts to the new path',
-  read(SECTION).includes("fetch('/api/platform/induction-modules'"),
+  'the editor takes its endpoint rather than hard-coding one',
+  // It now serves BOTH front doors, so a hard-coded path would be the bug.
+  /endpoint: string/.test(read(SECTION)) && !/fetch\('\/api\//.test(read(SECTION)),
+);
+chk(
+  'the Induction Videos page passes the platform endpoint',
+  read('app/platform/dashboard/induction-videos/modules/page.tsx')
+    .includes('endpoint="/api/platform/induction-modules"'),
 );
 chk(
   'the editor posts to no settings path',

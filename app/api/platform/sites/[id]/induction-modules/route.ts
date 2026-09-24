@@ -5,6 +5,7 @@ import {
   setSiteModuleDecision,
   type SiteModuleInput,
 } from '@/services/inductionModules/inductionModuleService';
+import { moduleActorFromPlatformViewer } from '@/services/inductionModules/moduleActor';
 import { withClosedProjectHandling } from '@/lib/routeErrors';
 
 export const runtime = 'nodejs';
@@ -61,7 +62,12 @@ async function POSTHandler(
       return NextResponse.json({ ok: false, error: 'Unknown state.' }, { status: 400 });
   }
 
-  const result = await setSiteModuleDecision(viewer, params.id, moduleId, input);
+  const result = await setSiteModuleDecision(
+    moduleActorFromPlatformViewer(viewer),
+    params.id,
+    moduleId,
+    input,
+  );
   return result.ok
     ? NextResponse.json({ ok: true, ...result.value })
     : NextResponse.json({ ok: false, error: result.error }, { status: 400 });

@@ -376,10 +376,10 @@ model Worker {
   permits                Permit[]
   // SC-015: corrective actions assigned to this worker.
   assignedActions        Action[]
+  inductionVideoViews    InductionVideoView[]
 
   @@index([company])
   @@index([cscsExpiry])
-  inductionVideoViews InductionVideoView[]
 }
 
 /// A construction site / job that workers induct onto and check in to.
@@ -493,9 +493,9 @@ model JobSite {
   appliedConfigTemplateName String?
   appliedConfigTemplateAt   DateTime?
   appliedConfigTemplateBy   String?
+  inductionModules          SiteInductionModule[]
 
   @@index([status])
-  inductionModules    SiteInductionModule[]
 }
 
 /// A Daily Bulletin (SC-002): an important site notice, announcement or safety
@@ -3157,13 +3157,19 @@ model CppRevision {
   /// Section content only — see the note above.
   contentHash String
 
-  preparedByUserId String?
-  preparedByName   String
-  preparedAt       DateTime @default(now())
+  preparedByUserId  String?
+  /// Admin Centre actors live in a different table; never written to *ByUserId.
+  preparedByAdminId String?
+  preparedByName    String
+  /// PLATFORM or ADMIN — a fact for the record, never consulted for a decision.
+  preparedByRealm   String?
+  preparedAt        DateTime @default(now())
 
-  issuedByUserId String?
-  issuedByName   String?
-  issuedAt       DateTime?
+  issuedByUserId  String?
+  issuedByAdminId String?
+  issuedByName    String?
+  issuedByRealm   String?
+  issuedAt        DateTime?
 
   /// CPP document control Phase B — the approval record.
   ///
@@ -3668,12 +3674,12 @@ model InductionVideo {
   /// PHASE 3 - THE RENDERED VIDEO. The MP4 itself, what produced it, and the
   /// fingerprint of the narration it was rendered from: a render whose hash no
   /// longer matches the audio is stale and is re-rendered rather than published.
-  videoBlobPath  String?
+  videoBlobPath   String?
   videoDurationMs Int?
-  videoSizeBytes Int?
-  renderEngine   String?
-  renderedAt     DateTime?
-  renderHash     String?
+  videoSizeBytes  Int?
+  renderEngine    String?
+  renderedAt      DateTime?
+  renderHash      String?
 
   /// Set when the rules engine blocked generation: which facts are missing.
   blockingReasons Json?
@@ -3767,10 +3773,12 @@ model InductionVideoEvent {
   video   InductionVideo @relation(fields: [videoId], references: [id], onDelete: Cascade)
   videoId String
 
-  action    String
-  detail    String?
-  actorName String
-  createdAt DateTime @default(now())
+  action     String
+  detail     String?
+  actorName  String
+  /// Which realm the action came from: PLATFORM or ADMIN.
+  actorRealm String?
+  createdAt  DateTime @default(now())
 
   @@index([videoId, createdAt])
 }
@@ -3803,7 +3811,7 @@ model InductionModule {
 
   /// A site may NOT exclude a mandatory module — the same rule that stops an
   /// editor deleting a required scene.
-  mandatory Boolean @default(false)
+  mandatory       Boolean @default(false)
   /// Included unless a site says otherwise.
   defaultIncluded Boolean @default(true)
 
@@ -3835,21 +3843,27 @@ model InductionModuleRevision {
   status  InductionModuleRevisionStatus @default(DRAFT)
 
   /// Shown as the scene's title in the video.
-  heading String
+  heading     String
   /// The exact words spoken. AUTHORED, never generated: module narration is not
   /// sent to the model at all, so it cannot be re-worded, costs nothing, and
   /// says precisely what a Director approved.
-  narration String
+  narration   String
   /// Fingerprint of the words, so a video knows which revision it carries.
   contentHash String
 
-  preparedByUserId String?
-  preparedByName   String
-  preparedAt       DateTime @default(now())
+  preparedByUserId  String?
+  /// Admin Centre actors live in a different table; never written to *ByUserId.
+  preparedByAdminId String?
+  preparedByName    String
+  /// PLATFORM or ADMIN — a fact for the record, never consulted for a decision.
+  preparedByRealm   String?
+  preparedAt        DateTime @default(now())
 
-  issuedByUserId String?
-  issuedByName   String?
-  issuedAt       DateTime?
+  issuedByUserId  String?
+  issuedByAdminId String?
+  issuedByName    String?
+  issuedByRealm   String?
+  issuedAt        DateTime?
 
   /// Why this revision was issued — the note a reader wants years later.
   issueNote String?
@@ -3872,10 +3886,12 @@ model InductionModuleEvent {
   revision   InductionModuleRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
   revisionId String
 
-  action    String
-  detail    String?
-  actorName String
-  createdAt DateTime @default(now())
+  action     String
+  detail     String?
+  actorName  String
+  /// Which realm the action came from: PLATFORM or ADMIN.
+  actorRealm String?
+  createdAt  DateTime @default(now())
 
   @@index([revisionId, createdAt])
 }
@@ -3903,8 +3919,10 @@ model SiteInductionModule {
   /// Required for an exclusion or an override: why this project differs.
   reason            String?
 
-  decidedByUserId String?
-  decidedByName   String?
+  decidedByUserId  String?
+  decidedByAdminId String?
+  decidedByName    String?
+  decidedByRealm   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3948,17 +3966,17 @@ model InductionVideoView {
   video   InductionVideo @relation(fields: [videoId], references: [id], onDelete: Cascade)
   videoId String
 
-  worker   Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  workerId String
+  worker     Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  workerId   String
   /// Denormalised, like every other audit name on this platform: a record that
   /// empties itself when a worker is removed is worthless at a hearing.
   workerName String
   jobSiteId  String
 
-  startedAt   DateTime  @default(now())
-  completedAt DateTime?
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
   /// Furthest point reached, in milliseconds.
-  furthestMs      Int  @default(0)
+  furthestMs      Int       @default(0)
   /// The video's length when it was watched, so "furthest" has a denominator.
   videoDurationMs Int?
 

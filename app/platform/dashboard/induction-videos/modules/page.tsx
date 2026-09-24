@@ -11,19 +11,17 @@ import {
   canDraftInductionModule,
   canIssueInductionModule,
   canViewInductionModules,
-  getModule,
-  listModules,
 } from '@/services/inductionModules/inductionModuleService';
-import { formatDateUK } from '@/lib/datetime';
+import { moduleRowsForEditor } from '@/services/inductionModules/moduleRows';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * Company induction modules — standard content, written once.
  *
- * Moved here from Platform → Settings so that videos, company modules and a
- * project's own induction content are one area rather than three places. See
- * `InductionVideoWorkspace` for why the Settings placement was wrong.
+ * One of TWO front doors onto the same modules; the other is Admin Centre →
+ * Settings → Induction modules. Same data, same service, same approval workflow,
+ * same audit trail — see `moduleActions.ts`. Nothing here is a copy.
  *
  * ── DELIBERATELY NOT SITE-SCOPED ──────────────────────────────────────────
  *
@@ -40,39 +38,7 @@ export default async function InductionModulesPage() {
   // administration.
   if (!canViewInductionModules(viewer.role)) redirect('/platform/dashboard');
 
-  const summaries = await listModules();
-  // The words in force, for the list: the issued revision, or the draft when
-  // nothing is issued yet, so a reader always sees what the module SAYS.
-  const rows = await Promise.all(
-    summaries.map(async (m) => {
-      const full = await getModule(m.id);
-      const inForce =
-        full?.revisions.find((r) => r.status === 'ISSUED') ??
-        full?.revisions.find((r) => r.status === 'DRAFT') ??
-        full?.revisions[0];
-      return {
-        id: m.id,
-        slug: m.slug,
-        title: m.title,
-        category: m.category,
-        mandatory: m.mandatory,
-        defaultIncluded: m.defaultIncluded,
-        active: m.active,
-        replacesSceneType: m.replacesSceneType,
-        issued: m.issued
-          ? {
-              version: m.issued.version,
-              issuedOn: formatDateUK(m.issued.issuedAt),
-              issuedByName: m.issued.issuedByName,
-            }
-          : null,
-        draft: m.draft,
-        heading: inForce?.heading ?? m.title,
-        narration: inForce?.narration ?? '',
-        revisionCount: m.revisionCount,
-      };
-    }),
-  );
+  const rows = await moduleRowsForEditor();
 
   return (
     <PlatformShell>
@@ -88,10 +54,16 @@ export default async function InductionModulesPage() {
           />
         }
       >
+        <p className="mb-3 rounded-lg border border-line bg-surface-sunken px-3 py-2 text-xs text-ink-muted">
+          These are the same company modules administrators manage in the Admin
+          Centre. Whichever place a change is made, it is the same content and the
+          history records where it came from.
+        </p>
         <InductionModulesSection
           modules={rows}
           canDraft={canDraftInductionModule(viewer.role)}
           canIssue={canIssueInductionModule(viewer.role)}
+          endpoint="/api/platform/induction-modules"
         />
       </InductionVideoWorkspace>
     </PlatformShell>

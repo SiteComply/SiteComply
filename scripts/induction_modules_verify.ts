@@ -17,6 +17,7 @@ export {};
  */
 const { prisma } = require('../lib/prisma');
 const svc = require('../services/inductionModules/inductionModuleService');
+const { moduleActorFromPlatformViewer } = require('../services/inductionModules/moduleActor');
 const { MODULE_CATALOGUE } = require('../services/inductionModules/moduleCatalogue');
 const { readFileSync } = require('fs');
 
@@ -27,9 +28,18 @@ const chk = (t: string, ok: boolean, d = '') => {
 };
 const read = (p: string) => readFileSync(p, 'utf8');
 
-const director = { id: 'u1', name: 'Dee Director', role: 'DIRECTOR', siteIds: [] as string[] };
-const manager = { id: 'u2', name: 'Sam Manager', role: 'SITE_MANAGER', siteIds: [] as string[] };
-const engineer = { id: 'u3', name: 'Eve Engineer', role: 'ENGINEER', siteIds: [] as string[] };
+const directorViewer = { id: 'u1', name: 'Dee Director', role: 'DIRECTOR', siteIds: [] as string[] };
+const managerViewer = { id: 'u2', name: 'Sam Manager', role: 'SITE_MANAGER', siteIds: [] as string[] };
+const engineerViewer = { id: 'u3', name: 'Eve Engineer', role: 'ENGINEER', siteIds: [] as string[] };
+/*
+ * The service takes a decided capability, not a viewer: company modules are
+ * administered from two realms, so authority is resolved by an adapter at the
+ * edge. These suites go through the SAME adapter the Platform routes use -
+ * hand-building a ModuleActor here would test a fiction.
+ */
+const director = moduleActorFromPlatformViewer(directorViewer as never);
+const manager = moduleActorFromPlatformViewer(managerViewer as never);
+const engineer = moduleActorFromPlatformViewer(engineerViewer as never);
 
 (async () => {
   const site = await prisma.jobSite.findFirst({ where: { status: 'ACTIVE' }, select: { id: true } });
@@ -39,9 +49,9 @@ const engineer = { id: 'u3', name: 'Eve Engineer', role: 'ENGINEER', siteIds: []
 
   try {
     console.log('\n[1] The starter set arrives as drafts, and reaches nobody');
-    const seeded = await svc.seedModuleCatalogue('Test');
+    const seeded = await svc.seedModuleCatalogue({ name: 'Test', realm: 'PLATFORM' });
     chk('the six standard modules are created', seeded.created === 6, JSON.stringify(seeded));
-    chk('  seeding twice adds nothing', (await svc.seedModuleCatalogue('Test')).created === 0);
+    chk('  seeding twice adds nothing', (await svc.seedModuleCatalogue({ name: 'Test', realm: 'PLATFORM' })).created === 0);
     const listed = await svc.listModules();
     const ours = listed.filter((m: { slug: string }) => slugs.includes(m.slug));
     chk('  every one is a DRAFT, not issued',

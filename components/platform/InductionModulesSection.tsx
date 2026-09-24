@@ -12,7 +12,13 @@ export interface ModuleRow {
   defaultIncluded: boolean;
   active: boolean;
   replacesSceneType: string | null;
-  issued: { version: number; issuedOn: string; issuedByName: string | null } | null;
+  issued: {
+    version: number;
+    issuedOn: string;
+    issuedByName: string | null;
+    /** "Platform" or "Admin Centre" — where the issuing happened. */
+    issuedByRealm: string | null;
+  } | null;
   draft: { id: string; version: number; preparedByName: string } | null;
   /** The words in force, or the draft's words when nothing is issued yet. */
   heading: string;
@@ -39,10 +45,18 @@ export function InductionModulesSection({
   modules,
   canDraft,
   canIssue,
+  endpoint,
 }: {
   modules: ModuleRow[];
   canDraft: boolean;
   canIssue: boolean;
+  /**
+   * Which front door this is: the Platform route or the Admin Centre route. The
+   * two accept identical bodies and run identical actions - only the realm the
+   * caller is authenticated in differs - so ONE component serves both and there
+   * is no second editor to keep in step.
+   */
+  endpoint: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -60,7 +74,7 @@ export function InductionModulesSection({
     setBusy(key);
     setError(null);
     try {
-      const res = await fetch('/api/platform/induction-modules', {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
@@ -184,7 +198,9 @@ export function InductionModulesSection({
 
           <p className="mt-2 text-xs text-ink-subtle">
             {m.issued
-              ? `In force since ${m.issued.issuedOn}${m.issued.issuedByName ? ` · issued by ${m.issued.issuedByName}` : ''}`
+              ? `In force since ${m.issued.issuedOn}${m.issued.issuedByName ? ` · issued by ${m.issued.issuedByName}` : ''}${
+                  m.issued.issuedByRealm ? ` (${m.issued.issuedByRealm})` : ''
+                }`
               : m.draft
                 ? `Draft revision ${m.draft.version}, prepared by ${m.draft.preparedByName}`
                 : 'No revision yet'}

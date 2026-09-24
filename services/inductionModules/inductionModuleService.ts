@@ -5,8 +5,7 @@ import {
   type InductionModuleCategory,
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
-import type { PlatformRoleValue } from '@/services/platformUsers/platformUserConstants';
+import type { ModuleActor } from '@/services/inductionModules/moduleActor';
 import { MODULE_CATALOGUE } from '@/services/inductionModules/moduleCatalogue';
 
 /**
@@ -34,43 +33,16 @@ import { MODULE_CATALOGUE } from '@/services/inductionModules/moduleCatalogue';
  * to every site at once.
  */
 
-const DRAFT_ROLES: PlatformRoleValue[] = ['DIRECTOR', 'SITE_MANAGER'];
-
-export function canDraftInductionModule(role: PlatformRoleValue): boolean {
-  return DRAFT_ROLES.includes(role);
-}
-
-/**
- * Who may READ the company modules screen.
- *
- * ── WHY THIS IS NOT canManageInductionVideos ──────────────────────────────
- *
- * The modules screen now lives inside the Induction Videos area, but it must NOT
- * inherit that area's gate. `canManageInductionVideos` admits PROJECT_MANAGER
- * and PRINCIPAL_CONTRACTOR; a Principal Contractor has no route to company
- * policy administration today, and moving a page between folders is not a reason
- * to give them one.
- *
- * ── WHY IT IS NOT canDraftInductionModule EITHER ──────────────────────────
- *
- * That would be narrower than what exists. A Project Manager can already read
- * this screen through Settings, so gating on drafting would quietly REMOVE
- * access as a side effect of a navigation change. Reading is what a Project
- * Manager keeps; drafting and issuing stay where they were.
- *
- * So: three roles, listed here rather than derived, because the set is a
- * decision and not a consequence.
+/*
+ * Re-exported: the role predicates now live in moduleRoles.ts so the actor
+ * adapters can use them without a circular import. Pages and suites import them
+ * from here, which is where they have always looked.
  */
-const VIEW_ROLES: PlatformRoleValue[] = ['DIRECTOR', 'PROJECT_MANAGER', 'SITE_MANAGER'];
-
-export function canViewInductionModules(role: PlatformRoleValue): boolean {
-  return VIEW_ROLES.includes(role);
-}
-
-/** Issuing, and overriding at a site, are a Director's alone. */
-export function canIssueInductionModule(role: PlatformRoleValue): boolean {
-  return role === 'DIRECTOR';
-}
+export {
+  canDraftInductionModule,
+  canViewInductionModules,
+  canIssueInductionModule,
+} from '@/services/inductionModules/moduleRoles';
 
 export type ModuleResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -91,7 +63,13 @@ export interface ModuleSummary {
   replacesSceneType: string | null;
   active: boolean;
   /** The revision in force, if any. Null means this module reaches nobody. */
-  issued: { id: string; version: number; issuedAt: Date; issuedByName: string | null } | null;
+  issued: {
+    id: string;
+    version: number;
+    issuedAt: Date;
+    issuedByName: string | null;
+    issuedByRealm: string | null;
+  } | null;
   /** An unissued revision being worked on, if any. */
   draft: { id: string; version: number; preparedByName: string } | null;
   revisionCount: number;
@@ -131,6 +109,7 @@ export async function listModules(): Promise<ModuleSummary[]> {
               version: issued.version,
               issuedAt: issued.issuedAt,
               issuedByName: issued.issuedByName,
+              issuedByRealm: issued.issuedByRealm,
             }
           : null,
       draft: draft
@@ -157,11 +136,19 @@ export async function getModule(moduleId: string) {
 async function record(
   revisionId: string,
   action: string,
-  actorName: string,
+  actor: ModuleActor | { name: string; realm: 'PLATFORM' | 'ADMIN' },
   detail?: string,
 ): Promise<void> {
   await prisma.inductionModuleEvent.create({
-    data: { revisionId, action, actorName, detail },
+    data: {
+      revisionId,
+      action,
+      actorName: actor.name,
+      // Recorded on every event, so "who changed what every operative hears"
+      // is answerable without knowing which screen was open at the time.
+      actorRealm: actor.realm,
+      detail,
+    },
   });
 }
 
@@ -173,10 +160,10 @@ async function record(
  * is returned instead so they meet in it.
  */
 export async function startDraft(
-  viewer: PlatformViewer,
+  actor: ModuleActor,
   moduleId: string,
 ): Promise<ModuleResult<{ revisionId: string; version: number }>> {
-  if (!canDraftInductionModule(viewer.role)) {
+  if (!actor.canDraft) {
     return { ok: false, error: 'Only a Director or Site Manager may draft induction modules.' };
   }
   const module = await prisma.inductionModule.findUnique({
@@ -207,22 +194,24 @@ export async function startDraft(
       heading: source?.heading ?? module.title,
       narration: source?.narration ?? '',
       contentHash: contentHash(source?.heading ?? module.title, source?.narration ?? ''),
-      preparedByUserId: viewer.id,
-      preparedByName: viewer.name,
+      preparedByUserId: actor.userId,
+      preparedByAdminId: actor.adminId,
+      preparedByName: actor.name,
+      preparedByRealm: actor.realm,
     },
     select: { id: true, version: true },
   });
-  await record(revision.id, 'DRAFTED', viewer.name, `Version ${version}`);
+  await record(revision.id, 'DRAFTED', actor, `Version ${version}`);
   return { ok: true, value: { revisionId: revision.id, version: revision.version } };
 }
 
 /** Edit a draft. An issued revision can never be edited — it is superseded. */
 export async function saveDraft(
-  viewer: PlatformViewer,
+  actor: ModuleActor,
   revisionId: string,
   input: { heading: string; narration: string },
 ): Promise<ModuleResult<{ saved: true }>> {
-  if (!canDraftInductionModule(viewer.role)) {
+  if (!actor.canDraft) {
     return { ok: false, error: 'Only a Director or Site Manager may draft induction modules.' };
   }
   const revision = await prisma.inductionModuleRevision.findUnique({
@@ -256,7 +245,7 @@ export async function saveDraft(
     where: { id: revisionId },
     data: { heading, narration, contentHash: contentHash(heading, narration) },
   });
-  await record(revisionId, 'EDITED', viewer.name);
+  await record(revisionId, 'EDITED', actor);
   return { ok: true, value: { saved: true } };
 }
 
@@ -268,11 +257,11 @@ export async function saveDraft(
  * can never both be in force.
  */
 export async function issueRevision(
-  viewer: PlatformViewer,
+  actor: ModuleActor,
   revisionId: string,
   issueNote: string,
 ): Promise<ModuleResult<{ version: number }>> {
-  if (!canIssueInductionModule(viewer.role)) {
+  if (!actor.canIssue) {
     return { ok: false, error: 'Only a Director may issue an induction module.' };
   }
   const revision = await prisma.inductionModuleRevision.findUnique({
@@ -305,8 +294,10 @@ export async function issueRevision(
       data: {
         status: InductionModuleRevisionStatus.ISSUED,
         issuedAt: now,
-        issuedByUserId: viewer.id,
-        issuedByName: viewer.name,
+        issuedByUserId: actor.userId,
+        issuedByAdminId: actor.adminId,
+        issuedByName: actor.name,
+        issuedByRealm: actor.realm,
         issueNote: note,
       },
     }),
@@ -314,7 +305,8 @@ export async function issueRevision(
       data: {
         revisionId,
         action: 'ISSUED',
-        actorName: viewer.name,
+        actorName: actor.name,
+        actorRealm: actor.realm,
         detail: `Version ${revision.version} · ${note}`,
       },
     }),
@@ -330,11 +322,11 @@ export async function issueRevision(
  * record pointing at nothing.
  */
 export async function setModuleActive(
-  viewer: PlatformViewer,
+  actor: ModuleActor,
   moduleId: string,
   active: boolean,
 ): Promise<ModuleResult<{ active: boolean }>> {
-  if (!canIssueInductionModule(viewer.role)) {
+  if (!actor.canIssue) {
     return { ok: false, error: 'Only a Director may retire an induction module.' };
   }
   const module = await prisma.inductionModule.findUnique({
@@ -355,11 +347,11 @@ export async function setModuleActive(
 
 /** Change how a module behaves, without touching its words. */
 export async function updateModuleSettings(
-  viewer: PlatformViewer,
+  actor: ModuleActor,
   moduleId: string,
   input: { mandatory?: boolean; defaultIncluded?: boolean; order?: number },
 ): Promise<ModuleResult<{ saved: true }>> {
-  if (!canIssueInductionModule(viewer.role)) {
+  if (!actor.canIssue) {
     return { ok: false, error: 'Only a Director may change how a module applies.' };
   }
   const module = await prisma.inductionModule.findUnique({
@@ -580,7 +572,7 @@ export type SiteModuleInput =
  * enforce, and keeps a legitimate write from logging an error.
  */
 export async function setSiteModuleDecision(
-  viewer: PlatformViewer,
+  actor: ModuleActor,
   siteId: string,
   moduleId: string,
   input: SiteModuleInput,
@@ -591,7 +583,7 @@ export async function setSiteModuleDecision(
   });
   if (!module) return { ok: false, error: 'That module does not exist.' };
 
-  if (input.state === 'OVERRIDDEN' && !canIssueInductionModule(viewer.role)) {
+  if (input.state === 'OVERRIDDEN' && !actor.canIssue) {
     return {
       ok: false,
       error:
@@ -630,8 +622,10 @@ export async function setSiteModuleDecision(
     reason: 'reason' in input ? input.reason.trim() : null,
     overrideNarration:
       input.state === 'OVERRIDDEN' ? input.overrideNarration.trim() : null,
-    decidedByUserId: viewer.id,
-    decidedByName: viewer.name,
+    decidedByUserId: actor.userId,
+    decidedByAdminId: actor.adminId,
+    decidedByName: actor.name,
+    decidedByRealm: actor.realm,
   };
 
   if (existing) {
@@ -658,7 +652,10 @@ export interface SeedResult {
  * than issued content is the whole point - nobody's induction gains words a
  * Director has not read.
  */
-export async function seedModuleCatalogue(actorName = 'SiteComply'): Promise<SeedResult> {
+export async function seedModuleCatalogue(
+  actor: Pick<ModuleActor, 'name' | 'realm'>,
+): Promise<SeedResult> {
+  const actorName = actor.name;
   let created = 0;
   let skipped = 0;
 
@@ -693,13 +690,14 @@ export async function seedModuleCatalogue(actorName = 'SiteComply'): Promise<See
         narration: entry.narration,
         contentHash: contentHash(entry.heading, entry.narration),
         preparedByName: actorName,
+        preparedByRealm: actor.realm,
       },
       select: { id: true },
     });
     await record(
       revision.id,
       'DRAFTED',
-      actorName,
+      actor,
       'Suggested starting wording — read it, change what does not match how this company works, then issue it.',
     );
     created++;

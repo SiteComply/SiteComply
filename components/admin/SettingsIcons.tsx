@@ -16,6 +16,7 @@ export type SettingsIconName =
   | 'shield'
   | 'bell'
   | 'building'
+  | 'clipboard'
   | 'chevron';
 
 const PATHS: Record<SettingsIconName, ReactNode> = {
@@ -32,6 +33,18 @@ const PATHS: Record<SettingsIconName, ReactNode> = {
       <path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z" />
       <path d="M12 11.5v2.5" />
       <circle cx="12" cy="9.6" r="0.7" fill="currentColor" stroke="none" />
+    </>
+  ),
+  /*
+   * Induction modules. Matches the clipboard the Platform nav already uses for
+   * Induction videos, so the same subject reads the same in both tiers.
+   */
+  clipboard: (
+    <>
+      <path d="M9 4h6v3H9z" />
+      <path d="M9 5.5H7a1 1 0 0 0-1 1V19a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1h-2" />
+      <path d="M9 11h6" />
+      <path d="M9 15h4" />
     </>
   ),
   bell: (

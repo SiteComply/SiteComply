@@ -17,6 +17,7 @@ export {};
  */
 const { prisma } = require('../lib/prisma');
 const svc = require('../services/inductionModules/inductionModuleService');
+const { moduleActorFromPlatformViewer } = require('../services/inductionModules/moduleActor');
 const { readFileSync } = require('fs');
 
 let fails = 0;
@@ -31,8 +32,16 @@ const read = (p: string) => readFileSync(p, 'utf8');
  */
 const flat = (p: string) => read(p).replace(/\s+/g, ' ');
 
-const director = { id: 'u1', name: 'Dee Director', role: 'DIRECTOR', siteIds: [] as string[] };
-const manager = { id: 'u2', name: 'Sam Manager', role: 'SITE_MANAGER', siteIds: [] as string[] };
+const directorViewer = { id: 'u1', name: 'Dee Director', role: 'DIRECTOR', siteIds: [] as string[] };
+const managerViewer = { id: 'u2', name: 'Sam Manager', role: 'SITE_MANAGER', siteIds: [] as string[] };
+/*
+ * The service takes a decided capability, not a viewer: company modules are
+ * administered from two realms, so authority is resolved by an adapter at the
+ * edge. These suites go through the SAME adapter the Platform routes use -
+ * hand-building a ModuleActor here would test a fiction.
+ */
+const director = moduleActorFromPlatformViewer(directorViewer as never);
+const manager = moduleActorFromPlatformViewer(managerViewer as never);
 
 const SLUGS = ['PHASEC_MANDATORY', 'PHASEC_OPTIONAL'];
 
