@@ -3157,19 +3157,13 @@ model CppRevision {
   /// Section content only — see the note above.
   contentHash String
 
-  preparedByUserId  String?
-  /// Admin Centre actors live in a different table; never written to *ByUserId.
-  preparedByAdminId String?
-  preparedByName    String
-  /// PLATFORM or ADMIN — a fact for the record, never consulted for a decision.
-  preparedByRealm   String?
-  preparedAt        DateTime @default(now())
+  preparedByUserId String?
+  preparedByName   String
+  preparedAt       DateTime @default(now())
 
-  issuedByUserId  String?
-  issuedByAdminId String?
-  issuedByName    String?
-  issuedByRealm   String?
-  issuedAt        DateTime?
+  issuedByUserId String?
+  issuedByName   String?
+  issuedAt       DateTime?
 
   /// CPP document control Phase B — the approval record.
   ///
@@ -3773,12 +3767,10 @@ model InductionVideoEvent {
   video   InductionVideo @relation(fields: [videoId], references: [id], onDelete: Cascade)
   videoId String
 
-  action     String
-  detail     String?
-  actorName  String
-  /// Which realm the action came from: PLATFORM or ADMIN.
-  actorRealm String?
-  createdAt  DateTime @default(now())
+  action    String
+  detail    String?
+  actorName String
+  createdAt DateTime @default(now())
 
   @@index([videoId, createdAt])
 }

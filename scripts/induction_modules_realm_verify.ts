@@ -133,6 +133,42 @@ const director = { id: 'u1', name: 'Dee Director', role: 'DIRECTOR', siteIds: []
       events.length >= 3 && events.every((e: { actorRealm: string | null }) => e.actorRealm === 'ADMIN'),
       events.map((e: { action: string; actorRealm: string }) => `${e.action}:${e.actorRealm}`).join(' '));
 
+    console.log('\nTHE SCHEMA MATCHES THE MIGRATION, MODEL FOR MODEL');
+    /*
+     * Added after a real incident: an unbounded string replace across the schema
+     * put `actorRealm` on InductionVideoEvent and four realm columns on
+     * CppRevision as well, because both share the field shape being edited. The
+     * migration added none of them, so Prisma expected columns production did not
+     * have - which surfaces as a runtime error on an unrelated feature, not as a
+     * type error. This asserts the two artefacts agree.
+     */
+    const SCHEMA = read('prisma/schema.prisma');
+    const MIG = read('prisma/migrations/20260924200000_add_module_actor_realm/migration.sql');
+    const owners = new Map<string, string>();
+    let model = '';
+    for (const line of SCHEMA.split('\n')) {
+      const m = /^model (\w+)/.exec(line);
+      if (m) model = m[1];
+      const c = /^\s{2}(\w*(?:Realm|AdminId))\s/.exec(line);
+      if (c) owners.set(`${model}.${c[1]}`, model);
+    }
+    const declared = [...owners.keys()].filter((k) => /Realm$/.test(k));
+    const migrated = new Set<string>();
+    let table = '';
+    for (const line of MIG.split('\n')) {
+      const t = /^ALTER TABLE "(\w+)"/.exec(line);
+      if (t) table = t[1];
+      const c = /ADD COLUMN IF NOT EXISTS "(\w+)"/.exec(line);
+      if (c) migrated.add(`${table}.${c[1]}`);
+    }
+    const unmigrated = declared.filter((k) => !migrated.has(k));
+    chk('every *Realm column the schema declares is in the migration',
+      unmigrated.length === 0,
+      unmigrated.length ? `orphaned: ${unmigrated.join(', ')}` : 'schema and migration agree');
+    chk('the realm columns are only on the three module tables',
+      declared.every((k) => /^(InductionModuleRevision|InductionModuleEvent|SiteInductionModule)\./.test(k)),
+      declared.join(' '));
+
     console.log('\nONE SOURCE OF TRUTH: THE ADMIN’S WORDS ARE WHAT A SITE RESOLVES');
     const resolved = await svc.resolveModulesForSite('no-such-site');
     const mine = resolved.find((r: { slug: string }) => r.slug === SLUG);
