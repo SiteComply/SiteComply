@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { sceneAudioForViewer } from '@/services/inductionVideo/narrationService';
 import { streamMedia } from '@/services/inductionVideo/mediaResponse';
+import { videoActorFromPlatformViewer } from '@/services/inductionVideo/videoActor';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,7 +26,7 @@ export async function GET(
   if (!viewer) {
     return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
   }
-  const audio = await sceneAudioForViewer(viewer, params.videoId, params.sceneId);
+  const audio = await sceneAudioForViewer(videoActorFromPlatformViewer(viewer), params.videoId, params.sceneId);
   if (!audio) {
     return NextResponse.json({ ok: false, error: 'Not available.' }, { status: 404 });
   }

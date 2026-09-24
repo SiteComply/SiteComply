@@ -3640,15 +3640,22 @@ model InductionVideo {
   model         String?
   promptVersion String?
 
-  generatedAt     DateTime?
-  generatedByName String?
+  generatedAt      DateTime?
+  generatedByName  String?
+  /// PLATFORM or ADMIN — a fact for the record, never consulted for a decision.
+  generatedByRealm String?
 
-  approvedAt       DateTime?
-  approvedByUserId String?
-  approvedByName   String?
+  approvedAt        DateTime?
+  approvedByUserId  String?
+  /// Admin Centre actors live in a different table; never written to *ByUserId.
+  approvedByAdminId String?
+  approvedByName    String?
+  approvedByRealm   String?
 
-  publishedAt     DateTime?
-  publishedByName String?
+  publishedAt        DateTime?
+  publishedByName    String?
+  publishedByAdminId String?
+  publishedByRealm   String?
 
   supersededAt DateTime?
 
@@ -3767,10 +3774,12 @@ model InductionVideoEvent {
   video   InductionVideo @relation(fields: [videoId], references: [id], onDelete: Cascade)
   videoId String
 
-  action    String
-  detail    String?
-  actorName String
-  createdAt DateTime @default(now())
+  action     String
+  detail     String?
+  actorName  String
+  /// Which realm the action came from: PLATFORM or ADMIN.
+  actorRealm String?
+  createdAt  DateTime @default(now())
 
   @@index([videoId, createdAt])
 }

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getAdminSession } from '@/lib/session';
 import { AdminInductionVideoWorkspace } from '@/components/admin/AdminInductionVideoWorkspace';
@@ -8,23 +9,19 @@ import { formatDateTimeUK } from '@/lib/datetime';
 export const dynamic = 'force-dynamic';
 
 /**
- * Admin → Induction videos → Videos — READ-ONLY, and that is the design.
+ * Admin → Induction videos → Videos.
  *
- * An administrator needs to see the state of every project's induction video:
- * which exist, which are waiting on someone, which have never been started. What
- * they do not need is a second way to generate, approve or publish one. That work
- * belongs against a project, with the Platform user who is accountable for it, and
- * a second approval path would split the record of who approved what.
+ * Every project's induction video, and the way in to working on one. This was
+ * read-only for a day, on the reasoning that generating and approving belonged to
+ * the Platform user accountable for a project. The owner's decision is the
+ * opposite and is now implemented throughout: an Admin Centre OWNER or ADMIN has
+ * authority equivalent to a Platform Director, so each row leads to the project's
+ * own page where a version can be generated, edited, approved, narrated,
+ * rendered, published and withdrawn.
  *
- * So this mirrors the Platform's listing exactly in shape and terminology, and
- * offers no actions. `adminReadOnly` on the shared area definition is where that
- * decision is recorded.
- *
- * It also earns the nav entry. Showing "Videos" in the tab strip and then having
- * it lead nowhere would be worse than not mirroring the Platform at all.
- *
- * Deliberately NOT linked through to the Platform's per-project pages: an
- * administrator may hold no Platform account, so those links would be dead ends.
+ * Links stay INSIDE the Admin Centre. Pointing at the Platform's routes would be
+ * a dead end for an administrator who holds no Platform account — which is why
+ * this tier has its own project and version pages rather than borrowing them.
  */
 export default async function AdminInductionVideosPage() {
   const session = getAdminSession();
@@ -55,11 +52,6 @@ export default async function AdminInductionVideosPage() {
 
   return (
     <AdminInductionVideoWorkspace active="videos">
-      <p className="rounded-xl border border-line bg-surface-sunken px-4 py-3 text-sm text-ink-muted">
-        Read-only. Induction videos are generated, approved and published against a
-        project in the Platform, by the person accountable for that project.
-      </p>
-
       <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-line bg-surface-sunken text-xs uppercase tracking-wide text-ink-subtle">
@@ -76,7 +68,12 @@ export default async function AdminInductionVideosPage() {
               return (
                 <tr key={s.id}>
                   <td className="px-5 py-3">
-                    <span className="font-semibold text-ink">{s.name}</span>
+                    <Link
+                      href={`/admin/induction-videos/projects/${s.id}`}
+                      className="font-semibold text-brand-700 hover:underline"
+                    >
+                      {s.name}
+                    </Link>
                     <span className="block text-xs text-ink-subtle">
                       {s.jobReference} · {s.town}
                     </span>

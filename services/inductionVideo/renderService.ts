@@ -5,9 +5,8 @@ import {
   InductionVideoStatus,
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
+import type { VideoActor } from '@/services/inductionVideo/videoActor';
 import {
-  canWorkOnVideoSite,
   type VideoResult,
 } from '@/services/inductionVideo/inductionVideoService';
 import { canApproveInductionVideo } from '@/services/inductionVideo/inductionVideoPermissions';
@@ -69,7 +68,7 @@ export function renderingConfigured(): boolean {
 
 /** Queue a render of a narrated version. The scheduler (or the nudge) runs it. */
 export async function requestRender(
-  viewer: PlatformViewer,
+  actor: VideoActor,
   videoId: string,
 ): Promise<VideoResult<{ queued: true }>> {
   const video = await prisma.inductionVideo.findUnique({
@@ -83,7 +82,7 @@ export async function requestRender(
       _count: { select: { scenes: true } },
     },
   });
-  if (!video || !canWorkOnVideoSite(viewer, video.jobSiteId)) {
+  if (!video || !actor.maySite(video.jobSiteId)) {
     return { ok: false, error: 'Not available.' };
   }
   const renderer = resolveVideoRenderer();
@@ -132,14 +131,14 @@ export async function requestRender(
       data: {
         videoId,
         kind: InductionVideoJobKind.RENDER,
-        requestedByName: viewer.name,
+        requestedByName: actor.name,
       },
     }),
     prisma.inductionVideoEvent.create({
       data: {
         videoId,
         action: 'RENDER_REQUESTED',
-        actorName: viewer.name,
+        actorName: actor.name,
         detail: `Version ${video.version} · ${renderer.engine}`,
       },
     }),
@@ -324,7 +323,7 @@ export function renderIsStale(video: {
  * able to be shown what version 2 said.
  */
 export async function publishVideo(
-  viewer: PlatformViewer,
+  actor: VideoActor,
   videoId: string,
 ): Promise<VideoResult<{ published: true }>> {
   const video = await prisma.inductionVideo.findUnique({
@@ -340,10 +339,10 @@ export async function publishVideo(
       narrationHash: true,
     },
   });
-  if (!video || !canWorkOnVideoSite(viewer, video.jobSiteId)) {
+  if (!video || !actor.maySite(video.jobSiteId)) {
     return { ok: false, error: 'Not available.' };
   }
-  if (!canApproveInductionVideo(viewer.role)) {
+  if (!actor.canApprove) {
     return { ok: false, error: 'Only a Director or Site Manager may publish an induction video.' };
   }
   if (video.status !== InductionVideoStatus.VIDEO_READY || !video.videoBlobPath) {
@@ -363,7 +362,8 @@ export async function publishVideo(
       data: {
         status: InductionVideoStatus.PUBLISHED,
         publishedAt: now,
-        publishedByName: viewer.name,
+        publishedByName: actor.name,
+          publishedByRealm: actor.realm,
         supersededAt: null,
       },
     }),
@@ -377,7 +377,7 @@ export async function publishVideo(
       data: {
         videoId,
         action: 'PUBLISHED',
-        actorName: viewer.name,
+        actorName: actor.name,
         detail: `Version ${video.version} is now the induction operatives see`,
       },
     }),
@@ -394,7 +394,7 @@ export async function publishVideo(
  * briefing screens, which have been there all along.
  */
 export async function withdrawVideo(
-  viewer: PlatformViewer,
+  actor: VideoActor,
   videoId: string,
   reason: string,
 ): Promise<VideoResult<{ withdrawn: true }>> {
@@ -402,10 +402,10 @@ export async function withdrawVideo(
     where: { id: videoId },
     select: { id: true, jobSiteId: true, status: true, version: true },
   });
-  if (!video || !canWorkOnVideoSite(viewer, video.jobSiteId)) {
+  if (!video || !actor.maySite(video.jobSiteId)) {
     return { ok: false, error: 'Not available.' };
   }
-  if (!canApproveInductionVideo(viewer.role)) {
+  if (!actor.canApprove) {
     return { ok: false, error: 'Only a Director or Site Manager may withdraw an induction video.' };
   }
   if (video.status !== InductionVideoStatus.PUBLISHED) {
@@ -417,13 +417,19 @@ export async function withdrawVideo(
   await prisma.$transaction([
     prisma.inductionVideo.update({
       where: { id: videoId },
-      data: { status: InductionVideoStatus.VIDEO_READY, publishedAt: null, publishedByName: null },
+      data: {
+        status: InductionVideoStatus.VIDEO_READY,
+        publishedAt: null,
+        publishedByName: null,
+        publishedByAdminId: null,
+        publishedByRealm: null,
+      },
     }),
     prisma.inductionVideoEvent.create({
       data: {
         videoId,
         action: 'WITHDRAWN',
-        actorName: viewer.name,
+        actorName: actor.name,
         detail: why.slice(0, 300),
       },
     }),

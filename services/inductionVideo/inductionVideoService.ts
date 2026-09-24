@@ -6,6 +6,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
+import type { VideoActor } from '@/services/inductionVideo/videoActor';
 import {
   canApproveInductionVideo,
   canManageInductionVideos,
@@ -54,18 +55,40 @@ export function canWorkOnVideoSite(viewer: PlatformViewer, siteId: string): bool
   return canManageInductionVideos(viewer.role) && viewer.siteIds.includes(siteId);
 }
 
-function guard(viewer: PlatformViewer, siteId: string): boolean {
-  return canWorkOnVideoSite(viewer, siteId);
+/**
+ * May this actor work on this project?
+ *
+ * Site authority is ASKED rather than enumerated, so a Platform user is tested
+ * against their assigned sites and an Admin Centre actor answers for every
+ * project. See videoActor.ts for why an empty site list would have been the
+ * dangerous way to express that.
+ */
+function guard(actor: VideoActor, siteId: string): boolean {
+  return actor.maySite(siteId);
 }
+
+/**
+ * A background job has no realm, and saying so is more honest than attributing
+ * its work to the Platform. `SYSTEM` is what the queue runners pass.
+ */
+export const SYSTEM_ACTOR = { name: 'SiteComply', realm: null } as const;
 
 async function record(
   videoId: string,
   action: string,
-  actorName: string,
+  actor: { name: string; realm: 'PLATFORM' | 'ADMIN' | null },
   detail?: string,
 ): Promise<void> {
   await prisma.inductionVideoEvent.create({
-    data: { videoId, action, actorName, detail },
+    data: {
+      videoId,
+      action,
+      actorName: actor.name,
+      // Recorded on every event, so "who approved this" is answerable without
+      // knowing which tier was open at the time.
+      actorRealm: actor.realm,
+      detail,
+    },
   });
 }
 
@@ -87,10 +110,10 @@ export interface VideoSummary {
 
 /** Every version for one site, newest first. */
 export async function listVideosForSite(
-  viewer: PlatformViewer,
+  actor: VideoActor,
   siteId: string,
 ): Promise<VideoSummary[] | null> {
-  if (!guard(viewer, siteId)) return null;
+  if (!guard(actor, siteId)) return null;
   const [site, rows, manifest] = await Promise.all([
     prisma.jobSite.findUnique({ where: { id: siteId }, select: { name: true } }),
     prisma.inductionVideo.findMany({
@@ -120,8 +143,8 @@ export async function listVideosForSite(
 }
 
 /** The readiness check: what the site can say, and what it must fix first. */
-export async function readinessForSite(viewer: PlatformViewer, siteId: string) {
-  if (!guard(viewer, siteId)) return null;
+export async function readinessForSite(actor: VideoActor, siteId: string) {
+  if (!guard(actor, siteId)) return null;
   const src = await loadVideoSource(siteId);
   if (!src) return null;
   const manifest = buildSceneManifest(src);
@@ -145,10 +168,10 @@ export async function readinessForSite(viewer: PlatformViewer, siteId: string) {
  * scheduler runs it. Nothing long-running happens in the request.
  */
 export async function requestScript(
-  viewer: PlatformViewer,
+  actor: VideoActor,
   siteId: string,
 ): Promise<VideoResult<{ videoId: string; version: number }>> {
-  if (!guard(viewer, siteId)) return { ok: false, error: 'Not available.' };
+  if (!guard(actor, siteId)) return { ok: false, error: 'Not available.' };
 
   const src = await loadVideoSource(siteId);
   if (!src) return { ok: false, error: 'That project is not available.' };
@@ -198,7 +221,7 @@ export async function requestScript(
           where: { id: reusable.id },
           data: {
             blockingReasons: manifest.missing as unknown as object,
-            generatedByName: viewer.name,
+            generatedByName: actor.name,
           },
           select: { id: true },
         })
@@ -208,11 +231,11 @@ export async function requestScript(
             version,
             status: InductionVideoStatus.INFORMATION_REQUIRED,
             blockingReasons: manifest.missing as unknown as object,
-            generatedByName: viewer.name,
+            generatedByName: actor.name,
           },
           select: { id: true },
         });
-    await record(video.id, 'INFORMATION_REQUIRED', viewer.name,
+    await record(video.id, 'INFORMATION_REQUIRED', actor,
       manifest.missing.map((m) => m.heading).join(', '));
     return { ok: true, value: { videoId: video.id, version } };
   }
@@ -226,7 +249,7 @@ export async function requestScript(
           // would keep yesterday's missing-information list on a version that
           // now has everything it needs.
           blockingReasons: Prisma.DbNull,
-          generatedByName: viewer.name,
+          generatedByName: actor.name,
         },
         select: { id: true },
       })
@@ -235,7 +258,7 @@ export async function requestScript(
           jobSiteId: siteId,
           version,
           status: InductionVideoStatus.SCRIPT_GENERATING,
-          generatedByName: viewer.name,
+          generatedByName: actor.name,
         },
         select: { id: true },
       });
@@ -243,10 +266,10 @@ export async function requestScript(
     data: {
       videoId: video.id,
       kind: InductionVideoJobKind.SCRIPT,
-      requestedByName: viewer.name,
+      requestedByName: actor.name,
     },
   });
-  await record(video.id, 'SCRIPT_REQUESTED', viewer.name, `Version ${version}`);
+  await record(video.id, 'SCRIPT_REQUESTED', actor, `Version ${version}`);
   // Start it NOW rather than at five past the hour; the tick is the safety net.
   kickInductionJobs();
   return { ok: true, value: { videoId: video.id, version } };
@@ -327,7 +350,7 @@ export async function runQueuedScriptJobs(limit = 2): Promise<number> {
           },
         }),
       ]);
-      await record(job.videoId, 'SCRIPT_GENERATED', 'SiteComply',
+      await record(job.videoId, 'SCRIPT_GENERATED', SYSTEM_ACTOR,
         `${script.scenes.length} scenes · ${script.model}`);
       done++;
     } catch (e) {
@@ -344,7 +367,7 @@ export async function runQueuedScriptJobs(limit = 2): Promise<number> {
         where: { id: job.videoId },
         data: { status: InductionVideoStatus.GENERATION_FAILED },
       });
-      await record(job.videoId, 'GENERATION_FAILED', 'SiteComply', message.slice(0, 300));
+      await record(job.videoId, 'GENERATION_FAILED', SYSTEM_ACTOR, message.slice(0, 300));
     }
   }
   return done;
@@ -366,7 +389,7 @@ function estimateScriptPence(promptTokens?: number, outputTokens?: number): numb
 
 /** Edit one scene's narration. Returns an approved script to review. */
 export async function editScene(
-  viewer: PlatformViewer,
+  actor: VideoActor,
   sceneId: string,
   narration: string,
 ): Promise<VideoResult<{ videoId: string }>> {
@@ -374,7 +397,7 @@ export async function editScene(
     where: { id: sceneId },
     include: { video: { select: { id: true, jobSiteId: true, status: true } } },
   });
-  if (!scene || !guard(viewer, scene.video.jobSiteId)) {
+  if (!scene || !guard(actor, scene.video.jobSiteId)) {
     return { ok: false, error: 'Not available.' };
   }
   const text = narration.trim();
@@ -450,23 +473,23 @@ export async function editScene(
         transcriptBlobPath: null,
       },
     });
-    await record(scene.video.id, 'APPROVAL_WITHDRAWN', viewer.name,
+    await record(scene.video.id, 'APPROVAL_WITHDRAWN', actor,
       `${scene.heading} was edited after approval`);
   }
-  await record(scene.video.id, 'SCENE_EDITED', viewer.name, scene.heading);
+  await record(scene.video.id, 'SCENE_EDITED', actor, scene.heading);
   return { ok: true, value: { videoId: scene.video.id } };
 }
 
 /** Remove an optional scene. A required one may never be removed. */
 export async function removeScene(
-  viewer: PlatformViewer,
+  actor: VideoActor,
   sceneId: string,
 ): Promise<VideoResult<{ videoId: string }>> {
   const scene = await prisma.inductionVideoScene.findUnique({
     where: { id: sceneId },
     include: { video: { select: { id: true, jobSiteId: true, status: true } } },
   });
-  if (!scene || !guard(viewer, scene.video.jobSiteId)) {
+  if (!scene || !guard(actor, scene.video.jobSiteId)) {
     return { ok: false, error: 'Not available.' };
   }
   if (scene.moduleRevisionId) {
@@ -514,21 +537,21 @@ export async function removeScene(
       },
     });
   }
-  await record(scene.video.id, 'SCENE_REMOVED', viewer.name, scene.heading);
+  await record(scene.video.id, 'SCENE_REMOVED', actor, scene.heading);
   return { ok: true, value: { videoId: scene.video.id } };
 }
 
 /** Approve a script. Directors and Site Managers, by the owner's decision. */
 export async function approveScript(
-  viewer: PlatformViewer,
+  actor: VideoActor,
   videoId: string,
 ): Promise<VideoResult<{ approved: true }>> {
   const video = await prisma.inductionVideo.findUnique({
     where: { id: videoId },
     select: { id: true, jobSiteId: true, status: true, version: true },
   });
-  if (!video || !guard(viewer, video.jobSiteId)) return { ok: false, error: 'Not available.' };
-  if (!canApproveInductionVideo(viewer.role)) {
+  if (!video || !guard(actor, video.jobSiteId)) return { ok: false, error: 'Not available.' };
+  if (!actor.canApprove) {
     return { ok: false, error: 'Only a Director or Site Manager may approve an induction script.' };
   }
   if (video.status !== InductionVideoStatus.SCRIPT_READY) {
@@ -542,11 +565,13 @@ export async function approveScript(
     data: {
       status: InductionVideoStatus.SCRIPT_APPROVED,
       approvedAt: new Date(),
-      approvedByUserId: viewer.id,
-      approvedByName: viewer.name,
+      approvedByUserId: actor.userId,
+      approvedByAdminId: actor.adminId,
+      approvedByName: actor.name,
+      approvedByRealm: actor.realm,
     },
   });
-  await record(videoId, 'SCRIPT_APPROVED', viewer.name, `Version ${video.version}`);
+  await record(videoId, 'SCRIPT_APPROVED', actor, `Version ${video.version}`);
   return { ok: true, value: { approved: true } };
 }
 
@@ -560,7 +585,7 @@ export async function approveScript(
 export async function supersedeEarlierVersions(
   siteId: string,
   currentVideoId: string,
-  actorName: string,
+  actor: { name: string; realm: 'PLATFORM' | 'ADMIN' | null },
 ): Promise<number> {
   const earlier = await prisma.inductionVideo.findMany({
     where: {
@@ -575,13 +600,13 @@ export async function supersedeEarlierVersions(
       where: { id: v.id },
       data: { supersededAt: new Date() },
     });
-    await record(v.id, 'SUPERSEDED', actorName, `Replaced by a newer version`);
+    await record(v.id, 'SUPERSEDED', actor, `Replaced by a newer version`);
   }
   return earlier.length;
 }
 
 /** One version in full, for the editor. */
-export async function getVideo(viewer: PlatformViewer, videoId: string) {
+export async function getVideo(actor: VideoActor, videoId: string) {
   const video = await prisma.inductionVideo.findUnique({
     where: { id: videoId },
     include: {
@@ -591,12 +616,12 @@ export async function getVideo(viewer: PlatformViewer, videoId: string) {
       jobs: { orderBy: { createdAt: 'desc' }, take: 5 },
     },
   });
-  if (!video || !guard(viewer, video.jobSiteId)) return null;
+  if (!video || !guard(actor, video.jobSiteId)) return null;
   const manifest = await manifestForSite(video.jobSiteId);
   return {
     video,
     stale: Boolean(video.sourceHash && manifest && video.sourceHash !== manifestHash(manifest)),
     warnings: manifest?.warnings ?? [],
-    canApprove: canApproveInductionVideo(viewer.role),
+    canApprove: actor.canApprove,
   };
 }

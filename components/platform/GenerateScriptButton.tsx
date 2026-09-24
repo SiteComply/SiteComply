@@ -15,9 +15,18 @@ import { useRouter } from 'next/navigation';
 export function GenerateScriptButton({
   siteId,
   disabled,
+  endpoint,
 }: {
   siteId: string;
   disabled: boolean;
+  /**
+   * Which tier this is mounted in: the Platform's route or the Admin Centre's.
+   *
+   * Both accept identical bodies and run identical actions through one shared
+   * dispatcher - only the realm the caller is authenticated in differs - so ONE
+   * component serves both and there is no second copy to keep in step.
+   */
+  endpoint: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -28,7 +37,7 @@ export function GenerateScriptButton({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/platform/sites/${siteId}/induction-video`, {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ action: 'generate' }),

@@ -16,6 +16,7 @@ require.cache[stubPath] = { id: stubPath, filename: stubPath, loaded: true,
     }) }) } } as never;
 
 const { prisma } = require('../lib/prisma');
+const { videoActorFromPlatformViewer } = require('../services/inductionVideo/videoActor');
 const svc = require('../services/inductionVideo/inductionVideoService');
 let fails = 0; const chk = (t: string, ok: boolean, d = '') => {
   console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${t}${d ? ` — ${d}` : ''}`); if (!ok) fails++; };
@@ -27,8 +28,17 @@ let fails = 0; const chk = (t: string, ok: boolean, d = '') => {
     info: await prisma.siteInformation.findUnique({ where: { jobSiteId: site.id } }),
     risks: await prisma.siteRiskTopic.findMany({ where: { jobSiteId: site.id } }),
   };
-  const director = { id: 'u1', name: 'Dee Director', role: 'DIRECTOR', siteIds: [site.id] };
-  const pm = { id: 'u2', name: 'Pat Manager', role: 'PROJECT_MANAGER', siteIds: [site.id] };
+  /*
+   * Through the SAME adapter the routes use. The services take a decided
+   * capability now, not a viewer, because company-wide admins and site-scoped
+   * platform users both drive this workflow - hand-building an actor here would
+   * test a fiction, and passing a bare viewer fails with "maySite is not a
+   * function", which is how this suite caught the conversion.
+   */
+  const directorViewer = { id: 'u1', name: 'Dee Director', role: 'DIRECTOR', siteIds: [site.id] };
+  const pmViewer = { id: 'u2', name: 'Pat Manager', role: 'PROJECT_MANAGER', siteIds: [site.id] };
+  const director = videoActorFromPlatformViewer(directorViewer as never);
+  const pm = videoActorFromPlatformViewer(pmViewer as never);
   try {
     // 1. Blocked: asbestos applies with no controls.
     await prisma.jobSite.update({ where: { id: site.id }, data: { fireAssemblyPoint: 'Rear car park', firstAiderName: 'Fay Aid', firstAiderLocation: 'Site office' } });
@@ -87,7 +97,7 @@ let fails = 0; const chk = (t: string, ok: boolean, d = '') => {
     const v2 = await svc.requestScript(director, site.id);
     await svc.runQueuedScriptJobs();
     chk('the next version is version 2', v2.value.version === 2);
-    const superseded = await svc.supersedeEarlierVersions(site.id, v2.value.videoId, director.name);
+    const superseded = await svc.supersedeEarlierVersions(site.id, v2.value.videoId, director);
     chk('earlier versions are superseded, not deleted',
       superseded >= 1 && (await prisma.inductionVideo.findUnique({ where: { id: videoId } })).supersededAt !== null);
     chk('  and are still there to read', (await prisma.inductionVideo.count({ where: { jobSiteId: site.id } })) === 2);

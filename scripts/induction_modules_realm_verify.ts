@@ -145,7 +145,18 @@ const director = { id: 'u1', name: 'Dee Director', role: 'DIRECTOR', siteIds: []
      * type error. This asserts the two artefacts agree.
      */
     const SCHEMA = read('prisma/schema.prisma');
-    const MIG = read('prisma/migrations/20260924200000_add_module_actor_realm/migration.sql');
+    /*
+     * EVERY migration, not just this feature's. The guard was written against one
+     * file and immediately became wrong when induction videos gained realm columns
+     * of their own in a second migration - reporting them as orphaned when they
+     * were simply migrated elsewhere. The question is "is this column migrated
+     * ANYWHERE", so read the whole directory.
+     */
+    const MIG = require('fs')
+      .readdirSync('prisma/migrations')
+      .filter((d: string) => existsSync(`prisma/migrations/${d}/migration.sql`))
+      .map((d: string) => read(`prisma/migrations/${d}/migration.sql`))
+      .join('\n');
     const owners = new Map<string, string>();
     let model = '';
     for (const line of SCHEMA.split('\n')) {
@@ -167,9 +178,13 @@ const director = { id: 'u1', name: 'Dee Director', role: 'DIRECTOR', siteIds: []
     chk('every *Realm column the schema declares is in the migration',
       unmigrated.length === 0,
       unmigrated.length ? `orphaned: ${unmigrated.join(', ')}` : 'schema and migration agree');
-    chk('the realm columns are only on the three module tables',
-      declared.every((k) => /^(InductionModuleRevision|InductionModuleEvent|SiteInductionModule)\./.test(k)),
-      declared.join(' '));
+    // The intended set, listed rather than derived: adding a table here should be
+    // a deliberate act, so an accidental column on an unrelated model still fails.
+    const ALLOWED =
+      /^(InductionModuleRevision|InductionModuleEvent|SiteInductionModule|InductionVideo|InductionVideoEvent)\./;
+    chk('realm columns appear only on the tables meant to have them',
+      declared.every((k) => ALLOWED.test(k)),
+      declared.filter((k) => !ALLOWED.test(k)).join(' ') || declared.length + ' declared, all expected');
 
     console.log('\nONE SOURCE OF TRUTH: THE ADMIN’S WORDS ARE WHAT A SITE RESOLVES');
     const resolved = await svc.resolveModulesForSite('no-such-site');

@@ -12,6 +12,7 @@ import { formatDateTimeUK } from '@/lib/datetime';
 import { InductionVideoStatusBadge } from '@/components/platform/InductionVideoStatusBadge';
 import { GenerateScriptButton } from '@/components/platform/GenerateScriptButton';
 import { SiteInductionModules } from '@/components/platform/SiteInductionModules';
+import { videoActorFromPlatformViewer } from '@/services/inductionVideo/videoActor';
 import {
   canIssueInductionModule,
   moduleDecisionsForSite,
@@ -39,8 +40,8 @@ export default async function SiteInductionVideoPage({
   }
 
   const [readiness, videos] = await Promise.all([
-    readinessForSite(viewer, params.id),
-    listVideosForSite(viewer, params.id),
+    readinessForSite(videoActorFromPlatformViewer(viewer), params.id),
+    listVideosForSite(videoActorFromPlatformViewer(viewer), params.id),
   ]);
   if (!readiness || !videos) notFound();
 
@@ -119,7 +120,11 @@ export default async function SiteInductionVideoPage({
             Scenes this project requires ({required.length} required,{' '}
             {optional.length} optional)
           </h2>
-          <GenerateScriptButton siteId={params.id} disabled={!manifest.canGenerate} />
+          <GenerateScriptButton
+            siteId={params.id}
+            endpoint={`/api/platform/sites/${params.id}/induction-video`}
+            disabled={!manifest.canGenerate}
+          />
         </div>
 
         <ul className="mt-3 divide-y divide-line">

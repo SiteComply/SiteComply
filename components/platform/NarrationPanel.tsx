@@ -35,11 +35,20 @@ export function NarrationPanel({
   hasTranscript,
   estimatePence,
   lastError,
+  endpoint,
 }: {
   videoId: string;
   status: string;
   /** False when this deployment has no speech service configured. */
   configured: boolean;
+  /**
+   * Which tier this is mounted in: the Platform's route or the Admin Centre's.
+   *
+   * Both accept identical bodies and run identical actions through one shared
+   * dispatcher - only the realm the caller is authenticated in differs - so ONE
+   * component serves both and there is no second copy to keep in step.
+   */
+  endpoint: string;
   scenes: NarratedScene[];
   totalLabel: string | null;
   voice: string | null;
@@ -67,7 +76,7 @@ export function NarrationPanel({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/platform/induction-video/${videoId}`, {
+      const res = await fetch(endpoint, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ action: 'narrate' }),

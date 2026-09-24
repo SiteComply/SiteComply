@@ -30,10 +30,19 @@ export function RenderPanel({
   watchedCount,
   completedCount,
   lastError,
+  endpoint,
 }: {
   videoId: string;
   status: string;
   configured: boolean;
+  /**
+   * Which tier this is mounted in: the Platform's route or the Admin Centre's.
+   *
+   * Both accept identical bodies and run identical actions through one shared
+   * dispatcher - only the realm the caller is authenticated in differs - so ONE
+   * component serves both and there is no second copy to keep in step.
+   */
+  endpoint: string;
   /** The narration changed after the render: what exists is out of date. */
   stale: boolean;
   canPublish: boolean;
@@ -66,7 +75,7 @@ export function RenderPanel({
     setBusy(key);
     setError(null);
     try {
-      const res = await fetch(`/api/platform/induction-video/${videoId}`, {
+      const res = await fetch(endpoint, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),

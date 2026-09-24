@@ -153,21 +153,26 @@ chk(
   dangling.length ? `no Admin page for: ${dangling.join(', ')}` : 'both areas resolve',
 );
 chk(
-  'videos is marked read-only in Admin, modules is not',
-  areas.INDUCTION_VIDEO_AREAS.find((a: { key: string }) => a.key === 'videos').adminReadOnly ===
-    true &&
-    areas.INDUCTION_VIDEO_AREAS.find((a: { key: string }) => a.key === 'modules')
-      .adminReadOnly === false,
+  'no area carries an adminReadOnly flag any more',
+  areas.INDUCTION_VIDEO_AREAS.every(
+    (a: Record<string, unknown>) => !('adminReadOnly' in a),
+  ),
+  'both areas are fully actionable in both tiers; what a PERSON may do is a role',
 );
 chk(
-  'the Admin videos listing offers no actions',
-  !/InductionModulesSection|<button|<form/.test(read(ADMIN_VIDEOS)),
-  'approving and publishing stay with the accountable Platform user',
+  'the Admin videos listing leads into the Admin project page',
+  /\/admin\/induction-videos\/projects\//.test(read(ADMIN_VIDEOS)),
+  'a listing that leads nowhere is the read-only design being fixed',
 );
 chk(
   'the Admin videos listing does not link into Platform routes',
   !/platform\/dashboard/.test(read(ADMIN_VIDEOS)),
   'an admin may hold no Platform account - those would be dead ends',
+);
+chk(
+  'no read-only messaging survives in the Admin video area',
+  !/Read-only/.test(read(ADMIN_VIDEOS)) &&
+    !/Read-only/.test(read('app/admin/(dashboard)/induction-videos/projects/[id]/page.tsx')),
 );
 
 console.log('\nSTILL ONE SYSTEM UNDERNEATH');

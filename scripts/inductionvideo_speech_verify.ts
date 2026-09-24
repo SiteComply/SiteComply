@@ -339,7 +339,10 @@ function main() {
   ok('the speech service is resolved only when there is work to do',
     /if \(jobs\.length === 0\) return 0;/.test(svc));
   ok('media routes go through one access rule, not a hand-written copy',
-    /canWorkOnVideoSite/.test(svc) && !/viewer\.siteIds\.includes/.test(svc));
+    // Expressed as the actor's own site test now, so the same rule answers for a
+    // site-scoped Platform user and an organisation-wide Admin Centre one. What
+    // must never come back is a route or service rolling its own siteIds check.
+    /actor\.maySite\(/.test(svc) && !/viewer\.siteIds\.includes/.test(svc));
 
   const video = read('services/inductionVideo/inductionVideoService.ts');
   ok('editing a scene clears its audio',
@@ -364,7 +367,9 @@ function main() {
   const audioRoute = read('app/api/platform/induction-video/[videoId]/audio/[sceneId]/route.ts');
   ok('the audio route checks the viewer', /getPlatformViewer\(\)/.test(audioRoute));
   ok('  scopes the scene to the version in the URL',
-    /sceneAudioForViewer\(viewer, params\.videoId, params\.sceneId\)/.test(audioRoute));
+    // The viewer is adapted into a VideoActor at the route edge now, so site
+    // authority can be answered for a Platform user or an Admin Centre one.
+    /sceneAudioForViewer\(\s*videoActorFromPlatformViewer\(viewer\),\s*params\.videoId,\s*params\.sceneId/.test(audioRoute));
   ok('  and serves ranges', /streamMedia/.test(audioRoute));
   const capRoute = read('app/api/platform/induction-video/[videoId]/captions/route.ts');
   const txtRoute = read('app/api/platform/induction-video/[videoId]/transcript/route.ts');

@@ -172,8 +172,14 @@ function main() {
   const svc = read('services/inductionVideo/renderService.ts');
   ok('only a rendered version can be published',
     /Only a rendered version can be published/.test(svc));
-  ok('only a Director or Site Manager may publish',
-    /canApproveInductionVideo\(viewer\.role\)[\s\S]{0,200}may publish an induction video/.test(svc));
+  /*
+   * Now expressed as a CAPABILITY rather than a role call, which is what lets one
+   * rule hold in two realms: a Platform Project Manager has canApprove false, and
+   * so does an Admin VIEWER. The roles that may publish are decided in
+   * videoActor.ts, where each realm's vocabulary is known.
+   */
+  ok('only an actor with approval authority may publish',
+    /!actor\.canApprove[\s\S]{0,200}may publish an induction video/.test(svc));
   ok('a stale render cannot be published',
     /renderIsStale\(video\)[\s\S]{0,200}Render it again first/.test(svc));
   ok('publishing supersedes every other version in the same transaction',

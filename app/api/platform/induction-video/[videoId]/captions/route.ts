@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { captionsForViewer } from '@/services/inductionVideo/narrationService';
 import { streamMedia } from '@/services/inductionVideo/mediaResponse';
+import { videoActorFromPlatformViewer } from '@/services/inductionVideo/videoActor';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: { videoId: str
   if (!viewer) {
     return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
   }
-  const file = await captionsForViewer(viewer, params.videoId);
+  const file = await captionsForViewer(videoActorFromPlatformViewer(viewer), params.videoId);
   if (!file) {
     return NextResponse.json({ ok: false, error: 'Not available.' }, { status: 404 });
   }

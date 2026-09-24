@@ -6,9 +6,8 @@ import {
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { formatDateTimeUK } from '@/lib/datetime';
-import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
+import type { VideoActor } from '@/services/inductionVideo/videoActor';
 import {
-  canWorkOnVideoSite,
   type VideoResult,
 } from '@/services/inductionVideo/inductionVideoService';
 import {
@@ -95,7 +94,7 @@ export function narrationSetHash(sceneHashes: string[]): string {
  * service, exactly as it calls the model for the script.
  */
 export async function requestNarration(
-  viewer: PlatformViewer,
+  actor: VideoActor,
   videoId: string,
 ): Promise<VideoResult<{ queued: true; scenes: number }>> {
   const video = await prisma.inductionVideo.findUnique({
@@ -108,7 +107,7 @@ export async function requestNarration(
       _count: { select: { scenes: true } },
     },
   });
-  if (!video || !canWorkOnVideoSite(viewer, video.jobSiteId)) {
+  if (!video || !actor.maySite(video.jobSiteId)) {
     return { ok: false, error: 'Not available.' };
   }
   const synthesiser = resolveSpeechSynthesiser();
@@ -172,14 +171,14 @@ export async function requestNarration(
       data: {
         videoId,
         kind: InductionVideoJobKind.NARRATION,
-        requestedByName: viewer.name,
+        requestedByName: actor.name,
       },
     }),
     prisma.inductionVideoEvent.create({
       data: {
         videoId,
         action: 'NARRATION_REQUESTED',
-        actorName: viewer.name,
+        actorName: actor.name,
         detail: `Version ${video.version} · ${video._count.scenes} scenes`,
       },
     }),
@@ -439,7 +438,7 @@ async function narrateVideo(videoId: string, ports: NarrationPorts): Promise<voi
  * files. Returns null for "no", without saying which of the reasons it was.
  */
 export async function sceneAudioForViewer(
-  viewer: PlatformViewer,
+  actor: VideoActor,
   videoId: string,
   sceneId: string,
 ): Promise<{ blobPath: string } | null> {
@@ -448,26 +447,26 @@ export async function sceneAudioForViewer(
     select: { audioBlobPath: true, video: { select: { jobSiteId: true } } },
   });
   if (!scene?.audioBlobPath) return null;
-  if (!canWorkOnVideoSite(viewer, scene.video.jobSiteId)) return null;
+  if (!actor.maySite(scene.video.jobSiteId)) return null;
   return { blobPath: scene.audioBlobPath };
 }
 
 export async function captionsForViewer(
-  viewer: PlatformViewer,
+  actor: VideoActor,
   videoId: string,
 ): Promise<{ blobPath: string; fileName: string } | null> {
-  return mediaFor(viewer, videoId, 'captions');
+  return mediaFor(actor, videoId, 'captions');
 }
 
 export async function transcriptForViewer(
-  viewer: PlatformViewer,
+  actor: VideoActor,
   videoId: string,
 ): Promise<{ blobPath: string; fileName: string } | null> {
-  return mediaFor(viewer, videoId, 'transcript');
+  return mediaFor(actor, videoId, 'transcript');
 }
 
 async function mediaFor(
-  viewer: PlatformViewer,
+  actor: VideoActor,
   videoId: string,
   kind: 'captions' | 'transcript',
 ): Promise<{ blobPath: string; fileName: string } | null> {
@@ -481,7 +480,7 @@ async function mediaFor(
       jobSite: { select: { name: true } },
     },
   });
-  if (!video || !canWorkOnVideoSite(viewer, video.jobSiteId)) return null;
+  if (!video || !actor.maySite(video.jobSiteId)) return null;
   const blobPath = kind === 'captions' ? video.captionsBlobPath : video.transcriptBlobPath;
   if (!blobPath) return null;
   const safeSite = video.jobSite.name.replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'Site';

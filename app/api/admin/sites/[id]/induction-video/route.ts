@@ -1,32 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
-import { videoActorFromPlatformViewer } from '@/services/inductionVideo/videoActor';
-import { handleSiteVideoAction } from '@/services/inductionVideo/videoActions';
+import { requireAdminRole, ADMIN_WRITE_ROLES } from '@/lib/adminAuth';
+import { getAdminSession } from '@/lib/session';
 import {
   listVideosForSite,
   readinessForSite,
 } from '@/services/inductionVideo/inductionVideoService';
-import { withClosedProjectHandling } from '@/lib/routeErrors';
+import { videoActorFromAdmin } from '@/services/inductionVideo/videoActor';
+import { handleSiteVideoAction } from '@/services/inductionVideo/videoActions';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * A project's induction videos, from the Platform.
+ * A project's induction videos, from the Admin Centre.
  *
  *   GET                        → versions, plus the readiness check
- *   POST { action: 'generate' } → queue a script for the next version
+ *   POST { action: 'generate' } → queue a script for the next version, which is
+ *                                 also how a regeneration is expressed
  *
- * Generation only QUEUES work. The scheduler runs it, so a model that takes
- * thirty seconds never holds an HTTP request open.
- *
- * The action lives in `handleSiteVideoAction`, shared with the Admin Centre.
+ * The same dispatcher the Platform uses. An admin's site scope is every project,
+ * so no assigned-sites test applies here — see videoActor.ts.
  */
 async function GETHandler(_req: NextRequest, { params }: { params: { id: string } }) {
-  const viewer = await getPlatformViewer();
-  if (!viewer) return NextResponse.json({ ok: false, error: 'Not available.' }, { status: 403 });
+  const admin = getAdminSession();
+  if (!admin) return NextResponse.json({ ok: false, error: 'Not signed in.' }, { status: 401 });
 
-  const actor = videoActorFromPlatformViewer(viewer);
+  const actor = videoActorFromAdmin(admin);
   const [videos, readiness] = await Promise.all([
     listVideosForSite(actor, params.id),
     readinessForSite(actor, params.id),
@@ -38,8 +37,8 @@ async function GETHandler(_req: NextRequest, { params }: { params: { id: string 
 }
 
 async function POSTHandler(req: NextRequest, { params }: { params: { id: string } }) {
-  const viewer = await getPlatformViewer();
-  if (!viewer) return NextResponse.json({ ok: false, error: 'Not available.' }, { status: 403 });
+  const auth = requireAdminRole(ADMIN_WRITE_ROLES);
+  if (!auth.ok) return auth.response;
 
   let body: Record<string, unknown> = {};
   try {
@@ -49,12 +48,12 @@ async function POSTHandler(req: NextRequest, { params }: { params: { id: string 
   }
 
   const { status, payload } = await handleSiteVideoAction(
-    videoActorFromPlatformViewer(viewer),
+    videoActorFromAdmin(auth.admin),
     params.id,
     body,
   );
   return NextResponse.json(payload, { status });
 }
 
-export const GET = withClosedProjectHandling(GETHandler);
-export const POST = withClosedProjectHandling(POSTHandler);
+export const GET = GETHandler;
+export const POST = POSTHandler;

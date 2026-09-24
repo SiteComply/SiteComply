@@ -30,15 +30,22 @@ export interface InductionVideoArea {
   key: InductionVideoAreaKey;
   label: string;
   description: string;
-  /**
-   * True when the Admin Centre can only SHOW this area, not act on it.
+  /*
+   * There is deliberately no `adminReadOnly` flag any more.
    *
-   * Videos are generated, approved and published against a project by a Platform
-   * user, and that is where the work belongs; an admin can see the state of every
-   * project's induction video without being given a second way to approve one.
-   * Company modules are fully manageable in both tiers.
+   * It existed for one day and encoded the wrong rule: that videos were
+   * generated, approved and published only by a Platform user. The owner's
+   * decision is that an Admin Centre OWNER or ADMIN has authority equivalent to a
+   * Platform Director for induction video management - generation, editing,
+   * approval, narration, rendering, publishing, withdrawal, regeneration and
+   * version management - across every project. Both areas are fully actionable in
+   * both tiers, so a per-area capability flag would have exactly one value and
+   * would only invite the restriction back.
+   *
+   * What a given PERSON may do is answered by videoActor.ts and moduleActor.ts,
+   * where each realm's roles are known. An admin VIEWER is read-only in both
+   * areas; that is a role, not a property of the area.
    */
-  adminReadOnly: boolean;
 }
 
 export const INDUCTION_VIDEO_AREAS: InductionVideoArea[] = [
@@ -47,7 +54,6 @@ export const INDUCTION_VIDEO_AREAS: InductionVideoArea[] = [
     label: 'Videos',
     description:
       'One row per project: which have an induction video, which are waiting on you, and which are missing information.',
-    adminReadOnly: true,
   },
   {
     /*
@@ -60,7 +66,6 @@ export const INDUCTION_VIDEO_AREAS: InductionVideoArea[] = [
     label: 'Company modules',
     description:
       'Standard content every induction carries, written once and issued centrally — included in every project alongside its own hazards and arrangements.',
-    adminReadOnly: false,
   },
 ];
 
