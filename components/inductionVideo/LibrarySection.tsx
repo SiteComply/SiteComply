@@ -98,7 +98,7 @@ export function LibrarySection({
   canIssue,
   endpoint,
   totalProjects,
-  detailHref,
+  basePath,
 }: {
   assets: LibraryRow[];
   /** Company modules a video can stand in for. */
@@ -108,8 +108,16 @@ export function LibrarySection({
   /** This tier's library API. */
   endpoint: string;
   totalProjects: number;
-  /** This tier's asset page, given the id. */
-  detailHref: (assetId: string) => string;
+  /**
+   * This tier's Library URL, e.g. /platform/dashboard/induction-videos/library.
+   *
+   * A STRING, deliberately. This was a `detailHref: (id) => string` callback, and
+   * that is not serialisable: a Server Component cannot hand a function to a
+   * 'use client' component, so every request to this page threw before rendering a
+   * thing. It type-checked and it built; only an authenticated render would have
+   * caught it, and the deploy gate's smoke test gets a 307 at the login redirect.
+   */
+  basePath: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -165,7 +173,7 @@ export function LibrarySection({
       }
       // Straight to the video's own page, which is where footage and captions go.
       const id = (data as { assetId?: string }).assetId;
-      if (id) router.push(detailHref(id));
+      if (id) router.push(`${basePath}/${id}`);
       else router.refresh();
     } catch {
       setError('Network problem. Please try again.');
@@ -410,7 +418,7 @@ export function LibrarySection({
                   {inBand.map((a) => (
                     <li key={a.id}>
                       <Link
-                        href={detailHref(a.id)}
+                        href={`${basePath}/${a.id}`}
                         className="block rounded-lg border border-line bg-surface-sunken p-3 hover:border-brand-300 hover:bg-brand-50/40"
                       >
                         <div className="flex flex-wrap items-baseline gap-2">

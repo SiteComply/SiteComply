@@ -58,7 +58,7 @@ export default async function InductionLibraryPage() {
           canIssue={canIssueInductionModule(viewer.role)}
           endpoint="/api/platform/induction-library"
           totalProjects={totalProjects}
-          detailHref={(id) => `/platform/dashboard/induction-videos/library/${id}`}
+          basePath="/platform/dashboard/induction-videos/library"
         />
       </InductionVideoWorkspace>
     </PlatformShell>

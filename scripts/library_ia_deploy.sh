@@ -138,7 +138,14 @@ raise SystemExit(0)
 PYCHK
 python3 scripts/check_client_prisma_leak.py \
   || fail "a client component value-imports the Prisma CLIENT"
-echo "  ok   source asserts pass (34)"
+# NO FUNCTION PROPS ACROSS THE BOUNDARY. This is what took the Library index down in
+# production: `detailHref={(id) => ...}` passed from an async Server Component to a
+# 'use client' component. Next cannot serialise a function, so it threw before
+# rendering anything - on every request, empty library or not. It type-checked, it
+# built, and the route smoke test below saw only the 307 at the login redirect.
+python3 scripts/check_server_client_props.py \
+  || fail "a Server Component passes a function prop to a client component - it will throw at render"
+echo "  ok   source asserts pass (35)"
 
 if [ -z "$DRY" ]; then
   DB="$(az webapp config appsettings list -g "$RG" -n "$APP" -o tsv --query "[?name=='DATABASE_URL'].value" 2>/dev/null)"
@@ -219,8 +226,27 @@ for i in $(seq 1 10); do
 done
 SERVED=$(served_buildid); echo "      served build id: $SERVED"
 [ "$SERVED" = "$NEW" ] || fail "prod is serving $SERVED, not $NEW"
-for R in / /platform/dashboard/induction-videos/library /admin/induction-videos/library; do
-  echo "        $R -> HTTP $(curl -s -o /dev/null -w '%{http_code}' --max-time 25 "${BASE}${R}")"
+echo "      route smoke test:"
+for R in / /check-in; do
+  H=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 "${BASE}${R}")
+  echo "        $R -> HTTP $H"
+  [ "$H" = "200" ] || fail "$R returned HTTP $H"
 done
+# A 307 here is the login redirect and proves NOTHING about whether the page renders.
+# Say so rather than printing it as though it were a pass.
+for R in /platform/dashboard/induction-videos/library /admin/induction-videos/library; do
+  H=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 "${BASE}${R}")
+  echo "        $R -> HTTP $H (auth redirect expected; NOT a render check)"
+  case "$H" in
+    307|302) ;;
+    500|502|503) fail "$R returned HTTP $H before any redirect - it is failing outright" ;;
+    *) echo "        note: expected a redirect, got $H" ;;
+  esac
+done
+echo
+echo "      UNVERIFIED BY THIS GATE: whether these pages RENDER for a signed-in user."
+echo "      Nothing here can log in, so a render-time failure - a function prop across"
+echo "      the server/client boundary, a null a component does not expect - reaches"
+echo "      production looking exactly like a pass. Open the Library and look."
 echo
 echo "DEPLOYED: $PREV -> $NEW"

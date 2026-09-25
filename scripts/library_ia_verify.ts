@@ -263,6 +263,43 @@ const draft = (over: Record<string, unknown> = {}) => ({
       /canIssue && \(/.test(DETAIL) && !/editableContent[\s\S]{0,80}Settings/.test(DETAIL),
       'category and placement are about where it is used, not what it says');
 
+    console.log('\nNOTHING UNSERIALISABLE CROSSES INTO THE CLIENT');
+    /*
+     * THE BUG THAT TOOK THE LIBRARY DOWN IN PRODUCTION. The index was handed
+     * `detailHref={(id) => ...}` by an async Server Component, and Next cannot
+     * serialise a function across that boundary: it threw before rendering anything,
+     * on every request, whether or not any assets existed. It type-checked and it
+     * built, and the deploy gate's smoke test saw only the 307 at the login redirect.
+     */
+    const { execFileSync } = require('node:child_process');
+    let boundaryClean = true;
+    let boundaryOut = '';
+    try {
+      boundaryOut = execFileSync('python3', ['scripts/check_server_client_props.py'],
+        { encoding: 'utf8' });
+    } catch (e: unknown) {
+      boundaryClean = false;
+      boundaryOut = String((e as { stdout?: string }).stdout ?? '');
+    }
+    chk('no Server Component passes a function prop to a client component',
+      boundaryClean, boundaryOut.trim().split('\n').slice(0, 3).join(' | '));
+    chk('the index takes a STRING base path, not a callback',
+      /basePath: string;/.test(INDEX) && !/detailHref/.test(
+        read('app/platform/dashboard/induction-videos/library/page.tsx')),
+      'a callback is the shape that cannot cross the boundary');
+    for (const [tier, pg] of [
+      ['platform', 'app/platform/dashboard/induction-videos/library/page.tsx'],
+      ['admin', 'app/admin/(dashboard)/induction-videos/library/page.tsx'],
+    ] as const) {
+      chk(`the ${tier} index passes basePath as a literal string`,
+        /basePath="\/[\w/-]+"/.test(read(pg)), read(pg).match(/basePath=[^\n]*/)?.[0] ?? 'absent');
+    }
+    chk('every prop the detail page receives is serialisable',
+      !/=\{\(/.test(
+        read('app/platform/dashboard/induction-videos/library/[assetId]/page.tsx')
+          .replace(/\{\(m: \{[^}]*\}\) =>[\s\S]*?\)\)\}/g, 'MAPPED')),
+      'a .map() producing an array is fine; a bare callback is not');
+
     console.log('\nTHE PAGE SAYS WHAT THE LIBRARY IS FOR');
     chk('the purpose is in the header, not only the empty state',
       /Reusable company footage that every project/.test(INDEX));

@@ -37,7 +37,7 @@ export default async function AdminInductionLibraryPage() {
         canIssue={manages}
         endpoint="/api/admin/induction-library"
         totalProjects={totalProjects}
-        detailHref={(id) => `/admin/induction-videos/library/${id}`}
+        basePath="/admin/induction-videos/library"
       />
     </AdminInductionVideoWorkspace>
   );
