@@ -194,11 +194,22 @@ NEW=$(cat .next/BUILD_ID); echo "      new build id: $NEW"
 echo "[6/7] Confirming the BUILD, not just the source..."
 grep -rqF "export it at a lower bitrate" .next 2>/dev/null \
   || fail "the size-limit message is not in the build - the editor guard did not compile"
-# Prisma must not have reached the browser bundle through libraryLimits.
-if grep -rl "PrismaClient" .next/static 2>/dev/null | head -1 | grep -q .; then
-  fail "PrismaClient is in the CLIENT bundle - a value import from a service leaked"
-fi
-echo "  ok   the editor guard shipped and Prisma stayed server-side"
+# THE PRISMA CHECK, AND WHY IT IS NOT A grep OF .next/static.
+#
+# It was `grep PrismaClient .next/static`, and that failed this deploy on a false
+# positive: what it found was Prisma's own BROWSER STUB, the 88 KB module whose
+# whole job is to throw "PrismaClientKnownRequestError is unable to run in this
+# browser". That stub has been in the client bundle for a long time, pulled in by
+# pre-existing components whose helper modules import Prisma ENUMS, and it cannot
+# connect to anything. The string cannot tell it apart from a real leak.
+#
+# What actually matters is narrower: no client component may reach the
+# INSTANTIATED client at @/lib/prisma through a chain of value imports. That is
+# checked at source, transitively, by the script below, and it is the mistake tsc
+# cannot see, because a type-only import is erased and a value import is not.
+python3 scripts/check_client_prisma_leak.py \
+  || fail "a client component value-imports the Prisma CLIENT - it would ship to the browser"
+echo "  ok   the editor guard shipped and no client component reaches the Prisma client"
 
 echo "[7/7] Packaging, deploying, cutting over..."
 rm -f "$ZIP"
