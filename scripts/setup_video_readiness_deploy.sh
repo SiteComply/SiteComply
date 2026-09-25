@@ -219,6 +219,15 @@ grep -qF "Ready for a Construction Phase Plan" "$WIZ" \
   || fail "setup no longer says whether the plan can be generated"
 echo "  ok   readiness asserts pass (2)"
 
+# --- CAN THE MIGRATION HISTORY REBUILD THE DATABASE? ----------------------
+# It could not, for months, and nothing said so: five enums, five tables and three
+# columns lived only in schema.prisma because the features that needed them were
+# applied to production by hand. Production was fine; a new developer, a staging
+# instance and a disaster-recovery rebuild were not. Repaired 2026-09-25; this
+# keeps it repaired.
+bash scripts/check_migration_drift.sh || fail "the migration history cannot rebuild the schema"
+
+
 if [ -n "$DRY" ]; then
   echo
   echo "DRY RUN COMPLETE: ${DRY_FAILED:-0} assert(s) failed."

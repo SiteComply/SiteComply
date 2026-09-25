@@ -147,6 +147,15 @@ grep -qF "uploadMediaFromFile(path, outputPath, 'video/mp4')" "$SVC" \
 grep -q "output: Buffer;" "$NORM" && fail "the normaliser returns the bytes again"
 echo "  ok   source asserts pass (33)"
 
+# --- CAN THE MIGRATION HISTORY REBUILD THE DATABASE? ----------------------
+# It could not, for months, and nothing said so: five enums, five tables and three
+# columns lived only in schema.prisma because the features that needed them were
+# applied to production by hand. Production was fine; a new developer, a staging
+# instance and a disaster-recovery rebuild were not. Repaired 2026-09-25; this
+# keeps it repaired.
+bash scripts/check_migration_drift.sh || fail "the migration history cannot rebuild the schema"
+
+
 # --- THE STORAGE ACCOUNT ITSELF -------------------------------------------
 # The upload is a browser PUT straight to blob storage. Without a CORS rule the
 # preflight fails and NOTHING can be uploaded - the state this account was in
