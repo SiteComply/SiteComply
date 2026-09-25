@@ -99,6 +99,19 @@ if [ -z "$DRY" ]; then
   MISS=$(PGOPTIONS='-c default_transaction_read_only=on' psql "$DB" -X -tA -c "SELECT count(*) FROM \"SiteInformation\" WHERE (COALESCE(TRIM(\"temporaryWorks\"),'') <> '' AND \"hasTemporaryWorks\" IS NULL) OR (COALESCE(TRIM(\"trafficManagement\"),'') <> '' AND \"hasTrafficManagement\" IS NULL) OR (COALESCE(TRIM(\"highRiskActivities\"),'') <> '' AND \"hasHighRiskActivities\" IS NULL)" 2>/dev/null)
   [ "$MISS" = "0" ] || fail "$MISS production sites have written an answer but are still unanswered - the backfill did not run"
   echo "  ok   production has all three columns, nullable, undefaulted, backfilled"
+  # THE ENUMS THE RESTRUCTURED WIZARD DEPENDS ON.
+  #
+  # The wizard now hosts the risk register, the site rules and the drawings/RAMS
+  # panel, so it reads RiskTopic, ChecklistItemType.SITE_RULE and
+  # DocumentCategory.DRAWING. None of the three is produced by the migration
+  # history - they were applied to production out of band, which a local
+  # `migrate reset` is what exposed. They ARE in production because the features
+  # that use them are live, but this deploy is the first to reach them from a NEW
+  # screen, so prove it rather than assume it.
+  ENUMCHK=$(PGOPTIONS='-c default_transaction_read_only=on' psql "$DB" -X -tA -c "SELECT (SELECT count(*) FROM pg_type WHERE typname='RiskTopic') || '/' || (SELECT count(*) FROM pg_enum e JOIN pg_type t ON t.oid=e.enumtypid WHERE t.typname='ChecklistItemType' AND e.enumlabel='SITE_RULE') || '/' || (SELECT count(*) FROM pg_enum e JOIN pg_type t ON t.oid=e.enumtypid WHERE t.typname='DocumentCategory' AND e.enumlabel='DRAWING')" 2>/dev/null)
+  [ "$ENUMCHK" = "1/1/1" ] \
+    || fail "production enums are RiskTopic/SITE_RULE/DRAWING = ${ENUMCHK:-unreadable}, expected 1/1/1 - the wizard would fail on the screens that host them"
+  echo "  ok   production has RiskTopic, ChecklistItemType.SITE_RULE, DocumentCategory.DRAWING"
   if [ -n "$FW_OPENED" ]; then cleanup_fw; FW_OPENED=""; fi
 fi
 

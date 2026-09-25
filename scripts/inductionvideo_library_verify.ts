@@ -242,7 +242,13 @@ const footage = (over: Record<string, unknown> = {}) => ({
     chk('an Admin OWNER may issue too', adminOwner.canIssue === true);
 
     console.log('\nWHAT A SITE RESOLVES');
+    // An empty database threw "Cannot read properties of null (reading 'id')" and
+    // the deploy gate reported it as a code failure. Say what is actually wrong.
     const site = await prisma.jobSite.findFirst({ where: { status: 'ACTIVE' }, select: { id: true } });
+    if (!site) {
+      console.log('  FAIL  no ACTIVE job site in this database - run `npx tsx prisma/seed.ts`');
+      process.exit(1);
+    }
     let resolved = await lib.resolveLibraryForSite(site.id);
     const mine = resolved.find((x: { slug: string }) => x.slug === 'TEST_LIB_INTRO');
     chk('an issued asset is included by default', Boolean(mine));
