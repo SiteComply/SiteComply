@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import {
   LibraryCategory,
+  LibraryProvenance,
   LibraryPlacement,
   LibraryRevisionStatus,
   InductionVideoJobStatus,
@@ -217,6 +218,8 @@ export async function createLibraryAsset(
     description?: string;
     placement: LibraryPlacement;
     category?: LibraryCategory;
+    /** GENERATED means its content comes from a module and is not editable here. */
+    provenance?: LibraryProvenance;
     order?: number;
     moduleId?: string | null;
     mandatory?: boolean;
@@ -227,6 +230,14 @@ export async function createLibraryAsset(
     return { ok: false, error: 'Only a Director or Site Manager may add library videos.' };
   }
   const slug = input.slug.trim().toUpperCase().replace(/[^A-Z0-9_]+/g, '_');
+  if (input.provenance === 'GENERATED' && !input.moduleId) {
+    return {
+      ok: false,
+      error:
+        'A video SiteComply produces needs the company module its wording comes from. ' +
+        'Choose one, or add an uploaded video instead.',
+    };
+  }
   if (slug.length < 3) return { ok: false, error: 'Give the video a short reference.' };
   if (input.title.trim().length < 3) return { ok: false, error: 'Give the video a title.' };
   if (await prisma.libraryAsset.findUnique({ where: { slug }, select: { id: true } })) {
@@ -234,6 +245,7 @@ export async function createLibraryAsset(
   }
   const asset = await prisma.libraryAsset.create({
     data: {
+      ...(input.provenance ? { provenance: input.provenance } : {}),
       ...(input.category ? { category: input.category } : {}),
       slug,
       title: input.title.trim(),

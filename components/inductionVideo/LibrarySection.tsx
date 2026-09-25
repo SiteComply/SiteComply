@@ -135,7 +135,10 @@ export function LibrarySection({
     placement: 'COMPANY_BAND',
     category: 'OTHER',
     moduleId: '',
+    provenance: 'UPLOADED',
   });
+  const setProvenanceChoice = (provenance: 'UPLOADED' | 'GENERATED') =>
+    setDraft((d) => ({ ...d, provenance }));
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -220,24 +223,38 @@ export function LibrarySection({
         <section className="rounded-xl border border-brand-200 bg-brand-50/40 p-4 shadow-card">
           <h3 className="text-sm font-bold text-ink">Where will the video come from?</h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg border border-brand-300 bg-surface p-3">
+            <button
+              type="button"
+              onClick={() => setProvenanceChoice('UPLOADED')}
+              className={`rounded-lg border p-3 text-left ${
+                draft.provenance === 'UPLOADED'
+                  ? 'border-brand-400 bg-brand-50 ring-1 ring-brand-300'
+                  : 'border-line bg-surface hover:border-brand-300'
+              }`}
+            >
               <p className="text-sm font-bold text-ink">I have footage</p>
               <p className="mt-1 text-xs text-ink-muted">
                 Filmed elsewhere and exported as a video file. You will upload it and a caption
                 file on the next screen.
               </p>
-            </div>
-            <div className="rounded-lg border border-line bg-surface-sunken p-3">
-              <p className="text-sm font-bold text-ink-muted">
-                SiteComply produces it{' '}
-                <span className="font-normal text-ink-subtle">— not available yet</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setProvenanceChoice('GENERATED')}
+              className={`rounded-lg border p-3 text-left ${
+                draft.provenance === 'GENERATED'
+                  ? 'border-brand-400 bg-brand-50 ring-1 ring-brand-300'
+                  : 'border-line bg-surface hover:border-brand-300'
+              }`}
+            >
+              <p className="text-sm font-bold text-ink">SiteComply produces it</p>
+              <p className="mt-1 text-xs text-ink-muted">
+                Generated from a Company Module: its approved wording becomes the narration,
+                word for word. The module stays the source of truth — to change the video you
+                edit the module and produce it again, so there is never a second version of the
+                same content.
               </p>
-              <p className="mt-1 text-xs text-ink-subtle">
-                Generated from a Company Module: its approved wording becomes the narration, and
-                the module stays the source of truth — you edit it there and regenerate rather
-                than having two versions of the same content. This is being built next.
-              </p>
-            </div>
+            </button>
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -292,30 +309,48 @@ export function LibrarySection({
               />
             </label>
             <label className="sm:col-span-2 text-xs font-semibold text-ink">
-              Does it cover a company module? (optional)
+              {draft.provenance === 'GENERATED'
+                ? 'Which company module is it produced from?'
+                : 'Does it cover a company module? (optional)'}
               <select
                 value={draft.moduleId}
                 onChange={(e) => setDraft({ ...draft, moduleId: e.target.value })}
                 className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm font-normal"
               >
-                <option value="">No — it plays alongside the modules</option>
+                <option value="">
+                  {draft.provenance === 'GENERATED'
+                    ? 'Choose the module whose wording becomes the video'
+                    : 'No — it plays alongside the modules'}
+                </option>
                 {modules.map((m) => (
                   <option key={m.id} value={m.id}>{m.title}</option>
                 ))}
               </select>
               <span className="mt-1 block font-normal text-ink-subtle">
-                If it does, the written module is left out of the induction so an operative is not
-                told the same thing twice.
+                {draft.provenance === 'GENERATED'
+                  ? 'Its approved wording becomes the narration, unchanged, and the written ' +
+                    'module is left out of the induction so nobody is told the same thing twice.'
+                  : 'If it does, the written module is left out of the induction so an operative ' +
+                    'is not told the same thing twice.'}
               </span>
             </label>
           </div>
           <button
             type="button"
-            disabled={busy || draft.title.trim().length < 3 || draft.slug.trim().length < 3}
+            disabled={
+              busy ||
+              draft.title.trim().length < 3 ||
+              draft.slug.trim().length < 3 ||
+              (draft.provenance === 'GENERATED' && !draft.moduleId)
+            }
             onClick={() => void create()}
             className="mt-3 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
           >
-            {busy ? 'Adding…' : 'Add and upload footage'}
+            {busy
+              ? 'Adding…'
+              : draft.provenance === 'GENERATED'
+                ? 'Add and produce the video'
+                : 'Add and upload footage'}
           </button>
         </section>
       )}

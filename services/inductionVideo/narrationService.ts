@@ -6,6 +6,8 @@ import {
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { formatDateTimeUK } from '@/lib/datetime';
+import { mayWorkOn } from '@/services/inductionVideo/videoActor';
+import { mediaOwnerId, videoDisplayName } from '@/services/inductionVideo/videoOwner';
 import type { VideoActor } from '@/services/inductionVideo/videoActor';
 import {
   type VideoResult,
@@ -111,7 +113,7 @@ export async function requestNarration(
       _count: { select: { scenes: true } },
     },
   });
-  if (!video || !actor.maySite(video.jobSiteId)) {
+  if (!video || !mayWorkOn(actor, video)) {
     return { ok: false, error: 'Not available.' };
   }
   const synthesiser = resolveSpeechSynthesiser();
@@ -329,7 +331,7 @@ async function narrateVideo(videoId: string, ports: NarrationPorts): Promise<voi
     }
     const hash = sceneAudioHash(scene.narration, voice);
     hashes.push(hash);
-    const path = sceneAudioPath(video.jobSiteId, video.id, scene.order, scene.sceneType);
+    const path = sceneAudioPath(mediaOwnerId(video), video.id, scene.order, scene.sceneType);
 
     /*
      * REUSE ONLY WHEN THE AUDIO IS REALLY THERE. Matching hashes prove the
@@ -410,15 +412,15 @@ async function narrateVideo(videoId: string, ports: NarrationPorts): Promise<voi
   const totalMs = captionScenes.reduce((n, s) => n + s.durationMs, 0);
 
   const narratedOn = new Date();
-  const vttPath = captionsPath(video.jobSiteId, video.id);
-  const txtPath = transcriptPath(video.jobSiteId, video.id);
+  const vttPath = captionsPath(mediaOwnerId(video), video.id);
+  const txtPath = transcriptPath(mediaOwnerId(video), video.id);
   await ports.put(vttPath, Buffer.from(buildVtt(captionScenes), 'utf8'), 'text/vtt; charset=utf-8');
   await ports.put(
     txtPath,
     Buffer.from(
       buildTranscript(
         {
-          siteName: video.jobSite.name,
+          siteName: videoDisplayName(video),
           version: video.version,
           narratedOn: formatDateTimeUK(narratedOn),
           voice,
@@ -500,7 +502,7 @@ export async function sceneAudioForViewer(
     select: { audioBlobPath: true, video: { select: { jobSiteId: true } } },
   });
   if (!scene?.audioBlobPath) return null;
-  if (!actor.maySite(scene.video.jobSiteId)) return null;
+  if (!mayWorkOn(actor, scene.video)) return null;
   return { blobPath: scene.audioBlobPath };
 }
 
@@ -533,10 +535,10 @@ async function mediaFor(
       jobSite: { select: { name: true } },
     },
   });
-  if (!video || !actor.maySite(video.jobSiteId)) return null;
+  if (!video || !mayWorkOn(actor, video)) return null;
   const blobPath = kind === 'captions' ? video.captionsBlobPath : video.transcriptBlobPath;
   if (!blobPath) return null;
-  const safeSite = video.jobSite.name.replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'Site';
+  const safeSite = videoDisplayName(video).replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'Site';
   const ext = kind === 'captions' ? 'vtt' : 'txt';
   return {
     blobPath,

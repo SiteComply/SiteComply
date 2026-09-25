@@ -63,7 +63,30 @@ export function canWorkOnVideoSite(viewer: PlatformViewer, siteId: string): bool
  * project. See videoActor.ts for why an empty site list would have been the
  * dangerous way to express that.
  */
-function guard(actor: VideoActor, siteId: string): boolean {
+/**
+ * MAY THIS ACTOR WORK ON THIS VIDEO?
+ *
+ * Takes the VIDEO, not a site id, because the answer depends on which kind it is. A
+ * site induction is gated on authority over that project. A COMPANY video belongs to
+ * no project, so asking `maySite(null)` would be meaningless - it is gated on
+ * authority over company content, which is the same bar as a Company Module: a
+ * Director, or an Admin Centre owner or admin.
+ *
+ * Passing the video rather than an id is deliberate. Five call sites each had
+ * `guard(actor, video.jobSiteId)`, and when that became nullable the tempting fix was
+ * five `?? ''`, every one of which would have silently denied or allowed the wrong
+ * thing.
+ */
+function guard(actor: VideoActor, video: { jobSiteId: string | null }): boolean {
+  return video.jobSiteId === null ? actor.canManage : actor.maySite(video.jobSiteId);
+}
+
+/**
+ * The same question for the entry points that name a PROJECT rather than a video -
+ * listing a project's versions, its readiness check, starting one. There is no video
+ * to inspect yet, and these are site-only by definition.
+ */
+function guardSite(actor: VideoActor, siteId: string): boolean {
   return actor.maySite(siteId);
 }
 
@@ -115,7 +138,7 @@ export async function listVideosForSite(
   actor: VideoActor,
   siteId: string,
 ): Promise<VideoSummary[] | null> {
-  if (!guard(actor, siteId)) return null;
+  if (!guardSite(actor, siteId)) return null;
   const [site, rows, manifest] = await Promise.all([
     prisma.jobSite.findUnique({ where: { id: siteId }, select: { name: true } }),
     prisma.inductionVideo.findMany({
@@ -147,7 +170,7 @@ export async function listVideosForSite(
 
 /** The readiness check: what the site can say, and what it must fix first. */
 export async function readinessForSite(actor: VideoActor, siteId: string) {
-  if (!guard(actor, siteId)) return null;
+  if (!guardSite(actor, siteId)) return null;
   const src = await loadVideoSource(siteId);
   if (!src) return null;
   const manifest = buildSceneManifest(src);
@@ -174,7 +197,7 @@ export async function requestScript(
   actor: VideoActor,
   siteId: string,
 ): Promise<VideoResult<{ videoId: string; version: number }>> {
-  if (!guard(actor, siteId)) return { ok: false, error: 'Not available.' };
+  if (!guardSite(actor, siteId)) return { ok: false, error: 'Not available.' };
 
   const src = await loadVideoSource(siteId);
   if (!src) return { ok: false, error: 'That project is not available.' };
@@ -304,6 +327,18 @@ export async function runQueuedScriptJobs(limit = 2): Promise<number> {
     if (claimed.count === 0) continue;
 
     try {
+      /*
+       * SCRIPT GENERATION IS A SITE THING. A company video's script is its module's
+       * approved wording, written at creation and never sent to the model, so no
+       * script job is ever queued for one. Saying so here rather than coercing the
+       * null: if this ever fires, the queue has a row nobody meant to create, and a
+       * clear failure on the version is how that gets noticed.
+       */
+      if (!job.video.jobSite) {
+        throw new Error(
+          'This is a company video: its script comes from the company module and is not generated.',
+        );
+      }
       const manifest = await manifestForSite(job.video.jobSite.id);
       if (!manifest || !manifest.canGenerate) {
         throw new Error('The project no longer has the information this script needs.');
@@ -416,7 +451,7 @@ export async function editScene(
       },
     },
   });
-  if (!scene || !guard(actor, scene.video.jobSiteId)) {
+  if (!scene || !guard(actor, scene.video)) {
     return { ok: false, error: 'Not available.' };
   }
   const text = narration.trim();
@@ -526,7 +561,7 @@ export async function removeScene(
     where: { id: sceneId },
     include: { video: { select: { id: true, jobSiteId: true, status: true } } },
   });
-  if (!scene || !guard(actor, scene.video.jobSiteId)) {
+  if (!scene || !guard(actor, scene.video)) {
     return { ok: false, error: 'Not available.' };
   }
   if (scene.moduleRevisionId) {
@@ -587,7 +622,7 @@ export async function approveScript(
     where: { id: videoId },
     select: { id: true, jobSiteId: true, status: true, version: true },
   });
-  if (!video || !guard(actor, video.jobSiteId)) return { ok: false, error: 'Not available.' };
+  if (!video || !guard(actor, video)) return { ok: false, error: 'Not available.' };
   if (!actor.canApprove) {
     return { ok: false, error: 'Only a Director or Site Manager may approve an induction script.' };
   }
@@ -699,7 +734,7 @@ export function versionMayBeDeleted(v: {
 export async function deleteVideoVersion(
   actor: VideoActor,
   videoId: string,
-): Promise<VideoResult<{ deleted: true; siteId: string; version: number }>> {
+): Promise<VideoResult<{ deleted: true; siteId: string | null; version: number }>> {
   const video = await prisma.inductionVideo.findUnique({
     where: { id: videoId },
     select: {
@@ -717,7 +752,7 @@ export async function deleteVideoVersion(
       jobs: { select: { status: true } },
     },
   });
-  if (!video || !guard(actor, video.jobSiteId)) return { ok: false, error: 'Not available.' };
+  if (!video || !guard(actor, video)) return { ok: false, error: 'Not available.' };
 
   /*
    * Deleting is a Director's or Site Manager's - an Admin Centre OWNER or ADMIN
@@ -795,14 +830,29 @@ export async function deleteVideoVersion(
  * publishes rendered video, and only one version is current at a time. Earlier
  * versions are marked superseded, never deleted.
  */
+/**
+ * Mark every earlier version of the SAME THING superseded.
+ *
+ * Takes the video, not a site id, because "the same thing" is a project for a site
+ * induction and a Library asset for a company video. Scoping a company video by
+ * `jobSiteId: null` would sweep every company video of every asset into one pile and
+ * supersede them all.
+ */
 export async function supersedeEarlierVersions(
-  siteId: string,
-  currentVideoId: string,
+  current: { id: string; jobSiteId: string | null; libraryAssetId: string | null },
   actor: { name: string; realm: 'PLATFORM' | 'ADMIN' | null },
 ): Promise<number> {
+  const currentVideoId = current.id;
+  const scope = current.jobSiteId
+    ? { jobSiteId: current.jobSiteId }
+    : current.libraryAssetId
+      ? { libraryAssetId: current.libraryAssetId }
+      : null;
+  // Neither a project nor an asset: nothing can be said about what it replaces.
+  if (!scope) return 0;
   const earlier = await prisma.inductionVideo.findMany({
     where: {
-      jobSiteId: siteId,
+      ...scope,
       id: { not: currentVideoId },
       supersededAt: null,
     },
@@ -829,12 +879,55 @@ export async function getVideo(actor: VideoActor, videoId: string) {
       jobs: { orderBy: { createdAt: 'desc' }, take: 5 },
     },
   });
-  if (!video || !guard(actor, video.jobSiteId)) return null;
-  const manifest = await manifestForSite(video.jobSiteId);
+  if (!video || !guard(actor, video)) return null;
+  /*
+   * STALENESS MEANS A DIFFERENT THING FOR EACH KIND.
+   *
+   * A site induction is stale when the PROJECT's information has moved on since the
+   * script was built - that is what the manifest hash compares. A company video has
+   * no project; it is stale when the MODULE it was produced from has been issued
+   * again, which is a comparison of two revision ids and needs no manifest at all.
+   */
+  const manifest = video.jobSiteId ? await manifestForSite(video.jobSiteId) : null;
+  const moduleMovedOn = video.jobSiteId
+    ? false
+    : await companyVideoIsStale(video.sourceModuleRevisionId, video.libraryAssetId);
   return {
     video,
-    stale: Boolean(video.sourceHash && manifest && video.sourceHash !== manifestHash(manifest)),
+    stale:
+      moduleMovedOn ||
+      Boolean(video.sourceHash && manifest && video.sourceHash !== manifestHash(manifest)),
     warnings: manifest?.warnings ?? [],
     canApprove: actor.canApprove,
   };
+}
+
+/**
+ * Has the company module moved on since this video was produced?
+ *
+ * Compares the module revision the video was built from with the one currently in
+ * force. Both are ids on rows nobody rewrites, so the answer cannot drift.
+ */
+async function companyVideoIsStale(
+  sourceModuleRevisionId: string | null,
+  libraryAssetId: string | null,
+): Promise<boolean> {
+  if (!sourceModuleRevisionId || !libraryAssetId) return false;
+  const asset = await prisma.libraryAsset.findUnique({
+    where: { id: libraryAssetId },
+    select: {
+      module: {
+        select: {
+          revisions: {
+            where: { status: 'ISSUED' },
+            orderBy: { version: 'desc' },
+            take: 1,
+            select: { id: true },
+          },
+        },
+      },
+    },
+  });
+  const current = asset?.module?.revisions[0]?.id;
+  return Boolean(current && current !== sourceModuleRevisionId);
 }

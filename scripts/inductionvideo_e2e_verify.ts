@@ -97,7 +97,14 @@ let fails = 0; const chk = (t: string, ok: boolean, d = '') => {
     const v2 = await svc.requestScript(director, site.id);
     await svc.runQueuedScriptJobs();
     chk('the next version is version 2', v2.value.version === 2);
-    const superseded = await svc.supersedeEarlierVersions(site.id, v2.value.videoId, director);
+    // supersedeEarlierVersions takes the VIDEO now, not a site id: "the same thing" is a
+    // project for a site induction and a Library asset for a company video, and a site id
+    // cannot express the second. Passing the old arguments silently superseded NOTHING.
+    const v2row = await prisma.inductionVideo.findUnique({
+      where: { id: v2.value.videoId },
+      select: { id: true, jobSiteId: true, libraryAssetId: true },
+    });
+    const superseded = await svc.supersedeEarlierVersions(v2row, director);
     chk('earlier versions are superseded, not deleted',
       superseded >= 1 && (await prisma.inductionVideo.findUnique({ where: { id: videoId } })).supersededAt !== null);
     chk('  and are still there to read', (await prisma.inductionVideo.count({ where: { jobSiteId: site.id } })) === 2);

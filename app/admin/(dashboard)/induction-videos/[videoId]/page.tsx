@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getAdminSession } from '@/lib/session';
+import { videoDisplayName } from '@/services/inductionVideo/videoOwner';
 import { getVideo } from '@/services/inductionVideo/inductionVideoService';
 import { videoActorFromAdmin } from '@/services/inductionVideo/videoActor';
 import { InductionVideoStatusBadge } from '@/components/platform/InductionVideoStatusBadge';
@@ -40,7 +41,7 @@ export default async function AdminInductionVideoVersionPage({
           href={`/admin/induction-videos/projects/${video.jobSiteId}`}
           className="text-sm font-semibold text-brand-700 hover:underline"
         >
-          ← {video.jobSite.name}
+          ← {videoDisplayName(video)}
         </Link>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-bold text-ink">
@@ -50,7 +51,7 @@ export default async function AdminInductionVideoVersionPage({
             <InductionVideoStatusBadge status={video.status} stale={stale} />
           </span>
         </div>
-        <p className="text-ink-muted">{video.jobSite.name}</p>
+        <p className="text-ink-muted">{videoDisplayName(video)}</p>
       </header>
 
       <VideoVersionSurface

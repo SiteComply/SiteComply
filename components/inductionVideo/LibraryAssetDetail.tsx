@@ -52,6 +52,7 @@ export function LibraryAssetDetail({
   canIssue,
   endpoint,
   backHref,
+  videoHrefBase,
 }: {
   asset: Detail;
   modules: { id: string; title: string }[];
@@ -59,6 +60,8 @@ export function LibraryAssetDetail({
   canIssue: boolean;
   endpoint: string;
   backHref: string;
+  /** This tier's induction-video working surface, e.g. /platform/dashboard/induction-videos. */
+  videoHrefBase: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -361,6 +364,52 @@ export function LibraryAssetDetail({
               On by default for new projects
             </label>
           </div>
+        </section>
+      )}
+
+      {/* ── PRODUCE IT. The generated path: no upload, no external supplier. ── */}
+      {canDraft && !editableContent && asset.active && (
+        <section className="rounded-xl border border-brand-200 bg-brand-50/40 p-4 shadow-card">
+          <h3 className="text-sm font-bold text-ink">Produce this video</h3>
+          <p className="mt-1 text-xs text-ink-muted">
+            SiteComply turns{' '}
+            <span className="font-semibold text-ink">“{asset.moduleTitle ?? 'the company module'}”</span>{' '}
+            into a video: its approved wording becomes the narration, word for word. You then read
+            the script, approve it, generate the voice-over and captions, render it, watch it, and
+            publish it into this library video as a new revision.
+          </p>
+          {!asset.moduleId && (
+            <p className="mt-2 rounded-lg border border-danger-200 bg-danger-50 px-3 py-2 text-xs text-danger-700">
+              No company module is chosen yet. Pick one in Settings above — it is where the wording
+              comes from.
+            </p>
+          )}
+          <button
+            type="button"
+            disabled={busy !== null || !asset.moduleId}
+            onClick={async () => {
+              setBusy('produce');
+              setError(null);
+              try {
+                const res = await fetch(endpoint, {
+                  method: 'POST',
+                  headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({ action: 'produce', assetId: asset.id }),
+                });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok || !json?.videoId) {
+                  setError(json?.error ?? 'That could not be started.');
+                  return;
+                }
+                router.push(`${videoHrefBase}/${json.videoId}`);
+              } finally {
+                setBusy(null);
+              }
+            }}
+            className="mt-3 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+          >
+            {busy === 'produce' ? 'Starting…' : 'Produce the video from this module'}
+          </button>
         </section>
       )}
 

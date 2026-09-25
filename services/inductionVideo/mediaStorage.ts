@@ -83,8 +83,13 @@ async function ensureContainer(): Promise<ContainerClient> {
  * audio rather than leaving a trail of orphans nobody will ever delete, and a
  * version's whole media set can be listed, copied or expired by its prefix.
  */
-export function videoMediaPrefix(siteId: string, videoId: string): string {
-  return `induction-video/${siteId}/${videoId}`;
+/**
+ * `ownerId` is the PROJECT for a site induction and the LIBRARY ASSET for a company
+ * video — see videoOwner.ts. It was `siteId`, and for site videos the value passed is
+ * still the jobSiteId, so every existing blob path is unchanged.
+ */
+export function videoMediaPrefix(ownerId: string, videoId: string): string {
+  return `induction-video/${ownerId}/${videoId}`;
 }
 
 export function sceneAudioPath(

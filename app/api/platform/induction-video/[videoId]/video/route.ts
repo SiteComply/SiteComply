@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPlatformViewer } from '@/services/platformUsers/platformAccess';
 import { prisma } from '@/lib/prisma';
+import { canManageInductionVideos } from '@/services/inductionVideo/inductionVideoPermissions';
 import { canWorkOnVideoSite } from '@/services/inductionVideo/inductionVideoService';
 import { streamMedia } from '@/services/inductionVideo/mediaResponse';
 
@@ -23,7 +24,12 @@ export async function GET(req: NextRequest, { params }: { params: { videoId: str
     where: { id: params.videoId },
     select: { jobSiteId: true, videoBlobPath: true },
   });
-  if (!video?.videoBlobPath || !canWorkOnVideoSite(viewer, video.jobSiteId)) {
+  // A company video belongs to no project: authority over company content is the
+  // bar, the same one the Library and Company Modules use.
+  const allowed = video?.jobSiteId
+    ? canWorkOnVideoSite(viewer, video.jobSiteId)
+    : canManageInductionVideos(viewer.role);
+  if (!video?.videoBlobPath || !allowed) {
     return NextResponse.json({ ok: false, error: 'Not available.' }, { status: 404 });
   }
   return streamMedia(req, video.videoBlobPath, { contentType: 'video/mp4' });

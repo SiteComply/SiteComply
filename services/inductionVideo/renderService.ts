@@ -5,6 +5,8 @@ import {
   InductionVideoStatus,
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { mediaOwnerId, videoDisplayName } from '@/services/inductionVideo/videoOwner';
+import { mayWorkOn } from '@/services/inductionVideo/videoActor';
 import type { VideoActor } from '@/services/inductionVideo/videoActor';
 import {
   type VideoResult,
@@ -82,7 +84,7 @@ export async function requestRender(
       _count: { select: { scenes: true } },
     },
   });
-  if (!video || !actor.maySite(video.jobSiteId)) {
+  if (!video || !mayWorkOn(actor, video)) {
     return { ok: false, error: 'Not available.' };
   }
   const renderer = resolveVideoRenderer();
@@ -246,7 +248,11 @@ async function renderVideo(videoId: string, renderer: VideoRenderer): Promise<st
     throw new Error('That version is no longer waiting to be rendered.');
   }
 
-  const request: RenderRequest = { siteName: video.jobSite.name, version: video.version, scenes: [] };
+  const request: RenderRequest = {
+    siteName: videoDisplayName(video),
+    version: video.version,
+    scenes: [],
+  };
   for (const scene of video.scenes) {
     /*
      * LIBRARY FOOTAGE: the segment IS the scene. It was transcoded to this
@@ -295,7 +301,7 @@ async function renderVideo(videoId: string, renderer: VideoRenderer): Promise<st
   }
 
   const output = await renderer.render(request);
-  const path = renderPath(video.jobSiteId, video.id);
+  const path = renderPath(mediaOwnerId(video), video.id);
   await uploadMedia(path, output.mp4, 'video/mp4');
 
   /*
@@ -374,7 +380,7 @@ export async function publishVideo(
       narrationHash: true,
     },
   });
-  if (!video || !actor.maySite(video.jobSiteId)) {
+  if (!video || !mayWorkOn(actor, video)) {
     return { ok: false, error: 'Not available.' };
   }
   if (!actor.canApprove) {
@@ -437,7 +443,7 @@ export async function withdrawVideo(
     where: { id: videoId },
     select: { id: true, jobSiteId: true, status: true, version: true },
   });
-  if (!video || !actor.maySite(video.jobSiteId)) {
+  if (!video || !mayWorkOn(actor, video)) {
     return { ok: false, error: 'Not available.' };
   }
   if (!actor.canApprove) {

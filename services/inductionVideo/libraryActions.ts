@@ -65,6 +65,7 @@ export async function handleLibraryAction(
         description: str('description'),
         placement: placement(body.placement),
         category: category(body.category),
+        provenance: body.provenance === 'GENERATED' ? 'GENERATED' : 'UPLOADED',
         moduleId: str('moduleId') || null,
       });
       return r.ok ? ok(r.value) : refuse(r.error);
@@ -136,6 +137,21 @@ export async function handleLibraryAction(
       if (!revisionId) return refuse('Which revision?');
       const url = await previewUrlForRevision(actor, revisionId);
       return url.ok ? ok({ url: url.value }) : refuse(url.error);
+    }
+    /*
+     * PRODUCE IT HERE. The generated path starts from the Library asset, because that
+     * is where a user is standing when they decide they have no footage. What comes
+     * back is a videoId, and the caller sends them to the ordinary induction-video
+     * working surface - the same screens, the same review and approval, for a company
+     * video as for a site one.
+     */
+    case 'produce': {
+      const assetId = str('assetId');
+      if (!assetId) return refuse('Which library video?');
+      const { startCompanyVideo } = await import('@/services/inductionVideo/companyVideoService');
+      const { videoActorFromModuleActor } = await import('@/services/inductionVideo/videoActor');
+      const r = await startCompanyVideo(videoActorFromModuleActor(actor), assetId);
+      return r.ok ? ok(r.value) : refuse(r.error);
     }
     case 'settings': {
       const r = await updateLibraryAssetSettings(actor, str('assetId'), {

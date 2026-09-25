@@ -85,7 +85,11 @@ export async function VideoVersionSurface({
    * script was generated should show as a departure the moment it is made, not
    * only after the next regeneration.
    */
-  const overriddenModuleRevisions = await overriddenRevisionIds(video.jobSiteId);
+  // Module OVERRIDES are a per-project decision. A company video has no project, so
+  // nothing can have been overridden for it.
+  const overriddenModuleRevisions = video.jobSiteId
+    ? await overriddenRevisionIds(video.jobSiteId)
+    : new Set<string>();
 
   return (
     <>

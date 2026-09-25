@@ -550,14 +550,15 @@ model SiteContact {
   id        String  @id @default(cuid())
   jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
   jobSiteId String
+
   /// The person's role/label, e.g. "Site Manager", "Site Office".
-  role      String
+  role  String
   /// The contact's name. Optional so a location-style contact ("Site Office")
   /// can be listed with just a number.
-  name      String?
-  phone     String?
+  name  String?
+  phone String?
   /// Display order within the site's contact list (ascending).
-  order     Int     @default(0)
+  order Int     @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3640,10 +3641,37 @@ enum InductionVideoJobStatus {
 /// SUPERSEDED VERSIONS ARE KEPT, by the owner's decision: a video an operative
 /// was inducted with is evidence, and deleting it would leave a signed induction
 /// pointing at nothing. A new version supersedes rather than overwrites.
+/// WHOSE INDUCTION IS THIS?
+///
+/// SITE is the original: one project's induction, built from that project's data.
+/// COMPANY is a reusable company video produced from a Company Module and published
+/// into the Library, so the same PPE briefing is not written or filmed twice.
+///
+/// One model, not two, because the workflow is identical - script, review, approve,
+/// narrate, caption, render, review, publish - and a second set of tables would mean
+/// a second set of jobs, a second audit trail and two places for every future fix.
+enum InductionVideoScope {
+  SITE
+  COMPANY
+}
+
 model InductionVideo {
-  id        String  @id @default(cuid())
-  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
-  jobSiteId String
+  id        String   @id @default(cuid())
+  /// NULL FOR A COMPANY VIDEO. Optional rather than pointing a company video at a
+  /// synthetic "company" project: a fake JobSite would appear in project lists, count
+  /// in compliance figures, and have to be excluded by hand everywhere for ever.
+  jobSite   JobSite? @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String?
+
+  scope InductionVideoScope @default(SITE)
+
+  /// For a COMPANY video: the Library asset this publishes into.
+  libraryAsset   LibraryAsset? @relation(fields: [libraryAssetId], references: [id], onDelete: Cascade)
+  libraryAssetId String?
+
+  /// For a COMPANY video: the module revision whose wording it was produced from.
+  /// Denormalised so re-issuing the module cannot change what was already rendered.
+  sourceModuleRevisionId String?
 
   /// 1, 2, 3… per site. The highest is the current one.
   version Int
@@ -3712,6 +3740,7 @@ model InductionVideo {
   views  InductionVideoView[]
 
   @@unique([jobSiteId, version])
+  @@unique([libraryAssetId, version])
   @@index([jobSiteId, status])
 }
 
@@ -4125,8 +4154,10 @@ model LibraryAsset {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  revisions LibraryAssetRevision[]
-  sites     SiteLibraryAsset[]
+  revisions   LibraryAssetRevision[]
+  /// Company videos produced for this asset, one per revision attempt.
+  productions InductionVideo[]
+  sites       SiteLibraryAsset[]
 
   @@index([active, order])
   @@index([moduleId])

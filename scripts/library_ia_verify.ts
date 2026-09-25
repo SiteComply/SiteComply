@@ -309,9 +309,14 @@ const draft = (over: Record<string, unknown> = {}) => ({
     chk('creation asks where the video comes from FIRST',
       /Where will the video come from\?/.test(INDEX),
       'the answer decides everything else about the asset');
-    chk('  and the generated option is honest that it is not available yet',
-      /not available yet/.test(INDEX),
-      'an option that silently fails is worse than one that explains itself');
+    // It IS available now. What must stay true is that choosing it commits you to a
+    // module, because a generated video with no source wording cannot be produced.
+    chk('  and the generated option is offered as a real choice',
+      /setProvenanceChoice\('GENERATED'\)/.test(INDEX) && !/not available yet/.test(INDEX),
+      'SiteComply now produces these; the placeholder is gone');
+    chk('  and choosing it requires the module the wording comes from',
+      /draft\.provenance === 'GENERATED' && !draft\.moduleId/.test(INDEX),
+      'a generated video with no source module could never be produced');
     chk('  and says the module stays the source of truth',
       /source of truth/.test(INDEX));
     chk('the caption requirement is stated up front, not at issue time',

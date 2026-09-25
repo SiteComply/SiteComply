@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
+import { videoDisplayName } from '@/services/inductionVideo/videoOwner';
 import { requirePlatformViewer } from '@/services/platformUsers/platformAccess';
 import { canManageInductionVideos } from '@/services/inductionVideo/inductionVideoPermissions';
 import { getVideo } from '@/services/inductionVideo/inductionVideoService';
@@ -36,7 +37,7 @@ export default async function InductionVideoVersionPage({
         items={[
           { label: 'Induction videos', href: '/platform/dashboard/induction-videos' },
           {
-            label: video.jobSite.name,
+            label: videoDisplayName(video),
             href: `/platform/dashboard/sites/${video.jobSiteId}/induction-video`,
           },
           { label: `Version ${video.version}` },
@@ -47,7 +48,7 @@ export default async function InductionVideoVersionPage({
           <h1 className="text-2xl font-bold text-ink">
             Induction script · version {video.version}
           </h1>
-          <p className="text-sm text-ink-muted">{video.jobSite.name}</p>
+          <p className="text-sm text-ink-muted">{videoDisplayName(video)}</p>
         </div>
         <span className="ml-auto">
           <InductionVideoStatusBadge status={video.status} stale={stale} />

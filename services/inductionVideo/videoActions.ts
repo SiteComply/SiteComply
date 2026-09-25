@@ -7,6 +7,7 @@ import {
   requestScript,
   supersedeEarlierVersions,
 } from '@/services/inductionVideo/inductionVideoService';
+import { publishCompanyVideoToLibrary } from '@/services/inductionVideo/companyVideoService';
 import { requestNarration } from '@/services/inductionVideo/narrationService';
 import {
   publishVideo,
@@ -76,7 +77,7 @@ export async function handleVideoAction(
        */
       const detail = await getVideo(actor, videoId);
       if (detail) {
-        await supersedeEarlierVersions(detail.video.jobSiteId, videoId, actor);
+        await supersedeEarlierVersions(detail.video, actor);
       }
       return ok();
     }
@@ -89,6 +90,25 @@ export async function handleVideoAction(
       return r.ok ? ok() : refuse(r.error);
     }
     case 'publish': {
+      /*
+       * PUBLISHING MEANS A DIFFERENT THING FOR EACH KIND, and the same button does
+       * both so a user learns one workflow.
+       *
+       * A SITE induction is published TO OPERATIVES: from then on it is what people
+       * are shown at that project's gate.
+       *
+       * A COMPANY video is published INTO THE LIBRARY, as a new revision of its
+       * asset. It is left as a DRAFT revision on purpose: the Library's own issue
+       * step is what decides that every project starts using it, and that step shows
+       * who it will reach before anybody presses it. Publishing the production and
+       * issuing it to every site are two decisions, and collapsing them would take
+       * the second one away.
+       */
+      const detail = await getVideo(actor, videoId);
+      if (detail && detail.video.jobSiteId === null) {
+        const r = await publishCompanyVideoToLibrary(actor, videoId);
+        return r.ok ? ok(r.value as unknown as Record<string, unknown>) : refuse(r.error);
+      }
       const r = await publishVideo(actor, videoId);
       return r.ok ? ok() : refuse(r.error);
     }

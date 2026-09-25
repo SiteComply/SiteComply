@@ -31,6 +31,7 @@ export default async function AdminLibraryAssetPage({ params }: { params: { asse
         canDraft={manages}
         canIssue={manages}
         endpoint="/api/admin/induction-library"
+        videoHrefBase="/admin/induction-videos"
         backHref="/admin/induction-videos/library"
       />
     </AdminInductionVideoWorkspace>

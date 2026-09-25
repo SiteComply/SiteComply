@@ -106,3 +106,50 @@ export function describeVideoRealm(realm: string | null | undefined): string | n
   if (realm === 'PLATFORM') return 'Platform';
   return null;
 }
+
+/**
+ * MAY THIS ACTOR WORK ON THIS VIDEO?
+ *
+ * The authority question, asked of the VIDEO rather than of a site id, because the
+ * answer depends on which kind of video it is:
+ *
+ *   a SITE induction  - authority over that project (`maySite`);
+ *   a COMPANY video   - authority over company content (`canManage`), because it
+ *                       belongs to no project and `maySite(null)` is meaningless.
+ *
+ * Every queue drain and every action handler asks this. It exists as one function
+ * because `jobSiteId` became nullable in eight of them at once, and eight separate
+ * `?? ''` fixes would each have silently allowed or denied the wrong thing.
+ */
+export function mayWorkOn(actor: VideoActor, video: { jobSiteId: string | null }): boolean {
+  return video.jobSiteId === null ? actor.canManage : actor.maySite(video.jobSiteId);
+}
+
+/**
+ * The Library's actor, as a video actor.
+ *
+ * Producing a company video starts from a Library asset, so the caller holds a
+ * `ModuleActor` - the Library and Company Modules share one authority model. The two
+ * map exactly: drafting company content is managing the production, and issuing it is
+ * approving it.
+ *
+ * `maySite` answers for NO project, deliberately. A company video has none, and an
+ * actor holding company authority has no implied authority over any particular site's
+ * induction - that is a different question with a different answer.
+ */
+export function videoActorFromModuleActor(actor: {
+  name: string;
+  realm: 'PLATFORM' | 'ADMIN';
+  canDraft: boolean;
+  canIssue: boolean;
+}): VideoActor {
+  return {
+    userId: null,
+    adminId: null,
+    name: actor.name,
+    realm: actor.realm,
+    canManage: actor.canDraft,
+    canApprove: actor.canIssue,
+    maySite: () => false,
+  };
+}

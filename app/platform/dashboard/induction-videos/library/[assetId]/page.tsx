@@ -52,6 +52,7 @@ export default async function LibraryAssetPage({ params }: { params: { assetId: 
           canDraft={canDraftInductionModule(viewer.role)}
           canIssue={canIssueInductionModule(viewer.role)}
           endpoint="/api/platform/induction-library"
+          videoHrefBase="/platform/dashboard/induction-videos"
           backHref="/platform/dashboard/induction-videos/library"
         />
       </InductionVideoWorkspace>
