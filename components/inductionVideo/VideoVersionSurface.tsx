@@ -11,6 +11,8 @@ import { viewsForVideo } from '@/services/inductionVideo/operativeVideoService';
 import { spendForVideo, formatPence } from '@/services/inductionVideo/spendGuard';
 import { overriddenRevisionIds } from '@/services/inductionModules/inductionModuleService';
 import { describeVideoRealm } from '@/services/inductionVideo/videoActor';
+import { RefreshWhileWorking } from '@/components/inductionVideo/RefreshWhileWorking';
+import { describeWork, isWorkingStatus } from '@/services/inductionVideo/videoProgress';
 import { formatDateTimeUK } from '@/lib/datetime';
 
 /**
@@ -72,6 +74,16 @@ export async function VideoVersionSurface({
 
   return (
     <>
+      {/*
+       * Narration and rendering are queued jobs that start immediately, so this
+       * screen is the one waiting on them. Rendered here rather than in each
+       * tier's page so both get it from one place.
+       */}
+      <RefreshWhileWorking
+        working={isWorkingStatus(video.status)}
+        label={describeWork(video.status)}
+      />
+
       {blocking.length > 0 && (
         <section className="mb-5 rounded-xl border border-danger-500/40 bg-danger-50 p-4">
           <h2 className="text-sm font-bold text-danger-700">Information required</h2>

@@ -17,6 +17,8 @@ import {
   canIssueInductionModule,
   moduleDecisionsForSite,
 } from '@/services/inductionModules/inductionModuleService';
+import { RefreshWhileWorking } from '@/components/inductionVideo/RefreshWhileWorking';
+import { anyWorking, describeAnyWork } from '@/services/inductionVideo/videoProgress';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,6 +75,17 @@ export default async function SiteInductionVideoPage({
 
       {/* STEP 2 FIRST WHEN IT BLOCKS. A manager who cannot generate should meet
           the reason before the inventory of what they do have. */}
+      {/*
+       * The reported bug: generating queued a job that finished in seconds, but
+       * this page had already rendered, so the new version only appeared on a
+       * manual reload. Same component and same definition of "working" as the
+       * Admin Centre's project page and both version pages.
+       */}
+      <RefreshWhileWorking
+        working={anyWorking(videos)}
+        label={describeAnyWork(videos)}
+      />
+
       {manifest.missing.length > 0 && (
         <section className="mb-5 rounded-xl border border-danger-500/40 bg-danger-50 p-4">
           <h2 className="text-sm font-bold text-danger-700">

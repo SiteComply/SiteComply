@@ -10,6 +10,8 @@ import { videoActorFromAdmin } from '@/services/inductionVideo/videoActor';
 import { InductionVideoStatusBadge } from '@/components/platform/InductionVideoStatusBadge';
 import { GenerateScriptButton } from '@/components/platform/GenerateScriptButton';
 import { formatDateTimeUK } from '@/lib/datetime';
+import { RefreshWhileWorking } from '@/components/inductionVideo/RefreshWhileWorking';
+import { anyWorking, describeAnyWork } from '@/services/inductionVideo/videoProgress';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,6 +66,11 @@ export default async function AdminProjectInductionVideoPage({
           induction carries.
         </p>
       </header>
+
+      <RefreshWhileWorking
+        working={anyWorking(videos)}
+        label={describeAnyWork(videos)}
+      />
 
       {manifest.missing.length > 0 && (
         <section className="rounded-xl border border-danger-500/40 bg-danger-50 p-4">
