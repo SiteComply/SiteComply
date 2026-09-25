@@ -57,6 +57,7 @@ export default async function InductionVideoVersionPage({
       <VideoVersionSurface
         detail={detail}
         apiBase={`/api/platform/induction-video/${video.id}`}
+        projectHref={`/platform/dashboard/sites/${video.jobSiteId}/induction-video`}
       />
     </PlatformShell>
   );

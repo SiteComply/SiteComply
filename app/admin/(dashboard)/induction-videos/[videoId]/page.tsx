@@ -56,6 +56,7 @@ export default async function AdminInductionVideoVersionPage({
       <VideoVersionSurface
         detail={detail}
         apiBase={`/api/admin/induction-video/${video.id}`}
+        projectHref={`/admin/induction-videos/projects/${video.jobSiteId}`}
       />
     </div>
   );

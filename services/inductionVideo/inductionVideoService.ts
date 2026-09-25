@@ -106,6 +106,8 @@ export interface VideoSummary {
   supersededAt: Date | null;
   /** True when the site's data has changed since this version was generated. */
   stale: boolean;
+  /** One view and this version is the record of somebody's induction. */
+  viewCount: number;
 }
 
 /** Every version for one site, newest first. */
@@ -119,7 +121,7 @@ export async function listVideosForSite(
     prisma.inductionVideo.findMany({
       where: { jobSiteId: siteId },
       orderBy: { version: 'desc' },
-      include: { _count: { select: { scenes: true } } },
+      include: { _count: { select: { scenes: true, views: true } } },
     }),
     manifestForSite(siteId),
   ]);
@@ -133,6 +135,7 @@ export async function listVideosForSite(
     siteId,
     siteName: site.name,
     sceneCount: r._count.scenes,
+    viewCount: r._count.views,
     generatedAt: r.generatedAt,
     approvedAt: r.approvedAt,
     approvedByName: r.approvedByName,
@@ -395,7 +398,19 @@ export async function editScene(
 ): Promise<VideoResult<{ videoId: string }>> {
   const scene = await prisma.inductionVideoScene.findUnique({
     where: { id: sceneId },
-    include: { video: { select: { id: true, jobSiteId: true, status: true } } },
+    include: {
+      video: {
+        select: {
+          id: true,
+          jobSiteId: true,
+          status: true,
+          // Needed to DELETE them, not just unlink them, when an edit
+          // invalidates the whole script's captions and transcript.
+          captionsBlobPath: true,
+          transcriptBlobPath: true,
+        },
+      },
+    },
   });
   if (!scene || !guard(actor, scene.video.jobSiteId)) {
     return { ok: false, error: 'Not available.' };
@@ -446,6 +461,8 @@ export async function editScene(
     },
   });
   if (scene.audioBlobPath) await deleteMedia(scene.audioBlobPath);
+  const priorCaptions = scene.video.captionsBlobPath;
+  const priorTranscript = scene.video.transcriptBlobPath;
   /*
    * AN EDIT UNDOES AN APPROVAL. What was approved was the text as it stood; the
    * approval cannot survive its own subject being rewritten.
@@ -460,6 +477,14 @@ export async function editScene(
         status: InductionVideoStatus.SCRIPT_READY,
         approvedAt: null,
         approvedByUserId: null,
+        /*
+         * The realm and the admin id go too. Added when the Admin Centre gained
+         * approval authority and missed on THIS path: a withdrawn approval that
+         * kept "approved from the Admin Centre" against it would attribute an
+         * approval that no longer exists.
+         */
+        approvedByAdminId: null,
+        approvedByRealm: null,
         approvedByName: null,
         /*
          * The captions and the transcript were built from the whole script, so
@@ -473,6 +498,14 @@ export async function editScene(
         transcriptBlobPath: null,
       },
     });
+    /*
+     * And removed from storage, not merely unlinked. Clearing the paths alone
+     * left paid-for files in the container with nothing pointing at them - which
+     * only became visible while working out what deleting a version must clean up.
+     */
+    for (const path of [priorCaptions, priorTranscript]) {
+      if (path) await deleteMedia(path);
+    }
     await record(scene.video.id, 'APPROVAL_WITHDRAWN', actor,
       `${scene.heading} was edited after approval`);
   }
@@ -573,6 +606,182 @@ export async function approveScript(
   });
   await record(videoId, 'SCRIPT_APPROVED', actor, `Version ${video.version}`);
   return { ok: true, value: { approved: true } };
+}
+
+/**
+ * The statuses a version may be permanently deleted in.
+ *
+ * Everything before the formal workflow starts, and nothing after it. Approving
+ * is the line: once a script has been approved it has been narrated, rendered,
+ * published or superseded, and those are records rather than drafts.
+ *
+ * GENERATION_FAILED is here because a failed attempt is rubbish by definition, and
+ * INFORMATION_REQUIRED because the code already treats a blocked attempt as not
+ * really a version - it reuses the row rather than burning a number.
+ */
+const DELETABLE: InductionVideoStatus[] = [
+  InductionVideoStatus.DRAFT,
+  InductionVideoStatus.INFORMATION_REQUIRED,
+  InductionVideoStatus.SCRIPT_READY,
+  InductionVideoStatus.GENERATION_FAILED,
+];
+
+/**
+ * MAY THIS VERSION BE DELETED — the question the UI asks before offering it.
+ *
+ * Exactly the conditions `deleteVideoVersion` enforces, minus the ones it can only
+ * check on the row itself (a job in flight). Kept here, beside them, so the button
+ * and the refusal cannot disagree: a delete control that is offered and then
+ * refused is worse than no control, and one that is hidden when it would have
+ * worked is the clutter the whole change is meant to remove.
+ *
+ * This is NOT the guard. The service re-checks everything.
+ */
+export function versionMayBeDeleted(v: {
+  status: string;
+  publishedAt: Date | null;
+  supersededAt: Date | null;
+  viewCount: number;
+}): boolean {
+  if (v.publishedAt || v.status === InductionVideoStatus.PUBLISHED) return false;
+  if (v.viewCount > 0) return false;
+  if (v.supersededAt) return false;
+  return (DELETABLE as string[]).includes(v.status);
+}
+
+/**
+ * PERMANENTLY DELETE A VERSION THAT NEVER ENTERED THE RECORD.
+ *
+ * During testing and content iteration, unwanted drafts accumulate and there was
+ * no way to remove them. This deletes one outright - no DISCARDED status, because
+ * a pile of hidden drafts is the same clutter wearing a different hat.
+ *
+ * ── STATUS IS NOT A SUFFICIENT GUARD ──────────────────────────────────────
+ *
+ * A SCRIPT_READY version can be carrying narration. Editing a scene on an
+ * approved version sends it back to SCRIPT_READY but clears only THAT scene's
+ * audio - the rest keep theirs, and the captions and transcript paths are cleared
+ * without the blobs being removed. So every condition below is checked
+ * independently of the status, and the media is cleaned up rather than assumed
+ * absent.
+ *
+ * ── WHAT MAKES A VERSION UNTOUCHABLE ──────────────────────────────────────
+ *
+ * The same two facts the retention sweep already uses, for the same reasons:
+ *
+ *   NEVER PUBLISHED  and the status is checked as well as publishedAt, because a
+ *                    withdrawal clears publishedAt - a version that was published
+ *                    and then withdrawn is still one operatives may have seen.
+ *   NEVER WATCHED    one view row and it is the record of somebody's induction,
+ *                    permanently.
+ *
+ * Plus: not superseded, and no job in flight. A job holds this row as its lock, so
+ * deleting it mid-run would leave the runner writing to something that is gone.
+ *
+ * ── THE DELETION ITSELF IS NOT RECORDED ANYWHERE ──────────────────────────
+ *
+ * Deliberate, and the reason it is acceptable: the version's own events cascade
+ * away with it, and there is no general audit log to write to. What makes that
+ * safe is the guard rather than the bookkeeping - a version that satisfies every
+ * condition above was never approved, never narrated into anything anyone kept,
+ * never published and never watched. It was never part of the record, so its
+ * removal leaves no hole in one.
+ *
+ * SPEND IS NOT DELETED. AiUsageEvent rows carry the videoId as a plain column
+ * with no relation, so the cost of a discarded draft still counts against the
+ * daily cap. A delete that reduced recorded spend would be a way to buy past the
+ * budget guard.
+ */
+export async function deleteVideoVersion(
+  actor: VideoActor,
+  videoId: string,
+): Promise<VideoResult<{ deleted: true; siteId: string; version: number }>> {
+  const video = await prisma.inductionVideo.findUnique({
+    where: { id: videoId },
+    select: {
+      id: true,
+      jobSiteId: true,
+      status: true,
+      version: true,
+      supersededAt: true,
+      publishedAt: true,
+      captionsBlobPath: true,
+      transcriptBlobPath: true,
+      videoBlobPath: true,
+      scenes: { select: { audioBlobPath: true } },
+      _count: { select: { views: true } },
+      jobs: { select: { status: true } },
+    },
+  });
+  if (!video || !guard(actor, video.jobSiteId)) return { ok: false, error: 'Not available.' };
+
+  /*
+   * Deleting is a Director's or Site Manager's - an Admin Centre OWNER or ADMIN
+   * being their equivalent. It is irreversible, and the existing prepare/approve
+   * split exists precisely to keep irreversible decisions about the record away
+   * from roles that may prepare one.
+   */
+  if (!actor.canApprove) {
+    return {
+      ok: false,
+      error: 'Only a Director or Site Manager may delete an induction script version.',
+    };
+  }
+
+  if (video.publishedAt || video.status === InductionVideoStatus.PUBLISHED) {
+    return {
+      ok: false,
+      error:
+        'This version has been published to operatives. Withdraw it instead — a published induction is a record.',
+    };
+  }
+  if (video._count.views > 0) {
+    return {
+      ok: false,
+      error:
+        'An operative has watched this version, so it is the record of their induction and cannot be deleted.',
+    };
+  }
+  if (video.supersededAt) {
+    return {
+      ok: false,
+      error: 'This version has been superseded. It is kept as history rather than deleted.',
+    };
+  }
+  if (video.jobs.some((j) => j.status === 'QUEUED' || j.status === 'RUNNING')) {
+    return {
+      ok: false,
+      error: 'Something is still running on this version. It can be deleted once that finishes.',
+    };
+  }
+  if (!(DELETABLE as string[]).includes(video.status)) {
+    return {
+      ok: false,
+      error:
+        'This version has been approved, so it is part of the approval workflow. Generate a new version instead, which supersedes it.',
+    };
+  }
+
+  /*
+   * MEDIA FIRST, ROW SECOND. If the row went first and a blob delete then failed,
+   * the file would be orphaned with nothing left pointing at it. This way a
+   * failure leaves the version intact and the operation can be retried.
+   */
+  const media = [
+    ...video.scenes.map((s) => s.audioBlobPath),
+    video.captionsBlobPath,
+    video.transcriptBlobPath,
+    video.videoBlobPath,
+  ].filter((p): p is string => Boolean(p));
+  for (const path of media) await deleteMedia(path);
+
+  // Scenes, jobs, events and views all cascade.
+  await prisma.inductionVideo.delete({ where: { id: videoId } });
+
+  return {
+    ok: true,
+    value: { deleted: true, siteId: video.jobSiteId, version: video.version },
+  };
 }
 
 /**

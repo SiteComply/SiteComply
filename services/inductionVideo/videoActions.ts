@@ -1,5 +1,6 @@
 import {
   approveScript,
+  deleteVideoVersion,
   editScene,
   getVideo,
   removeScene,
@@ -90,6 +91,15 @@ export async function handleVideoAction(
     case 'publish': {
       const r = await publishVideo(actor, videoId);
       return r.ok ? ok() : refuse(r.error);
+    }
+    case 'delete': {
+      /*
+       * Permanent, and guarded entirely in the service: a version that has been
+       * published, watched, superseded, approved, or has a job in flight is
+       * refused there rather than here, so both tiers get the same answer.
+       */
+      const r = await deleteVideoVersion(actor, videoId);
+      return r.ok ? ok(r.value as unknown as Record<string, unknown>) : refuse(r.error);
     }
     case 'withdraw': {
       const r = await withdrawVideo(actor, videoId, str('reason'));

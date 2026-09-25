@@ -12,6 +12,8 @@ import { spendForVideo, formatPence } from '@/services/inductionVideo/spendGuard
 import { overriddenRevisionIds } from '@/services/inductionModules/inductionModuleService';
 import { describeVideoRealm } from '@/services/inductionVideo/videoActor';
 import { RefreshWhileWorking } from '@/components/inductionVideo/RefreshWhileWorking';
+import { DeleteVersionButton } from '@/components/inductionVideo/DeleteVersionButton';
+import { versionMayBeDeleted } from '@/services/inductionVideo/inductionVideoService';
 import { describeWork, isWorkingStatus } from '@/services/inductionVideo/videoProgress';
 import { formatDateTimeUK } from '@/lib/datetime';
 
@@ -39,11 +41,17 @@ import { formatDateTimeUK } from '@/lib/datetime';
 export async function VideoVersionSurface({
   detail,
   apiBase,
+  projectHref,
 }: {
   /** The result of `getVideo(actor, videoId)` — already authorised by the caller. */
   detail: NonNullable<Awaited<ReturnType<typeof import('@/services/inductionVideo/inductionVideoService').getVideo>>>;
   /** The tier's route for this version, e.g. `/api/admin/induction-video/<id>`. */
   apiBase: string;
+  /**
+   * Where to go after deleting, since the page being looked at ceases to exist.
+   * Each tier passes its own project page.
+   */
+  projectHref: string;
 }) {
   const { video, stale, warnings, canApprove } = detail;
 
@@ -240,6 +248,35 @@ export async function VideoVersionSurface({
           ))}
         </ul>
       </section>
+
+      {/*
+       * LAST ON THE PAGE, deliberately. A destructive action at the top competes
+       * with the work; at the bottom it is found by someone who has decided.
+       *
+       * Offered only when the version never entered the record - the same
+       * predicate the service enforces, asked here so a button is not shown that
+       * would only be refused. `canApprove` because deleting is irreversible and
+       * belongs with the roles that own the record.
+       */}
+      {canApprove &&
+        versionMayBeDeleted({
+          status: video.status,
+          publishedAt: video.publishedAt,
+          supersededAt: video.supersededAt,
+          viewCount: views.length,
+        }) && (
+          <section className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface-sunken px-4 py-3">
+            <p className="text-sm text-ink-muted">
+              This version has not been approved, published or watched by anyone.
+              It can be deleted permanently — useful while iterating on content.
+            </p>
+            <DeleteVersionButton
+              endpoint={apiBase}
+              version={video.version}
+              afterHref={projectHref}
+            />
+          </section>
+        )}
     </>
   );
 }

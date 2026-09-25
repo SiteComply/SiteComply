@@ -5,12 +5,14 @@ import { adminCanManage } from '@/lib/adminAuth';
 import {
   listVideosForSite,
   readinessForSite,
+  versionMayBeDeleted,
 } from '@/services/inductionVideo/inductionVideoService';
 import { videoActorFromAdmin } from '@/services/inductionVideo/videoActor';
 import { InductionVideoStatusBadge } from '@/components/platform/InductionVideoStatusBadge';
 import { GenerateScriptButton } from '@/components/platform/GenerateScriptButton';
 import { formatDateTimeUK } from '@/lib/datetime';
 import { RefreshWhileWorking } from '@/components/inductionVideo/RefreshWhileWorking';
+import { DeleteVersionButton } from '@/components/inductionVideo/DeleteVersionButton';
 import { anyWorking, describeAnyWork } from '@/services/inductionVideo/videoProgress';
 
 export const dynamic = 'force-dynamic';
@@ -160,10 +162,28 @@ export default async function AdminProjectInductionVideoPage({
                       ? `Generated ${formatDateTimeUK(v.generatedAt)}`
                       : 'Not generated'}
                 </span>
+                {manages &&
+                  versionMayBeDeleted({
+                    status: v.status,
+                    publishedAt: v.publishedAt,
+                    supersededAt: v.supersededAt,
+                    viewCount: v.viewCount,
+                  }) && (
+                    <DeleteVersionButton
+                      endpoint={`/api/admin/induction-video/${v.id}`}
+                      version={v.version}
+                      compact
+                    />
+                  )}
               </li>
             ))}
           </ul>
         )}
+        <p className="mt-3 text-xs text-ink-subtle">
+          Superseded versions are kept: an operative inducted against an earlier
+          version must still be able to be shown what it said. An unapproved
+          version nobody has watched can be deleted outright.
+        </p>
       </section>
     </div>
   );

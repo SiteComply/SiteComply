@@ -193,8 +193,23 @@ function main() {
     /APPROVAL_WITHDRAWN/.test(svc) && /approvedAt: null/.test(svc));
   ok('a required scene cannot be removed', /cannot be removed/.test(svc));
   ok('a published version cannot be edited', /A published version cannot be edited/.test(svc));
+  /*
+   * Superseding must never be implemented as deletion. The service DOES delete
+   * now - an unapproved, never-watched draft can be discarded on purpose - so the
+   * blanket "no delete anywhere" check no longer says what it meant. What matters
+   * is that supersedeEarlierVersions marks rows and that the only delete lives in
+   * the explicitly guarded deleteVideoVersion.
+   */
+  const supersedeBody = svc.slice(
+    svc.indexOf('export async function supersedeEarlierVersions'),
+    svc.indexOf('export async function getVideo'),
+  );
   ok('earlier versions are superseded, never deleted',
-    /supersededAt: new Date\(\)/.test(svc) && !/inductionVideo\.delete/.test(svc));
+    /supersededAt: new Date\(\)/.test(svc) && !/\.delete\(/.test(supersedeBody));
+  ok('  and the only version delete is the guarded one',
+    (svc.match(/prisma\.inductionVideo\.delete\(/g) ?? []).length === 1 &&
+      svc.indexOf('prisma.inductionVideo.delete(') >
+        svc.indexOf('export async function deleteVideoVersion'));
   ok('every state change is recorded with an actor',
     ['SCRIPT_REQUESTED', 'SCRIPT_GENERATED', 'SCRIPT_APPROVED', 'SUPERSEDED', 'GENERATION_FAILED']
       .every((a) => svc.includes(a)));

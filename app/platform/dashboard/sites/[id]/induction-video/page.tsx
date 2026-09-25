@@ -3,10 +3,14 @@ import { notFound, redirect } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
 import { requirePlatformViewer } from '@/services/platformUsers/platformAccess';
-import { canManageInductionVideos } from '@/services/inductionVideo/inductionVideoPermissions';
+import {
+  canApproveInductionVideo,
+  canManageInductionVideos,
+} from '@/services/inductionVideo/inductionVideoPermissions';
 import {
   listVideosForSite,
   readinessForSite,
+  versionMayBeDeleted,
 } from '@/services/inductionVideo/inductionVideoService';
 import { formatDateTimeUK } from '@/lib/datetime';
 import { InductionVideoStatusBadge } from '@/components/platform/InductionVideoStatusBadge';
@@ -18,6 +22,7 @@ import {
   moduleDecisionsForSite,
 } from '@/services/inductionModules/inductionModuleService';
 import { RefreshWhileWorking } from '@/components/inductionVideo/RefreshWhileWorking';
+import { DeleteVersionButton } from '@/components/inductionVideo/DeleteVersionButton';
 import { anyWorking, describeAnyWork } from '@/services/inductionVideo/videoProgress';
 
 export const dynamic = 'force-dynamic';
@@ -57,6 +62,9 @@ export default async function SiteInductionVideoPage({
     params.id,
     manifest.scenes.map((s) => s.sceneType),
   );
+  // Deleting a version is irreversible, so it sits with the roles that own the
+  // record - the same list that may approve one.
+  const canApproveVideo = canApproveInductionVideo(viewer.role);
   const required = manifest.scenes.filter((s) => s.required);
   const optional = manifest.scenes.filter((s) => !s.required);
 
@@ -204,13 +212,27 @@ export default async function SiteInductionVideoPage({
                       ? `Generated ${formatDateTimeUK(v.generatedAt)}`
                       : ''}
                 </span>
+                {canApproveVideo &&
+                  versionMayBeDeleted({
+                    status: v.status,
+                    publishedAt: v.publishedAt,
+                    supersededAt: v.supersededAt,
+                    viewCount: v.viewCount,
+                  }) && (
+                    <DeleteVersionButton
+                      endpoint={`/api/platform/induction-video/${v.id}`}
+                      version={v.version}
+                      compact
+                    />
+                  )}
               </li>
             ))}
           </ul>
         )}
         <p className="mt-3 text-xs text-ink-subtle">
           Superseded versions are kept: an operative inducted against an earlier
-          version must still be able to be shown what it said.
+          version must still be able to be shown what it said. An unapproved
+          version nobody has watched can be deleted outright.
         </p>
       </section>
     </PlatformShell>
