@@ -338,9 +338,39 @@ interface V26Card {
   cardSerial?: unknown;
   customerName?: unknown;
   registrationNumber?: unknown;
+
+  /* ── THE CSCS CARD SHAPE, confirmed 2026-09-16 ─────────────────────────── */
   expired?: unknown;
   cancelled?: unknown;
   cardColour?: unknown;
+
+  /*
+   * ── THE ECS CARD SHAPE, confirmed against the live service 2026-09-25 ───
+   *
+   * The SAME envelope carries a DIFFERENT card. An ECS record has none of the
+   * three fields above; it has these instead, and the difference is why an ECS
+   * lookup that found a perfectly valid card reported "the service could not
+   * complete this check".
+   *
+   * Observed on a real Craft card (responseCode 200, one card returned):
+   *
+   *   isValid: true              one boolean, not two
+   *   dateOfExpiry: "2028-09-05" an actual date, which the CSCS shape never gives
+   *   cardTypeName: "Craft"      a name, not a colour
+   *   cardDesignName: "Craft"
+   *   qualificationType: "1"
+   *   isNonCscsCard: false
+   *   occupationQualifications: [ ...9 entries ]
+   *
+   * NOT hedged across a list of plausible names: every one of these was read off
+   * the wire. The generic fallback further down exists for shapes nobody has
+   * seen; this is a shape we have.
+   */
+  isValid?: unknown;
+  dateOfExpiry?: unknown;
+  cardTypeName?: unknown;
+  cardDesignName?: unknown;
+  isNonCscsCard?: unknown;
 }
 
 /** True when the payload is the confirmed V2.6 card shape. */
@@ -358,14 +388,87 @@ export function isV26CardResponse(payload: SmartCheckPayload): boolean {
  * checked first: a card that is both cancelled and expired is withdrawn, and
  * that is the more serious fact to report.
  */
-export function statusFromV26Flags(card: V26Card): CscsVerificationStatus {
+export function statusFromV26Flags(
+  card: V26Card,
+  /** For deciding whether a date has passed. Injected so tests are not clock-bound. */
+  checkedAt: Date = new Date(),
+): CscsVerificationStatus {
   const { cancelled, expired } = card;
-  if (typeof cancelled !== 'boolean' || typeof expired !== 'boolean') {
-    return 'ERROR';
+
+  /*
+   * THE CSCS SHAPE FIRST, because it is the one confirmed longest and the one a
+   * multi-card CSCS set is read with. Two booleans, `cancelled` the graver fact.
+   */
+  if (typeof cancelled === 'boolean' && typeof expired === 'boolean') {
+    if (cancelled) return 'REVOKED';
+    if (expired) return 'EXPIRED';
+    return 'VALID';
   }
-  if (cancelled) return 'REVOKED';
-  if (expired) return 'EXPIRED';
-  return 'VALID';
+
+  /*
+   * THE ECS SHAPE: one boolean and a date.
+   *
+   * `isValid` is the scheme's own verdict and is taken as such. When it says NO,
+   * the reason matters to the operative reading the message, and the date is the
+   * only evidence available:
+   *
+   *   not valid, expiry in the past  -> EXPIRED  ("renew it and update your details")
+   *   not valid, expiry still ahead  -> REVOKED  ("contact the card scheme")
+   *
+   * The second is an inference, and it is the honest one: a card the scheme says
+   * is not valid for a reason that is NOT its expiry date is a card whose holder
+   * must talk to the scheme. Calling it EXPIRED would tell them to renew
+   * something that has not lapsed; calling it ERROR would blame the service for
+   * answering clearly.
+   *
+   * A valid card with a date already past is downgraded to EXPIRED by the caller,
+   * which is where that rule already lives for every other shape.
+   */
+  if (typeof card.isValid === 'boolean') {
+    if (card.isValid) return 'VALID';
+    const expiry = parseSmartCheckDate(card.dateOfExpiry);
+    if (expiry && !isAfterToday(expiry, checkedAt)) return 'EXPIRED';
+    return 'REVOKED';
+  }
+
+  /*
+   * FAIL-SAFE ON ABSENCE, unchanged and deliberate. A card whose standing cannot
+   * be read in EITHER shape is not a valid card, it is a response we do not
+   * understand - ERROR, never VALID. This is what fired on every ECS lookup
+   * before the shape above was known, and it was right to.
+   */
+  return 'ERROR';
+}
+
+/** Is this date today or later, in UTC day terms? */
+function isAfterToday(date: Date, checkedAt: Date): boolean {
+  const today = Date.UTC(
+    checkedAt.getUTCFullYear(),
+    checkedAt.getUTCMonth(),
+    checkedAt.getUTCDate(),
+  );
+  return date.getTime() >= today;
+}
+
+/** The expiry a card states, in whichever shape it states it. */
+export function expiryFromV26Card(card: V26Card): Date | null {
+  // Only the ECS shape carries one; the CSCS shape has no date at all.
+  return parseSmartCheckDate(card.dateOfExpiry);
+}
+
+/**
+ * The card type, from whichever field the scheme uses.
+ *
+ * CSCS says `cardColour` ("Blue"); ECS says `cardTypeName` ("Craft") with
+ * `cardDesignName` alongside it. mapCardType already reads role words as well as
+ * colours, so "Craft" lands on the skilled grade the same way "Blue" does.
+ */
+export function cardTypeFromV26Card(card: V26Card): CscsCardType | null {
+  return (
+    mapCardType(card.cardColour) ??
+    mapCardType(card.cardTypeName) ??
+    mapCardType(card.cardDesignName)
+  );
 }
 
 export function mapV26CardResponse(
@@ -442,9 +545,9 @@ export function mapV26CardResponse(
     };
   }
 
-  const standings = cards.map((c) => statusFromV26Flags(c));
+  const standings = cards.map((c) => statusFromV26Flags(c, checkedAt));
   const current = cards.filter((_, i) => standings[i] === 'VALID');
-  const status: CscsVerificationStatus = current.length
+  let status: CscsVerificationStatus = current.length
     ? 'VALID'
     : standings.includes('ERROR')
       ? 'ERROR'
@@ -453,8 +556,35 @@ export function mapV26CardResponse(
         : 'EXPIRED';
 
   const basis = current.length ? current : cards;
-  const types = new Set(basis.map((c) => mapCardType(c.cardColour)));
+  const types = new Set(basis.map((c) => cardTypeFromV26Card(c)));
   const cardType = types.size === 1 ? [...types][0] : null;
+
+  /*
+   * THE EXPIRY, WHEN THE SCHEME GIVES ONE.
+   *
+   * The CSCS shape gives no date, so this stays null there and the operative's own
+   * typed expiry is left standing - unchanged behaviour. The ECS shape DOES give
+   * one, and recording it is the point: a verified card with a real expiry is what
+   * the access rules and the renewal reminders are for.
+   *
+   * THE LATEST of the cards being relied on. Where somebody holds a renewed card
+   * beside the one it replaced, the set is current until the newer one lapses.
+   */
+  const dates = basis
+    .map((c) => expiryFromV26Card(c))
+    .filter((d): d is Date => d !== null);
+  const expiry = dates.length
+    ? new Date(Math.max(...dates.map((d) => d.getTime())))
+    : null;
+
+  /*
+   * AND THE DOWNGRADE, which until now could never fire on this contract because
+   * it had no dates. A scheme reporting a card as valid while its own expiry has
+   * passed does not produce a verified competency record.
+   */
+  if (status === 'VALID' && expiry && !isAfterToday(expiry, checkedAt)) {
+    status = 'EXPIRED';
+  }
 
   return {
     status,
@@ -463,15 +593,20 @@ export function mapV26CardResponse(
     scheme,
     providerName,
     checkedAt,
-    // No date is available in this contract. Null, not a guess - the worker's
-    // own typed expiry is left standing rather than overwritten with nothing.
-    expiry: null,
+    expiry,
     cardType,
     holderName: str(basis[0].customerName),
-    // Not present in this contract. Empty, not absent, so callers do not have
-    // to distinguish "no qualifications" from "we did not look".
+    /*
+     * NOT READ, DELIBERATELY. An ECS card carries `occupationQualifications` - the
+     * probe saw nine entries on one card - and a CSCS card carries none. Reading
+     * them would be worth doing, but the shape of an entry has not been confirmed
+     * and inventing a mapping for a competency record is how a worker ends up
+     * credited with a qualification they do not hold. Empty, not absent, so callers
+     * do not have to distinguish "no qualifications" from "we did not look".
+     */
     qualifications: [],
-    message: messageForStatus(status, null),
+    // The expiry now reaches the message, so a verified ECS card says until when.
+    message: messageForStatus(status, expiry),
     note: summary,
   };
 }
@@ -485,7 +620,7 @@ export function describeCards(cards: V26Card[]): string {
     const st = statusFromV26Flags(c);
     const word =
       st === 'VALID' ? 'current' : st === 'REVOKED' ? 'cancelled' : st === 'EXPIRED' ? 'expired' : 'unreadable';
-    const colour = str(c.cardColour);
+    const colour = str(c.cardColour) ?? str(c.cardTypeName) ?? str(c.cardDesignName);
     return colour ? `${word} ${colour}` : word;
   });
   return `${cards.length} cards returned: ${parts.join('; ')}`;
