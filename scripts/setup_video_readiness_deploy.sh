@@ -259,8 +259,29 @@ rm -f "$ZIP"
 zip -rq "$ZIP" .next public prisma package.json package-lock.json next.config.js \
   node_modules server.js 2>/dev/null || true
 echo "      $(du -h "$ZIP" | cut -f1) -> $ZIP"
-az webapp deploy -g "$RG" -n "$APP" --src-path "$ZIP" --type zip --async false \
-  || fail "deployment failed"
+# `az webapp deploy` returned 504 GatewayTimeout on the first run of this script
+# while the deployment was still RUNNING server-side - it had already rsynced and
+# built, and production cut over a couple of minutes later. The CLI's polling
+# socket giving up is not the deployment failing, and the two must not be reported
+# the same way: retrying here would race a live deployment, which is how a slow
+# deploy becomes a corrupted wwwroot.
+#
+# So a non-zero exit is a signal to go and LOOK, not a verdict.
+if ! az webapp deploy -g "$RG" -n "$APP" --src-path "$ZIP" --type zip --async false; then
+  echo "      the CLI returned non-zero - asking Kudu what actually happened"
+  az webapp log deployment show -g "$RG" -n "$APP" 2>/dev/null \
+    | python3 -c "import sys,json;d=json.load(sys.stdin);r=d if isinstance(d,list) else [d];[print('       ',x.get('log_time',''),'|',str(x.get('message',''))[:120]) for x in r[-4:]]" \
+    2>/dev/null || echo "        (could not read the deployment log)"
+  echo "      NOT retrying: a second deploy would race one that may still be running."
+  echo "      waiting up to 10 minutes for production to cut over to $NEW..."
+  CUT=""
+  for _ in $(seq 1 20); do
+    [ "$(served_buildid)" = "$NEW" ] && { CUT=yes; break; }
+    sleep 30
+  done
+  [ -n "$CUT" ] || fail "production never cut over to $NEW - inspect https://${APP}.scm.azurewebsites.net/api/deployments/latest before redeploying"
+  echo "      it cut over on its own - the 504 was the CLI, not the deployment"
+fi
 for i in 1 2 3 4 5 6 7 8 9 10; do
   H=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 "$HEALTH" 2>/dev/null)
   echo "      [$i] health: HTTP $H"
