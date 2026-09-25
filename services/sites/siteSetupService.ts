@@ -15,6 +15,7 @@ import {
   type SetupSnapshot,
 } from '@/services/sites/siteSetupCompletion';
 import { getSiteRules } from '@/services/checklists/siteRulesService';
+import { getSitePpeRequirements } from '@/services/checklists/sitePpeService';
 
 /**
  * SC-019 Phase 1 — the project setup wizard's server side.
@@ -61,20 +62,22 @@ export async function getSetupForSite(viewer: PlatformViewer, siteId: string) {
 type LoadedSite = NonNullable<Awaited<ReturnType<typeof getSetupForSite>>>;
 
 /**
- * The conditional flags that decide which steps apply. Derived from data the
- * user has already given rather than asked twice: if a site has recorded
- * temporary works, that step is obviously relevant.
+ * The conditional flags that decide which steps apply.
+ *
+ * ONE FLAG LEFT. F10 is a legal notification that either applies or does not, and
+ * the project step asks that question outright.
+ *
+ * The three site-condition flags are gone. They were derived from whether the
+ * matching textarea was already non-empty, so the step that collects the detail
+ * only appeared once somebody had filled it in - which meant nothing ever asked.
+ * Those steps are always shown now and ask directly; the answers live on
+ * SiteInformation.hasTemporaryWorks / hasTrafficManagement / hasHighRiskActivities.
  */
 export function deriveFlags(
   site: LoadedSite,
 ): Partial<Record<SetupFlag, boolean>> {
-  const info = site.siteInformation;
-  const has = (v: string | null | undefined) => Boolean(v && v.trim());
   return {
     cdmNotifiable: site.projectDetails?.cdmNotifiable === true,
-    hasTemporaryWorks: has(info?.temporaryWorks),
-    hasTrafficManagement: has(info?.trafficManagement),
-    hasHighRiskActivities: has(info?.highRiskActivities),
   };
 }
 
@@ -94,6 +97,18 @@ export function deriveFlags(
 export function buildSetupSnapshot(
   site: LoadedSite,
   siteRuleCount: number,
+  /**
+   * Counts that live outside the site's own rows.
+   *
+   * PPE is a versioned checklist item and the risk shortfall is computed from the
+   * register, so neither can be read off `LoadedSite`. They are passed in rather
+   * than fetched here so this stays a pure mapping the wizard can mirror exactly -
+   * the whole reason the two sides agree.
+   */
+  extra: { ppeItems: number; risksMissingControls: number } = {
+    ppeItems: 0,
+    risksMissingControls: 0,
+  },
 ): SetupSnapshot {
   const info = site.siteInformation;
   const cdm = site.cdmDutyHolders;
@@ -139,15 +154,36 @@ export function buildSetupSnapshot(
         siteHazards: info?.siteHazards ?? null,
         existingSiteRisks: info?.existingSiteRisks ?? null,
       },
-      'high-risk': { highRiskActivities: info?.highRiskActivities ?? null },
-      'temporary-works': { temporaryWorks: info?.temporaryWorks ?? null },
+      'high-risk': {
+        highRiskActivities: info?.highRiskActivities ?? null,
+        hasHighRiskActivities: info?.hasHighRiskActivities ?? null,
+      },
+      'temporary-works': {
+        temporaryWorks: info?.temporaryWorks ?? null,
+        // Null until asked. `false` is an answer; see SiteInformation.
+        hasTemporaryWorks: info?.hasTemporaryWorks ?? null,
+      },
       access: {
         accessEgress: info?.accessEgress ?? null,
         deliveryProcedures: info?.deliveryProcedures ?? null,
       },
-      traffic: { trafficManagement: info?.trafficManagement ?? null },
+      traffic: {
+        trafficManagement: info?.trafficManagement ?? null,
+        hasTrafficManagement: info?.hasTrafficManagement ?? null,
+      },
       utilities: { utilitiesIsolation: info?.utilitiesIsolation ?? null },
       environment: { environmentalControls: info?.environmentalControls ?? null },
+      /*
+       * The register is edited in place and saves itself, so this step holds no
+       * fields of its own - only the record that a manager has been through it,
+       * which is what `reviewed` is. The shortfall that actually matters is the
+       * count below.
+       */
+      risks: {
+        reviewed: (site.setupProgress?.completedSteps ?? []).includes('risks')
+          ? true
+          : null,
+      },
     },
     counts: {
       siteManagers: site.keyPeople.filter(
@@ -157,6 +193,8 @@ export function buildSetupSnapshot(
         (p) => p.kind === SiteKeyPersonKind.FIRST_AIDER,
       ).length,
       siteRules: siteRuleCount,
+      ppeItems: extra.ppeItems,
+      risksMissingControls: extra.risksMissingControls,
     },
   };
 }
@@ -172,12 +210,36 @@ export function buildSetupSnapshot(
 export async function completenessFor(
   site: LoadedSite,
 ): Promise<DerivedCompleteness> {
-  const rules = await getSiteRules(site.id);
+  const [rules, ppe, risksMissingControls] = await Promise.all([
+    getSiteRules(site.id),
+    getSitePpeRequirements(site.id),
+    countRisksMissingControls(site.id),
+  ]);
   return computeDerivedCompleteness(
     deriveFlags(site),
-    buildSetupSnapshot(site, rules.length),
+    buildSetupSnapshot(site, rules.length, {
+      ppeItems: ppe.length,
+      risksMissingControls,
+    }),
     site.setupProgress?.completedSteps ?? [],
   );
+}
+
+/**
+ * Risks the register says APPLY here with no control measures written.
+ *
+ * The one condition that refuses to generate an induction video, counted here so
+ * setup can say so before somebody tries. `applicable` is deliberately three-state
+ * in the register - null means nobody has decided - and only an explicit `true`
+ * demands controls: an undecided risk is an unanswered question, which the
+ * step's own "reviewed" requirement covers.
+ */
+export async function countRisksMissingControls(siteId: string): Promise<number> {
+  const rows = await prisma.siteRiskTopic.findMany({
+    where: { jobSiteId: siteId, applicable: true },
+    select: { controls: true },
+  });
+  return rows.filter((r) => !(r.controls && r.controls.trim())).length;
 }
 
 /** Project-level steps are Director-only; operational steps follow sites:edit. */
@@ -186,6 +248,10 @@ function mayEditStep(viewer: PlatformViewer, stepKey: string): boolean {
   if (projectLevel.includes(stepKey)) return canEditSite(viewer.role);
   return permits(viewer.role, 'sites', 'edit');
 }
+
+/** A tri-state answer. Undefined stays undefined: silence is not "no". */
+const bool = (v: unknown): boolean | null | undefined =>
+  v === true || v === false ? v : undefined;
 
 const text = (v: unknown): string | null => {
   if (typeof v !== 'string') return null;
@@ -381,14 +447,24 @@ export async function saveSetupStep(
         existingSiteRisks: text(v.existingSiteRisks),
       });
       break;
+    /*
+     * THE GATED STEPS SAVE THE ANSWER AND THE DETAIL.
+     *
+     * Answering "no" CLEARS the detail: a site that has just said it has no
+     * temporary works must not keep a paragraph about temporary works, which would
+     * go on producing a scene in the induction contradicting the answer.
+     */
     case 'high-risk':
       await upsertInfo(siteId, viewer, {
-        highRiskActivities: text(v.highRiskActivities),
+        hasHighRiskActivities: bool(v.hasHighRiskActivities),
+        highRiskActivities:
+          v.hasHighRiskActivities === false ? null : text(v.highRiskActivities),
       });
       break;
     case 'temporary-works':
       await upsertInfo(siteId, viewer, {
-        temporaryWorks: text(v.temporaryWorks),
+        hasTemporaryWorks: bool(v.hasTemporaryWorks),
+        temporaryWorks: v.hasTemporaryWorks === false ? null : text(v.temporaryWorks),
       });
       break;
     case 'access':
@@ -399,8 +475,25 @@ export async function saveSetupStep(
       break;
     case 'traffic':
       await upsertInfo(siteId, viewer, {
-        trafficManagement: text(v.trafficManagement),
+        hasTrafficManagement: bool(v.hasTrafficManagement),
+        trafficManagement:
+          v.hasTrafficManagement === false ? null : text(v.trafficManagement),
       });
+      break;
+    /*
+     * The rules, the PPE and the register save themselves through their own
+     * endpoints, so these steps persist only what the wizard itself owns.
+     */
+    case 'induction':
+      await prisma.jobSite.update({
+        where: { id: siteId },
+        data: { inductionContent: text(v.inductionContent) ?? '' },
+      });
+      break;
+    case 'risks':
+    case 'company-content':
+      // Nothing of their own: "Save & continue" records that the manager has been
+      // through the step, which is what the reviewed list is for.
       break;
     case 'utilities':
       await upsertInfo(siteId, viewer, {
@@ -435,7 +528,12 @@ export async function saveSetupStep(
 async function upsertInfo(
   siteId: string,
   viewer: PlatformViewer,
-  data: Record<string, string | null>,
+  /*
+   * Booleans as well as text now: the three site-condition answers live here.
+   * `undefined` is passed through to Prisma as "leave it alone", which is what an
+   * unanswered question must do - writing null would turn silence into a decision.
+   */
+  data: Record<string, string | boolean | null | undefined>,
 ): Promise<void> {
   const stamp = { updatedByUserId: viewer.id, updatedByName: viewer.name };
   await prisma.siteInformation.upsert({

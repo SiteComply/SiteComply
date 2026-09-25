@@ -2,6 +2,24 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { SiteRiskRegister } from '@/components/platform/SiteRiskRegister';
+import { SiteRulesConfig } from '@/components/platform/SiteRulesConfig';
+import { PpeRequirementsConfig } from '@/components/platform/PpeRequirementsConfig';
+import { SiteInductionModules } from '@/components/platform/SiteInductionModules';
+import { SiteLibraryPanel } from '@/components/inductionVideo/SiteLibraryPanel';
+import { SiteMapUpload, type SiteMapState } from '@/components/platform/SiteMapUpload';
+/*
+ * TYPE-ONLY, every one of them. A VALUE import from a service module pulls Prisma
+ * into the browser bundle and fails the build outright - the trap SiteRulesConfig
+ * carries its own warning about, and one the type checker cannot see because a
+ * type-only import is erased before webpack looks. The rule types come from
+ * siteRuleRows, which is client-safe by design.
+ */
+import type { RiskTopicRow } from '@/services/sites/cppRiskService';
+import type { LibraryRule, SiteRule } from '@/services/checklists/siteRuleRows';
+import type { PpeRequirement } from '@/services/checklists/sitePpeService';
+import type { SiteModuleRow } from '@/components/platform/SiteInductionModules';
+import type { SiteLibraryRow } from '@/components/inductionVideo/SiteLibraryPanel';
 import { SiteServicesConfig } from '@/components/platform/SiteServicesConfig';
 import type { SiteServiceGroup } from '@/services/siteServices/siteServiceCatalog';
 import Link from 'next/link';
@@ -85,7 +103,7 @@ const FIELDS: Record<
   {
     name: string;
     label: string;
-    kind: 'text' | 'area' | 'date' | 'check';
+    kind: 'text' | 'area' | 'date' | 'check' | 'gate';
     hint?: string;
   }[]
 > = {
@@ -189,18 +207,41 @@ const FIELDS: Record<
       hint: 'Risks already present on or next to the site.',
     },
   ],
+  /*
+   * THE GATED STEPS ASK FIRST.
+   *
+   * `gate` is the yes/no, and the textarea below it is only demanded when the
+   * answer is yes. These used to be hidden steps whose visibility was inferred
+   * from the textarea already having content, so the question was never put and a
+   * site with real temporary works read as complete.
+   */
   'high-risk': [
-    { name: 'highRiskActivities', label: 'High-risk activities', kind: 'area' },
+    {
+      name: 'hasHighRiskActivities',
+      label: 'Does this project involve high-risk activities?',
+      kind: 'gate',
+    },
+    { name: 'highRiskActivities', label: 'How they are managed', kind: 'area' },
   ],
   'temporary-works': [
-    { name: 'temporaryWorks', label: 'Temporary works', kind: 'area' },
+    {
+      name: 'hasTemporaryWorks',
+      label: 'Does this project have temporary works?',
+      kind: 'gate',
+    },
+    { name: 'temporaryWorks', label: 'The temporary works arrangements', kind: 'area' },
   ],
   access: [
     { name: 'accessEgress', label: 'Site access and egress', kind: 'area' },
     { name: 'deliveryProcedures', label: 'Delivery procedures', kind: 'area' },
   ],
   traffic: [
-    { name: 'trafficManagement', label: 'Traffic management', kind: 'area' },
+    {
+      name: 'hasTrafficManagement',
+      label: 'Do vehicles and pedestrians share routes on this site?',
+      kind: 'gate',
+    },
+    { name: 'trafficManagement', label: 'How they are kept apart', kind: 'area' },
   ],
   utilities: [
     {
@@ -231,6 +272,19 @@ export function SiteSetupWizard({
   initialPeople,
   completedSteps,
   siteRuleCount,
+  ppeItemCount,
+  risksMissingControls,
+  riskTopics,
+  ruleItems,
+  ruleLibrary,
+  rulesAcknowledged,
+  ppeItems,
+  ppeDefaults,
+  siteMap,
+  ramsCount,
+  moduleDecisions,
+  libraryDecisions,
+  canOverrideModules,
   canEditProject,
   serviceGroups,
   configTemplates = [],
@@ -247,6 +301,30 @@ export function SiteSetupWizard({
    * server rather than guessing from the free-text field.
    */
   siteRuleCount: number;
+  /**
+   * PPE_CONFIRM items published for this site, and risks that apply with no
+   * controls. Passed in for the same reason siteRuleCount is: they are edited by
+   * components hosted inside this wizard that save themselves, so the badge must
+   * match the server rather than guess from form state.
+   */
+  ppeItemCount: number;
+  risksMissingControls: number;
+  /*
+   * Everything the hosted editors need. Passed from the server page rather than
+   * fetched here: these components already exist and already save themselves, and
+   * the wizard's job is to put them in the journey, not to re-implement them.
+   */
+  riskTopics: RiskTopicRow[];
+  ruleItems: SiteRule[];
+  ruleLibrary: LibraryRule[];
+  rulesAcknowledged: boolean;
+  ppeItems: PpeRequirement[];
+  ppeDefaults: PpeRequirement[];
+  siteMap: SiteMapState;
+  ramsCount: number;
+  moduleDecisions: SiteModuleRow[];
+  libraryDecisions: SiteLibraryRow[];
+  canOverrideModules: boolean;
   canEditProject: boolean;
   /** SC-021 — permits and inspections available on this site. */
   serviceGroups: SiteServiceGroup[];
@@ -266,15 +344,10 @@ export function SiteSetupWizard({
 
   // Conditional triggers, recomputed live so answering "notifiable" reveals the
   // F10 step immediately rather than after a reload.
-  const flags = useMemo<Partial<Record<SetupFlag, boolean>>>(() => {
-    const str = (k: string, f: string) => String(values[k]?.[f] ?? '').trim();
-    return {
-      cdmNotifiable: values.project?.cdmNotifiable === true,
-      hasTemporaryWorks: str('temporary-works', 'temporaryWorks') !== '',
-      hasTrafficManagement: str('traffic', 'trafficManagement') !== '',
-      hasHighRiskActivities: str('high-risk', 'highRiskActivities') !== '',
-    };
-  }, [values]);
+  const flags = useMemo<Partial<Record<SetupFlag, boolean>>>(
+    () => ({ cdmNotifiable: values.project?.cdmNotifiable === true }),
+    [values],
+  );
 
   /*
    * The SAME computation the server runs, over the values currently in the form.
@@ -285,14 +358,25 @@ export function SiteSetupWizard({
    */
   const snapshot = useMemo<SetupSnapshot>(
     () => ({
-      values,
+      values: {
+        ...values,
+        /*
+         * The register saves itself, so this step has no form field. Its
+         * requirement is that a manager has BEEN THROUGH it, which is exactly what
+         * the reviewed list records - and the server reads it from the same place,
+         * so the two verdicts cannot differ.
+         */
+        risks: { reviewed: done.includes('risks') ? true : null },
+      },
       counts: {
         siteManagers: people.filter((p) => p.kind === 'SITE_MANAGER').length,
         firstAiders: people.filter((p) => p.kind === 'FIRST_AIDER').length,
         siteRules: siteRuleCount,
+        ppeItems: ppeItemCount,
+        risksMissingControls,
       },
     }),
-    [values, people, siteRuleCount],
+    [values, people, done, siteRuleCount, ppeItemCount, risksMissingControls],
   );
 
   // Conditional steps stay visible so they can be filled in the first place;
@@ -381,14 +465,46 @@ export function SiteSetupWizard({
             complete
           </p>
           <p className="text-sm text-ink-muted">
-            {completeness.cppReady ? (
-              <span className="font-semibold text-safe-700">
-                Ready for a Construction Phase Plan draft
-              </span>
-            ) : (
-              `${completeness.outstanding.length} still to do`
-            )}
+            {completeness.outstanding.length > 0
+              ? `${completeness.outstanding.length} still to do`
+              : null}
           </p>
+        </div>
+
+        {/*
+          * WHAT FINISHING SETUP GETS YOU, said plainly and in one place.
+          *
+          * Both documents, because they need different things: the plan needs the
+          * CDM apparatus an induction never mentions, and the induction needs what
+          * an operative is shown and must wear. A single "complete" would be wrong
+          * in one direction or the other.
+          *
+          * This is not a readiness CHECK somebody has to go and find - it is the
+          * answer to "am I finished", on the screen where the work is done.
+          */}
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          <span
+            className={
+              completeness.cppReady
+                ? 'rounded-full bg-safe-50 px-2 py-1 font-semibold text-safe-700'
+                : 'rounded-full bg-surface-sunken px-2 py-1 font-semibold text-ink-subtle'
+            }
+          >
+            {completeness.cppReady
+              ? '✓ Ready for a Construction Phase Plan'
+              : 'Construction Phase Plan — not yet'}
+          </span>
+          <span
+            className={
+              completeness.videoReady
+                ? 'rounded-full bg-safe-50 px-2 py-1 font-semibold text-safe-700'
+                : 'rounded-full bg-surface-sunken px-2 py-1 font-semibold text-ink-subtle'
+            }
+          >
+            {completeness.videoReady
+              ? '✓ Ready to generate an induction video'
+              : 'Induction video — not yet'}
+          </span>
         </div>
         <div
           className="mt-2 h-2 w-full overflow-hidden rounded-full bg-surface-sunken"
@@ -652,24 +768,155 @@ export function SiteSetupWizard({
               canEdit={editable}
               templates={configTemplates}
             />
+          ) : active.key === 'risks' ? (
+            /*
+             * THE REGISTER ITSELF, hosted rather than linked.
+             *
+             * It saves each topic through its own endpoint, so "Save & continue"
+             * only records that the manager has been through it - the same
+             * arrangement the permits step uses. Hosting the existing editor rather
+             * than rebuilding it matters: two editors of one row is a bug this
+             * codebase has already paid for once.
+             */
+            <SiteRiskRegister siteId={siteId} initial={riskTopics} canEdit={editable} />
+          ) : active.key === 'induction' ? (
+            <div className="space-y-6">
+              <SiteRulesConfig
+                siteId={siteId}
+                initial={ruleItems}
+                library={ruleLibrary}
+                acknowledged={rulesAcknowledged}
+                canEdit={editable}
+              />
+              <PpeRequirementsConfig
+                siteId={siteId}
+                initial={ppeItems}
+                defaults={ppeDefaults}
+                canEdit={editable}
+              />
+              <div className="space-y-1.5">
+                <label className="block text-sm font-semibold text-ink" htmlFor="induction-notes">
+                  Induction notes
+                </label>
+                <p className="text-xs text-ink-subtle">
+                  Shown at induction alongside the rules above. Previously reachable
+                  only from the site record, which is why most sites have none.
+                </p>
+                <textarea
+                  id="induction-notes"
+                  rows={5}
+                  value={String(values.induction?.inductionContent ?? '')}
+                  disabled={!editable || saving}
+                  onChange={(e) => set('induction', 'inductionContent', e.target.value)}
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+                />
+              </div>
+            </div>
+          ) : active.key === 'company-content' ? (
+            /*
+             * WHAT THE FINISHED INDUCTION WILL CONTAIN, last.
+             *
+             * Company modules and library footage are centrally managed and are not
+             * edited here; a project may leave an optional piece out, with a reason.
+             * The point of the step is that the composition - company content plus
+             * what was just collected - is visible before anybody generates, rather
+             * than discovered on another screen afterwards.
+             */
+            <div className="space-y-4">
+              <SiteInductionModules
+                siteId={siteId}
+                modules={moduleDecisions}
+                canOverride={canOverrideModules}
+              />
+              <SiteLibraryPanel
+                siteId={siteId}
+                assets={libraryDecisions}
+                endpoint={`/api/platform/sites/${siteId}/induction-library`}
+              />
+            </div>
           ) : active.key === 'drawings' ? (
-            <div className="space-y-2 text-sm text-ink-muted">
-              <p>
-                Site layout drawings and emergency plans are filed as site
-                documents, so they use the register’s permissions, expiry
-                tracking and photo annotation.
-              </p>
-              <Link
-                href={`/platform/dashboard/documents/new?site=${siteId}`}
-                className="inline-flex font-semibold text-brand-700 hover:underline"
-              >
-                Upload a drawing or plan →
-              </Link>
+            <div className="space-y-4 text-sm text-ink-muted">
+              {/*
+                * THE SITE MAP, moved here. It used to sit at the bottom of a panel
+                * on the Operative Experience tab, below that panel's Save button,
+                * which is why most sites have none. It is the induction's own layout
+                * image and is NOT a document - it has no expiry and no annotation.
+                */}
+              <SiteMapUpload siteId={siteId} current={siteMap} canEdit={editable} />
+              <div className="space-y-2 border-t border-line pt-4">
+                <p>
+                  Drawings, emergency plans and method statements are filed as site
+                  documents, so they keep the register’s permissions, expiry
+                  tracking and photo annotation. RAMS appear in the induction when
+                  they exist here.
+                </p>
+                <p className="text-xs text-ink-subtle">
+                  This site currently has {ramsCount} RAMS{' '}
+                  {ramsCount === 1 ? 'document' : 'documents'}.
+                </p>
+                <Link
+                  href={`/platform/dashboard/documents/new?site=${siteId}`}
+                  className="inline-flex font-semibold text-brand-700 hover:underline"
+                >
+                  Upload a drawing, plan or RAMS →
+                </Link>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
               {(FIELDS[active.key] ?? []).map((f) => {
                 const current = values[active.key]?.[f.name];
+                /*
+                 * A GATE IS A REAL QUESTION, with three states. Unanswered is not
+                 * "no": a site that has never been asked about temporary works is
+                 * not a site without them, so neither button is selected until
+                 * somebody chooses. Answering "No" completes the step; answering
+                 * "Yes" reveals the detail and the step stays outstanding until it
+                 * is written.
+                 */
+                if (f.kind === 'gate') {
+                  return (
+                    <div key={f.name} className="space-y-1.5">
+                      <p className="text-sm font-semibold text-ink">{f.label}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { v: true, label: 'Yes' },
+                          { v: false, label: 'No' },
+                        ].map((opt) => (
+                          <button
+                            key={String(opt.v)}
+                            type="button"
+                            disabled={!editable || saving}
+                            onClick={() => set(active.key, f.name, opt.v)}
+                            aria-pressed={current === opt.v}
+                            className={
+                              current === opt.v
+                                ? 'rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white'
+                                : 'rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-semibold text-ink hover:bg-surface-sunken disabled:opacity-40'
+                            }
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                      {current === false && (
+                        <p className="text-xs text-ink-subtle">
+                          Nothing further needed here, and this subject is left out
+                          of the induction for this project.
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
+                /*
+                 * The detail behind a gate is hidden until the gate says yes. A
+                 * textarea for something the site has just said it does not have is
+                 * an invitation to write "N/A", which every placeholder filter in
+                 * the product then has to reject.
+                 */
+                // Past the branch above, `f` is never the gate itself.
+                const gate = (FIELDS[active.key] ?? []).find((g) => g.kind === 'gate');
+                if (gate && values[active.key]?.[gate.name] !== true) return null;
                 if (f.kind === 'check') {
                   return (
                     <label key={f.name} className="flex items-start gap-2">

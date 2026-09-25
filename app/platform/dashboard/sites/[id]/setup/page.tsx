@@ -7,7 +7,28 @@ import {
   canEditSite,
 } from '@/services/platformUsers/platformPermissions';
 import { getSetupForSite } from '@/services/sites/siteSetupService';
-import { getSiteRules } from '@/services/checklists/siteRulesService';
+import {
+  getSiteRules,
+  siteRulesAreAcknowledged as rulesStillAcknowledged,
+  SITE_RULE_LIBRARY,
+} from '@/services/checklists/siteRulesService';
+
+import {
+  getSitePpeRequirements,
+  DEFAULT_PPE,
+} from '@/services/checklists/sitePpeService';
+import { getRiskRegister } from '@/services/sites/cppRiskService';
+import { countRisksMissingControls } from '@/services/sites/siteSetupService';
+import {
+  canIssueInductionModule,
+  moduleDecisionsForSite,
+} from '@/services/inductionModules/inductionModuleService';
+import { libraryDecisionsForSite } from '@/services/inductionVideo/libraryAssetService';
+import { manifestForSite } from '@/services/inductionVideo/scriptService';
+import { formatRunningTime } from '@/services/inductionVideo/captions';
+import { describeRealm } from '@/services/inductionModules/moduleActor';
+import { prisma } from '@/lib/prisma';
+import { DocumentCategory } from '@prisma/client';
 import { getSiteServiceConfig } from '@/services/siteServices/siteServiceAvailability';
 import { listActiveConfigTemplates } from '@/services/siteServices/siteConfigTemplateService';
 import {
@@ -112,6 +133,9 @@ export default async function SiteSetupPage({
     utilities: { utilitiesIsolation: info?.utilitiesIsolation ?? '' },
     environment: { environmentalControls: info?.environmentalControls ?? '' },
     drawings: {},
+    // The notes move here from the Director-only site record.
+    induction: { inductionContent: site.inductionContent ?? '' },
+    risks: {},
     people: {},
     services: {},
   };
@@ -119,6 +143,41 @@ export default async function SiteSetupPage({
   // SC-021 — the site's permit and inspection availability, with the conflicts
   // that block a disable, so the step can explain a refusal before it happens.
   const serviceGroups = (await getSiteServiceConfig(viewer, site.id)) ?? [];
+
+  /*
+   * EVERYTHING THE HOSTED EDITORS NEED.
+   *
+   * The risk register, the site rules, the PPE list, the site map and the company
+   * content are all edited inside this wizard now, by the components that already
+   * own them. They save themselves through their own endpoints, so this page only
+   * has to hand them their current state.
+   */
+  const [
+    register,
+    ppeItems,
+    risksMissingControls,
+    rulesAcknowledged,
+    ramsCount,
+    manifest,
+  ] = await Promise.all([
+    getRiskRegister(site.id),
+    getSitePpeRequirements(site.id),
+    countRisksMissingControls(site.id),
+    rulesStillAcknowledged(site.id),
+    prisma.document.count({
+      where: { jobSiteId: site.id, category: DocumentCategory.RAMS },
+    }),
+    manifestForSite(site.id),
+  ]);
+  /*
+   * The company content the finished induction will carry. The overlap note needs
+   * the scene types this project's own records produce, which is what the manifest
+   * is - the same input the induction-video screen uses, so the two agree.
+   */
+  const [moduleDecisions, libraryDecisions] = await Promise.all([
+    moduleDecisionsForSite(site.id, (manifest?.scenes ?? []).map((sc: { sceneType: string }) => sc.sceneType)),
+    libraryDecisionsForSite(site.id),
+  ]);
   // SC-021 Phase 2 — templates the manager can apply from inside the wizard.
   const configTemplates = (await listActiveConfigTemplates()).map((t) => ({
     id: t.id,
@@ -149,6 +208,50 @@ export default async function SiteSetupPage({
         initialPeople={initialPeople}
         completedSteps={site.setupProgress?.completedSteps ?? []}
         siteRuleCount={siteRules.length}
+        ppeItemCount={ppeItems.length}
+        risksMissingControls={risksMissingControls}
+        riskTopics={register.rows}
+        ruleItems={siteRules}
+        ruleLibrary={SITE_RULE_LIBRARY}
+        rulesAcknowledged={rulesAcknowledged}
+        ppeItems={ppeItems}
+        ppeDefaults={DEFAULT_PPE}
+        siteMap={{
+          hasSiteMap: Boolean(site.siteInformation?.siteMapBlobPath),
+          siteMapFileName: site.siteInformation?.siteMapFileName ?? null,
+        }}
+        ramsCount={ramsCount}
+        moduleDecisions={moduleDecisions.map((d) => ({
+          moduleId: d.moduleId,
+          slug: d.slug,
+          title: d.title,
+          mandatory: d.mandatory,
+          issuedVersion: d.issuedVersion,
+          companyHeading: d.companyHeading,
+          companyNarration: d.companyNarration,
+          state: d.state,
+          included: d.included,
+          overrideNarration: d.overrideNarration,
+          reason: d.reason,
+          decidedByName: d.decidedByName,
+          displacedBySiteContent: d.displacedBySiteContent,
+        }))}
+        libraryDecisions={libraryDecisions.map((d) => ({
+          assetId: d.assetId,
+          title: d.title,
+          description: d.description,
+          placement: d.placement,
+          mandatory: d.mandatory,
+          issuedVersion: d.issuedVersion,
+          durationLabel: d.durationMs ? formatRunningTime(d.durationMs) : null,
+          included: d.included,
+          effectivelyIncluded: d.effectivelyIncluded,
+          reason: d.reason,
+          decidedByName: d.decidedByName,
+          decidedByRealm: describeRealm(d.decidedByRealm),
+          replacesModuleTitle: d.replacesModuleTitle,
+        }))}
+        canOverrideModules={canIssueInductionModule(viewer.role)}
         canEditProject={canEditSite(viewer.role)}
         serviceGroups={serviceGroups}
         configTemplates={configTemplates}

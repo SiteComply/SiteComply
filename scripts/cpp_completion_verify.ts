@@ -28,7 +28,14 @@ function chk(name: string, cond: boolean, detail = '') {
   else { failed++; console.log(`  FAIL ${name}${detail ? ` — ${detail}` : ''}`); }
 }
 
-const EMPTY_COUNTS = { siteManagers: 0, firstAiders: 0, siteRules: 0 };
+const EMPTY_COUNTS = {
+  siteManagers: 0,
+  firstAiders: 0,
+  siteRules: 0,
+  ppeItems: 0,
+  // Zero is the GOOD value here: nothing applies without controls.
+  risksMissingControls: 0,
+};
 const snap = (
   values: SetupSnapshot['values'],
   counts: Partial<SetupSnapshot['counts']> = {},
@@ -63,7 +70,13 @@ function main() {
     access: { accessEgress: NARRATIVE },
     utilities: { utilitiesIsolation: NARRATIVE },
     environment: { environmentalControls: NARRATIVE },
-  }, { siteManagers: 1, firstAiders: 1, siteRules: 10 });
+    // The three site-condition questions, answered. "No" is a complete answer.
+    'high-risk': { hasHighRiskActivities: false },
+    'temporary-works': { hasTemporaryWorks: false },
+    traffic: { hasTrafficManagement: false },
+    // The register has been through, with nothing applying that lacks controls.
+    risks: { reviewed: true },
+  }, { siteManagers: 1, firstAiders: 1, siteRules: 10, ppeItems: 4, risksMissingControls: 0 });
   const cf = computeDerivedCompleteness({}, full, []);
   chk('[1] CONTROL — a genuinely complete site reaches 100%', cf.percent === 100,
     `${cf.percent}% (outstanding: ${cf.outstanding.map((o) => o.key).join(', ') || 'none'})`);
@@ -107,14 +120,42 @@ function main() {
     stepStatus('welfare', snap({ welfare: { welfareFacilities: NARRATIVE, workingHours: 'Mon-Fri 07:30-17:00' } })).status === 'COMPLETE');
 
   // -----------------------------------------------------------------------
-  console.log('\n[4] The rules section uses the LIBRARY, not the free text');
+  console.log('\n[4] What an operative is told comes from the LIBRARY, not free text');
   // -----------------------------------------------------------------------
-  chk('[4] free text alone does NOT complete the rules section',
-    stepStatus('rules', snap({ rules: { siteRules: NARRATIVE } })).status === 'EMPTY');
-  chk('[4] one published library rule does',
-    stepStatus('rules', snap({}, { siteRules: 1 })).status === 'COMPLETE');
-  chk('[4]   and zero rules with free text is still outstanding',
-    stepStatus('rules', snap({ rules: { siteRules: NARRATIVE } }, { siteRules: 0 })).missing.length === 1);
+  /*
+   * The requirement MOVED. It used to sit on the `rules` step, which edits
+   * SiteInformation.siteRules - supplementary notes - and could therefore never
+   * satisfy it: a red status pointing at a screen whose field is the wrong one.
+   * It now sits on `induction`, which is where the rules and the PPE are edited.
+   */
+  chk('[4] the free-text step no longer carries a requirement it cannot satisfy',
+    requirementsFor('rules').length === 0);
+  chk('[4] free text alone does not complete the induction section',
+    stepStatus('induction', snap({ rules: { siteRules: NARRATIVE } })).status === 'EMPTY');
+  chk('[4] published rules AND PPE complete it',
+    stepStatus('induction', snap({}, { siteRules: 1, ppeItems: 3 })).status === 'COMPLETE');
+  chk('[4]   rules without PPE is PARTIAL, not complete',
+    stepStatus('induction', snap({}, { siteRules: 1, ppeItems: 0 })).status === 'PARTIAL');
+  chk('[4]   and it names the PPE as what is missing',
+    stepStatus('induction', snap({}, { siteRules: 1 })).missing.join() ===
+      'At least one PPE requirement');
+
+  console.log('\n[4b] The risk register is the one thing that BLOCKS a video');
+  chk('[4b] an unreviewed register is outstanding',
+    stepStatus('risks', snap({})).status !== 'COMPLETE',
+    // PARTIAL rather than EMPTY: "nothing applies without controls" is already
+    // true of a register nobody has touched, which is exactly why the reviewed
+    // requirement exists beside it.
+    stepStatus('risks', snap({})).status);
+  chk('[4b] a reviewed register with every control written is COMPLETE',
+    stepStatus('risks', snap({ risks: { reviewed: true } }, { risksMissingControls: 0 }))
+      .status === 'COMPLETE');
+  chk('[4b] ONE risk applying with no controls is not complete, however much else is done',
+    stepStatus('risks', snap({ risks: { reviewed: true } }, { risksMissingControls: 1 }))
+      .status === 'PARTIAL');
+  chk('[4b]   and it says so',
+    stepStatus('risks', snap({ risks: { reviewed: true } }, { risksMissingControls: 2 }))
+      .missing.join() === 'Control measures for every risk that applies');
 
   // -----------------------------------------------------------------------
   console.log('\n[5] Personnel');
@@ -154,15 +195,43 @@ function main() {
     half.outstanding.find((o) => o.key === 'welfare')?.status === 'PARTIAL');
 
   // -----------------------------------------------------------------------
-  console.log('\n[8] Conditional steps are not gaps');
+  console.log('\n[8] The site-condition questions are ASKED, not inferred');
   // -----------------------------------------------------------------------
-  const off = computeDerivedCompleteness({}, snap({}), []);
-  const on = computeDerivedCompleteness({ hasTemporaryWorks: true }, snap({}), []);
-  chk('[8] temporary works is not counted when the flag is off',
-    !off.outstanding.some((o) => o.key === 'temporary-works'));
-  chk('[8]   and IS counted when it is on',
-    on.outstanding.some((o) => o.key === 'temporary-works'));
-  chk('[8] applicable tracks the flag', on.applicable > off.applicable);
+  /*
+   * These three used to be hidden steps whose visibility was derived from the
+   * textarea already having content - so nothing ever asked, and a site with real
+   * temporary works read as complete with no temporary-works scene. They are now
+   * always applicable and carry a gated requirement.
+   */
+  const unasked = computeDerivedCompleteness({}, snap({}), []);
+  chk('[8] an unanswered temporary-works question IS outstanding',
+    unasked.outstanding.some((o) => o.key === 'temporary-works'));
+  const saidNo = computeDerivedCompleteness(
+    {},
+    snap({ 'temporary-works': { hasTemporaryWorks: false } }),
+    [],
+  );
+  chk('[8] answering NO completes the step with no detail needed',
+    !saidNo.outstanding.some((o) => o.key === 'temporary-works'));
+  const saidYes = computeDerivedCompleteness(
+    {},
+    snap({ 'temporary-works': { hasTemporaryWorks: true } }),
+    [],
+  );
+  chk('[8] answering YES leaves it outstanding until the detail is written',
+    saidYes.outstanding.some((o) => o.key === 'temporary-works'));
+  const answered = computeDerivedCompleteness(
+    {},
+    snap({ 'temporary-works': { hasTemporaryWorks: true, temporaryWorks: NARRATIVE } }),
+    [],
+  );
+  chk('[8]   and complete once it is',
+    !answered.outstanding.some((o) => o.key === 'temporary-works'));
+  chk('[8] F10 is still conditional, because it either applies or does not',
+    !computeDerivedCompleteness({}, snap({}), []).outstanding.some((o) => o.key === 'f10') &&
+      computeDerivedCompleteness({ cdmNotifiable: true }, snap({}), []).outstanding.some(
+        (o) => o.key === 'f10',
+      ));
 
   // -----------------------------------------------------------------------
   console.log('\n[9] The wizard and the server cannot drift');
@@ -178,9 +247,25 @@ function main() {
   let missingInWizard: string[] = [];
   for (const key of STEPS_WITH_REQUIREMENTS) {
     for (const r of requirementsFor(key)) {
-      const fields = r.kind === 'either' ? r.fields : r.kind === 'count' ? [] : [r.field];
+      const fields =
+        r.kind === 'either'
+          ? r.fields
+          : r.kind === 'count' || r.kind === 'none'
+            ? []
+            // A gated requirement owns two names, and BOTH must exist on each side.
+            : r.kind === 'gated'
+              ? [r.flag, r.field]
+              : [r.field];
       for (const f of fields) {
         if (!new RegExp(`\\b${f}\\b`).test(snapBlock)) missingInServer.push(`${key}.${f}`);
+        /*
+         * `reviewed` is the one requirement with no input, deliberately: the risk
+         * register saves itself through its own endpoint, so what the step needs is
+         * the record that somebody has been through it. Both sides read that from
+         * the reviewed list - the server from completedSteps, the wizard from
+         * `done` - so they cannot drift, which is what this check is protecting.
+         */
+        if (f === 'reviewed') continue;
         if (!new RegExp(`name: '${f}'`).test(wiz)) missingInWizard.push(`${key}.${f}`);
       }
     }

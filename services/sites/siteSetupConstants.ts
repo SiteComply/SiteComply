@@ -20,12 +20,20 @@
 
 export type SetupOwner = 'DIRECTOR' | 'SITE_MANAGER';
 
-/** Flags gathered early that decide which later steps are relevant. */
-export type SetupFlag =
-  | 'hasTemporaryWorks'
-  | 'hasTrafficManagement'
-  | 'hasHighRiskActivities'
-  | 'cdmNotifiable';
+/**
+ * Flags gathered early that decide which later steps are relevant.
+ *
+ * ONLY cdmNotifiable REMAINS. The three site-condition flags - temporary works,
+ * traffic management, high-risk activities - used to hide their own steps until
+ * somebody had already typed into the textarea behind them, which meant the
+ * question was never asked and a site with real temporary works read as complete
+ * with no temporary-works scene in its induction. Those steps are now always
+ * shown and ask outright; the ANSWER lives on SiteInformation.
+ *
+ * F10 is different and stays conditional: it is a legal notification that either
+ * applies or does not, and the project step asks that question directly.
+ */
+export type SetupFlag = 'cdmNotifiable';
 
 export interface SetupStep {
   key: string;
@@ -37,6 +45,24 @@ export interface SetupStep {
   requiresFlag?: SetupFlag;
   /** Counts toward "ready to generate a Construction Phase Plan". */
   cppRequired: boolean;
+  /**
+   * Counts toward "ready to generate this site's induction video".
+   *
+   * ── WHY BOTH FLAGS AND NOT ONE ────────────────────────────────────────────
+   *
+   * The two documents need different things. A Construction Phase Plan needs the
+   * CDM apparatus - duty holders, F10, appointment dates - which an induction
+   * video never mentions. An induction video needs what an operative is shown and
+   * must wear: the site rules they acknowledge, the PPE, control measures for every
+   * hazard that applies. Neither list is a subset of the other, so a single
+   * "required" flag would either hold up a video for an F10 reference or let a
+   * plan pass with no PPE.
+   *
+   * Setup is complete when BOTH are satisfied. That is the point of the
+   * restructure: finishing setup means you can generate either, immediately,
+   * without discovering a gap on another screen.
+   */
+  videoRequired: boolean;
 }
 
 /**
@@ -52,6 +78,9 @@ export const SETUP_STEPS: SetupStep[] = [
     description: 'Scope of works, programme dates and CDM notifiable status.',
     owner: 'DIRECTOR',
     cppRequired: true,
+    // The description and scope are what the induction's opening scenes say about
+    // the work; without them an operative is told where they are and not what for.
+    videoRequired: true,
   },
   {
     key: 'client',
@@ -59,44 +88,52 @@ export const SETUP_STEPS: SetupStep[] = [
     description: 'The commissioning client and their contact.',
     owner: 'DIRECTOR',
     cppRequired: true,
+    videoRequired: false,
   },
   {
     key: 'duty-holders',
     title: 'CDM duty holders',
-    description:
-      'Principal Designer and Principal Contractor appointments under CDM 2015.',
+    description: 'Principal Designer and Principal Contractor, and when each was appointed.',
     owner: 'DIRECTOR',
     cppRequired: true,
+    videoRequired: false,
   },
   {
     key: 'f10',
     title: 'F10 notification',
-    description: 'Reference for the HSE notification on a notifiable project.',
+    description: 'The HSE reference for a notifiable project.',
     owner: 'DIRECTOR',
     requiresFlag: 'cdmNotifiable',
     cppRequired: true,
+    videoRequired: false,
   },
   {
     key: 'people',
     title: 'Site personnel',
-    description: 'Site managers, first aiders and fire marshals.',
+    description: 'Site managers, first aiders and fire marshals, with how to reach them.',
     owner: 'SITE_MANAGER',
     cppRequired: true,
+    // A first aider here is one of the four things that BLOCK generation: an
+    // operative must know who to find.
+    videoRequired: true,
   },
   {
     key: 'emergency',
     title: 'Emergency arrangements',
     description:
-      'Assembly points, fire arrangements, nearest hospital and procedures.',
+      'What to do in an emergency, the fire assembly point, and how accidents and near misses are reported.',
     owner: 'SITE_MANAGER',
     cppRequired: true,
+    // Two more of the four blockers: the procedures and the assembly point.
+    videoRequired: true,
   },
   {
     key: 'welfare',
     title: 'Welfare and working hours',
-    description: 'Facilities provided and the site’s working hours.',
+    description: 'Facilities on site and the hours the site operates.',
     owner: 'SITE_MANAGER',
     cppRequired: true,
+    videoRequired: true,
   },
   {
     key: 'rules',
@@ -109,7 +146,21 @@ export const SETUP_STEPS: SetupStep[] = [
     description:
       'Supplementary notes shown to operatives beneath the induction site rules.',
     owner: 'SITE_MANAGER',
-    cppRequired: true,
+    /*
+     * NOT cppRequired ANY MORE, and that is a correction rather than a relaxation.
+     * The plan's requirement was "at least one published site rule", which this
+     * step cannot satisfy - it edits the supplementary free text. The requirement
+     * moved with the rules themselves to the `induction` step, which IS required,
+     * so the plan still needs a rule. A step with no requirements that claims to
+     * gate a plan only inflates the figure.
+     */
+    cppRequired: false,
+    /*
+     * NOT videoRequired either, and worth being explicit: NOTHING in the induction
+     * video reads this field. The rules an operative hears come from the Library,
+     * which the `induction` step collects.
+     */
+    videoRequired: false,
   },
   {
     key: 'hazards',
@@ -118,22 +169,42 @@ export const SETUP_STEPS: SetupStep[] = [
       'Site-specific hazards and risks already present on the site or adjacent to it.',
     owner: 'SITE_MANAGER',
     cppRequired: true,
+    videoRequired: true,
+  },
+  {
+    /*
+     * THE RISK REGISTER, moved into the journey.
+     *
+     * This is the step the whole restructure exists for. A hazard the register
+     * marks as APPLYING with no control measures written is the one condition that
+     * REFUSES to generate a video - and the register lived on a page with no link
+     * to it from anywhere in the product. A manager could finish every other step
+     * and still be unable to generate, with nothing telling them why or where to go.
+     */
+    key: 'risks',
+    title: 'Significant risks and controls',
+    description:
+      'Which of the significant risks apply here, and how each one is controlled on this site.',
+    owner: 'SITE_MANAGER',
+    cppRequired: true,
+    videoRequired: true,
   },
   {
     key: 'high-risk',
     title: 'High-risk activities',
-    description: 'Activities needing specific control measures.',
+    description: 'Whether this project involves high-risk activities, and how they are managed.',
     owner: 'SITE_MANAGER',
-    requiresFlag: 'hasHighRiskActivities',
+    // Always shown now, and it ASKS. See SetupFlag.
     cppRequired: true,
+    videoRequired: true,
   },
   {
     key: 'temporary-works',
     title: 'Temporary works',
-    description: 'Design, checks and sign-off for temporary works.',
+    description: 'Whether this project has temporary works, and the arrangements for them.',
     owner: 'SITE_MANAGER',
-    requiresFlag: 'hasTemporaryWorks',
-    cppRequired: false,
+    cppRequired: true,
+    videoRequired: true,
   },
   {
     key: 'access',
@@ -141,36 +212,67 @@ export const SETUP_STEPS: SetupStep[] = [
     description: 'How people and deliveries get on and off site.',
     owner: 'SITE_MANAGER',
     cppRequired: true,
+    videoRequired: true,
   },
   {
     key: 'traffic',
     title: 'Traffic management',
-    description: 'Vehicle routes, segregation and banksman arrangements.',
+    description:
+      'Whether vehicles and pedestrians share routes here, and how they are kept apart.',
     owner: 'SITE_MANAGER',
-    requiresFlag: 'hasTrafficManagement',
-    cppRequired: false,
+    cppRequired: true,
+    videoRequired: true,
   },
   {
     key: 'utilities',
     title: 'Utilities and isolation points',
-    description: 'Services on site and where they are isolated.',
+    description: 'Live services, isolation points and who controls them.',
     owner: 'SITE_MANAGER',
     cppRequired: true,
+    videoRequired: true,
   },
   {
     key: 'environment',
     title: 'Environmental controls',
-    description: 'Dust, noise, spill and waste controls.',
+    description: 'Noise, dust, spillage and waste arrangements for this site.',
     owner: 'SITE_MANAGER',
     cppRequired: true,
+    videoRequired: true,
+  },
+  {
+    /*
+     * WHAT AN OPERATIVE IS TOLD AND MUST WEAR.
+     *
+     * Site rules and PPE are the two scenes an induction cannot sensibly omit, and
+     * neither was collected here: the rules lived on another tab, and PPE was not
+     * mentioned anywhere in setup at all. Both are versioned checklist items rather
+     * than site fields, so this step HOSTS their existing editors rather than
+     * building second ones - the same arrangement the permits step already uses.
+     *
+     * The induction notes join them because they are the same kind of thing - words
+     * an operative is shown - and because they were previously reachable only from
+     * a Director-only edit form that neither the wizard nor the Operative Experience
+     * tab mentions.
+     */
+    key: 'induction',
+    title: 'Site rules, PPE and induction notes',
+    description:
+      'The rules an operative acknowledges, the PPE this site requires, and any notes shown at induction.',
+    owner: 'SITE_MANAGER',
+    cppRequired: true,
+    videoRequired: true,
   },
   {
     key: 'drawings',
-    title: 'Drawings and plans',
+    title: 'Site map, drawings and RAMS',
     description:
-      'Site layout drawings and emergency plans, filed as site documents.',
+      'The site layout map shown at induction, plus drawings and method statements filed as documents.',
     owner: 'SITE_MANAGER',
     cppRequired: false,
+    // The map and the RAMS both produce scenes when present, and neither blocks
+    // generation - a site legitimately may not have method statements yet. Asked
+    // here so nobody has to find the upload on another tab.
+    videoRequired: false,
   },
   {
     // SC-021. Appended rather than inserted so every existing step keeps its
@@ -187,8 +289,29 @@ export const SETUP_STEPS: SetupStep[] = [
       'Which permits, inspections and checks apply to this project. Everything is available until you turn it off.',
     owner: 'SITE_MANAGER',
     cppRequired: false,
+    videoRequired: false,
+  },
+  {
+    /*
+     * THE WHOLE INDUCTION, IN ONE PLACE, LAST.
+     *
+     * Setup ends by showing what the finished video will contain: the company
+     * modules and library footage every project carries, alongside what has just
+     * been collected here. Nothing is edited that is not editable elsewhere - a
+     * project may leave an optional piece of company content out, with a reason -
+     * but the composition stops being something a manager discovers on a different
+     * screen after generating.
+     */
+    key: 'company-content',
+    title: 'Company induction content',
+    description:
+      'The company modules and videos this project will carry, alongside its own content.',
+    owner: 'SITE_MANAGER',
+    cppRequired: false,
+    videoRequired: false,
   },
 ];
+
 
 /** Fields that must exist before a site record is created at all. */
 export const SITE_CORE_FIELDS = [

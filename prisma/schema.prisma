@@ -1911,7 +1911,24 @@ model SiteInformation {
   environmentalControls String? @db.Text
   utilitiesIsolation    String? @db.Text
   highRiskActivities    String? @db.Text
-  fireArrangements      String? @db.Text
+
+  // DOES THIS SITE HAVE THEM AT ALL?
+  //
+  // Three facts about the site, asked outright. They used to be INFERRED from
+  // whether the matching textarea happened to be non-empty, which meant the step
+  // that collects the detail only appeared once somebody had already filled it in
+  // - so nothing ever asked, and a site with real temporary works read as fully
+  // set up with no temporary-works scene in its induction.
+  //
+  // NULL means "not asked yet", which is why these are nullable and not
+  // defaulted: `false` is an answer and must be distinguishable from silence. A
+  // sentinel in the text field could not do this job - both the video's
+  // placeholder filter and the setup completeness check reject "not applicable",
+  // so an honest "no" would have read as an unanswered question forever.
+  hasTemporaryWorks     Boolean?
+  hasTrafficManagement  Boolean?
+  hasHighRiskActivities Boolean?
+  fireArrangements      String?  @db.Text
 
   /// Site map image, stored in the same private Azure Blob container as the
   /// Documents module (via services/documents/blobStorage). Metadata only; the

@@ -58,10 +58,27 @@ function main() {
     /if \(!s\.gatesCompletion \|\| s\.stepKey === null\) continue;/.test(svcCode));
   chk('[2] the gap list only contains setup-owned sections',
     /s\.gatesCompletion &&\s*\n\s*s\.stepKey !== null &&/.test(svcCode));
-  chk('[2] no wired source was added to the completion requirements',
-    !/ppe|rams|permits|monitoring|induction|competence/i.test(
-      completion.slice(completion.indexOf('const REQUIREMENTS'), completion.indexOf('export function requirementsFor')),
-    ));
+  /*
+   * NO WIRED SOURCE MAY GATE THE PLAN.
+   *
+   * The requirement list now also carries induction-video requirements - PPE is
+   * one - so the text "ppe" legitimately appears in it. What must stay true is
+   * narrower and is the thing this check was always protecting: nothing wired may
+   * gate the PLAN. A video-only requirement is marked `gates: 'VIDEO'` and is
+   * excluded from cppReady, so the plan's rule is intact.
+   */
+  const reqBlock = completion.slice(
+    completion.indexOf('const REQUIREMENTS'),
+    completion.indexOf('export function requirementsFor'),
+  );
+  const wiredMentions = reqBlock
+    .split('\n')
+    .filter((l) => /ppe|rams|permits|monitoring|competence/i.test(l));
+  chk('[2] no wired source gates the PLAN',
+    wiredMentions.every((l) => /gates: 'VIDEO'/.test(l)),
+    wiredMentions.filter((l) => !/gates: 'VIDEO'/.test(l)).join(' | ') || 'none');
+  chk('[2]   and the plan excludes video-only requirements from cppReady',
+    /\.every\(\(s\) => metFor\(s\.key, snap, 'BOTH'\)\)/.test(completion));
   // CONTROL: the rules requirement IS in there, so the check above is not
   // passing merely because the slice is empty or mis-located.
   chk('[2] CONTROL — the rules requirement is still present in REQUIREMENTS',

@@ -47,16 +47,60 @@ export interface SetupSnapshot {
     firstAiders: number;
     /** Published SITE_RULE items — the Site Rules Library, not free text. */
     siteRules: number;
+    /** PPE_CONFIRM checklist items — what this site requires an operative to wear. */
+    ppeItems: number;
+    /**
+     * Risks the register marks as APPLYING with no control measures written.
+     *
+     * The only count that must be ZERO. It is also the one condition that refuses
+     * to generate an induction video, which is why it earns a requirement of its
+     * own rather than being folded into a "has some risks" check: a site with
+     * twenty controlled risks and one uncontrolled one cannot generate, and a
+     * count of applicable risks would call that complete.
+     */
+    risksMissingControls: number;
   };
 }
 
+/**
+ * WHICH DOCUMENT A REQUIREMENT HOLDS UP.
+ *
+ * Most hold up both. Some hold up only the induction video, and that distinction
+ * is not a convenience - it is a decision the Construction Phase Plan already made
+ * and this must not overturn. The plan renders PPE, RAMS, permits and monitoring
+ * straight from live data and deliberately does NOT let them gate its completeness
+ * ("wired" sections, gatesCompletion: false). An induction video is the opposite:
+ * an induction with no PPE scene is deficient.
+ *
+ * So a PPE requirement gates VIDEO and not BOTH. Marking it BOTH would quietly
+ * reverse the plan's own rule and make every existing site's CPP read incomplete
+ * for a reason the plan does not care about.
+ */
+type Gates = 'BOTH' | 'VIDEO';
+
+/** Everything gates both documents unless it says otherwise. */
+const gatesOf = (r: Requirement): Gates => r.gates ?? 'BOTH';
+
 /** One thing a section needs before it can be called complete. */
-type Requirement =
+type Requirement = { gates?: Gates } & (
   | { kind: 'text'; field: string; label: string; min?: number }
   | { kind: 'date'; field: string; label: string }
   | { kind: 'answered'; field: string; label: string }
   | { kind: 'either'; fields: string[]; label: string }
-  | { kind: 'count'; of: keyof SetupSnapshot['counts']; label: string };
+  | { kind: 'count'; of: keyof SetupSnapshot['counts']; label: string }
+  /** A count that must be zero — something outstanding rather than something held. */
+  | { kind: 'none'; of: keyof SetupSnapshot['counts']; label: string }
+  /**
+   * A yes/no about the site, plus the detail it demands when the answer is yes.
+   *
+   * "Does this site have temporary works?" is complete when answered NO, and when
+   * answered YES only once the arrangements are written. Two separate requirements
+   * could not express that: a plain `answered` would pass a site that said yes and
+   * wrote nothing, and a plain `text` would hold a site open for detail about
+   * something it does not have.
+   */
+  | { kind: 'gated'; flag: string; field: string; label: string; detailLabel: string }
+);
 
 /**
  * MINIMUM SUBSTANCE for a narrative field.
@@ -169,23 +213,74 @@ const REQUIREMENTS: Record<string, Requirement[]> = {
    * notes instead would let a site with ten published rules read as incomplete,
    * and a site with none read as complete.
    */
-  rules: [
+  /*
+   * NOTHING REQUIRED HERE ANY MORE, and that is the fix rather than an omission.
+   *
+   * This step edits SiteInformation.siteRules - supplementary notes. The rules an
+   * operative acknowledges are SITE_RULE checklist items, and that requirement has
+   * moved to the `induction` step, which is where they are now edited. Leaving the
+   * requirement here would have gone on pointing a red status at a screen whose
+   * field cannot satisfy it.
+   */
+  rules: [],
+  /*
+   * THE RISK REGISTER. Both halves matter:
+   *   - every risk marked as applying must have controls, or the video refuses to
+   *     generate. This is the one blocker setup never checked.
+   *   - and the register must actually have been gone through: a site that has
+   *     answered nothing has no uncontrolled risks either, and would otherwise
+   *     read complete by having said nothing at all.
+   */
+  risks: [
+    {
+      kind: 'none',
+      of: 'risksMissingControls',
+      label: 'Control measures for every risk that applies',
+      // The plan renders the register from live data and does not gate on it.
+      gates: 'VIDEO',
+    },
+    { kind: 'answered', field: 'reviewed', label: 'Significant risks reviewed' },
+  ],
+  /*
+   * WHAT AN OPERATIVE IS TOLD AND MUST WEAR. Both produce a scene an induction
+   * cannot sensibly omit, and neither was collected in setup before.
+   */
+  induction: [
     { kind: 'count', of: 'siteRules', label: 'At least one published site rule' },
+    { kind: 'count', of: 'ppeItems', label: 'At least one PPE requirement', gates: 'VIDEO' },
   ],
   hazards: [
     { kind: 'text', field: 'siteHazards', label: 'Site-specific hazards' },
   ],
   'high-risk': [
-    { kind: 'text', field: 'highRiskActivities', label: 'High-risk activities' },
+    {
+      kind: 'gated',
+      flag: 'hasHighRiskActivities',
+      field: 'highRiskActivities',
+      label: 'Whether this project has high-risk activities',
+      detailLabel: 'How the high-risk activities are managed',
+    },
   ],
   'temporary-works': [
-    { kind: 'text', field: 'temporaryWorks', label: 'Temporary works' },
+    {
+      kind: 'gated',
+      flag: 'hasTemporaryWorks',
+      field: 'temporaryWorks',
+      label: 'Whether this project has temporary works',
+      detailLabel: 'The temporary works arrangements',
+    },
   ],
   access: [
     { kind: 'text', field: 'accessEgress', label: 'Site access and egress' },
   ],
   traffic: [
-    { kind: 'text', field: 'trafficManagement', label: 'Traffic management' },
+    {
+      kind: 'gated',
+      flag: 'hasTrafficManagement',
+      field: 'trafficManagement',
+      label: 'Whether vehicles and pedestrians share routes here',
+      detailLabel: 'How vehicles and pedestrians are kept apart',
+    },
   ],
   utilities: [
     { kind: 'text', field: 'utilitiesIsolation', label: 'Utilities and isolation points' },
@@ -213,7 +308,27 @@ function met(req: Requirement, snap: SetupSnapshot, stepKey: string): boolean {
       return req.fields.some((f) => hasShortValue(v[f]));
     case 'count':
       return snap.counts[req.of] > 0;
+    case 'none':
+      return snap.counts[req.of] === 0;
+    case 'gated': {
+      const answer = v[req.flag];
+      if (!isAnswered(answer)) return false;
+      return answer === false ? true : hasSubstance(v[req.field]);
+    }
   }
+}
+
+/**
+ * Is every requirement of this step that gates `doc` satisfied?
+ *
+ * Separate from stepStatus, which answers about the step as a WHOLE - the figure a
+ * manager reads. This answers the narrower question the plan asks: a step whose
+ * only outstanding item is video-only is complete as far as the plan is concerned.
+ */
+function metFor(stepKey: string, snap: SetupSnapshot, doc: Gates): boolean {
+  return requirementsFor(stepKey)
+    .filter((r) => doc === 'VIDEO' || gatesOf(r) === 'BOTH')
+    .every((r) => met(r, snap, stepKey));
 }
 
 export interface StepStatus {
@@ -268,6 +383,15 @@ export interface DerivedCompleteness {
   statuses: Record<string, StepStatus>;
   /** Every applicable step required for a CPP is COMPLETE. */
   cppReady: boolean;
+  /**
+   * Every applicable step required for an induction VIDEO is COMPLETE.
+   *
+   * Separate from cppReady because the two documents need different things: the
+   * plan needs the CDM apparatus an induction never mentions, and the induction
+   * needs what an operative is shown and must wear. Neither is a subset of the
+   * other, so one flag could only be wrong in one direction.
+   */
+  videoReady: boolean;
   /** Steps the user has marked reviewed — tracking only, never completion. */
   reviewed: string[];
   /**
@@ -320,6 +444,18 @@ export function computeDerivedCompleteness(
     statuses,
     cppReady: applicable
       .filter((s) => s.cppRequired)
+      .every((s) => metFor(s.key, snap, 'BOTH')),
+    /*
+     * READY TO GENERATE AN INDUCTION VIDEO.
+     *
+     * The point of the restructure: this is answered by finishing setup, not by
+     * opening the video screen and reading a warning. It asks every requirement of
+     * every video-required step - including the ones the plan ignores - so a site
+     * that is cppReady may still not be videoReady, and the outstanding list says
+     * which step to open.
+     */
+    videoReady: applicable
+      .filter((s) => s.videoRequired)
       .every((s) => statuses[s.key]!.status === 'COMPLETE'),
     reviewed,
     reviewedButIncomplete: reviewed.filter((k) => statuses[k]!.status !== 'COMPLETE'),
