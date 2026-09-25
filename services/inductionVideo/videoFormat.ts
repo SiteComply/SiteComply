@@ -49,6 +49,47 @@ export const VIDEO_FORMAT = {
 } as const;
 
 /**
+ * THE AUDIO SPEC, AND WHY IT HAS TO LIVE HERE.
+ *
+ * An induction is joined with the concat demuxer and `-c copy`. That is a stream
+ * copy, so every part must already agree on codec, sample rate AND CHANNEL COUNT.
+ * The video side of that agreement was in VIDEO_FORMAT from the start; the audio
+ * side was not, and the two encoders drifted the moment the Library existed:
+ * generated scenes took their channel count from the narration mp3 (Azure speech
+ * returns `...-mono-mp3`, so one channel) while library footage was forced to two.
+ *
+ * The join does not fail on that. It writes the FIRST part's channel layout into
+ * the track header and copies every later part's frames in underneath it, so the
+ * file claims mono and contains stereo, or the reverse, and warns
+ * `Non-monotonic DTS` at each boundary. ffmpeg's own decoder reads the in-band
+ * configuration and plays it anyway, which is exactly why this survived testing;
+ * a stricter player is entitled not to.
+ *
+ * TWO CHANNELS, not one: upmixing mono narration is a duplicated channel and
+ * costs nothing at a fixed 96k, whereas downmixing filmed footage to mono throws
+ * away something a supplier was paid for.
+ */
+export const AUDIO_FORMAT = {
+  codec: 'aac',
+  bitrate: '96k',
+  sampleRate: 44100,
+  channels: 2,
+} as const;
+
+/**
+ * The encoder flags for that spec. Both encoders call this rather than writing
+ * the flags out, so there is one place to change and nowhere to disagree.
+ */
+export function audioEncodeArgs(): string[] {
+  return [
+    '-c:a', AUDIO_FORMAT.codec,
+    '-b:a', AUDIO_FORMAT.bitrate,
+    '-ar', String(AUDIO_FORMAT.sampleRate),
+    '-ac', String(AUDIO_FORMAT.channels),
+  ];
+}
+
+/**
  * Safe areas as a fraction of the canvas.
  *
  * A phone's own furniture - the notch, the home indicator, a browser's chrome,

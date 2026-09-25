@@ -2,6 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+// VALUES, from a module with no Prisma in it - see libraryLimits.ts.
+import {
+  MAX_LIBRARY_VIDEO_BYTES,
+  describeBytes,
+} from '@/services/inductionVideo/libraryLimits';
 
 export interface LibraryRow {
   id: string;
@@ -128,6 +133,19 @@ export function LibrarySection({
     file: File,
   ) {
     setError(null);
+    /*
+     * REFUSE IT HERE, before the bytes go anywhere. The server checks the real size
+     * in storage, but finding out after a 300 MB upload over site broadband is not
+     * a check, it is a punishment. The limit is imported rather than retyped.
+     */
+    if (kind === 'VIDEO' && file.size > MAX_LIBRARY_VIDEO_BYTES) {
+      setError(
+        `That file is ${describeBytes(file.size)}. The limit is ` +
+          `${describeBytes(MAX_LIBRARY_VIDEO_BYTES)} — export it at a lower bitrate, ` +
+          'or split it into shorter videos.',
+      );
+      return;
+    }
     setProgress(`Preparing to upload ${file.name}…`);
     try {
       let rev = revisionId;

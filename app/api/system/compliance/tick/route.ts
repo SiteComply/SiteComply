@@ -85,10 +85,20 @@ async function POSTHandler(req: NextRequest) {
   let libraryPrepared = 0;
   try {
     videosRendered = await runQueuedRenderJobs();
-    /*
-     * LAST, and one at a time. Transcoding library footage is the heaviest thing
-     * on this instance; a script or a render somebody is waiting on comes first.
-     */
+  } catch {
+    // Already recorded against the job row; the tick itself still succeeded.
+  }
+  /*
+   * ITS OWN try, which is the whole point. This shared a try with the render
+   * drain, so anything thrown OUTSIDE a render's own per-job handling - resolving
+   * the renderer, the initial query - skipped the library queue for that hour. One
+   * repeatedly-failing render could therefore starve library transcoding
+   * indefinitely, and the tick would report success each time.
+   *
+   * Last and one at a time: transcoding is the heaviest thing on this instance, so
+   * a script or a render somebody is waiting on comes first.
+   */
+  try {
     libraryPrepared = await runQueuedNormaliseJobs(1);
   } catch {
     // Already recorded against the job row; the tick itself still succeeded.

@@ -36,6 +36,7 @@
 import { runQueuedScriptJobs } from '@/services/inductionVideo/inductionVideoService';
 import { runQueuedNarrationJobs } from '@/services/inductionVideo/narrationService';
 import { runQueuedRenderJobs } from '@/services/inductionVideo/renderService';
+import { runQueuedNormaliseJobs } from '@/services/inductionVideo/libraryAssetService';
 
 let running = false;
 
@@ -53,6 +54,22 @@ export function kickInductionJobs(): boolean {
   setTimeout(() => {
     void (async () => {
       try {
+        /*
+         * NORMALISE FIRST, and it was missing from this list entirely until
+         * 2026-09-25. An uploaded library video sat QUEUED until the hourly tick,
+         * so the operator watched "Preparing the video…" for up to an hour with no
+         * way to tell that from a failure - the exact wait this whole module was
+         * built to remove, on the one job that is slowest to run.
+         *
+         * First, because nothing downstream can be issued until footage is
+         * prepared, and one at a time because a transcode is the heaviest thing
+         * this instance does.
+         */
+        try {
+          await runQueuedNormaliseJobs(1);
+        } catch {
+          // Recorded against the job row; the next tick will try again.
+        }
         try {
           await runQueuedScriptJobs();
         } catch {

@@ -86,11 +86,18 @@ const footage = (over: Record<string, unknown> = {}) => ({
     chk('it pads rather than crops', /force_original_aspect_ratio=decrease/.test(norm) &&
       /pad=\$\{width\}:\$\{height\}/.test(norm),
       'cropping silently decides the sides of somebody’s footage did not matter');
-    chk('it forces an audio stream even for silent footage',
-      /anullsrc=channel_layout=stereo:sample_rate=44100/.test(norm),
+    chk('it still supplies an audio stream for silent footage',
+      /anullsrc=channel_layout=/.test(norm) && /silentFiller/.test(norm),
       'a segment with no audio stream cannot be concatenated with ones that have');
-    chk('it matches the renderer’s audio spec',
-      /'-ar', '44100'/.test(norm) && /'-ac', '2'/.test(norm));
+    chk('  but only when the upload has none of its own',
+      /probe\.hasAudio \? \[\] : silentFiller/.test(norm),
+      'mapping the source AND the filler gave every real upload TWO audio tracks');
+    chk('it takes the audio spec from videoFormat, not its own flags',
+      /audioEncodeArgs\(\)/.test(norm) && !/'-ac', '2'/.test(norm),
+      'channel count has to be shared or the -c copy join mislabels the track');
+    chk('  and so does the renderer',
+      /audioEncodeArgs\(\)/.test(read('services/inductionVideo/ffmpegRenderer.ts')),
+      'scripts/library_audiospec_verify.ts proves the result on real media');
 
     console.log('\nWHERE FOOTAGE SITS IN THE RUNNING ORDER');
     const opening = buildSceneManifest(source({ library: [footage({ placement: 'OPENING' })] }));

@@ -5,7 +5,13 @@ import {
   InductionVideoJobStatus,
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { deleteMedia } from '@/services/inductionVideo/mediaStorage';
+import { kickInductionJobs } from '@/services/inductionVideo/jobKicker';
+import { deleteMedia, mediaProperties } from '@/services/inductionVideo/mediaStorage';
+import {
+  MAX_LIBRARY_VIDEO_BYTES,
+  MAX_LIBRARY_VIDEO_MS,
+  describeBytes,
+} from '@/services/inductionVideo/libraryLimits';
 import type { ModuleActor } from '@/services/inductionModules/moduleActor';
 
 /**
@@ -289,6 +295,7 @@ export async function attachUpload(
     | { kind: 'CAPTIONS'; blobPath: string; fileName: string },
 ): Promise<LibraryResult<{ queued: boolean }>> {
   if (!actor.canDraft) return { ok: false, error: 'Not available.' };
+  let trueBytes = input.kind === 'VIDEO' ? input.bytes : 0;
   const rev = await prisma.libraryAssetRevision.findUnique({
     where: { id: revisionId },
     select: {
@@ -317,6 +324,34 @@ export async function attachUpload(
   }
 
   /*
+   * VERIFY THE UPLOAD AGAINST STORAGE, and take the size from there.
+   *
+   * `bytes` arrives from the browser, and the browser also chose `blobPath`. A
+   * failed or abandoned PUT followed by a successful attach used to record a
+   * revision whose footage did not exist, and the operator only found out when the
+   * transcode failed an hour later with "could not be read back from storage".
+   */
+  if (input.kind === 'VIDEO') {
+    const props = await mediaProperties(input.blobPath);
+    if (!props || props.totalLength === 0) {
+      return {
+        ok: false,
+        error: 'That upload did not arrive completely. Please try uploading the file again.',
+      };
+    }
+    if (props.totalLength > MAX_LIBRARY_VIDEO_BYTES) {
+      return {
+        ok: false,
+        error:
+          `That file is ${describeBytes(props.totalLength)}. The limit is ` +
+          `${describeBytes(MAX_LIBRARY_VIDEO_BYTES)} — export it at a lower bitrate, ` +
+          'or split it into shorter videos.',
+      };
+    }
+    trueBytes = props.totalLength;
+  }
+
+  /*
    * A NEW UPLOAD INVALIDATES THE OLD TRANSCODE. Both files go, and the normalised
    * path is cleared, so a revision can never serve footage from a previous upload
    * while claiming to be the new one.
@@ -331,7 +366,8 @@ export async function attachUpload(
     data: {
       sourceBlobPath: input.blobPath,
       sourceFileName: input.fileName,
-      sourceBytes: input.bytes,
+      // Storage's number, not the browser's.
+      sourceBytes: trueBytes,
       normalisedBlobPath: null,
       normalisedBytes: null,
       durationMs: null,
@@ -343,6 +379,12 @@ export async function attachUpload(
     data: { revisionId, requestedByName: actor.name },
   });
   await record(revisionId, 'FOOTAGE_UPLOADED', actor, input.fileName);
+  /*
+   * START IT NOW. Not awaited: the transcode must not sit inside the operator's
+   * upload request. Without this the job waited for the hourly tick, and the UI
+   * said "Preparing the video for the induction pipeline…" for up to an hour.
+   */
+  kickInductionJobs();
   return { ok: true, value: { queued: true } };
 }
 
@@ -693,10 +735,44 @@ export async function libraryRevisionIdsForSite(siteId: string): Promise<string[
   return resolved.map((r) => r.revisionId);
 }
 
-/** Queued normalise work, for the scheduler. */
+/**
+ * How long a RUNNING transcode may be silent before another pass may take it.
+ *
+ * Comfortably longer than the ffmpeg timeout (15 minutes), so a job that is
+ * genuinely still encoding is never stolen from itself - only one abandoned by a
+ * process that died is reclaimed.
+ */
+export const NORMALISE_STALE_AFTER_MS = Number(
+  process.env.LIBRARY_NORMALISE_STALE_MS ?? 25 * 60 * 1000,
+);
+
+/**
+ * Give up after this many attempts.
+ *
+ * Without a cap, a file that kills the process while being encoded would be
+ * reclaimed and retried for as long as the platform runs.
+ */
+export const NORMALISE_MAX_ATTEMPTS = 3;
+
+/**
+ * Queued normalise work, for the scheduler - AND jobs abandoned mid-run.
+ *
+ * Previously this selected QUEUED only, and nothing anywhere reset a RUNNING row.
+ * An App Service recycle during a transcode therefore parked that revision
+ * forever: invisible to every later pass, `normalisedBlobPath` still null and
+ * `normaliseError` still null, so the UI said "waiting for the upload to finish
+ * being prepared" with nothing coming. A restart is routine on a B1 and the
+ * transcode is the longest-running thing here, so this was a matter of time.
+ */
 export function queuedNormaliseJobs(limit: number) {
+  const staleBefore = new Date(Date.now() - NORMALISE_STALE_AFTER_MS);
   return prisma.libraryNormaliseJob.findMany({
-    where: { status: InductionVideoJobStatus.QUEUED },
+    where: {
+      OR: [
+        { status: InductionVideoJobStatus.QUEUED },
+        { status: InductionVideoJobStatus.RUNNING, startedAt: { lt: staleBefore } },
+      ],
+    },
     orderBy: { createdAt: 'asc' },
     take: limit,
   });
@@ -725,16 +801,32 @@ export async function runQueuedNormaliseJobs(limit = 1): Promise<number> {
   const { normaliseToSpec, normalisingConfigured } = await import(
     '@/services/inductionVideo/libraryNormaliser'
   );
-  const { readMedia, uploadMedia, libraryNormalisedPath } = await import(
+  const { downloadMediaToFile, uploadMediaFromFile, libraryNormalisedPath } = await import(
     '@/services/inductionVideo/mediaStorage'
   );
 
   let done = 0;
   for (const job of jobs) {
-    await prisma.libraryNormaliseJob.update({
-      where: { id: job.id },
-      data: { status: InductionVideoJobStatus.RUNNING, startedAt: new Date(), attempts: { increment: 1 } },
+    /*
+     * CLAIM IT ATOMICALLY, the way the render drain already does. This was a bare
+     * `update`, so two overlapping passes - the upload's own nudge and the hourly
+     * tick, a scheduler retry, a past-due catch-up - could both read the same row
+     * and both spawn ffmpeg on it: two 1080p encodes on one core.
+     *
+     * The status AND startedAt must both be unchanged since the read. That covers
+     * the reclaimed-stale case too: whoever writes first wins, and the loser sees
+     * no rows updated and moves on.
+     */
+    const claimed = await prisma.libraryNormaliseJob.updateMany({
+      where: { id: job.id, status: job.status, startedAt: job.startedAt },
+      data: {
+        status: InductionVideoJobStatus.RUNNING,
+        startedAt: new Date(),
+        attempts: { increment: 1 },
+      },
     });
+    if (claimed.count === 0) continue;
+
     const fail = async (message: string) => {
       await prisma.libraryNormaliseJob.update({
         where: { id: job.id },
@@ -746,6 +838,19 @@ export async function runQueuedNormaliseJobs(limit = 1): Promise<number> {
       });
       await record(job.revisionId, 'PREPARE_FAILED', { name: 'SiteComply', realm: null }, message.slice(0, 200));
     };
+
+    /*
+     * GIVE UP RATHER THAN LOOP. `attempts` was incremented and never read: a file
+     * that takes the process down while encoding would be reclaimed as stale and
+     * retried for the life of the platform. The operator gets a reason instead.
+     */
+    if (job.attempts + 1 > NORMALISE_MAX_ATTEMPTS) {
+      await fail(
+        `preparing this video failed ${job.attempts} times and will not be retried automatically. ` +
+          'Upload the file again, or a different export of it.',
+      );
+      continue;
+    }
 
     try {
       const rev = await prisma.libraryAssetRevision.findUnique({
@@ -761,28 +866,44 @@ export async function runQueuedNormaliseJobs(limit = 1): Promise<number> {
         continue;
       }
 
-      const source = await readMedia(rev.sourceBlobPath);
-      if (!source) {
-        await fail('The uploaded file could not be read back from storage.');
-        continue;
-      }
-      const { output, durationMs } = await normaliseToSpec(
-        source.bytes,
+      /*
+       * STREAMED, BOTH WAYS. Storage → a temp file → ffmpeg → a temp file →
+       * storage, with no copy of the video in the Node heap. This used to
+       * download the whole source into a Buffer and read the whole result into
+       * another, which on a 1.75 GB instance is how a long video takes the site
+       * down with it rather than just failing.
+       */
+      const prepared = await normaliseToSpec(
+        (destination) => downloadMediaToFile(rev.sourceBlobPath!, destination),
         rev.sourceFileName ?? 'upload.mp4',
+        async ({ outputPath, durationMs }) => {
+          if (durationMs <= 0) return { ok: false as const, reason: 'The file does not appear to contain any video.' };
+          if (durationMs > MAX_LIBRARY_VIDEO_MS) {
+            return {
+              ok: false as const,
+              reason:
+                `That video is ${Math.round(durationMs / 60000)} minutes long. The limit is ` +
+                `${Math.round(MAX_LIBRARY_VIDEO_MS / 60000)} minutes — an operative at a site ` +
+                'gate will not watch longer than that. Split it into shorter videos.',
+            };
+          }
+          const path = libraryNormalisedPath(rev.assetId, rev.id);
+          await uploadMediaFromFile(path, outputPath, 'video/mp4');
+          const bytes = (await import('node:fs/promises')).stat(outputPath);
+          return { ok: true as const, path, durationMs, bytes: (await bytes).size };
+        },
       );
-      if (durationMs <= 0) {
-        await fail('The file does not appear to contain any video.');
+      if (!prepared.ok) {
+        await fail(prepared.reason);
         continue;
       }
 
-      const path = libraryNormalisedPath(rev.assetId, rev.id);
-      await uploadMedia(path, output, 'video/mp4');
       await prisma.libraryAssetRevision.update({
         where: { id: rev.id },
         data: {
-          normalisedBlobPath: path,
-          normalisedBytes: output.byteLength,
-          durationMs,
+          normalisedBlobPath: prepared.path,
+          normalisedBytes: prepared.bytes,
+          durationMs: prepared.durationMs,
           normaliseError: null,
         },
       });
@@ -794,7 +915,7 @@ export async function runQueuedNormaliseJobs(limit = 1): Promise<number> {
         rev.id,
         'PREPARED',
         { name: 'SiteComply', realm: null },
-        `${Math.round(durationMs / 1000)}s · ${(output.byteLength / 1_048_576).toFixed(1)} MB`,
+        `${Math.round(prepared.durationMs / 1000)}s · ${describeBytes(prepared.bytes)}`,
       );
       done++;
     } catch (e) {
@@ -803,3 +924,6 @@ export async function runQueuedNormaliseJobs(limit = 1): Promise<number> {
   }
   return done;
 }
+
+// Re-exported so server callers and the verification suites have one import.
+export { MAX_LIBRARY_VIDEO_BYTES, MAX_LIBRARY_VIDEO_MS, describeBytes };

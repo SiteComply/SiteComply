@@ -1,10 +1,10 @@
-import { mkdtemp, rm, writeFile, readFile, stat } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { chmod, access } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { VIDEO_FORMAT } from '@/services/inductionVideo/videoFormat';
+import { AUDIO_FORMAT, VIDEO_FORMAT, audioEncodeArgs } from '@/services/inductionVideo/videoFormat';
 
 /**
  * TRANSCODING AN UPLOAD TO THE PIPELINE'S EXACT OUTPUT SPEC.
@@ -95,8 +95,19 @@ function run(
   });
 }
 
-/** Milliseconds, read from the container rather than guessed from the bitrate. */
-async function probeDurationMs(bin: string, file: string, cwd: string): Promise<number> {
+/**
+ * Milliseconds, read from the container rather than guessed from the bitrate -
+ * and whether the file has an audio stream at all.
+ *
+ * The audio answer decides how many inputs the transcode gets. Mapping both the
+ * source's audio AND a silent filler (`-map 0:a? -map 1:a`) is what produced
+ * segments with TWO audio tracks for every real upload: the optional map matched,
+ * the mandatory one was added anyway, and the concat silently kept one of them.
+ */
+async function probeSource(bin: string, file: string, cwd: string): Promise<{
+  durationMs: number;
+  hasAudio: boolean;
+}> {
   /*
    * ffprobe is a separate binary and the vendored build may not include it, so the
    * duration is read from ffmpeg's own report of the file it just wrote. Parsing
@@ -105,15 +116,20 @@ async function probeDurationMs(bin: string, file: string, cwd: string): Promise<
   const { stderr } = await run(bin, ['-hide_banner', '-nostdin', '-i', file], cwd, 60_000).catch(
     (e: Error) => ({ stdout: '', stderr: e.message }),
   );
+  // Only a stream OF THE INPUT counts. `Stream #0:` is the file being probed;
+  // matching a bare "Audio:" would also match an input ffmpeg itself added.
+  const hasAudio = /Stream #0:\d+.*: Audio:/.test(stderr);
   const m = /Duration:\s*(\d+):(\d+):(\d+)\.(\d+)/.exec(stderr);
-  if (!m) return 0;
+  if (!m) return { durationMs: 0, hasAudio };
   const [, h, min, sec, frac] = m;
-  return (
-    Number(h) * 3_600_000 +
-    Number(min) * 60_000 +
-    Number(sec) * 1_000 +
-    Number(frac.padEnd(3, '0').slice(0, 3))
-  );
+  return {
+    durationMs:
+      Number(h) * 3_600_000 +
+      Number(min) * 60_000 +
+      Number(sec) * 1_000 +
+      Number(frac.padEnd(3, '0').slice(0, 3)),
+    hasAudio,
+  };
 }
 
 export function normalisingConfigured(): boolean {
@@ -126,10 +142,22 @@ export function normalisingConfigured(): boolean {
  * The caller uploads the result; this function touches no storage, so it can be
  * driven from a test with a local file.
  */
-export async function normaliseToSpec(source: Buffer, fileName: string): Promise<{
-  output: Buffer;
-  durationMs: number;
-}> {
+export async function normaliseToSpec<T>(
+  /**
+   * Either the bytes, or a function that writes the source to a path this gives
+   * it. The second form keeps a 300 MB upload out of the Node heap entirely: the
+   * caller streams storage straight to disk, ffmpeg reads the file, and the result
+   * is streamed back without ever being a Buffer.
+   */
+  source: Buffer | ((destination: string) => Promise<boolean>),
+  fileName: string,
+  /**
+   * Called with the finished segment while the working directory still exists.
+   * Cleanup stays in this function's `finally`, so no caller can leak a temp dir
+   * holding a copy of a video.
+   */
+  consume: (result: { outputPath: string; durationMs: number }) => Promise<T>,
+): Promise<T> {
   const bin = executablePath();
   await ensureExecutable(bin);
   const { width, height, fps } = VIDEO_FORMAT;
@@ -137,31 +165,41 @@ export async function normaliseToSpec(source: Buffer, fileName: string): Promise
   try {
     const ext = fileName.includes('.') ? fileName.split('.').pop()!.replace(/[^a-zA-Z0-9]/g, '') : 'mp4';
     const input = `source.${ext || 'mp4'}`;
-    await writeFile(join(work, input), source);
+    if (typeof source === 'function') {
+      const got = await source(join(work, input));
+      if (!got) throw new Error('the uploaded file could not be read back from storage');
+    } else {
+      await writeFile(join(work, input), source);
+    }
 
+    /*
+     * EXACTLY ONE AUDIO STREAM, decided before the encode rather than by two maps
+     * racing each other. A silent filler is added as a second INPUT only when the
+     * upload genuinely has no audio; when it does, there is no filler to map and
+     * no `-shortest` needed to hold it back.
+     */
+    const probe = await probeSource(bin, input, work);
+    const silentFiller = [
+      '-f', 'lavfi',
+      '-i', `anullsrc=channel_layout=${AUDIO_FORMAT.channels === 2 ? 'stereo' : 'mono'}` +
+        `:sample_rate=${AUDIO_FORMAT.sampleRate}`,
+    ];
     await run(
       bin,
       [
         '-hide_banner', '-nostdin', '-y',
         '-i', input,
-        /*
-         * Silent audio, used only if the upload has no audio stream. `-shortest`
-         * below stops it extending the segment.
-         */
-        '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
+        ...(probe.hasAudio ? [] : silentFiller),
         '-filter_complex',
         `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
           `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black,` +
           `fps=${fps},setsar=1[v]`,
         '-map', '[v]',
-        // The upload's own audio when it has any, the silence otherwise.
-        '-map', '0:a?',
-        '-map', '1:a',
-        '-shortest',
+        ...(probe.hasAudio ? ['-map', '0:a:0'] : ['-map', '1:a', '-shortest']),
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
         '-g', String(fps * 2),
         '-pix_fmt', 'yuv420p',
-        '-c:a', 'aac', '-b:a', '96k', '-ar', '44100', '-ac', '2',
+        ...audioEncodeArgs(),
         '-movflags', '+faststart',
         'segment.mp4',
       ],
@@ -173,8 +211,8 @@ export async function normaliseToSpec(source: Buffer, fileName: string): Promise
     const out = join(work, 'segment.mp4');
     const info = await stat(out);
     if (info.size === 0) throw new Error('the transcode produced an empty file');
-    const durationMs = await probeDurationMs(bin, 'segment.mp4', work);
-    return { output: await readFile(out), durationMs };
+    const durationMs = (await probeSource(bin, 'segment.mp4', work)).durationMs;
+    return await consume({ outputPath: out, durationMs });
   } finally {
     await rm(work, { recursive: true, force: true });
   }

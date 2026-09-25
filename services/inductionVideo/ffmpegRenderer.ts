@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
 import { accessSync, chmodSync, constants, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { VIDEO_FORMAT } from '@/services/inductionVideo/videoFormat';
+import { VIDEO_FORMAT, audioEncodeArgs } from '@/services/inductionVideo/videoFormat';
 import { sceneVisual, type SceneVisual } from '@/services/inductionVideo/sceneVisual';
 import { sceneAss } from '@/services/inductionVideo/assDocument';
 import type {
@@ -274,7 +274,13 @@ export class FfmpegVideoRenderer implements VideoRenderer {
       '-g', String(VIDEO_FORMAT.fps * 2),
       // yuv420p, or the file will not play on iOS at all.
       '-pix_fmt', 'yuv420p',
-      '-c:a', 'aac', '-b:a', '96k', '-ar', '44100',
+      /*
+       * The SHARED audio spec, not this file's own. Azure speech returns
+       * `...-mono-mp3`, so without an explicit channel count a generated scene
+       * inherited ONE channel while library footage was forced to two, and the
+       * `-c copy` join then mislabelled whichever came second.
+       */
+      ...audioEncodeArgs(),
       '-shortest',
       `${stem}.mp4`,
     ];

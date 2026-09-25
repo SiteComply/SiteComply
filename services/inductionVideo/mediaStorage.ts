@@ -161,6 +161,40 @@ export async function uploadMedia(
 }
 
 /** Best-effort delete, for media whose scene has gone. */
+/**
+ * Stream a blob to a local file, and a local file back to a blob.
+ *
+ * WHY NOT readMedia/uploadMedia: those hand back and take a Buffer. For a
+ * 300 MB library upload that is 300 MB of Node heap for the source and another
+ * buffer for the transcoded result, on the same 1.75 GB instance that is serving
+ * every request - and ffmpeg needs the bytes on disk anyway, so the Buffer was
+ * pure overhead between two files. The Azure SDK streams both directions.
+ */
+export async function downloadMediaToFile(
+  blobPath: string,
+  localPath: string,
+): Promise<boolean> {
+  try {
+    await getContainer().getBlockBlobClient(blobPath).downloadToFile(localPath);
+    return true;
+  } catch (error) {
+    if (error instanceof RestError && error.statusCode === 404) return false;
+    throw error;
+  }
+}
+
+/** Upload a local file's contents, streamed rather than read into memory. */
+export async function uploadMediaFromFile(
+  blobPath: string,
+  localPath: string,
+  contentType: string,
+): Promise<void> {
+  await ensureContainer();
+  await getContainer()
+    .getBlockBlobClient(blobPath)
+    .uploadFile(localPath, { blobHTTPHeaders: { blobContentType: contentType } });
+}
+
 export async function deleteMedia(blobPath: string): Promise<void> {
   try {
     await getContainer().getBlockBlobClient(blobPath).deleteIfExists();
