@@ -390,14 +390,24 @@ export function LibrarySection({
 
       {assets.length === 0 && (
         <p className="rounded-xl border border-line bg-surface p-4 text-sm text-ink-muted shadow-card">
-          No library videos yet. Every project’s induction is currently built entirely from that
-          project’s own information and the written company modules.
+          <span className="font-semibold text-ink">No library videos yet.</span> Every project’s
+          induction is currently built entirely from that project’s own information and the written
+          company modules. The three parts of the induction a company video can occupy are shown
+          below.
         </p>
       )}
 
-      {/* ── GROUPED BY WHERE IT PLAYS ── */}
-      {assets.length > 0 &&
-        BANDS.map((band) => {
+      {/*
+       * GROUPED BY WHERE IT PLAYS — AND ALWAYS RENDERED, INCLUDING WHEN EMPTY.
+       *
+       * This was gated on `assets.length > 0`, which hid the entire structure on a
+       * new library and made the page look untouched: the owner's first sight of it
+       * was a heading and one paragraph, exactly as before. The running order is
+       * most useful when there is nothing in it, because it is what explains where a
+       * company video would go and how many slots there are. An empty band says so
+       * itself.
+       */}
+      {BANDS.map((band) => {
           const inBand = shown.filter((a) => a.placement === band.key);
           return (
             <section key={band.key} className="rounded-xl border border-line bg-surface p-4 shadow-card">
@@ -453,7 +463,7 @@ export function LibrarySection({
               )}
             </section>
           );
-        })}
+      })}
     </div>
   );
 }

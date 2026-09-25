@@ -183,10 +183,15 @@ fi
 
 echo "[4/7] Running the verification suites..."
 export FFMPEG_PATH="$PWD/vendor/ffmpeg/ffmpeg"
-for S in library_ia_verify library_pipeline_verify library_audiospec_verify \
+# library_render_verify ACTUALLY RENDERS the index to HTML. Every other suite reads
+# source or calls a service, and that gap cost twice in one day: a function prop that
+# threw before rendering, and a page whose whole new structure was gated on having
+# assets so an empty library looked untouched. Both passed every string assertion.
+for S in library_render_verify library_ia_verify library_pipeline_verify library_audiospec_verify \
          inductionvideo_library_verify inductionvideo_verify inductionvideo_e2e_verify \
          setup_video_readiness_verify cpp_completion_verify site_rules_verify; do
-  OUT=$(npx tsx "scripts/$S.ts" 2>&1) || { echo "$OUT" | tail -20; fail "$S failed"; }
+  SRC="scripts/$S.ts"; [ -f "$SRC" ] || SRC="scripts/$S.tsx"
+  OUT=$(npx tsx "$SRC" 2>&1) || { echo "$OUT" | tail -20; fail "$S failed"; }
   echo "$OUT" | grep -qE "(^| )0 failed" || { echo "$OUT" | tail -20; fail "$S did not report 0 failed"; }
   echo "  ok   $S"
 done
