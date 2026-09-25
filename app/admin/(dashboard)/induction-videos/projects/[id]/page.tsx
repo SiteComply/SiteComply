@@ -12,6 +12,10 @@ import { InductionVideoStatusBadge } from '@/components/platform/InductionVideoS
 import { GenerateScriptButton } from '@/components/platform/GenerateScriptButton';
 import { formatDateTimeUK } from '@/lib/datetime';
 import { RefreshWhileWorking } from '@/components/inductionVideo/RefreshWhileWorking';
+import { SiteLibraryPanel } from '@/components/inductionVideo/SiteLibraryPanel';
+import { libraryDecisionsForSite } from '@/services/inductionVideo/libraryAssetService';
+import { formatRunningTime } from '@/services/inductionVideo/captions';
+import { describeRealm } from '@/services/inductionModules/moduleActor';
 import { DeleteVersionButton } from '@/components/inductionVideo/DeleteVersionButton';
 import { anyWorking, describeAnyWork } from '@/services/inductionVideo/videoProgress';
 
@@ -47,6 +51,22 @@ export default async function AdminProjectInductionVideoPage({
   if (!videos || !readiness) notFound();
 
   const { manifest, siteName } = readiness;
+  const libraryDecisions = await libraryDecisionsForSite(params.id);
+  const libraryRows = libraryDecisions.map((d) => ({
+    assetId: d.assetId,
+    title: d.title,
+    description: d.description,
+    placement: d.placement,
+    mandatory: d.mandatory,
+    issuedVersion: d.issuedVersion,
+    durationLabel: d.durationMs ? formatRunningTime(d.durationMs) : null,
+    included: d.included,
+    effectivelyIncluded: d.effectivelyIncluded,
+    reason: d.reason,
+    decidedByName: d.decidedByName,
+    decidedByRealm: describeRealm(d.decidedByRealm),
+    replacesModuleTitle: d.replacesModuleTitle,
+  }));
   const manages = adminCanManage(session.role);
   const required = manifest.scenes.filter((s) => s.required);
   const optional = manifest.scenes.filter((s) => !s.required);
@@ -73,6 +93,17 @@ export default async function AdminProjectInductionVideoPage({
         working={anyWorking(videos)}
         label={describeAnyWork(videos)}
       />
+
+      <SiteLibraryPanel
+
+        siteId={params.id}
+
+        assets={libraryRows}
+
+        endpoint={`/api/admin/sites/${params.id}/induction-library`}
+
+      />
+
 
       {manifest.missing.length > 0 && (
         <section className="rounded-xl border border-danger-500/40 bg-danger-50 p-4">

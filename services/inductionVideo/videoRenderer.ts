@@ -25,10 +25,19 @@ export interface RenderScene {
   heading: string;
   /** The approved narration. The frame shows what fits; the voice says it all. */
   narration: string;
-  /** The synthesised audio for this scene. */
-  audio: Buffer;
+  /** The synthesised audio for this scene. Absent for library footage. */
+  audio?: Buffer;
   /** Its measured length, which is what the scene's frame is held for. */
   durationMs: number;
+  /**
+   * LIBRARY FOOTAGE: an already-finished segment, transcoded on upload to this
+   * pipeline's exact output spec.
+   *
+   * When present the renderer must NOT build a frame or lay audio over it. The
+   * segment is the scene: it is concatenated as it is, which is the whole reason
+   * uploads are normalised once rather than re-encoded into every render.
+   */
+  segment?: Buffer;
 }
 
 export interface RenderRequest {

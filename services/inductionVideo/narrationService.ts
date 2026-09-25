@@ -20,6 +20,7 @@ import {
 import {
   captionsPath,
   mediaExists,
+  readMedia,
   sceneAudioPath,
   transcriptPath,
   uploadMedia,
@@ -65,6 +66,8 @@ export interface NarrationPorts {
   synthesiser: SpeechSynthesiser;
   put(blobPath: string, data: Buffer, contentType: string): Promise<void>;
   exists(blobPath: string): Promise<boolean>;
+  /** Reads a library segment's caption file back, to splice into the subtitles. */
+  get(blobPath: string): Promise<Buffer | null>;
 }
 
 export function azureNarrationPorts(): NarrationPorts {
@@ -72,6 +75,7 @@ export function azureNarrationPorts(): NarrationPorts {
     synthesiser: requireSpeechSynthesiser(),
     put: uploadMedia,
     exists: mediaExists,
+    get: async (blobPath: string) => (await readMedia(blobPath))?.bytes ?? null,
   };
 }
 
@@ -151,11 +155,22 @@ export async function requestNarration(
    */
   const scenes = await prisma.inductionVideoScene.findMany({
     where: { videoId },
-    select: { narration: true, audioHash: true, audioDurationMs: true },
+    select: {
+      narration: true,
+      audioHash: true,
+      audioDurationMs: true,
+      libraryRevisionId: true,
+    },
   });
   const voice = synthesiser.voice;
+  /*
+   * FOOTAGE IS NOT BOUGHT: it is already recorded, and estimating speech for it
+   * would refuse a whole narration for a budget it was never going to spend.
+   */
   const toBuy = scenes.filter(
-    (s) => !s.audioDurationMs || s.audioHash !== sceneAudioHash(s.narration, voice),
+    (s) =>
+      !s.libraryRevisionId &&
+      (!s.audioDurationMs || s.audioHash !== sceneAudioHash(s.narration, voice)),
   );
   const overBudget = await refuseIfOverBudget(
     estimateNarrationForScenes(toBuy.map((s) => s.narration)).pence,
@@ -302,6 +317,16 @@ async function narrateVideo(videoId: string, ports: NarrationPorts): Promise<voi
   const hashes: string[] = [];
 
   for (const scene of video.scenes) {
+    /*
+     * LIBRARY FOOTAGE IS NOT NARRATED. It arrives with its own soundtrack and its
+     * own caption file; synthesising a voice over it would talk across whoever is
+     * already speaking on the film. Its duration comes from the segment, so the
+     * set-level total below stays right.
+     */
+    if (scene.libraryRevisionId) {
+      hashes.push(`library:${scene.libraryRevisionId}`);
+      continue;
+    }
     const hash = sceneAudioHash(scene.narration, voice);
     hashes.push(hash);
     const path = sceneAudioPath(video.jobSiteId, video.id, scene.order, scene.sceneType);
@@ -343,13 +368,41 @@ async function narrateVideo(videoId: string, ports: NarrationPorts): Promise<voi
   const narrated = await prisma.inductionVideoScene.findMany({
     where: { videoId },
     orderBy: { order: 'asc' },
-    select: { heading: true, narration: true, audioDurationMs: true },
+    select: {
+      heading: true,
+      narration: true,
+      audioDurationMs: true,
+      libraryRevisionId: true,
+      libraryCaptionsBlobPath: true,
+      libraryDurationMs: true,
+    },
   });
-  const captionScenes: CaptionScene[] = narrated.map((s) => ({
-    heading: s.heading,
-    narration: s.narration,
-    durationMs: s.audioDurationMs ?? 0,
-  }));
+  /*
+   * FOOTAGE CONTRIBUTES ITS OWN DURATION AND ITS OWN CUES. Its caption file is
+   * fetched and spliced onto the finished video's clock; without this the subtitles
+   * would simply stop for the length of every library segment, which is the reason
+   * a caption file is required before an asset can be issued.
+   */
+  const captionScenes: CaptionScene[] = await Promise.all(
+    narrated.map(async (s) => {
+      if (s.libraryRevisionId) {
+        const vtt = s.libraryCaptionsBlobPath
+          ? await ports.get(s.libraryCaptionsBlobPath)
+          : null;
+        return {
+          heading: s.heading,
+          narration: '',
+          durationMs: s.libraryDurationMs ?? 0,
+          libraryVtt: vtt ? vtt.toString('utf8') : undefined,
+        };
+      }
+      return {
+        heading: s.heading,
+        narration: s.narration,
+        durationMs: s.audioDurationMs ?? 0,
+      };
+    }),
+  );
   const missingAudio = captionScenes.filter((s) => s.durationMs === 0).length;
   if (missingAudio > 0) {
     throw new Error(`${missingAudio} scene(s) have no audio; narration is incomplete.`);

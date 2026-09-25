@@ -111,6 +111,38 @@ export function renderPath(siteId: string, videoId: string, ext = 'mp4'): string
   return `${videoMediaPrefix(siteId, videoId)}/video-${randomUUID()}.${ext}`;
 }
 
+/**
+ * Where a library asset's files live.
+ *
+ * A PREFIX OF ITS OWN, deliberately away from `videoMediaPrefix`. Library footage
+ * belongs to no video, and the retention sweep deletes the render blobs of
+ * superseded, unpublished, never-watched VERSIONS. A master sitting under a
+ * video's prefix would eventually be swept out from under every induction that
+ * concatenates it.
+ */
+export function libraryPrefix(assetId: string, revisionId: string): string {
+  return `library/${assetId}/${revisionId}`;
+}
+
+/** The upload exactly as it arrived, kept so it can be transcoded again. */
+export function librarySourcePath(
+  assetId: string,
+  revisionId: string,
+  fileName: string,
+): string {
+  const ext = fileName.includes('.') ? fileName.split('.').pop()!.toLowerCase() : 'mp4';
+  return `${libraryPrefix(assetId, revisionId)}/source.${ext.replace(/[^a-z0-9]/g, '')}`;
+}
+
+/** The transcoded segment, ready to be concatenated by stream copy. */
+export function libraryNormalisedPath(assetId: string, revisionId: string): string {
+  return `${libraryPrefix(assetId, revisionId)}/segment.mp4`;
+}
+
+export function libraryCaptionsPath(assetId: string, revisionId: string): string {
+  return `${libraryPrefix(assetId, revisionId)}/captions.vtt`;
+}
+
 /* ───────────────────────────── writing ─────────────────────────────────── */
 
 export async function uploadMedia(
@@ -237,6 +269,32 @@ export async function mediaSasUrl(blobPath: string, minutes = 60): Promise<strin
   const blob = getContainer().getBlockBlobClient(blobPath);
   return blob.generateSasUrl({
     permissions: BlobSASPermissions.parse('r'),
+    startsOn: new Date(Date.now() - 2 * 60_000),
+    expiresOn: new Date(Date.now() + ttl * 60_000),
+  });
+}
+
+/**
+ * A short-lived URL a browser may PUT one file to.
+ *
+ * ── WHY UPLOADS DO NOT PASS THROUGH THE APPLICATION ───────────────────────
+ *
+ * A library video is tens or hundreds of megabytes. Streaming that through a Next
+ * route on a small shared instance means the request body in memory, a platform
+ * body-size limit to argue with, and a failure mode - a timeout halfway - that the
+ * person uploading can do nothing about. The browser writes straight to storage
+ * instead, and the application only records where the bytes landed.
+ *
+ * WRITE ONLY, AND BRIEFLY. The permission is create-and-write on ONE blob path,
+ * not on the container: a leaked URL can overwrite the blob it was issued for and
+ * nothing else. The same clamp the read URLs use caps how long it lives.
+ */
+export async function mediaUploadUrl(blobPath: string, minutes = 30): Promise<string> {
+  const ttl = clampSasMinutes(minutes);
+  const c = await ensureContainer();
+  const blob = c.getBlockBlobClient(blobPath);
+  return blob.generateSasUrl({
+    permissions: BlobSASPermissions.parse('cw'),
     startsOn: new Date(Date.now() - 2 * 60_000),
     expiresOn: new Date(Date.now() + ttl * 60_000),
   });

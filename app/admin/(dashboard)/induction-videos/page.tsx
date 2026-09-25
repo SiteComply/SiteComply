@@ -51,7 +51,7 @@ export default async function AdminInductionVideosPage() {
   });
 
   return (
-    <AdminInductionVideoWorkspace active="videos">
+    <AdminInductionVideoWorkspace active="sites">
       <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-line bg-surface-sunken text-xs uppercase tracking-wide text-ink-subtle">

@@ -161,7 +161,12 @@ function main() {
     /chmodSync\(path, 0o755\)/.test(ff) && /accessSync\(path, constants\.X_OK\)/.test(ff));
   ok('  and if it cannot be repaired the engine reports itself unavailable',
     /return false;\n\s*\}\n\s*\}\n\}/.test(ff));
-  ok('static frames are not encoded thirty times a second', VIDEO_FORMAT.fps === 10);
+  /*
+   * ONE framerate for the whole pipeline, high enough for real footage. The join
+   * is a stream copy, so a static scene and a library segment cannot differ - the
+   * old ten was chosen when everything was static and would judder film.
+   */
+  ok('one framerate, high enough for footage', VIDEO_FORMAT.fps === 25);
   ok('  and a player can still seek: a keyframe every two seconds',
     /'-g', String\(VIDEO_FORMAT\.fps \* 2\)/.test(ff));
   ok('a self-hosted render costs nothing per minute', estimateRenderPence(240_000, 0) === 0);

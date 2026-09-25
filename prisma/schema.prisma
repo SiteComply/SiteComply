@@ -494,6 +494,7 @@ model JobSite {
   appliedConfigTemplateAt   DateTime?
   appliedConfigTemplateBy   String?
   inductionModules          SiteInductionModule[]
+  libraryAssetDecisions     SiteLibraryAsset[]
 
   @@index([status])
 }
@@ -3730,6 +3731,17 @@ model InductionVideoScene {
   /// PHASE 2. The synthesised audio for this scene, its measured length, and
   /// the fingerprint of the narration + voice that produced it. An edited scene
   /// clears all three: audio that no longer matches the words must never play.
+  /// LIBRARY SCENES. A scene built from Library footage is not generated and not
+  /// narrated: the transcoded segment is concatenated as it is, and its own caption
+  /// file is spliced into the finished subtitles. These are denormalised onto the
+  /// scene for the same reason moduleRevisionId is - a published video is the record
+  /// of what an operative was shown, and must not change because an asset was later
+  /// re-issued or retired.
+  libraryRevisionId       String?
+  libraryBlobPath         String?
+  libraryCaptionsBlobPath String?
+  libraryDurationMs       Int?
+
   audioBlobPath   String?
   audioDurationMs Int?
   audioHash       String?
@@ -3822,8 +3834,10 @@ model InductionModule {
 
   active Boolean @default(true)
 
-  revisions InductionModuleRevision[]
-  sites     SiteInductionModule[]
+  revisions     InductionModuleRevision[]
+  /// Library assets that deliver this module's subject as footage instead.
+  libraryAssets LibraryAsset[]
+  sites         SiteInductionModule[]
 
   createdByUserId String?
   createdByName   String?
@@ -4019,4 +4033,193 @@ model AiUsageEvent {
 
   @@index([jobSiteId, createdAt])
   @@index([purpose, createdAt])
+}
+
+/// A reusable video segment, centrally managed and inserted into every site's
+/// induction alongside its generated scenes.
+///
+/// The counterpart to InductionModule: that one is reusable TEXT the model speaks,
+/// this one is finished FOOTAGE. Same lifecycle, because the same question has to
+/// be answerable years later - what exactly was this operative shown?
+model LibraryAsset {
+  id   String @id @default(cuid())
+  slug String @unique
+
+  title       String
+  description String?
+
+  /// Where it sits in the running order. See libraryPlacement.ts.
+  placement LibraryPlacement @default(COMPANY_BAND)
+  /// Ordering within its band.
+  order     Int              @default(0)
+
+  /// When set, this video REPLACES that company module's generated scene rather
+  /// than playing alongside it. The six starter modules cover the same subjects as
+  /// the obvious library assets, and an operative must not be told a thing twice.
+  module   InductionModule? @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+  moduleId String?
+
+  /// Included in every site unless a site says otherwise.
+  defaultIncluded Boolean @default(true)
+  /// A site may not leave a mandatory asset out.
+  mandatory       Boolean @default(false)
+  /// Retired assets stay for history but reach no new induction.
+  active          Boolean @default(true)
+
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  revisions LibraryAssetRevision[]
+  sites     SiteLibraryAsset[]
+
+  @@index([active, order])
+  @@index([moduleId])
+}
+
+/// One version of a library asset's footage.
+model LibraryAssetRevision {
+  id      String       @id @default(cuid())
+  asset   LibraryAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  assetId String
+
+  version Int
+  status  LibraryRevisionStatus @default(DRAFT)
+
+  /// What was uploaded, exactly as uploaded. Kept so a revision can be normalised
+  /// again if the pipeline's output spec ever changes.
+  sourceBlobPath String?
+  sourceFileName String?
+  sourceBytes    Int?
+
+  /// The upload transcoded to the pipeline's exact spec, ready to be concatenated
+  /// by stream copy. Null until the normalise job has run.
+  normalisedBlobPath String?
+  normalisedBytes    Int?
+  durationMs         Int?
+
+  /// REQUIRED before issuing, by the owner's decision: a segment with no captions
+  /// leaves a silent gap in the finished video's subtitles.
+  captionsBlobPath String?
+  captionsFileName String?
+
+  /// Why normalising failed, when it did.
+  normaliseError String?
+
+  /// Fingerprint of what this revision IS, so a video knows which footage it carries.
+  contentHash String?
+
+  preparedByUserId  String?
+  preparedByAdminId String?
+  preparedByName    String
+  preparedByRealm   String?
+  preparedAt        DateTime @default(now())
+
+  issuedByUserId  String?
+  issuedByAdminId String?
+  issuedByName    String?
+  issuedByRealm   String?
+  issuedAt        DateTime?
+
+  issueNote String?
+
+  supersededAt DateTime?
+
+  events        LibraryAssetEvent[]
+  normaliseJobs LibraryNormaliseJob[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([assetId, version])
+  @@index([assetId, status])
+}
+
+/// What happened to a library revision, and who did it.
+model LibraryAssetEvent {
+  id         String               @id @default(cuid())
+  revision   LibraryAssetRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  revisionId String
+
+  action     String
+  detail     String?
+  actorName  String
+  /// PLATFORM or ADMIN.
+  actorRealm String?
+  createdAt  DateTime @default(now())
+
+  @@index([revisionId, createdAt])
+}
+
+/// What one project has decided about a library asset.
+///
+/// INCLUDE OR EXCLUDE ONLY - deliberately no override. A company module's words
+/// can be rewritten for one site; a site cannot re-shoot a film.
+model SiteLibraryAsset {
+  id        String  @id @default(cuid())
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  jobSiteId String
+
+  asset   LibraryAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  assetId String
+
+  included Boolean
+  /// Required when leaving one out: why this project differs.
+  reason   String?
+
+  decidedByUserId  String?
+  decidedByAdminId String?
+  decidedByName    String?
+  decidedByRealm   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([jobSiteId, assetId])
+  @@index([jobSiteId])
+}
+
+enum LibraryPlacement {
+  /// Before the welcome: a company introduction opens the induction.
+  OPENING
+  /// With the company modules, after the site's hazards and before its rules.
+  COMPANY_BAND
+  /// After the site rules and PPE, before the close.
+  CLOSING
+}
+
+enum LibraryRevisionStatus {
+  DRAFT
+  ISSUED
+  SUPERSEDED
+}
+
+/// Transcoding one library upload to the pipeline's output spec.
+///
+/// ── ITS OWN TABLE, NOT A KIND OF InductionVideoJob ────────────────────────
+///
+/// Every InductionVideoJob belongs to a video, and that is a useful invariant:
+/// the row is the video's lock and the reason a version cannot be deleted
+/// mid-render. A normalise job belongs to a REVISION and to no video at all, so
+/// reusing that table would have meant making videoId nullable for every job kind
+/// to suit one - weakening a guarantee six other things rely on. The status enum is
+/// shared because the states genuinely are the same.
+model LibraryNormaliseJob {
+  id         String               @id @default(cuid())
+  revision   LibraryAssetRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  revisionId String
+
+  status   InductionVideoJobStatus @default(QUEUED)
+  attempts Int                     @default(0)
+  error    String?
+
+  requestedByName String?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([revisionId, createdAt])
 }

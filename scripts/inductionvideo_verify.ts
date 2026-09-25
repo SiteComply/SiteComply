@@ -42,6 +42,9 @@ const base = (over: Partial<VideoSource> = {}): VideoSource => ({
   // A site with no company modules resolved: Phase 1's rules are unchanged by
   // their absence, which is the point of asserting it here.
   modules: [],
+  // A site with no library footage: Phase 1's rules are unchanged by its absence,
+  // which is the point of asserting it here.
+  library: [],
   siteRules: ['Wear your hard hat at all times.'], ppe: ['Hard hat'],
   ...over,
 });

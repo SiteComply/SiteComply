@@ -64,7 +64,9 @@ export type SceneType =
   | 'PPE'
   | 'CLOSING'
   /** A company induction module. Its words are authored, not generated. */
-  | 'COMPANY_MODULE';
+  | 'COMPANY_MODULE'
+  /** Finished footage from the Library, concatenated rather than generated. */
+  | 'LIBRARY_SEGMENT';
 
 export interface SceneRequirement {
   sceneType: SceneType;
@@ -88,10 +90,21 @@ export interface SceneRequirement {
    *          ALREADY WRITTEN and are never sent to the model - it cannot
    *          re-phrase company policy, the scene costs no tokens, and what an
    *          operative hears is exactly what was approved.
+   * LIBRARY  finished footage, issued by a Director. Nothing is generated and
+   *          nothing is spoken by the voice: the segment is concatenated into
+   *          the render as it is, with its own caption file.
    */
   source: SceneSource;
   /** MODULE scenes only: the issued revision whose words these are. */
   moduleRevisionId?: string;
+  /** LIBRARY scenes only: the issued revision whose footage this is. */
+  libraryRevisionId?: string;
+  /** LIBRARY scenes only: the transcoded segment to concatenate. */
+  libraryBlobPath?: string;
+  /** LIBRARY scenes only: its own caption file. */
+  libraryCaptionsBlobPath?: string;
+  /** LIBRARY scenes only: how long the footage runs. */
+  libraryDurationMs?: number;
   /** MODULE scenes only: the authored narration, used verbatim. */
   narration?: string;
   /** MODULE scenes only: this project has departed from the company text. */
@@ -105,7 +118,7 @@ export interface SceneRequirement {
   orderKey: number;
 }
 
-export type SceneSource = 'SITE' | 'MODULE';
+export type SceneSource = 'SITE' | 'MODULE' | 'LIBRARY';
 
 /** A company module, already resolved for this project. */
 export interface ResolvedModuleScene {
@@ -149,8 +162,29 @@ export interface VideoSource extends BriefingSource {
    * displace one.
    */
   modules: ResolvedModuleScene[];
+  /**
+   * Library footage already resolved for this project, by resolveLibraryForSite.
+   * As with modules the engine does not decide WHICH assets apply; it decides
+   * where they sit, and which company module a piece of footage displaces.
+   */
+  library: ResolvedLibraryScene[];
   siteRules: string[];
   ppe: string[];
+}
+
+/** A library asset, already resolved for this project. */
+export interface ResolvedLibraryScene {
+  assetId: string;
+  slug: string;
+  title: string;
+  placement: 'OPENING' | 'COMPANY_BAND' | 'CLOSING';
+  order: number;
+  revisionId: string;
+  blobPath: string;
+  captionsBlobPath: string;
+  durationMs: number;
+  /** The company module this footage delivers instead of, if any. */
+  replacesModuleId: string | null;
 }
 
 const t = (v: string | null | undefined): string | null =>
@@ -481,8 +515,50 @@ export function buildSceneManifest(src: VideoSource): SceneManifest {
    * 2. THEY ARE NEVER "MISSING". A module carries its own words, so it can
    *    never block generation the way an unanswered site field does.
    */
+  /*
+   * ── LIBRARY FOOTAGE ──────────────────────────────────────────────────────
+   *
+   * Resolved BEFORE the modules, deliberately, because a piece of footage can
+   * REPLACE a module: the six starter modules cover the same subjects as the
+   * obvious library videos - PPE, behavioural standards, manual handling - and
+   * playing both would tell an operative the same thing twice, once read aloud by
+   * a synthetic voice and once by a person on film. Where an asset names a module,
+   * the footage wins: it is the richer delivery of the same approved content.
+   *
+   * A library scene carries no narration and costs no tokens. It is not generated
+   * at all - the renderer concatenates the segment and the caption builder splices
+   * in its caption file.
+   */
+  const replacedModuleIds = new Set(
+    src.library.map((l) => l.replacesModuleId).filter((id): id is string => Boolean(id)),
+  );
+  for (const l of src.library) {
+    scenes.push({
+      sceneType: 'LIBRARY_SEGMENT',
+      heading: l.title,
+      // Company footage is not a site's to drop from the script editor. Leaving one
+      // out happens in the project's induction settings, with a reason.
+      required: true,
+      sourceRefs: [`library.${l.slug}`],
+      facts: [],
+      visualTemplate: 'library-segment',
+      source: 'LIBRARY',
+      libraryRevisionId: l.revisionId,
+      libraryBlobPath: l.blobPath,
+      libraryCaptionsBlobPath: l.captionsBlobPath,
+      libraryDurationMs: l.durationMs,
+      orderKey: libraryOrderKey(l.placement, l.order),
+    });
+  }
+
   const emitted = new Set(scenes.map((s) => s.sceneType));
   for (const m of src.modules) {
+    if (replacedModuleIds.has(m.moduleId)) {
+      warnings.push(
+        `“${m.title}” is covered by a company video, so the written version is left out — an operative is not told the same thing twice.`,
+      );
+      continue;
+    }
     if (m.replacesSceneType && emitted.has(m.replacesSceneType as SceneType)) {
       warnings.push(
         `“${m.title}” was left out: this project records its own arrangement for it, and that is what the induction says.`,
@@ -567,6 +643,29 @@ const SCENE_ORDER: SceneType[] = [
  */
 const COMPANY_BAND_AFTER: SceneType = 'RAMS';
 
+/**
+ * Where a piece of footage sits.
+ *
+ * OPENING is before everything, including the welcome: a company introduction is
+ * what an operative should see first, not the third thing after a title card.
+ * COMPANY_BAND shares the modules' slot, which is what lets footage stand in for a
+ * module without moving the running order. CLOSING is after the site's rules and
+ * PPE but before the sign-off.
+ *
+ * Negative keys are how OPENING gets ahead of WELCOME without SCENE_ORDER having to
+ * know that footage exists.
+ */
+function libraryOrderKey(
+  placement: 'OPENING' | 'COMPANY_BAND' | 'CLOSING',
+  order: number,
+): number {
+  if (placement === 'OPENING') return -1_000 + order;
+  if (placement === 'CLOSING') return SCENE_ORDER.indexOf('CLOSING') * 1000 - 500 + order;
+  // Interleaved with the modules, by the same arithmetic, so a module and the
+  // footage that replaces it occupy the same place in the induction.
+  return companyBandOrderKey(order);
+}
+
 function companyBandOrderKey(moduleOrder: number): number {
   // Between RAMS and SITE_RULES. The * 1000 on site scenes leaves exactly this
   // room, and the module's own order decides the sequence within the band.
@@ -593,7 +692,18 @@ export function manifestHash(manifest: SceneManifest): string {
    * was built from".
    */
   const payload = manifest.scenes
-    .map((s) => [s.sceneType, s.heading, s.facts, s.moduleRevisionId ?? '', s.narration ?? ''].join('|'))
+    .map((s) =>
+      [
+        s.sceneType,
+        s.heading,
+        s.facts,
+        s.moduleRevisionId ?? '',
+        // Re-issuing library footage must mark every video carrying it out of
+        // date, exactly as re-issuing a module's words does.
+        s.libraryRevisionId ?? '',
+        s.narration ?? '',
+      ].join('|'),
+    )
     .join('||');
   let h = 0;
   for (let i = 0; i < payload.length; i++) {

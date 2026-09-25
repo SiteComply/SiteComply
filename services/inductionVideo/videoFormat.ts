@@ -21,20 +21,29 @@ export const VIDEO_FORMAT = {
   width: 1080,
   height: 1920,
   /*
-   * TEN, NOT THIRTY.
+   * TWENTY-FIVE, BECAUSE THE VIDEO IS NO LONGER ONLY STATIC FRAMES.
    *
-   * Every frame of an induction scene is IDENTICAL - a colour, a heading, a few
-   * lines and the brand mark. Encoding thirty of them a second spends two and a
-   * half times the CPU to produce a slightly larger file that looks exactly the
-   * same. Measured: 20 seconds of video took 2,378 ms at thirty and 961 ms at
-   * ten, and the ten-frame file was smaller.
+   * It was ten. Every frame of a GENERATED scene is identical - a colour, a
+   * heading, a few lines, the brand mark - so encoding thirty a second spent two
+   * and a half times the CPU for a file that looked exactly the same. Measured at
+   * the time: 20 seconds took 2,378 ms at thirty and 961 ms at ten, and the
+   * ten-frame file was smaller.
    *
-   * That ratio matters because the encoder shares a small instance with every
-   * request the platform serves: on the production B1, fifteen seconds of video
-   * took ninety-five seconds to render at thirty frames. Nothing here moves, so
-   * nothing is lost.
+   * The Library changes the premise. A finished induction now concatenates
+   * generated scenes with real FOOTAGE - a company introduction, a manual handling
+   * demonstration - and film at ten frames a second judders visibly. The join is a
+   * stream copy, so every segment must share one framerate: there is no mixing a
+   * static scene at ten with footage at twenty-five.
+   *
+   * So one rate for the whole pipeline, chosen for the hardest content in it
+   * rather than the easiest. The cost is real and lands on the generated scenes -
+   * on a B1 instance, fifteen seconds of static video took ninety-five seconds to
+   * render at thirty - but rendering is a queued job whose page now refreshes
+   * itself, so a slower render is an inconvenience rather than a wait. What it
+   * actually spends is the shared instance's CPU, which is the argument for a
+   * larger plan rather than for worse video.
    */
-  fps: 10,
+  fps: 25,
   /** Kept as a single source of truth for the renderer's output settings. */
   container: 'mp4',
 } as const;

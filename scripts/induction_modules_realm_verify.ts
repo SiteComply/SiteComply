@@ -166,13 +166,25 @@ const director = { id: 'u1', name: 'Dee Director', role: 'DIRECTOR', siteIds: []
       if (c) owners.set(`${model}.${c[1]}`, model);
     }
     const declared = [...owners.keys()].filter((k) => /Realm$/.test(k));
+    /*
+     * A column is migrated whether it arrived by ALTER TABLE or was there in the
+     * CREATE TABLE. The first version of this parser only read ADD COLUMN, so the
+     * Library's own tables - which declare their realm columns at creation -
+     * reported as orphaned the moment they existed. The guard was right to look;
+     * it was reading half the file.
+     */
     const migrated = new Set<string>();
     let table = '';
     for (const line of MIG.split('\n')) {
-      const t = /^ALTER TABLE "(\w+)"/.exec(line);
-      if (t) table = t[1];
-      const c = /ADD COLUMN IF NOT EXISTS "(\w+)"/.exec(line);
-      if (c) migrated.add(`${table}.${c[1]}`);
+      const alter = /^ALTER TABLE "(\w+)"/.exec(line);
+      if (alter) table = alter[1];
+      const create = /^CREATE TABLE (?:IF NOT EXISTS )?"(\w+)"/.exec(line);
+      if (create) table = create[1];
+      const added = /ADD COLUMN IF NOT EXISTS "(\w+)"/.exec(line);
+      if (added) migrated.add(`${table}.${added[1]}`);
+      // A column definition inside a CREATE TABLE body: `"name" TYPE ...`.
+      const defined = /^\s+"(\w+)"\s+(?:TEXT|INTEGER|BOOLEAN|TIMESTAMP|"[A-Za-z]+")/.exec(line);
+      if (defined) migrated.add(`${table}.${defined[1]}`);
     }
     const unmigrated = declared.filter((k) => !migrated.has(k));
     chk('every *Realm column the schema declares is in the migration',
@@ -181,7 +193,7 @@ const director = { id: 'u1', name: 'Dee Director', role: 'DIRECTOR', siteIds: []
     // The intended set, listed rather than derived: adding a table here should be
     // a deliberate act, so an accidental column on an unrelated model still fails.
     const ALLOWED =
-      /^(InductionModuleRevision|InductionModuleEvent|SiteInductionModule|InductionVideo|InductionVideoEvent)\./;
+      /^(InductionModuleRevision|InductionModuleEvent|SiteInductionModule|InductionVideo|InductionVideoEvent|LibraryAssetRevision|LibraryAssetEvent|SiteLibraryAsset)\./;
     chk('realm columns appear only on the tables meant to have them',
       declared.every((k) => ALLOWED.test(k)),
       declared.filter((k) => !ALLOWED.test(k)).join(' ') || declared.length + ' declared, all expected');

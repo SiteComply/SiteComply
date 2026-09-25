@@ -59,7 +59,7 @@ export default async function InductionVideosPage() {
   return (
     <PlatformShell>
       <InductionVideoWorkspace
-        active="videos"
+        active="sites"
         areas={areas}
         breadcrumbs={<Breadcrumbs items={[{ label: 'Induction videos' }]} />}
       >

@@ -115,10 +115,15 @@ export async function requestRender(
 
   const scenes = await prisma.inductionVideoScene.aggregate({
     where: { videoId },
-    _sum: { audioDurationMs: true },
+    // Footage costs render time too: its duration is part of the finished video
+    // even though nothing was bought to speak it.
+    _sum: { audioDurationMs: true, libraryDurationMs: true },
   });
   const overBudget = await refuseIfOverBudget(
-    estimateRenderPence(scenes._sum.audioDurationMs ?? 0, renderer.pencePerMinute),
+    estimateRenderPence(
+      (scenes._sum.audioDurationMs ?? 0) + (scenes._sum.libraryDurationMs ?? 0),
+      renderer.pencePerMinute,
+    ),
   );
   if (overBudget) return { ok: false, error: overBudget };
 
@@ -243,6 +248,36 @@ async function renderVideo(videoId: string, renderer: VideoRenderer): Promise<st
 
   const request: RenderRequest = { siteName: video.jobSite.name, version: video.version, scenes: [] };
   for (const scene of video.scenes) {
+    /*
+     * LIBRARY FOOTAGE: the segment IS the scene. It was transcoded to this
+     * pipeline's spec when it was uploaded, so it is fetched and passed straight
+     * through - there is no audio to look for and nothing to draw.
+     *
+     * The path is read off the SCENE, not looked up through the asset, so
+     * re-issuing or retiring a library video cannot change what an
+     * already-rendered induction contains.
+     */
+    if (scene.libraryRevisionId) {
+      if (!scene.libraryBlobPath || !scene.libraryDurationMs) {
+        throw new Error(
+          `“${scene.heading}” is a library video that has not finished being prepared.`,
+        );
+      }
+      const segment = await readMedia(scene.libraryBlobPath);
+      if (!segment) {
+        throw new Error(
+          `The footage for “${scene.heading}” is missing from storage. Re-upload the library video.`,
+        );
+      }
+      request.scenes.push({
+        sceneType: scene.sceneType,
+        heading: scene.heading,
+        narration: scene.narration,
+        segment: segment.bytes,
+        durationMs: scene.libraryDurationMs,
+      });
+      continue;
+    }
     if (!scene.audioBlobPath || !scene.audioDurationMs) {
       throw new Error(`“${scene.heading}” has no audio. Narrate the version before rendering it.`);
     }

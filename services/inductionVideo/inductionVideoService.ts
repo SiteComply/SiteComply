@@ -323,6 +323,10 @@ export async function runQueuedScriptJobs(limit = 2): Promise<number> {
             sourceRefs: s.sourceRefs as unknown as object,
             required: s.required,
             moduleRevisionId: s.moduleRevisionId,
+            libraryRevisionId: s.libraryRevisionId,
+            libraryBlobPath: s.libraryBlobPath,
+            libraryCaptionsBlobPath: s.libraryCaptionsBlobPath,
+            libraryDurationMs: s.libraryDurationMs,
           })),
         }),
         prisma.inductionVideo.update({

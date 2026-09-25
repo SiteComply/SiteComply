@@ -4,6 +4,7 @@ import { loadBriefingSource } from '@/services/induction/inductionBriefingServic
 import { getSiteRules } from '@/services/checklists/siteRulesService';
 import { getSitePpeRequirements } from '@/services/checklists/sitePpeService';
 import { resolveModulesForSite } from '@/services/inductionModules/inductionModuleService';
+import { resolveLibraryForSite } from '@/services/inductionVideo/libraryAssetService';
 import {
   buildSceneManifest,
   manifestHash,
@@ -77,6 +78,11 @@ export interface GeneratedScript {
     visualTemplate: string;
     /** Set on company-module scenes: the issued revision these words are. */
     moduleRevisionId: string | null;
+    /** Set on LIBRARY scenes: the footage concatenated in place of a frame. */
+    libraryRevisionId: string | null;
+    libraryBlobPath: string | null;
+    libraryCaptionsBlobPath: string | null;
+    libraryDurationMs: number | null;
   }[];
   provider: string;
   model: string;
@@ -94,7 +100,7 @@ export async function loadVideoSource(siteId: string): Promise<VideoSource | nul
   });
   if (!site) return null;
 
-  const [briefing, rules, ppe, modules] = await Promise.all([
+  const [briefing, rules, ppe, modules, library] = await Promise.all([
     // The SAME source the induction briefing screens are built from - see
     // loadBriefingSource. One loader, so the video cannot narrate something the
     // induction does not show.
@@ -108,6 +114,7 @@ export async function loadVideoSource(siteId: string): Promise<VideoSource | nul
      * project's own records displace one.
      */
     resolveModulesForSite(site.id),
+    resolveLibraryForSite(site.id),
   ]);
   if (!briefing) return null;
 
@@ -125,6 +132,23 @@ export async function loadVideoSource(siteId: string): Promise<VideoSource | nul
       replacesSceneType: m.replacesSceneType,
       overridden: m.overridden,
       overrideReason: m.overrideReason,
+    })),
+    /*
+     * Library footage, already resolved: as with modules, WHICH assets apply is
+     * company policy plus this site's decision. The engine decides where they sit
+     * and which module a piece of footage displaces.
+     */
+    library: library.map((l) => ({
+      assetId: l.assetId,
+      slug: l.slug,
+      title: l.title,
+      placement: l.placement,
+      order: l.order,
+      revisionId: l.revisionId,
+      blobPath: l.blobPath,
+      captionsBlobPath: l.captionsBlobPath,
+      durationMs: l.durationMs,
+      replacesModuleId: l.replacesModuleId,
     })),
     siteRules: rules.map((r) => r.label.trim()).filter(Boolean),
     ppe: ppe.map((p) => p.label.trim()).filter(Boolean),
@@ -210,6 +234,10 @@ export async function generateScript(
       sourceRefs: scene.sourceRefs,
       visualTemplate: scene.visualTemplate,
       moduleRevisionId: scene.moduleRevisionId ?? null,
+      libraryRevisionId: scene.libraryRevisionId ?? null,
+      libraryBlobPath: scene.libraryBlobPath ?? null,
+      libraryCaptionsBlobPath: scene.libraryCaptionsBlobPath ?? null,
+      libraryDurationMs: scene.libraryDurationMs ?? null,
     })),
     provider: provider.name,
     model: result.model,

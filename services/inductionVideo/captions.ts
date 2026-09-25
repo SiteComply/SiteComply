@@ -31,8 +31,70 @@ import {
 export interface CaptionScene {
   heading: string;
   narration: string;
-  /** Measured length of this scene's audio. */
+  /** Measured length of this scene's audio, or of its footage. */
   durationMs: number;
+  /**
+   * LIBRARY FOOTAGE ONLY: the segment's own WebVTT, exactly as supplied.
+   *
+   * A library scene has no narration this system generated and no synthesised
+   * audio to divide, so its cues cannot be derived - they have to come from the
+   * file that was uploaded with the footage. They are re-timed onto the finished
+   * video's clock and otherwise left alone: re-wrapping somebody's subtitles would
+   * be editing a record we did not write.
+   */
+  libraryVtt?: string;
+}
+
+/**
+ * The cues in a supplied WebVTT, shifted onto the finished video's clock.
+ *
+ * ── WHY THE PARSER IS DELIBERATELY FORGIVING ──────────────────────────────
+ *
+ * This reads a file an operator exported from whatever tool they use. It takes the
+ * timing line and the text beneath it, ignores cue identifiers, NOTE blocks,
+ * styling and positioning settings, and skips anything it cannot time. A caption
+ * file that is 90% usable must produce 90% of the captions rather than nothing -
+ * but a cue whose timing cannot be read is dropped, never guessed, because a
+ * caption on screen at the wrong moment is worse than a missing one.
+ *
+ * Both comma and full-stop decimal separators are accepted: SRT-derived files use
+ * a comma and are the most common thing to be handed by mistake.
+ */
+export function shiftVttCues(vtt: string, offsetMs: number, limitMs: number): Cue[] {
+  const TIMING =
+    /(\d{1,2}:)?(\d{1,2}):(\d{2})[.,](\d{1,3})\s*-->\s*(\d{1,2}:)?(\d{1,2}):(\d{2})[.,](\d{1,3})/;
+  const toMs = (h: string | undefined, m: string, sec: string, frac: string) =>
+    (h ? Number(h.replace(':', '')) : 0) * 3_600_000 +
+    Number(m) * 60_000 +
+    Number(sec) * 1_000 +
+    Number(frac.padEnd(3, '0').slice(0, 3));
+
+  const out: Cue[] = [];
+  const lines = vtt.replace(/\r\n?/g, '\n').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const m = TIMING.exec(lines[i]);
+    if (!m) continue;
+    const startMs = toMs(m[1], m[2], m[3], m[4]);
+    const endMs = toMs(m[5], m[6], m[7], m[8]);
+    if (endMs <= startMs) continue;
+    const text: string[] = [];
+    for (let j = i + 1; j < lines.length && lines[j].trim() !== ''; j++) text.push(lines[j].trim());
+    if (text.length === 0) continue;
+    /*
+     * CLAMPED TO THE SEGMENT. A caption file longer than the footage it belongs to
+     * would otherwise write cues over the scene that follows, captioning the wrong
+     * picture - the one failure mode worse than no captions at all.
+     */
+    if (startMs >= limitMs) continue;
+    out.push({
+      index: 0,
+      startMs: offsetMs + startMs,
+      endMs: offsetMs + Math.min(endMs, limitMs),
+      lines: text,
+      text: text.join(' '),
+    });
+  }
+  return out;
 }
 
 export interface Cue {
@@ -180,6 +242,17 @@ export function buildCues(scenes: CaptionScene[]): Cue[] {
   for (const scene of scenes) {
     const duration = Math.max(0, Math.round(scene.durationMs || 0));
     if (duration === 0) continue;
+
+    // Footage brings its own cues; only their clock changes.
+    if (scene.libraryVtt) {
+      for (const cue of shiftVttCues(scene.libraryVtt, offset, duration)) {
+        index += 1;
+        cues.push({ ...cue, index });
+      }
+      offset += duration;
+      continue;
+    }
+
     const chunks = mergeShortChunks(splitForCaptions(scene.narration), duration);
     if (chunks.length === 0) {
       offset += duration;

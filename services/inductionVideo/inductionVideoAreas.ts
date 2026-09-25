@@ -24,7 +24,7 @@
  * navigator that hides a link is not an access control.
  */
 
-export type InductionVideoAreaKey = 'videos' | 'modules';
+export type InductionVideoAreaKey = 'sites' | 'modules' | 'library';
 
 export interface InductionVideoArea {
   key: InductionVideoAreaKey;
@@ -50,8 +50,16 @@ export interface InductionVideoArea {
 
 export const INDUCTION_VIDEO_AREAS: InductionVideoArea[] = [
   {
-    key: 'videos',
-    label: 'Videos',
+    /*
+     * "SITES", NOT "VIDEOS". This tab lists PROJECTS - which have an induction
+     * video, which are waiting on someone, which have never been started - and
+     * calling it Videos described the feature rather than the content, inside an
+     * area already called Induction videos. The route is unchanged: the area's
+     * landing page is still /induction-videos, because the URL is load-bearing
+     * and the word in it names the area, not this tab.
+     */
+    key: 'sites',
+    label: 'Sites',
     description:
       'One row per project: which have an induction video, which are waiting on you, and which are missing information.',
   },
@@ -66,6 +74,19 @@ export const INDUCTION_VIDEO_AREAS: InductionVideoArea[] = [
     label: 'Company modules',
     description:
       'Standard content every induction carries, written once and issued centrally — included in every project alongside its own hazards and arrangements.',
+  },
+  {
+    /*
+     * THIRD, because it is the least often touched and the most expensive to
+     * change: footage is commissioned, filmed and uploaded, not typed. Modules and
+     * the Library are both reusable company content - the difference is that one is
+     * words the voice speaks and the other is a finished film - so they sit next to
+     * each other, after the daily work.
+     */
+    key: 'library',
+    label: 'Library',
+    description:
+      'Approved company video segments — an introduction, PPE, behavioural standards — inserted into every project’s induction alongside its generated scenes.',
   },
 ];
 
@@ -88,7 +109,9 @@ export function inductionVideoHref(
   tier: 'PLATFORM' | 'ADMIN',
   key: InductionVideoAreaKey,
 ): string {
-  return key === 'videos' ? BASE[tier] : `${BASE[tier]}/${key}`;
+  // 'sites' IS the area's landing page rather than a child of it, so it has no
+  // path segment of its own. Renaming the tab did not move the URL.
+  return key === 'sites' ? BASE[tier] : `${BASE[tier]}/${key}`;
 }
 
 export function inductionVideoAreaBase(tier: 'PLATFORM' | 'ADMIN'): string {

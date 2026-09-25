@@ -87,7 +87,8 @@ chk(
   'identity, not equality: a copy would pass a deep-equal check today and rot tomorrow',
 );
 const keys = areas.INDUCTION_VIDEO_AREAS.map((a: { key: string }) => a.key);
-chk('two areas, videos first', keys.length === 2 && keys[0] === 'videos' && keys[1] === 'modules',
+chk('three areas in the agreed order',
+  keys.length === 3 && keys[0] === 'sites' && keys[1] === 'modules' && keys[2] === 'library',
   keys.join(', '));
 chk(
   'the same area sits at the same relative path in both tiers',

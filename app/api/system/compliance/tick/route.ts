@@ -1,6 +1,7 @@
 import { runQueuedScriptJobs } from '@/services/inductionVideo/inductionVideoService';
 import { runQueuedNarrationJobs } from '@/services/inductionVideo/narrationService';
 import { runQueuedRenderJobs } from '@/services/inductionVideo/renderService';
+import { runQueuedNormaliseJobs } from '@/services/inductionVideo/libraryAssetService';
 import { sweepUnpublishedRenders } from '@/services/inductionVideo/retentionService';
 import { NextRequest, NextResponse } from 'next/server';
 import { SchedulerTrigger } from '@prisma/client';
@@ -81,8 +82,14 @@ async function POSTHandler(req: NextRequest) {
   // Renders last: the longest job, and the one a failure of which must not
   // delay the cheap work behind it.
   let videosRendered = 0;
+  let libraryPrepared = 0;
   try {
     videosRendered = await runQueuedRenderJobs();
+    /*
+     * LAST, and one at a time. Transcoding library footage is the heaviest thing
+     * on this instance; a script or a render somebody is waiting on comes first.
+     */
+    libraryPrepared = await runQueuedNormaliseJobs(1);
   } catch {
     // Already recorded against the job row; the tick itself still succeeded.
   }
@@ -106,6 +113,7 @@ async function POSTHandler(req: NextRequest) {
     scriptsGenerated,
     narrationsGenerated,
     videosRendered,
+    libraryPrepared,
     rendersRemoved,
     runId: result.runId,
     sitesConsidered: result.sitesConsidered,

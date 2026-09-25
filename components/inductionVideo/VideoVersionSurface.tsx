@@ -66,7 +66,14 @@ export async function VideoVersionSurface({
    */
   const narrationConfigured = Boolean(resolveSpeechSynthesiser()) && mediaStorageConfigured();
   // Only the scenes that would actually be bought: the rest are reused.
-  const unnarrated = video.scenes.filter((s) => !s.audioDurationMs).map((s) => s.narration);
+  /*
+   * Only the scenes that would actually be bought: narrated ones are reused, and
+   * LIBRARY footage is never narrated at all - counting it would quote a price for
+   * speech nobody is going to synthesise.
+   */
+  const unnarrated = video.scenes
+    .filter((s) => !s.libraryRevisionId && !s.audioDurationMs)
+    .map((s) => s.narration);
   const lastNarrationError =
     video.jobs.find((j) => j.kind === 'NARRATION' && j.status === 'FAILED')?.error ?? null;
   const lastRenderError =
@@ -151,7 +158,14 @@ export async function VideoVersionSurface({
         scenes={video.scenes.map((s) => ({
           id: s.id,
           heading: s.heading,
-          duration: s.audioDurationMs ? clockLabel(s.audioDurationMs) : null,
+          duration: s.libraryRevisionId
+            ? // Footage, not narration: show its length so the total reads true.
+              s.libraryDurationMs
+              ? `${clockLabel(s.libraryDurationMs)} · video`
+              : 'video'
+            : s.audioDurationMs
+              ? clockLabel(s.audioDurationMs)
+              : null,
         }))}
         totalLabel={video.narrationDurationMs ? formatRunningTime(video.narrationDurationMs) : null}
         voice={video.voice}

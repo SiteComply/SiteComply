@@ -56,6 +56,7 @@ const base = (over: Partial<VideoSource> = {}): VideoSource => ({
   incidentReporting: null, risks: [], permitTypes: [], ramsDocuments: [],
   siteRules: ['Wear your hard hat at all times.'], ppe: ['Hard hat'],
   modules: [],
+  library: [],
   ...over,
 });
 const types = (m: ReturnType<typeof buildSceneManifest>) => m.scenes.map((s) => s.sceneType);

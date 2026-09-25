@@ -157,10 +157,25 @@ export class FfmpegVideoRenderer implements VideoRenderer {
 
       const parts: string[] = [];
       for (const [index, scene] of request.scenes.entries()) {
+        const stem = `${SCENE_PREFIX}-${String(index).padStart(2, '0')}`;
+
+        /*
+         * A LIBRARY SEGMENT IS ALREADY A FINISHED SCENE. It was transcoded to this
+         * pipeline's exact spec when it was uploaded, so it goes into the list as it
+         * is - no frame to draw, no audio to lay over it, no second encode. That is
+         * what keeps the join a stream copy now that inductions contain footage.
+         */
+        if (scene.segment) {
+          if (scene.segment.length === 0) {
+            throw new Error(`“${scene.heading}” has an empty video segment.`);
+          }
+          await writeFile(join(work, `${stem}.mp4`), scene.segment);
+          parts.push(`${stem}.mp4`);
+          continue;
+        }
         if (!scene.audio || scene.audio.length === 0) {
           throw new Error(`“${scene.heading}” has no audio; the render would be silent.`);
         }
-        const stem = `${SCENE_PREFIX}-${String(index).padStart(2, '0')}`;
         const visual = sceneVisual(scene);
         await writeFile(join(work, `${stem}.mp3`), scene.audio);
         await writeFile(

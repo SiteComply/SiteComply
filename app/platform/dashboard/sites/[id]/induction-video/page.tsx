@@ -22,6 +22,10 @@ import {
   moduleDecisionsForSite,
 } from '@/services/inductionModules/inductionModuleService';
 import { RefreshWhileWorking } from '@/components/inductionVideo/RefreshWhileWorking';
+import { SiteLibraryPanel } from '@/components/inductionVideo/SiteLibraryPanel';
+import { libraryDecisionsForSite } from '@/services/inductionVideo/libraryAssetService';
+import { formatRunningTime } from '@/services/inductionVideo/captions';
+import { describeRealm } from '@/services/inductionModules/moduleActor';
 import { DeleteVersionButton } from '@/components/inductionVideo/DeleteVersionButton';
 import { anyWorking, describeAnyWork } from '@/services/inductionVideo/videoProgress';
 
@@ -64,6 +68,22 @@ export default async function SiteInductionVideoPage({
   );
   // Deleting a version is irreversible, so it sits with the roles that own the
   // record - the same list that may approve one.
+  const libraryDecisions = await libraryDecisionsForSite(params.id);
+  const libraryRows = libraryDecisions.map((d) => ({
+    assetId: d.assetId,
+    title: d.title,
+    description: d.description,
+    placement: d.placement,
+    mandatory: d.mandatory,
+    issuedVersion: d.issuedVersion,
+    durationLabel: d.durationMs ? formatRunningTime(d.durationMs) : null,
+    included: d.included,
+    effectivelyIncluded: d.effectivelyIncluded,
+    reason: d.reason,
+    decidedByName: d.decidedByName,
+    decidedByRealm: describeRealm(d.decidedByRealm),
+    replacesModuleTitle: d.replacesModuleTitle,
+  }));
   const canApproveVideo = canApproveInductionVideo(viewer.role);
   const required = manifest.scenes.filter((s) => s.required);
   const optional = manifest.scenes.filter((s) => !s.required);
@@ -108,6 +128,17 @@ export default async function SiteInductionVideoPage({
           </ul>
         </section>
       )}
+
+      <SiteLibraryPanel
+
+        siteId={params.id}
+
+        assets={libraryRows}
+
+        endpoint={`/api/platform/sites/${params.id}/induction-library`}
+
+      />
+
 
       <SiteInductionModules
         siteId={params.id}

@@ -144,9 +144,10 @@ chk(
 
 console.log('\nTHE AREA’S SHAPE');
 const keys = ws.INDUCTION_VIDEO_AREAS.map((a: { key: string }) => a.key);
-chk('two areas', keys.length === 2, keys.join(', '));
-chk('videos first — it is the daily task', keys[0] === 'videos');
+chk('three areas', keys.length === 3, keys.join(', '));
+chk('sites first — it is the daily task', keys[0] === 'sites');
 chk('company modules second', keys[1] === 'modules');
+chk('the library third', keys[2] === 'library');
 chk(
   'the modules area href matches the page route',
   // Areas no longer carry a href: the path is derived per tier from the shared
