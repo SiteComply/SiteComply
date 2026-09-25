@@ -146,19 +146,40 @@ const SLUG = 'TEST_PIPE_ASSET';
       ghost.error ?? 'it was accepted');
 
     console.log('\nTHE EDITOR REFUSES A HUGE FILE BEFORE UPLOADING IT');
-    const ui = read('components/inductionVideo/LibrarySection.tsx');
-    chk('the editor checks the size itself',
-      /file\.size > MAX_LIBRARY_VIDEO_BYTES/.test(ui),
+    /*
+     * FOUND BY WHICHEVER COMPONENT UPLOADS, not by name. These assertions named
+     * LibrarySection.tsx and broke when uploading moved to the asset detail page in
+     * the IA work - the behaviour was intact and the test was pointing at the old
+     * address. Anything that PUTs a block blob must carry the guard.
+     */
+    const uploaders = ['components/inductionVideo/LibrarySection.tsx',
+      'components/inductionVideo/LibraryAssetDetail.tsx']
+      .filter((f) => /'x-ms-blob-type': 'BlockBlob'/.test(read(f)));
+    chk('something in the UI uploads footage', uploaders.length > 0,
+      uploaders.join(', ') || 'nothing PUTs a blob');
+    const ui = uploaders.map((f) => read(f)).join('\n');
+    chk('every uploading surface checks the size itself',
+      uploaders.every((f) => /file\.size > MAX_LIBRARY_VIDEO_BYTES/.test(read(f))),
       'finding out after a 300 MB upload over site broadband is not a check');
     chk('  using the shared limit, not its own number',
-      /from '@\/services\/inductionVideo\/libraryLimits'/.test(ui));
+      uploaders.every((f) =>
+        /from '@\/services\/inductionVideo\/libraryLimits'/.test(read(f))));
     chk('the limits module touches no database',
       !/prisma|PrismaClient/.test(read('services/inductionVideo/libraryLimits.ts')),
       'a VALUE import from a client component pulls whatever it imports into the browser bundle');
-    chk('  and the editor value-imports ONLY that module',
-      (ui.match(/^import \{[^}]*\} from '@\/services\/[^']+';$/gm) ?? [])
-        .every((l: string) => l.includes('libraryLimits')),
-      'tsc cannot see this mistake, which is how it gets shipped');
+    /*
+     * MULTI-LINE IMPORTS COUNT. The previous form anchored to one line, and
+     * LibraryAssetDetail's taxonomy import is wrapped across two - so it matched
+     * nothing and passed regardless of what was imported. A wrapped value import of
+     * a service that touches the database is precisely the mistake this exists for.
+     */
+    const CLIENT_SAFE = /libraryLimits|libraryTaxonomy|libraryStatus/;
+    const valueImports = [...ui.matchAll(
+      /^import\s+(?!type\b)[\s\S]*?from\s+'(@\/services\/[^']+)';/gm,
+    )].map((m) => m[1]);
+    chk('  and every uploading surface value-imports only client-safe modules',
+      valueImports.length > 0 && valueImports.every((m: string) => CLIENT_SAFE.test(m)),
+      valueImports.join(', ') || 'no service imports found at all — check the regex');
 
     console.log('\nTHE VIDEO IS NEVER HELD IN MEMORY');
     const store = read('services/inductionVideo/mediaStorage.ts');

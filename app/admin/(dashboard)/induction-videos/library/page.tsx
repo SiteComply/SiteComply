@@ -19,7 +19,7 @@ export default async function AdminInductionLibraryPage() {
   if (!session) redirect('/admin/login');
 
   const manages = adminCanManage(session.role);
-  const { assets, modules } = await libraryRowsForEditor();
+  const { assets, modules, totalProjects } = await libraryRowsForEditor();
 
   return (
     <AdminInductionVideoWorkspace active="library">
@@ -36,6 +36,8 @@ export default async function AdminInductionLibraryPage() {
         canDraft={manages}
         canIssue={manages}
         endpoint="/api/admin/induction-library"
+        totalProjects={totalProjects}
+        detailHref={(id) => `/admin/induction-videos/library/${id}`}
       />
     </AdminInductionVideoWorkspace>
   );

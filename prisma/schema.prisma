@@ -4058,12 +4058,50 @@ model AiUsageEvent {
 /// The counterpart to InductionModule: that one is reusable TEXT the model speaks,
 /// this one is finished FOOTAGE. Same lifecycle, because the same question has to
 /// be answerable years later - what exactly was this operative shown?
+enum LibraryCategory {
+  /// Who we are, how we work. A company introduction lives here.
+  COMPANY_CULTURE
+  PPE
+  /// Conduct, behavioural standards, how people treat each other on site.
+  BEHAVIOUR
+  MANUAL_HANDLING
+  HOUSEKEEPING
+  ENVIRONMENT
+  /// Near misses, incidents, speaking up.
+  REPORTING
+  OTHER
+}
+
+/// WHERE A LIBRARY VIDEO CAME FROM, and therefore who may change it.
+///
+/// UPLOADED footage was filmed elsewhere; the Library is where it is stored,
+/// versioned and approved, and there is nowhere else to edit it.
+///
+/// GENERATED footage was produced by SiteComply from a Company Module. The MODULE
+/// is the source of truth: its wording is what was approved, and it is where an
+/// edit belongs. A generated asset is therefore NOT independently editable here -
+/// two editable copies of "PPE expectations" would diverge and nobody would be able
+/// to say which one an operative was shown. The Library stores and versions the
+/// resulting video, and records which module revision produced it.
+enum LibraryProvenance {
+  UPLOADED
+  GENERATED
+}
+
 model LibraryAsset {
   id   String @id @default(cuid())
   slug String @unique
 
   title       String
   description String?
+
+  /// What the video is ABOUT, as opposed to where it plays. Two axes, because a
+  /// manager looking for the PPE video should not have to know which band it is in.
+  category LibraryCategory @default(OTHER)
+
+  /// Filmed elsewhere, or produced by SiteComply from a Company Module. Decides
+  /// whether this asset's content may be changed here at all.
+  provenance LibraryProvenance @default(UPLOADED)
 
   /// Where it sits in the running order. See libraryPlacement.ts.
   placement LibraryPlacement @default(COMPANY_BAND)
@@ -4119,6 +4157,12 @@ model LibraryAssetRevision {
   /// leaves a silent gap in the finished video's subtitles.
   captionsBlobPath String?
   captionsFileName String?
+
+  /// For a GENERATED revision: the module revision whose narration was rendered.
+  /// Denormalised as an id rather than a relation so a module re-issue can never
+  /// change what an already-rendered video contains, and so "the module moved on,
+  /// this video is out of date" is answerable by comparing two ids.
+  sourceModuleRevisionId String?
 
   /// Why normalising failed, when it did.
   normaliseError String?

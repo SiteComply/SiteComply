@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import {
+  LibraryCategory,
   LibraryPlacement,
   LibraryRevisionStatus,
   InductionVideoJobStatus,
@@ -111,6 +112,10 @@ export interface LibraryAssetSummary {
   title: string;
   description: string | null;
   placement: LibraryPlacement;
+  /** What it is about, as opposed to where it plays. */
+  category: string;
+  /** Filmed elsewhere, or produced here from a Company Module. */
+  provenance: string;
   order: number;
   mandatory: boolean;
   defaultIncluded: boolean;
@@ -154,6 +159,8 @@ export async function listLibraryAssets(): Promise<LibraryAssetSummary[]> {
       id: a.id,
       slug: a.slug,
       title: a.title,
+      category: a.category,
+      provenance: a.provenance,
       description: a.description,
       placement: a.placement,
       order: a.order,
@@ -209,6 +216,7 @@ export async function createLibraryAsset(
     title: string;
     description?: string;
     placement: LibraryPlacement;
+    category?: LibraryCategory;
     order?: number;
     moduleId?: string | null;
     mandatory?: boolean;
@@ -226,6 +234,7 @@ export async function createLibraryAsset(
   }
   const asset = await prisma.libraryAsset.create({
     data: {
+      ...(input.category ? { category: input.category } : {}),
       slug,
       title: input.title.trim(),
       description: input.description?.trim() || null,
@@ -296,6 +305,26 @@ export async function attachUpload(
 ): Promise<LibraryResult<{ queued: boolean }>> {
   if (!actor.canDraft) return { ok: false, error: 'Not available.' };
   let trueBytes = input.kind === 'VIDEO' ? input.bytes : 0;
+  /*
+   * A GENERATED ASSET'S CONTENT IS NOT EDITABLE HERE, and that is enforced in the
+   * service rather than only in the screen that hides the control. The module it was
+   * produced from is the source of truth; uploading a file over a generated video
+   * would create a second version of the same content with nothing to say which one
+   * an operative had been shown.
+   */
+  const owning = await prisma.libraryAssetRevision.findUnique({
+    where: { id: revisionId },
+    select: { asset: { select: { provenance: true, title: true, module: { select: { title: true } } } } },
+  });
+  if (owning?.asset.provenance === 'GENERATED') {
+    return {
+      ok: false,
+      error:
+        `“${owning.asset.title}” is generated from a company module` +
+        `${owning.asset.module ? ` (“${owning.asset.module.title}”)` : ''}, so footage cannot be ` +
+        'uploaded over it. Edit the module and generate the video again.',
+    };
+  }
   const rev = await prisma.libraryAssetRevision.findUnique({
     where: { id: revisionId },
     select: {
@@ -501,6 +530,7 @@ export async function updateLibraryAssetSettings(
     moduleId?: string | null;
     mandatory?: boolean;
     defaultIncluded?: boolean;
+    category?: LibraryCategory;
   },
 ): Promise<LibraryResult<{ saved: true }>> {
   if (!actor.canIssue) {
@@ -509,6 +539,7 @@ export async function updateLibraryAssetSettings(
   await prisma.libraryAsset.update({
     where: { id: assetId },
     data: {
+      ...(input.category !== undefined ? { category: input.category } : {}),
       ...(input.title === undefined ? {} : { title: input.title.trim() }),
       ...(input.description === undefined ? {} : { description: input.description.trim() || null }),
       ...(input.placement === undefined ? {} : { placement: input.placement }),
@@ -927,3 +958,28 @@ export async function runQueuedNormaliseJobs(limit = 1): Promise<number> {
 
 // Re-exported so server callers and the verification suites have one import.
 export { MAX_LIBRARY_VIDEO_BYTES, MAX_LIBRARY_VIDEO_MS, describeBytes };
+
+/**
+ * A SHORT-LIVED URL TO WATCH ONE REVISION.
+ *
+ * Prefers the transcoded segment - that is what an induction actually contains, and
+ * therefore what somebody approving it should be judging. Falls back to the upload
+ * so a revision can be checked while it is still being prepared, or after a
+ * preparation failure, which is exactly when looking at it is most useful.
+ */
+export async function previewUrlForRevision(
+  actor: ModuleActor,
+  revisionId: string,
+): Promise<LibraryResult<string>> {
+  if (!actor.canDraft && !actor.canIssue) return { ok: false, error: 'Not available.' };
+  const rev = await prisma.libraryAssetRevision.findUnique({
+    where: { id: revisionId },
+    select: { normalisedBlobPath: true, sourceBlobPath: true },
+  });
+  if (!rev) return { ok: false, error: 'That revision no longer exists.' };
+  const path = rev.normalisedBlobPath ?? rev.sourceBlobPath;
+  if (!path) return { ok: false, error: 'There is no footage on this revision yet.' };
+  const { mediaSasUrl } = await import('@/services/inductionVideo/mediaStorage');
+  // Long enough to watch a ten-minute video with a pause in the middle, no longer.
+  return { ok: true, value: await mediaSasUrl(path, 30) };
+}

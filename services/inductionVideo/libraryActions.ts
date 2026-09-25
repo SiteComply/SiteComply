@@ -1,4 +1,4 @@
-import { LibraryPlacement } from '@prisma/client';
+import { LibraryCategory, LibraryPlacement } from '@prisma/client';
 import {
   attachUpload,
   createLibraryAsset,
@@ -6,6 +6,7 @@ import {
   setLibraryAssetActive,
   startRevision,
   updateLibraryAssetSettings,
+  previewUrlForRevision,
 } from '@/services/inductionVideo/libraryAssetService';
 import {
   libraryCaptionsPath,
@@ -40,6 +41,14 @@ function placement(v: unknown): LibraryPlacement {
   return v === 'OPENING' || v === 'CLOSING' ? v : LibraryPlacement.COMPANY_BAND;
 }
 
+/** Anything unrecognised is OTHER rather than an error: a category is for finding
+ *  things, and refusing to save a video over one is not a trade worth making. */
+function category(v: unknown): LibraryCategory {
+  return typeof v === 'string' && v in LibraryCategory
+    ? (v as LibraryCategory)
+    : LibraryCategory.OTHER;
+}
+
 export async function handleLibraryAction(
   actor: ModuleActor,
   body: Record<string, unknown>,
@@ -55,6 +64,7 @@ export async function handleLibraryAction(
         title: str('title'),
         description: str('description'),
         placement: placement(body.placement),
+        category: category(body.category),
         moduleId: str('moduleId') || null,
       });
       return r.ok ? ok(r.value) : refuse(r.error);
@@ -116,11 +126,23 @@ export async function handleLibraryAction(
       const r = await setLibraryAssetActive(actor, str('assetId'), body.active === true);
       return r.ok ? ok(r.value) : refuse(r.error);
     }
+    /*
+     * A URL TO WATCH A REVISION. The Library had no player at all: you could upload
+     * a video, prepare it, issue it to every project and never once see it. The link
+     * is short-lived and scoped to the one blob, so footage is never a public URL.
+     */
+    case 'previewUrl': {
+      const revisionId = str('revisionId');
+      if (!revisionId) return refuse('Which revision?');
+      const url = await previewUrlForRevision(actor, revisionId);
+      return url.ok ? ok({ url: url.value }) : refuse(url.error);
+    }
     case 'settings': {
       const r = await updateLibraryAssetSettings(actor, str('assetId'), {
         ...(body.title === undefined ? {} : { title: str('title') }),
         ...(body.description === undefined ? {} : { description: str('description') }),
         ...(body.placement === undefined ? {} : { placement: placement(body.placement) }),
+        ...(body.category === undefined ? {} : { category: category(body.category) }),
         ...(body.order === undefined ? {} : { order: num('order') }),
         ...(body.moduleId === undefined ? {} : { moduleId: str('moduleId') || null }),
         ...(bool('mandatory') === undefined ? {} : { mandatory: bool('mandatory') }),

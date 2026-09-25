@@ -30,7 +30,7 @@ export default async function InductionLibraryPage() {
   const viewer = await requirePlatformViewer();
   if (!canViewInductionModules(viewer.role)) redirect('/platform/dashboard');
 
-  const { assets, modules } = await libraryRowsForEditor();
+  const { assets, modules, totalProjects } = await libraryRowsForEditor();
 
   return (
     <PlatformShell>
@@ -57,6 +57,8 @@ export default async function InductionLibraryPage() {
           canDraft={canDraftInductionModule(viewer.role)}
           canIssue={canIssueInductionModule(viewer.role)}
           endpoint="/api/platform/induction-library"
+          totalProjects={totalProjects}
+          detailHref={(id) => `/platform/dashboard/induction-videos/library/${id}`}
         />
       </InductionVideoWorkspace>
     </PlatformShell>

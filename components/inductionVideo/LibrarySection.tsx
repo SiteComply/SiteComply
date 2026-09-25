@@ -1,12 +1,41 @@
 'use client';
 
-import { useState } from 'react';
+/**
+ * THE LIBRARY INDEX: every reusable company video, and what it is doing.
+ *
+ * ── WHAT THIS IS FOR, SAID ON THE PAGE ────────────────────────────────────
+ *
+ * The Library is company footage that every project's induction can reuse, so the
+ * same PPE briefing is not filmed or written twice. That sentence used to appear
+ * only in the empty state, which meant the explanation vanished the moment somebody
+ * added their first video.
+ *
+ * ── GROUPED BY WHERE IT PLAYS ─────────────────────────────────────────────
+ *
+ * This was a flat list with placement mentioned in a metadata line. Placement is the
+ * thing that decides what an operative actually sees and in what order, so it is the
+ * spine of the page instead of a footnote. Category answers the other question -
+ * what is the video about - and drives the filters.
+ *
+ * ── THE ROW IS A SUMMARY, NOT A CONTROL PANEL ─────────────────────────────
+ *
+ * Uploading, issuing, retiring and settings live on the asset's own page. A row that
+ * tried to do all of it could not do any of it properly, and there was nowhere to
+ * put a player or the usage figures.
+ */
+
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-// VALUES, from a module with no Prisma in it - see libraryLimits.ts.
+import Link from 'next/link';
+// Values from modules with no Prisma in them: a value import from a service that
+// touches the database would ship the client to the browser, and tsc cannot see it.
 import {
-  MAX_LIBRARY_VIDEO_BYTES,
-  describeBytes,
-} from '@/services/inductionVideo/libraryLimits';
+  LIBRARY_CATEGORIES,
+  LIBRARY_PROVENANCE,
+  categoryLabel,
+  provenanceLabel,
+} from '@/services/inductionVideo/libraryTaxonomy';
+import { LIBRARY_STATUS_FILTERS, type LibraryStatus } from '@/services/inductionVideo/libraryStatus';
 
 export interface LibraryRow {
   id: string;
@@ -14,6 +43,10 @@ export interface LibraryRow {
   title: string;
   description: string | null;
   placement: string;
+  category: string;
+  provenance: string;
+  status: LibraryStatus;
+  usage: { onProjects: number; publishedInductions: number };
   mandatory: boolean;
   defaultIncluded: boolean;
   active: boolean;
@@ -33,43 +66,39 @@ export interface LibraryRow {
     missing: string[];
     normaliseError: string | null;
   } | null;
-  revisionCount: number;
 }
 
-const PLACEMENT_LABEL: Record<string, string> = {
-  OPENING: 'Opens the induction',
-  COMPANY_BAND: 'With the company standards',
-  CLOSING: 'Before the close',
+/** The running order, which is also the grouping. */
+const BANDS = [
+  {
+    key: 'OPENING',
+    title: 'Opening',
+    when: 'Before the site welcome — the first thing an operative sees.',
+  },
+  {
+    key: 'COMPANY_BAND',
+    title: 'Company standards',
+    when: 'After the site information, before the site rules.',
+  },
+  { key: 'CLOSING', title: 'Closing', when: 'At the end, before sign-off.' },
+] as const;
+
+const TONE: Record<string, string> = {
+  good: 'bg-safe-50 text-safe-700 border-safe-200',
+  working: 'bg-hivis-50 text-hivis-700 border-hivis-200',
+  attention: 'bg-hivis-50 text-hivis-700 border-hivis-200',
+  bad: 'bg-danger-50 text-danger-700 border-danger-200',
+  neutral: 'bg-surface-sunken text-ink-muted border-line',
 };
 
-/**
- * The video Library.
- *
- * ── THE STATE THAT MATTERS IS "IS IT ISSUED" ──────────────────────────────
- *
- * Same as company modules, for the same reason: an asset with no issued revision
- * reaches nobody, however good the footage. So it is the first thing each row says.
- *
- * ── AND THEN "IS IT READY TO ISSUE" ───────────────────────────────────────
- *
- * Unlike a module, a draft here is not ready the moment it is written. The upload
- * has to be transcoded to the render pipeline's exact spec before it can be joined
- * to anything, and it needs a caption file. So a draft says what it is still
- * waiting for, rather than offering an Issue button that would be refused.
- *
- * ── UPLOADS GO STRAIGHT TO STORAGE ────────────────────────────────────────
- *
- * The file never passes through the application. This asks the server for a
- * short-lived upload URL, PUTs the bytes to it, and then tells the server where
- * they landed. A hundred-megabyte video through a route on a small instance fails
- * for reasons nobody can act on.
- */
 export function LibrarySection({
   assets,
   modules,
   canDraft,
   canIssue,
   endpoint,
+  totalProjects,
+  detailHref,
 }: {
   assets: LibraryRow[];
   /** Company modules a video can stand in for. */
@@ -78,419 +107,345 @@ export function LibrarySection({
   canIssue: boolean;
   /** This tier's library API. */
   endpoint: string;
+  totalProjects: number;
+  /** This tier's asset page, given the id. */
+  detailHref: (assetId: string) => string;
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [q, setQ] = useState('');
+  const [category, setCategory] = useState('');
+  const [provenance, setProvenance] = useState('');
+  const [status, setStatus] = useState('');
+  const [showRetired, setShowRetired] = useState(false);
   const [draft, setDraft] = useState({
     slug: '',
     title: '',
     description: '',
     placement: 'COMPANY_BAND',
+    category: 'OTHER',
     moduleId: '',
   });
-  const [issuing, setIssuing] = useState<string | null>(null);
-  const [note, setNote] = useState('');
-  const [progress, setProgress] = useState<string | null>(null);
 
-  async function call(body: Record<string, unknown>, key: string) {
-    if (busy) return null;
-    setBusy(key);
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return assets.filter((a) => {
+      if (!showRetired && !a.active) return false;
+      if (category && a.category !== category) return false;
+      if (provenance && a.provenance !== provenance) return false;
+      if (status && a.status.key !== status) return false;
+      if (!needle) return true;
+      return (
+        a.title.toLowerCase().includes(needle) ||
+        a.slug.toLowerCase().includes(needle) ||
+        (a.description ?? '').toLowerCase().includes(needle) ||
+        (a.moduleTitle ?? '').toLowerCase().includes(needle)
+      );
+    });
+  }, [assets, q, category, provenance, status, showRetired]);
+
+  const retiredCount = assets.filter((a) => !a.active).length;
+  const filtered = Boolean(q.trim() || category || provenance || status);
+
+  async function create() {
+    setBusy(true);
     setError(null);
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ action: 'create', ...draft }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.ok) {
-        setError(data?.error ?? 'That did not work.');
-        return null;
+        setError(data?.error ?? 'That could not be added.');
+        return;
       }
-      router.refresh();
-      return data as Record<string, unknown>;
+      // Straight to the video's own page, which is where footage and captions go.
+      const id = (data as { assetId?: string }).assetId;
+      if (id) router.push(detailHref(id));
+      else router.refresh();
     } catch {
       setError('Network problem. Please try again.');
-      return null;
     } finally {
-      setBusy(null);
-    }
-  }
-
-  /**
-   * Ask for a URL, PUT the bytes, tell the server where they went.
-   *
-   * The three steps are separate on purpose: if the upload fails the revision is
-   * untouched, and if the recording call fails the blob is simply unreferenced
-   * rather than half-attached.
-   */
-  async function upload(
-    assetId: string,
-    revisionId: string | null,
-    kind: 'VIDEO' | 'CAPTIONS',
-    file: File,
-  ) {
-    setError(null);
-    /*
-     * REFUSE IT HERE, before the bytes go anywhere. The server checks the real size
-     * in storage, but finding out after a 300 MB upload over site broadband is not
-     * a check, it is a punishment. The limit is imported rather than retyped.
-     */
-    if (kind === 'VIDEO' && file.size > MAX_LIBRARY_VIDEO_BYTES) {
-      setError(
-        `That file is ${describeBytes(file.size)}. The limit is ` +
-          `${describeBytes(MAX_LIBRARY_VIDEO_BYTES)} — export it at a lower bitrate, ` +
-          'or split it into shorter videos.',
-      );
-      return;
-    }
-    setProgress(`Preparing to upload ${file.name}…`);
-    try {
-      let rev = revisionId;
-      if (!rev) {
-        const started = await call({ action: 'startRevision', assetId }, `rev-${assetId}`);
-        if (!started) return;
-        rev = started.revisionId as string;
-      }
-      const ticket = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          action: 'uploadUrl',
-          revisionId: rev,
-          kind,
-          fileName: file.name,
-        }),
-      }).then((r) => r.json());
-      if (!ticket?.ok) {
-        setError(ticket?.error ?? 'Could not start the upload.');
-        return;
-      }
-
-      setProgress(`Uploading ${file.name}…`);
-      const put = await fetch(ticket.url as string, {
-        method: 'PUT',
-        headers: {
-          'x-ms-blob-type': 'BlockBlob',
-          'content-type': file.type || 'application/octet-stream',
-        },
-        body: file,
-      });
-      if (!put.ok) {
-        setError(`The upload failed (${put.status}). Please try again.`);
-        return;
-      }
-
-      setProgress(
-        kind === 'VIDEO' ? 'Preparing the video for the induction pipeline…' : 'Saved.',
-      );
-      await call(
-        {
-          action: 'attach',
-          revisionId: rev,
-          kind,
-          blobPath: ticket.blobPath,
-          fileName: file.name,
-          bytes: file.size,
-        },
-        `attach-${rev}`,
-      );
-    } finally {
-      setProgress(null);
+      setBusy(false);
     }
   }
 
   return (
-    <section className="space-y-3">
-      <div className="rounded-xl border border-line bg-surface p-4 shadow-card">
-        <h2 className="text-sm font-bold text-ink">Company video library</h2>
-        <p className="mt-1 max-w-3xl text-sm text-ink-muted">
-          Approved footage, filmed once and included in every project’s induction
-          alongside the scenes generated from that site’s own records. A video only
-          reaches an induction once it has been <strong>issued</strong>, and an
-          upload is prepared to the induction format before it can be.
-        </p>
-        {canDraft && !adding && (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="mt-3 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-          >
-            Add a library video
-          </button>
-        )}
-      </div>
+    <div className="space-y-4">
+      {/* ── WHAT THE LIBRARY IS. Stays on the page, not only when it is empty. ── */}
+      <header className="rounded-xl border border-line bg-surface p-4 shadow-card">
+        <div className="flex flex-wrap items-start gap-2">
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-ink">Company video library</h2>
+            <p className="mt-1 max-w-2xl text-sm text-ink-muted">
+              Reusable company footage that every project’s induction can include — a company
+              introduction, PPE expectations, behavioural standards and so on. Filmed once,
+              approved once, and used by every site, so the same briefing is never produced
+              twice. Each video is versioned: a published induction keeps the revision it was
+              made with.
+            </p>
+          </div>
+          {canDraft && (
+            <button
+              type="button"
+              onClick={() => setAdding((v) => !v)}
+              className="ml-auto rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+            >
+              {adding ? 'Cancel' : 'Add a library video'}
+            </button>
+          )}
+        </div>
+      </header>
 
       {error && (
-        <p role="alert" className="rounded-lg border border-danger-500/40 bg-danger-50 px-3 py-2 text-sm text-danger-700">
+        <p className="rounded-lg border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700">
           {error}
         </p>
       )}
-      {progress && (
-        <p role="status" aria-live="polite" className="rounded-lg border border-brand-500/40 bg-brand-50 px-3 py-2 text-sm text-ink">
-          {progress}
-        </p>
-      )}
 
-      {adding && (
-        <div className="space-y-2 rounded-xl border border-line bg-surface-sunken p-4">
-          <div className="grid gap-2 sm:grid-cols-2">
+      {/* ── CREATION. The first question is the one that decides everything else. ── */}
+      {adding && canDraft && (
+        <section className="rounded-xl border border-brand-200 bg-brand-50/40 p-4 shadow-card">
+          <h3 className="text-sm font-bold text-ink">Where will the video come from?</h3>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-brand-300 bg-surface p-3">
+              <p className="text-sm font-bold text-ink">I have footage</p>
+              <p className="mt-1 text-xs text-ink-muted">
+                Filmed elsewhere and exported as a video file. You will upload it and a caption
+                file on the next screen.
+              </p>
+            </div>
+            <div className="rounded-lg border border-line bg-surface-sunken p-3">
+              <p className="text-sm font-bold text-ink-muted">
+                SiteComply produces it{' '}
+                <span className="font-normal text-ink-subtle">— not available yet</span>
+              </p>
+              <p className="mt-1 text-xs text-ink-subtle">
+                Generated from a Company Module: its approved wording becomes the narration, and
+                the module stays the source of truth — you edit it there and regenerate rather
+                than having two versions of the same content. This is being built next.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <label className="text-xs font-semibold text-ink">
               Title
               <input
                 value={draft.title}
-                onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm font-normal text-ink"
+                onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                placeholder="Company introduction"
+                className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm font-normal"
               />
             </label>
             <label className="text-xs font-semibold text-ink">
-              Reference
+              Short reference
               <input
                 value={draft.slug}
-                onChange={(e) => setDraft((d) => ({ ...d, slug: e.target.value }))}
+                onChange={(e) => setDraft({ ...draft, slug: e.target.value.toUpperCase() })}
                 placeholder="COMPANY_INTRO"
-                className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm font-normal text-ink"
+                className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm font-normal"
               />
             </label>
-          </div>
-          <label className="block text-xs font-semibold text-ink">
-            What it covers
-            <input
-              value={draft.description}
-              onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
-              className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm font-normal text-ink"
-            />
-          </label>
-          <div className="grid gap-2 sm:grid-cols-2">
             <label className="text-xs font-semibold text-ink">
-              Where it plays
+              What is it about?
               <select
-                value={draft.placement}
-                onChange={(e) => setDraft((d) => ({ ...d, placement: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm font-normal text-ink"
+                value={draft.category}
+                onChange={(e) => setDraft({ ...draft, category: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm font-normal"
               >
-                <option value="OPENING">Opens the induction</option>
-                <option value="COMPANY_BAND">With the company standards</option>
-                <option value="CLOSING">Before the close</option>
-              </select>
-            </label>
-            <label className="text-xs font-semibold text-ink">
-              Replaces a written module
-              <select
-                value={draft.moduleId}
-                onChange={(e) => setDraft((d) => ({ ...d, moduleId: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm font-normal text-ink"
-              >
-                <option value="">Nothing — it stands on its own</option>
-                {modules.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.title}
-                  </option>
+                {LIBRARY_CATEGORIES.map((c) => (
+                  <option key={c.key} value={c.key}>{c.label}</option>
                 ))}
               </select>
             </label>
+            <label className="text-xs font-semibold text-ink">
+              Where does it play?
+              <select
+                value={draft.placement}
+                onChange={(e) => setDraft({ ...draft, placement: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm font-normal"
+              >
+                {BANDS.map((b) => (
+                  <option key={b.key} value={b.key}>{b.title} — {b.when}</option>
+                ))}
+              </select>
+            </label>
+            <label className="sm:col-span-2 text-xs font-semibold text-ink">
+              Description (optional)
+              <input
+                value={draft.description}
+                onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm font-normal"
+              />
+            </label>
+            <label className="sm:col-span-2 text-xs font-semibold text-ink">
+              Does it cover a company module? (optional)
+              <select
+                value={draft.moduleId}
+                onChange={(e) => setDraft({ ...draft, moduleId: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm font-normal"
+              >
+                <option value="">No — it plays alongside the modules</option>
+                {modules.map((m) => (
+                  <option key={m.id} value={m.id}>{m.title}</option>
+                ))}
+              </select>
+              <span className="mt-1 block font-normal text-ink-subtle">
+                If it does, the written module is left out of the induction so an operative is not
+                told the same thing twice.
+              </span>
+            </label>
           </div>
-          <p className="text-xs text-ink-subtle">
-            Choosing a module means an operative sees this film{' '}
-            <strong>instead of</strong> hearing that module read aloud — the same
-            content, delivered better, and never both.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={busy !== null || draft.title.trim().length < 3 || draft.slug.trim().length < 3}
-              onClick={async () => {
-                const r = await call({ action: 'create', ...draft }, 'create');
-                if (r) {
-                  setAdding(false);
-                  setDraft({ slug: '', title: '', description: '', placement: 'COMPANY_BAND', moduleId: '' });
-                }
-              }}
-              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
-            >
-              {busy === 'create' ? 'Adding…' : 'Add it'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setAdding(false)}
-              className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+          <button
+            type="button"
+            disabled={busy || draft.title.trim().length < 3 || draft.slug.trim().length < 3}
+            onClick={() => void create()}
+            className="mt-3 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+          >
+            {busy ? 'Adding…' : 'Add and upload footage'}
+          </button>
+        </section>
       )}
 
-      {assets.length === 0 && !adding && (
+      {/* ── SEARCH AND FILTER ── */}
+      {assets.length > 0 && (
+        <section className="rounded-xl border border-line bg-surface p-3 shadow-card">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search by title, reference or description…"
+              className="min-w-[14rem] flex-1 rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
+            />
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="rounded-lg border border-line bg-surface px-2 py-1.5 text-xs"
+            >
+              <option value="">Any subject</option>
+              {LIBRARY_CATEGORIES.map((c) => (
+                <option key={c.key} value={c.key}>{c.label}</option>
+              ))}
+            </select>
+            <select
+              value={provenance}
+              onChange={(e) => setProvenance(e.target.value)}
+              className="rounded-lg border border-line bg-surface px-2 py-1.5 text-xs"
+            >
+              <option value="">Uploaded or generated</option>
+              {LIBRARY_PROVENANCE.map((p) => (
+                <option key={p.key} value={p.key}>{p.label}</option>
+              ))}
+            </select>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="rounded-lg border border-line bg-surface px-2 py-1.5 text-xs"
+            >
+              <option value="">Any status</option>
+              {LIBRARY_STATUS_FILTERS.map((f) => (
+                <option key={f.key} value={f.key}>{f.label}</option>
+              ))}
+            </select>
+            {retiredCount > 0 && (
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-ink">
+                <input
+                  type="checkbox"
+                  checked={showRetired}
+                  onChange={(e) => setShowRetired(e.target.checked)}
+                />
+                Show retired ({retiredCount})
+              </label>
+            )}
+          </div>
+          {filtered && (
+            <p className="mt-2 text-xs text-ink-subtle">
+              Showing {shown.length} of {assets.length}.{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setQ(''); setCategory(''); setProvenance(''); setStatus('');
+                }}
+                className="font-semibold text-brand-700 hover:underline"
+              >
+                Clear filters
+              </button>
+            </p>
+          )}
+        </section>
+      )}
+
+      {assets.length === 0 && (
         <p className="rounded-xl border border-line bg-surface p-4 text-sm text-ink-muted shadow-card">
-          No library videos yet. Every project’s induction is currently built
-          entirely from generated scenes and written company modules.
+          No library videos yet. Every project’s induction is currently built entirely from that
+          project’s own information and the written company modules.
         </p>
       )}
 
-      {assets.map((a) => (
-        <article key={a.id} className="rounded-xl border border-line bg-surface p-4 shadow-card">
-          <div className="flex flex-wrap items-baseline gap-2">
-            <h3 className="text-sm font-bold text-ink">{a.title}</h3>
-            {a.mandatory ? (
-              <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
-                Every site
-              </span>
-            ) : (
-              <span className="text-xs text-ink-subtle">
-                {a.defaultIncluded ? 'On by default' : 'Off by default'}
-              </span>
-            )}
-            {!a.active && (
-              <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-semibold text-ink-subtle">
-                Retired
-              </span>
-            )}
-            <span className="ml-auto text-xs">
-              {a.issued ? (
-                <span className="font-semibold text-safe-700">
-                  Issued · revision {a.issued.version}
-                  {a.issued.durationLabel ? ` · ${a.issued.durationLabel}` : ''}
+      {/* ── GROUPED BY WHERE IT PLAYS ── */}
+      {assets.length > 0 &&
+        BANDS.map((band) => {
+          const inBand = shown.filter((a) => a.placement === band.key);
+          return (
+            <section key={band.key} className="rounded-xl border border-line bg-surface p-4 shadow-card">
+              <div className="flex flex-wrap items-baseline gap-2">
+                <h3 className="text-sm font-bold text-ink">{band.title}</h3>
+                <span className="text-xs text-ink-subtle">{band.when}</span>
+                <span className="ml-auto text-xs font-semibold text-ink-muted">
+                  {inBand.length} video{inBand.length === 1 ? '' : 's'}
                 </span>
-              ) : (
-                <span className="font-semibold text-hivis-600">
-                  Not issued — reaches nobody
-                </span>
-              )}
-            </span>
-          </div>
+              </div>
 
-          {a.description && <p className="mt-1 text-sm text-ink-muted">{a.description}</p>}
-
-          <p className="mt-2 text-xs text-ink-subtle">
-            {PLACEMENT_LABEL[a.placement] ?? a.placement}
-            {a.moduleTitle ? ` · shown instead of “${a.moduleTitle}”` : ''}
-            {a.issued
-              ? ` · in force since ${a.issued.issuedOn}${
-                  a.issued.issuedByName ? ` · issued by ${a.issued.issuedByName}` : ''
-                }${a.issued.issuedByRealm ? ` (${a.issued.issuedByRealm})` : ''}`
-              : ''}
-            {a.revisionCount > 1 ? ` · ${a.revisionCount} revisions` : ''}
-          </p>
-
-          {a.draft && (
-            <div className="mt-3 rounded-lg border border-line bg-surface-sunken p-3">
-              <p className="text-xs font-semibold text-ink">
-                Draft revision {a.draft.version} · prepared by {a.draft.preparedByName}
-              </p>
-              {a.draft.normaliseError ? (
-                <p className="mt-1 text-xs font-medium text-danger-700">
-                  The upload could not be prepared: {a.draft.normaliseError}
-                </p>
-              ) : a.draft.ready ? (
-                <p className="mt-1 text-xs text-safe-700">
-                  Ready to issue.
+              {inBand.length === 0 ? (
+                <p className="mt-2 text-xs text-ink-subtle">
+                  {filtered ? 'Nothing here matches the filters.' : 'Nothing plays here yet.'}
                 </p>
               ) : (
-                <p className="mt-1 text-xs text-hivis-600">
-                  Still needs {a.draft.missing.join(' and ')}.
-                </p>
+                <ul className="mt-3 space-y-2">
+                  {inBand.map((a) => (
+                    <li key={a.id}>
+                      <Link
+                        href={detailHref(a.id)}
+                        className="block rounded-lg border border-line bg-surface-sunken p-3 hover:border-brand-300 hover:bg-brand-50/40"
+                      >
+                        <div className="flex flex-wrap items-baseline gap-2">
+                          <span className="text-sm font-bold text-ink">{a.title}</span>
+                          <span className="text-xs text-ink-subtle">
+                            {categoryLabel(a.category)} · {provenanceLabel(a.provenance)}
+                          </span>
+                          {a.mandatory && (
+                            <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+                              Every project
+                            </span>
+                          )}
+                          <span
+                            className={`ml-auto rounded-full border px-2 py-0.5 text-xs font-semibold ${TONE[a.status.tone]}`}
+                          >
+                            {a.status.label}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-ink-muted">
+                          {a.status.reachesOperatives
+                            ? `On ${a.usage.onProjects} of ${totalProjects} projects`
+                            : 'Reaches nobody yet'}
+                          {a.usage.publishedInductions > 0 &&
+                            ` · in ${a.usage.publishedInductions} published induction${a.usage.publishedInductions === 1 ? '' : 's'}`}
+                          {a.moduleTitle && ` · shown instead of “${a.moduleTitle}”`}
+                          {a.issued?.durationLabel && ` · ${a.issued.durationLabel}`}
+                        </p>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
               )}
-              {canDraft && (
-                <div className="mt-2 flex flex-wrap items-center gap-3">
-                  <label className="text-xs font-semibold text-brand-700">
-                    Upload video
-                    <input
-                      type="file"
-                      accept="video/*"
-                      className="ml-2 text-xs font-normal text-ink-muted"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) void upload(a.id, a.draft!.id, 'VIDEO', f);
-                      }}
-                    />
-                  </label>
-                  <label className="text-xs font-semibold text-brand-700">
-                    Upload captions (.vtt)
-                    <input
-                      type="file"
-                      accept=".vtt,text/vtt"
-                      className="ml-2 text-xs font-normal text-ink-muted"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) void upload(a.id, a.draft!.id, 'CAPTIONS', f);
-                      }}
-                    />
-                  </label>
-                </div>
-              )}
-              {canIssue && a.draft.ready && (
-                <div className="mt-3">
-                  {issuing === a.draft.id ? (
-                    <div className="space-y-2">
-                      <label className="block text-xs font-semibold text-ink">
-                        What changed in this revision? Kept on the history.
-                        <input
-                          value={note}
-                          onChange={(e) => setNote(e.target.value)}
-                          className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm font-normal text-ink"
-                        />
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          disabled={note.trim().length < 5 || busy !== null}
-                          onClick={async () => {
-                            const r = await call(
-                              { action: 'issue', revisionId: a.draft!.id, issueNote: note },
-                              `issue-${a.id}`,
-                            );
-                            if (r) {
-                              setIssuing(null);
-                              setNote('');
-                            }
-                          }}
-                          className="rounded-lg bg-safe-500 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
-                        >
-                          {busy === `issue-${a.id}` ? 'Issuing…' : 'Issue it'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setIssuing(null)}
-                          className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink"
-                        >
-                          Not yet
-                        </button>
-                      </div>
-                      <p className="text-xs text-ink-subtle">
-                        Every project’s induction will carry this footage from now
-                        on. Existing videos keep the revision they were built with
-                        and show as out of date.
-                      </p>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setIssuing(a.draft!.id)}
-                      className="rounded-lg bg-safe-500 px-3 py-1.5 text-xs font-semibold text-white"
-                    >
-                      Issue revision {a.draft.version}
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {canDraft && !a.draft && (
-            <button
-              type="button"
-              disabled={busy !== null}
-              onClick={() => call({ action: 'startRevision', assetId: a.id }, `rev-${a.id}`)}
-              className="mt-3 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
-            >
-              {busy === `rev-${a.id}` ? 'Starting…' : 'Replace the footage'}
-            </button>
-          )}
-        </article>
-      ))}
-    </section>
+            </section>
+          );
+        })}
+    </div>
   );
 }

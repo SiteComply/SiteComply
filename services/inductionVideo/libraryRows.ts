@@ -1,4 +1,6 @@
 import { listLibraryAssets } from '@/services/inductionVideo/libraryAssetService';
+import { libraryStatus } from '@/services/inductionVideo/libraryStatus';
+import { libraryUsageSummaries } from '@/services/inductionVideo/libraryUsage';
 import { listModules } from '@/services/inductionModules/inductionModuleService';
 import { describeRealm } from '@/services/inductionModules/moduleActor';
 import { formatRunningTime } from '@/services/inductionVideo/captions';
@@ -16,15 +18,41 @@ import type { LibraryRow } from '@/components/inductionVideo/LibrarySection';
 export async function libraryRowsForEditor(): Promise<{
   assets: LibraryRow[];
   modules: { id: string; title: string }[];
+  totalProjects: number;
 }> {
-  const [assets, modules] = await Promise.all([listLibraryAssets(), listModules()]);
+  const [assets, modules, usage] = await Promise.all([
+    listLibraryAssets(),
+    listModules(),
+    libraryUsageSummaries(),
+  ]);
   return {
+    totalProjects: usage.totalProjects,
     assets: assets.map((a) => ({
       id: a.id,
       slug: a.slug,
       title: a.title,
       description: a.description,
       placement: a.placement,
+      category: a.category,
+      provenance: a.provenance,
+      // Derived here so the index and the detail page cannot phrase the same state
+      // in two different ways.
+      status: libraryStatus({
+        active: a.active,
+        issued: a.issued ? { version: a.issued.version } : null,
+        draft: a.draft
+          ? {
+              version: a.draft.version,
+              hasFootage: a.draft.readiness.hasFootage,
+              normalised: a.draft.readiness.normalised,
+              hasCaptions: a.draft.readiness.hasCaptions,
+              normaliseError: a.draft.normaliseError,
+            }
+          : null,
+      }),
+      usage: usage.byAsset.get(a.id) ?? {
+        assetId: a.id, onProjects: 0, publishedInductions: 0,
+      },
       mandatory: a.mandatory,
       defaultIncluded: a.defaultIncluded,
       active: a.active,
