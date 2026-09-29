@@ -110,6 +110,50 @@ chk('the filter bar is NOT shown, because there is nothing to filter',
   !empty.includes('Any subject'),
   'controls that can only return nothing are noise');
 
+console.log('\nA CATALOGUE THAT GREW AFTER YOU SEEDED IT');
+/*
+ * The "create the standard modules" button only rendered when there were NONE, so a
+ * company that had already seeded could never receive one added later. That is what
+ * happened when Company Introduction joined the set: production had six modules, the
+ * seventh could not be created by anything in the product, and a user building a
+ * "Company Introduction" library video was left picking PPE expectations as its
+ * source — producing a company introduction made of PPE content.
+ */
+const { InductionModulesSection } = require('../components/platform/InductionModulesSection');
+const { MODULE_CATALOGUE } = require('../services/inductionModules/moduleCatalogue');
+const asModule = (c: { slug: string; title: string }) => ({
+  id: c.slug, slug: c.slug, title: c.title, category: 'SAFETY', order: 10,
+  mandatory: false, defaultIncluded: true, active: true, replacesSceneType: null,
+  issued: null, draft: null, revisionCount: 0,
+});
+const renderModules = (mods: unknown[]) =>
+  renderToStaticMarkup(
+    React.createElement(InductionModulesSection, {
+      modules: mods, canDraft: true, canIssue: true,
+      endpoint: '/api/platform/induction-modules',
+    }),
+  ) as string;
+
+const allButIntro = MODULE_CATALOGUE
+  .filter((c: { slug: string }) => c.slug !== 'COMPANY_INTRODUCTION')
+  .map(asModule);
+const incomplete = renderModules(allButIntro);
+chk('a catalogue missing one standard module says so',
+  /One standard module is missing/.test(incomplete),
+  'production had six of seven and nothing in the product could add the seventh');
+chk('  and names it', /Company introduction/.test(incomplete));
+chk('  and offers to add it', /Add it to my modules/.test(incomplete));
+chk('  reassuring that nothing written is touched',
+  /nothing you have already written is touched/i.test(incomplete));
+const complete = renderModules(MODULE_CATALOGUE.map(asModule));
+chk('a complete catalogue does NOT nag',
+  !/standard module is missing|standard modules are missing/.test(complete),
+  'a prompt that never goes away is noise');
+const emptyCatalogue = renderModules([]);
+chk('an empty catalogue still offers the whole set',
+  new RegExp(`Create the ${MODULE_CATALOGUE.length} standard modules`).test(emptyCatalogue),
+  'the label said "six" while the set had seven');
+
 console.log('\nTHE MODULE IS OFFERED BEFORE THE TITLE, AND SAYS WHEN IT IS NOT READY');
 /*
  * THE PROBLEM THIS FIXES. A user could create a library video called "Company

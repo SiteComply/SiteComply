@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+// The catalogue is a plain data table with no Prisma in it, so a client
+// component may import it by value — see moduleCatalogue.ts.
+import { MODULE_CATALOGUE } from '@/services/inductionModules/moduleCatalogue';
 
 export interface ModuleRow {
   id: string;
@@ -107,10 +110,11 @@ export function InductionModulesSection({
         <h2 className="text-sm font-bold text-ink">No induction modules yet</h2>
         <p className="mt-2 max-w-2xl text-sm text-ink-muted">
           Induction modules are the standard content every operative hears on
-          every project — PPE expectations, behavioural standards, accident and
-          near-miss reporting, housekeeping, manual handling and environmental
-          awareness. They are written once here and included in every site’s
-          induction alongside that project’s own hazards and arrangements.
+          every project — a company introduction, PPE expectations, behavioural
+          standards, accident and near-miss reporting, housekeeping, manual handling
+          and environmental awareness. They are written once here and included in
+          every site’s induction alongside that project’s own hazards and
+          arrangements.
         </p>
         {canIssue ? (
           <>
@@ -120,7 +124,7 @@ export function InductionModulesSection({
               disabled={busy !== null}
               className="mt-4 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40"
             >
-              {busy === 'seed' ? 'Creating…' : 'Create the six standard modules'}
+              {busy === 'seed' ? 'Creating…' : `Create the ${MODULE_CATALOGUE.length} standard modules`}
             </button>
             <p className="mt-2 text-xs text-ink-subtle">
               They are created as <strong>drafts</strong> with suggested wording.
@@ -142,8 +146,53 @@ export function InductionModulesSection({
     );
   }
 
+  /*
+   * ── A CATALOGUE THAT GREW AFTER YOU SEEDED IT ─────────────────────────
+   *
+   * The "create the standard modules" button rendered only when there were NONE, so
+   * a company that had already seeded could never receive a module added to the set
+   * later. That is exactly what happened when Company Introduction joined it:
+   * production held six of seven, nothing in the product could create the seventh,
+   * and somebody building a "Company Introduction" library video was left choosing
+   * PPE expectations as its source — producing a company introduction made of PPE
+   * content.
+   *
+   * Offering the seed at any time is safe: it matches on slug, skips everything that
+   * already exists and never touches wording somebody has written.
+   */
+  const missing = MODULE_CATALOGUE.filter(
+    (c) => !modules.some((m) => m.slug === c.slug),
+  );
+
   return (
     <section className="space-y-3">
+      {missing.length > 0 && canIssue && (
+        <div className="rounded-xl border border-brand-200 bg-brand-50/50 p-4 shadow-card">
+          <h2 className="text-sm font-bold text-ink">
+            {missing.length === 1
+              ? 'One standard module is missing'
+              : `${missing.length} standard modules are missing`}
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-ink-muted">
+            {missing.map((m) => m.title).join(', ')} —{' '}
+            {missing.length === 1 ? 'it is' : 'they are'} part of the standard set and
+            not yet in your catalogue. Adding{' '}
+            {missing.length === 1 ? 'it creates a draft' : 'them creates drafts'} only:
+            nothing you have already written is touched, and nothing reaches an
+            induction until it is issued.
+          </p>
+          <button
+            type="button"
+            onClick={() => call({ action: 'seed' }, 'seed')}
+            disabled={busy !== null}
+            className="mt-3 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40"
+          >
+            {busy === 'seed'
+              ? 'Adding…'
+              : `Add ${missing.length === 1 ? 'it' : 'them'} to my modules`}
+          </button>
+        </div>
+      )}
       <div className="rounded-xl border border-line bg-surface p-4 shadow-card">
         <h2 className="text-sm font-bold text-ink">Company induction modules</h2>
         <p className="mt-1 max-w-3xl text-sm text-ink-muted">
