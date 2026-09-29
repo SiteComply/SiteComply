@@ -16,7 +16,7 @@
 #                        and the item's detail IS their sentence.
 #   NO URLS IN THE SERVICE a kind and an id; the component joins the base paths.
 #   IT DISAPPEARS QUIET  renders nothing when there is nothing to say.
-#   IT IS CAPPED         four items, then a count.
+#   (that gate capped the rows at four; the cap is gone now - see the top block)
 #   MOUNTED ON ALL FOUR  both tiers, modules and library.
 #   STILL A SERVER COMPONENT — no state, nothing shipped to the browser.
 #
@@ -123,7 +123,54 @@ else
   PREV="(dry run)"
 fi
 
+# ── THE COPY STEP 6 LOOKS FOR IN THE BUILD ────────────────────────────────
+#
+# Declared HERE, not inside step 6, because DRY_RUN stops after step 3 and therefore
+# never exercised this list. TWICE in one day a deploy failed at step 6 on a string
+# the same change had deliberately REWORDED - "Reusable company footage that every
+# project", then "Reaches nobody" - each costing a full build to discover. Step 3 now
+# proves every entry still exists in the SOURCE, so a string I have invalidated fails
+# in the dry run instead of twenty minutes later.
+BUILD_STRINGS=(
+  "Where will the video come from?"
+  "Where this video is used"
+  "Company standards"
+  "SiteComply produces it"
+  "Produce the video from this module"
+  "standard module is missing"
+  "Under way"
+  "Discard it"
+  "produced from the wrong module"
+  "is already being produced"
+  "updates on its own as each step finishes"
+  "appears here as it is recorded"
+  "Where this module is used"
+  "Reusable company footage every project"
+  "Worth knowing"
+  "Show detail"
+  "not live"
+  "Not started"
+)
+
 echo "[3/7] Asserting the source, the history and the database..."
+python3 - "${BUILD_STRINGS[@]}" <<'PYSTRINGS' || fail "the build check wants copy that is in no source file - reworded copy, stale assert"
+import re, sys, pathlib
+wanted = sys.argv[1:]
+blob = []
+for root in ('app', 'components', 'services'):
+    for f in pathlib.Path(root).rglob('*'):
+        if f.suffix not in ('.ts', '.tsx') or not f.is_file():
+            continue
+        src = f.read_text()
+        src = re.sub(r'/\*[\s\S]*?\*/', '', src)
+        src = re.sub(r'^\s*//.*$', '', src, flags=re.M)
+        blob.append(src)
+joined = '\n'.join(blob)
+missing = [w for w in wanted if w not in joined]
+for w in missing:
+    print(f'      MISSING FROM SOURCE: "{w}"')
+sys.exit(1 if missing else 0)
+PYSTRINGS
 for f in "$STATUS" "$TAX" "$USAGE" "$DETAILSVC" "$SVC" "$INDEX" "$DETAIL" "$PP" "$AP"; do
   test -f "$f" || fail "missing: $f"
 done
@@ -694,14 +741,7 @@ npx next build >/tmp/compact_build.log 2>&1 || { tail -30 /tmp/compact_build.log
 NEW=$(cat .next/BUILD_ID); echo "      new build id: $NEW"
 
 echo "[6/7] Confirming the BUILD, not just the source..."
-for S in "Where will the video come from?" \
-         "Where this video is used" "Company standards" "SiteComply produces it" \
-         "Produce the video from this module" "standard module is missing" \
-         "Under way" "Discard it" "produced from the wrong module" \
-         "is already being produced" "updates on its own as each step finishes" \
-         "appears here as it is recorded" "Where this module is used" \
-         "Reaches nobody" "Reusable company footage every project" \
-         "Worth knowing" "Show detail" "not live" "Not started"; do
+for S in "${BUILD_STRINGS[@]}"; do
   grep -rqF "$S" .next/server 2>/dev/null || fail "\"$S\" is not in the build"
 done
 echo "  ok   the new Library screens are in the build"
