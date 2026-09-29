@@ -226,7 +226,7 @@ export function ModulesIndex({
               checked={onlyNeedsWork}
               onChange={(e) => setOnlyNeedsWork(e.target.checked)}
             />
-            Reaches nobody
+            Not live only
           </label>
           {retiredCount > 0 && (
             <label className="flex items-center gap-2 text-xs font-semibold text-ink">
@@ -282,16 +282,16 @@ export function ModulesIndex({
                   )}
                 </td>
                 <td className="px-4 py-3">
+                  {/*
+                    * ONE FACT, ONE PLACE. There was a "Reaches nobody" line under this
+                    * chip; the label now says "not live" itself, so repeating it was
+                    * two things to read where one would do.
+                    */}
                   <span
                     className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-semibold ${TONE[m.status.tone]}`}
                   >
                     {m.status.label}
                   </span>
-                  {!m.status.reachesOperatives && m.active && (
-                    <div className="mt-0.5 text-xs font-semibold text-ink-muted">
-                      Reaches nobody
-                    </div>
-                  )}
                 </td>
                 <td className="px-4 py-3 text-sm text-ink-muted">
                   {m.mandatory

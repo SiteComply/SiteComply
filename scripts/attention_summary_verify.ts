@@ -13,7 +13,7 @@ export {};
  *   IT NAMES THE REAL FAILURES   the ones this product has actually had: an unissued
  *                                module, a mismatched production, a failed job.
  *   IT DISAPPEARS WHEN QUIET     no all-clear panel taking up the top of the page.
- *   IT IS CAPPED                 four items, then a count.
+ *   THE CLOSED LINE IS COUNTS    one chip per category, no item titles.
  *   A KIND AND AN ID, NOT A URL  the service is tier-agnostic; the component joins.
  *
  * Run: npx tsx scripts/attention_summary_verify.ts
@@ -96,7 +96,7 @@ const mine = (items: Item[], needle: string): Item[] =>
   try {
     console.log('\nIT DISAPPEARS WHEN THERE IS NOTHING TO SAY');
     chk('an empty summary renders nothing at all',
-      render({ items: [], actionCount: 0 }) === '',
+      render({ items: [], actionCount: 0, counts: [] }) === '',
       // A strip that is always there stops being read; its presence has to mean something.
       'no all-clear panel taking up the top of the page every day');
 
@@ -246,21 +246,42 @@ const mine = (items: Item[], needle: string): Item[] =>
     const html = render(a);
     chk('it renders', html.length > 200, `${html.length} bytes`);
     chk('the heading counts what needs doing',
-      new RegExp(`${a.actionCount} things? need`).test(html), 'headline says the number');
+      new RegExp(`${a.actionCount} needs? action`).test(html), 'headline says the number');
     chk('it links into the Platform tier',
       html.includes('/platform/dashboard/induction-videos/'),
       'built from the base paths its tier passes in');
     const many = {
       items: Array.from({ length: 9 }, (_, i) => ({
-        key: `k${i}`, severity: 'action', title: `Item ${i}`, detail: 'd',
-        target: { kind: 'modules' }, action: 'Go',
+        key: `k${i}`, category: 'DRAFT_MODULE', severity: 'action', title: `Item ${i}`,
+        detail: 'd', target: { kind: 'modules' }, action: 'Go',
       })),
       actionCount: 9,
+      counts: [{ category: 'DRAFT_MODULE', label: '9 modules in draft', count: 9,
+        severity: 'action' }],
     };
-    const capped = render(many);
-    chk('it shows four items at most', capped.includes('Item 3') && !capped.includes('Item 4'),
-      'an uncapped strip on thirty assets would be the whole page');
-    chk('  and says how many it is not showing', /and 5 more/.test(capped));
+    const nine = render(many);
+    /*
+     * THE CAP IS GONE, AND THAT IS THE POINT. It existed because the item rows were
+     * always on screen; behind a <details> they cost nothing until somebody asks, and
+     * a truncated expansion would be a worse answer than a long one. What has to stay
+     * small is the CLOSED line: nine drafts collapse to one chip, so the strip is the
+     * same height whether there is one problem or thirty.
+     */
+    chk('nine items collapse to ONE count chip on the summary line',
+      nine.includes('9 modules in draft') && (nine.match(/Item \d/g) ?? []).length === 9,
+      'the summary line is counts; the items are behind the disclosure');
+    const summaryLine = nine.slice(nine.indexOf('<summary'), nine.indexOf('</summary>'));
+    chk('  and no item title appears on that line',
+      !/Item \d/.test(summaryLine),
+      'anything on the closed line is what the page costs when nothing is wrong');
+    chk('  which stays one line however many there are',
+      (summaryLine.match(/9 modules in draft/g) ?? []).length === 1);
+    chk('expanding shows every one of them, untruncated',
+      Array.from({ length: 9 }, (_, i) => `Item ${i}`).every((t) => nine.includes(t)),
+      'a capped expansion would hide work somebody went looking for');
+    chk('the disclosure is native, so no JavaScript is needed to open it',
+      nine.includes('<details') && nine.includes('<summary'),
+      'a useState toggle would turn a summary line into a client bundle');
     const adminHtml = renderToStaticMarkup(
       React.createElement(AttentionSummary, {
         attention: a,

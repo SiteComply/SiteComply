@@ -37,9 +37,26 @@ export type AttentionTarget =
   | { kind: 'modules' }
   | { kind: 'library' };
 
+/**
+ * WHAT KIND OF THING THIS IS, so the summary can COUNT rather than list.
+ *
+ * The first version of this strip printed a sentence per item, which repeated what the
+ * row underneath already said. Counts collapse five drafts into "5 drafts" and leave
+ * the detail to an expansion, which is what makes it a summary.
+ */
+export type AttentionCategory =
+  | 'DRAFT_MODULE'
+  | 'MISSING_STANDARD_MODULE'
+  | 'VIDEO_NOT_LIVE'
+  | 'PRODUCTION_IN_PROGRESS'
+  | 'PRODUCTION_WRONG_MODULE'
+  | 'FAILED_GENERATION'
+  | 'REVISION_WAITING';
+
 export interface AttentionItem {
   /** Stable, so a React key and a test can both name one item. */
   key: string;
+  category: AttentionCategory;
   /**
    * `action` is something nobody can do their job without; `watch` is worth knowing
    * and can wait. Two levels only: a third would invite arguing about the middle.
@@ -52,11 +69,43 @@ export interface AttentionItem {
   action: string;
 }
 
+export interface AttentionCount {
+  category: AttentionCategory;
+  /** Plural-aware and short enough for a chip: "3 drafts", "1 failed generation". */
+  label: string;
+  count: number;
+  severity: 'action' | 'watch';
+}
+
 export interface Attention {
   items: AttentionItem[];
-  /** So a screen can say "4 things need you" without counting twice. */
+  /** So a screen can say "4 need action" without counting twice. */
   actionCount: number;
+  /** One entry per category present, most urgent first. THIS is what the strip shows. */
+  counts: AttentionCount[];
 }
+
+/** Singular and plural, per category. Kept here so both tiers word a count alike. */
+const COUNT_LABEL: Record<AttentionCategory, [string, string]> = {
+  MISSING_STANDARD_MODULE: ['standard module missing', 'standard modules missing'],
+  DRAFT_MODULE: ['module in draft', 'modules in draft'],
+  VIDEO_NOT_LIVE: ['video not live', 'videos not live'],
+  PRODUCTION_WRONG_MODULE: ['production from the wrong module', 'productions from the wrong module'],
+  FAILED_GENERATION: ['failed generation', 'failed generations'],
+  PRODUCTION_IN_PROGRESS: ['production in progress', 'productions in progress'],
+  REVISION_WAITING: ['revision waiting to be issued', 'revisions waiting to be issued'],
+};
+
+/** Most urgent first, and stable: a strip whose chips reorder is hard to re-read. */
+const CATEGORY_ORDER: AttentionCategory[] = [
+  'MISSING_STANDARD_MODULE',
+  'PRODUCTION_WRONG_MODULE',
+  'FAILED_GENERATION',
+  'DRAFT_MODULE',
+  'VIDEO_NOT_LIVE',
+  'PRODUCTION_IN_PROGRESS',
+  'REVISION_WAITING',
+];
 
 /**
  * Everything worth saying, most urgent first.
@@ -160,6 +209,7 @@ export async function attentionItems(): Promise<Attention> {
   if (missing.length > 0) {
     items.push({
       key: 'modules:missing-standard',
+      category: 'MISSING_STANDARD_MODULE',
       severity: 'action',
       title:
         missing.length === 1
@@ -188,6 +238,7 @@ export async function attentionItems(): Promise<Attention> {
     if (status.reachesOperatives) continue;
     items.push({
       key: `module:${m.id}:unissued`,
+      category: 'DRAFT_MODULE',
       severity: 'action',
       title: `“${m.title}” reaches nobody`,
       detail: status.detail,
@@ -220,6 +271,7 @@ export async function attentionItems(): Promise<Attention> {
     if (!status.reachesOperatives) {
       items.push({
         key: `asset:${a.id}:not-live`,
+        category: 'VIDEO_NOT_LIVE',
         // Always `action`: a library video nobody can see is a job half done,
         // whatever stage it stalled at. The stage itself is in `detail`.
         severity: 'action',
@@ -234,6 +286,7 @@ export async function attentionItems(): Promise<Attention> {
     if (status.key === 'LIVE_WITH_DRAFT') {
       items.push({
         key: `asset:${a.id}:draft-waiting`,
+        category: 'REVISION_WAITING',
         severity: 'watch',
         title: `“${a.title}” has revision ${draft?.version} prepared but not issued`,
         detail: status.detail,
@@ -284,6 +337,7 @@ export async function attentionItems(): Promise<Attention> {
     if (mismatched) {
       items.push({
         key: `video:${p.id}:mismatched`,
+        category: 'PRODUCTION_WRONG_MODULE',
         severity: 'action',
         title: `“${title}” version ${p.version} was produced from the wrong module`,
         detail:
@@ -298,6 +352,7 @@ export async function attentionItems(): Promise<Attention> {
 
     items.push({
       key: `video:${p.id}:unfinished`,
+      category: p.status === 'GENERATION_FAILED' ? 'FAILED_GENERATION' : 'PRODUCTION_IN_PROGRESS',
       severity: p.status === 'GENERATION_FAILED' ? 'action' : 'watch',
       title:
         p.status === 'GENERATION_FAILED'
@@ -317,6 +372,7 @@ export async function attentionItems(): Promise<Attention> {
     const where = j.video?.jobSite?.name ?? j.video?.libraryAsset?.title ?? 'an induction video';
     items.push({
       key: `job:${j.id}:failed`,
+      category: 'FAILED_GENERATION',
       severity: 'action',
       title: `${j.kind === 'RENDER' ? 'Rendering' : j.kind === 'NARRATION' ? 'Narrating' : 'Writing the script for'} “${where}” failed`,
       detail: j.error
@@ -330,6 +386,7 @@ export async function attentionItems(): Promise<Attention> {
   for (const n of failedNormalises) {
     items.push({
       key: `normalise:${n.id}:failed`,
+      category: 'FAILED_GENERATION',
       severity: 'action',
       title: `Preparing footage for “${n.revision?.asset?.title ?? 'a library video'}” failed`,
       detail: n.error
@@ -345,5 +402,30 @@ export async function attentionItems(): Promise<Attention> {
   const order = { action: 0, watch: 1 } as const;
   items.sort((x, y) => order[x.severity] - order[y.severity]);
 
-  return { items, actionCount: items.filter((i) => i.severity === 'action').length };
+  /*
+   * COUNTS, IN A FIXED ORDER. Severity comes from the items themselves rather than a
+   * second table: if any item in a category needs action, the chip does. A category
+   * with nothing in it is absent, not shown as zero.
+   */
+  const counts: AttentionCount[] = CATEGORY_ORDER.flatMap((category) => {
+    const inCategory = items.filter((i) => i.category === category);
+    if (inCategory.length === 0) return [];
+    const [one, many] = COUNT_LABEL[category];
+    return [
+      {
+        category,
+        count: inCategory.length,
+        label: `${inCategory.length} ${inCategory.length === 1 ? one : many}`,
+        severity: inCategory.some((i) => i.severity === 'action')
+          ? ('action' as const)
+          : ('watch' as const),
+      },
+    ];
+  });
+
+  return {
+    items,
+    actionCount: items.filter((i) => i.severity === 'action').length,
+    counts,
+  };
 }

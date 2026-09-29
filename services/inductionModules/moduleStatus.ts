@@ -13,6 +13,15 @@
  * The state is DERIVED, never stored. A stored status is a second source of truth,
  * and it drifts the first moment somebody issues a revision in the other tier.
  *
+ * ── THE LABEL SAYS WHETHER ANYBODY HEARS IT ───────────────────────────────
+ *
+ * It used to say "Issued · rev 1" with a separate "Reaches nobody" line underneath
+ * for the states that were not issued, which meant the row carried two facts that had
+ * to be joined up, and the second was phrased in a way a first-time user had to
+ * decode. So the label itself now carries it - "Live", or "Draft · rev 2 — not live" -
+ * and nothing else on the row needs to repeat it. The vocabulary matches the
+ * Library's on purpose: one area, one set of words.
+ *
  * No Prisma here on purpose: the list, the detail page and both tiers all need
  * this, and a value import from a service that touches the database would pull the
  * client into the browser bundle - a mistake that has already reached production in
@@ -67,7 +76,7 @@ export function moduleStatus(input: ModuleStatusInput): ModuleStatus {
   if (input.issued && input.draft) {
     return {
       key: 'LIVE_WITH_DRAFT',
-      label: `Live · rev ${input.issued.version}, rev ${input.draft.version} drafting`,
+      label: `Live · rev ${input.issued.version} (rev ${input.draft.version} draft)`,
       detail:
         `Revision ${input.issued.version} is what operatives hear. Revision ` +
         `${input.draft.version} is being written and reaches nobody until it is issued.`,
@@ -79,7 +88,7 @@ export function moduleStatus(input: ModuleStatusInput): ModuleStatus {
   if (input.issued) {
     return {
       key: 'LIVE',
-      label: `Issued · rev ${input.issued.version}`,
+      label: `Live · rev ${input.issued.version}`,
       detail: `Revision ${input.issued.version} is in force and included in inductions.`,
       tone: 'good',
       reachesOperatives: true,
@@ -95,7 +104,7 @@ export function moduleStatus(input: ModuleStatusInput): ModuleStatus {
   if (input.draft) {
     return {
       key: 'DRAFT_ONLY',
-      label: `Draft · rev ${input.draft.version}`,
+      label: `Draft · rev ${input.draft.version} — not live`,
       detail:
         'Never issued, so it reaches nobody. Read it through and issue it when the ' +
         'wording is right.',
@@ -106,7 +115,7 @@ export function moduleStatus(input: ModuleStatusInput): ModuleStatus {
 
   return {
     key: 'NOTHING_WRITTEN',
-    label: 'Nothing written',
+    label: 'Not started',
     detail: 'No wording yet. Write it, then issue it to put it into inductions.',
     tone: 'neutral',
     reachesOperatives: false,

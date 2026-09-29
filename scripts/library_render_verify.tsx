@@ -426,10 +426,20 @@ chk('each row links to its own page',
   'built from basePath — a callback here is what took the Library index down');
 chk('the columns a manager chooses by are there',
   ['Module', 'Status', 'Included', 'Subject', 'Used on'].every((h) => list.includes(h)));
-chk('a draft is shown as reaching nobody',
-  list.includes('Draft · rev 1') && list.includes('Reaches nobody'),
+chk('a draft says IN THE LABEL that it is not live',
+  list.includes('Draft · rev 1 — not live'),
+  // The chip used to say only "Draft · rev 1", with a separate "Reaches nobody" line
+  // under it: two facts to join up, the second in words a newcomer had to decode.
   'the property that let a placeholder module sit in production looking issued');
-chk('an issued module shows its revision', list.includes('Issued · rev 1'));
+chk('  and the row no longer repeats it underneath',
+  !list.includes('Reaches nobody'),
+  'one fact, one place');
+chk('a live module shows Live and its revision', list.includes('Live · rev 1'),
+  '"Issued" and "Live" were two words for one state');
+chk('a module with a draft over a live revision says both',
+  renderModules([asModule({ slug: 'BOTH', title: 'Both' },
+    { issued: { version: 1 }, draft: { version: 2 } })]).includes('Live · rev 1 (rev 2 draft)'),
+  'the state that needed two places on the page to read');
 chk('usage is on the row', list.includes('6 of 6 projects'));
 chk('a video standing in for a module is declared',
   list.includes('A library video stands in for this'),
@@ -537,27 +547,34 @@ const renderAttention = (attention: unknown) =>
     }),
   ) as string;
 const attentionItem = (over: Record<string, unknown> = {}) => ({
-  key: 'module:m1:unissued', severity: 'action',
+  key: 'module:m1:unissued', category: 'DRAFT_MODULE', severity: 'action',
   title: '“Company introduction” reaches nobody',
   detail: 'Never issued, so it reaches nobody.',
   target: { kind: 'module', id: 'm1' }, action: 'Read it and issue it', ...over,
 });
 chk('a quiet summary draws nothing whatsoever',
-  renderAttention({ items: [], actionCount: 0 }) === '',
+  renderAttention({ items: [], actionCount: 0, counts: [] }) === '',
   'a strip that is always there stops being read');
-const busyStrip = renderAttention({ items: [attentionItem()], actionCount: 1 });
-chk('one action reads as one thing needing you', /1 thing needs you/.test(busyStrip));
+const busyStrip = renderAttention({
+  items: [attentionItem()], actionCount: 1,
+  counts: [{ category: 'DRAFT_MODULE', label: '1 module in draft', count: 1,
+    severity: 'action' }],
+});
+chk('one action reads as one needing action', /1 needs action/.test(busyStrip));
 chk('  it names the subject', busyStrip.includes('reaches nobody'));
 chk('  and links to that module',
   busyStrip.includes('/platform/dashboard/induction-videos/modules/m1'),
   'joined from the base path this tier passed in');
 const noteOnly = renderAttention({
-  items: [attentionItem({ key: 'a:1', severity: 'watch', title: 'Revision 2 is prepared',
-    target: { kind: 'asset', id: 'a1' }, action: 'Review it' })],
+  items: [attentionItem({ key: 'a:1', category: 'REVISION_WAITING', severity: 'watch',
+    title: 'Revision 2 is prepared', target: { kind: 'asset', id: 'a1' },
+    action: 'Review it' })],
   actionCount: 0,
+  counts: [{ category: 'REVISION_WAITING', label: '1 revision waiting to be issued',
+    count: 1, severity: 'watch' }],
 });
-chk('notes alone do not claim anything needs you', /Worth knowing/.test(noteOnly) &&
-  !/needs you/.test(noteOnly),
+chk('notes alone do not claim anything needs action', /Worth knowing/.test(noteOnly) &&
+  !/needs? action/.test(noteOnly),
   'crying wolf over a note is how a strip loses its meaning');
 chk('  and a note links to its asset',
   noteOnly.includes('/platform/dashboard/induction-videos/library/a1'));

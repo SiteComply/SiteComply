@@ -613,7 +613,7 @@ export function LibraryAssetDetail({
         <h3 className="text-sm font-bold text-ink">Revisions</h3>
         {asset.revisions.length === 0 ? (
           <p className="mt-2 text-sm text-ink-muted">
-            Nothing yet. This video reaches nobody until a revision is issued.
+            Nothing issued yet, so this video is not in any induction.
           </p>
         ) : (
           <ul className="mt-3 space-y-3">

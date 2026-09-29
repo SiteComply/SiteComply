@@ -77,14 +77,14 @@ const BANDS = [
   {
     key: 'OPENING',
     title: 'Opening',
-    when: 'Before the site welcome — the first thing an operative sees.',
+    when: 'Before the site welcome',
   },
   {
     key: 'COMPANY_BAND',
     title: 'Company standards',
-    when: 'After the site information, before the site rules.',
+    when: 'After the site information, before the site rules',
   },
-  { key: 'CLOSING', title: 'Closing', when: 'At the end, before sign-off.' },
+  { key: 'CLOSING', title: 'Closing', when: 'At the end, before sign-off' },
 ] as const;
 
 const TONE: Record<string, string> = {
@@ -193,14 +193,14 @@ export function LibrarySection({
           <div className="min-w-0">
             <h2 className="text-sm font-bold text-ink">Company video library</h2>
             {/*
-              * ONE LINE, NOT FIVE. This paragraph explained what the Library is, why it
-              * exists, and how versioning works — useful once, then in the way every
-              * time after. What a video is and what it costs to change belong on its own
-              * page, where somebody is about to act on them.
+              * ONE CLAUSE. This was five lines, then two sentences, now one: what the
+              * Library IS, and nothing about what it costs to change a video - that
+              * belongs on the video's page, where somebody is about to do it. The purpose
+              * stays in the header rather than only the empty state, because it used to
+              * vanish the moment somebody added their first video.
               */}
-            <p className="mt-1 max-w-2xl text-sm text-ink-muted">
-              Reusable company footage every project’s induction can include. Open a video to
-              see its revisions, where it is used and what changing it would do.
+            <p className="mt-0.5 text-xs text-ink-muted">
+              Reusable company footage every project’s induction can include.
             </p>
           </div>
           {canDraft && (
@@ -318,29 +318,34 @@ export function LibrarySection({
        * company video would go and how many slots there are. An empty band says so
        * itself.
        */}
-      {BANDS.map((band) => {
+      <section className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+        {BANDS.map((band) => {
           const inBand = shown.filter((a) => a.placement === band.key);
           return (
-            <section key={band.key} className="rounded-xl border border-line bg-surface p-4 shadow-card">
-              <div className="flex flex-wrap items-baseline gap-2">
-                <h3 className="text-sm font-bold text-ink">{band.title}</h3>
+            <div key={band.key} className="border-b border-line last:border-b-0">
+              {/* A band heading inside one list, not a card of its own: three bordered
+                  cards read as three documents; this reads as an asset list. */}
+              <div className="flex flex-wrap items-baseline gap-2 bg-surface-sunken px-4 py-2">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-ink-muted">
+                  {band.title}
+                </h3>
                 <span className="text-xs text-ink-subtle">{band.when}</span>
                 <span className="ml-auto text-xs font-semibold text-ink-muted">
-                  {inBand.length} video{inBand.length === 1 ? '' : 's'}
+                  {inBand.length}
                 </span>
               </div>
 
               {inBand.length === 0 ? (
-                <p className="mt-2 text-xs text-ink-subtle">
+                <p className="px-4 py-3 text-xs text-ink-subtle">
                   {filtered ? 'Nothing here matches the filters.' : 'Nothing plays here yet.'}
                 </p>
               ) : (
-                <ul className="mt-3 space-y-2">
+                <ul className="divide-y divide-line">
                   {inBand.map((a) => (
                     <li key={a.id}>
                       <Link
                         href={`${basePath}/${a.id}`}
-                        className="block rounded-lg border border-line bg-surface-sunken p-3 hover:border-brand-300 hover:bg-brand-50/40"
+                        className="block px-4 py-3 hover:bg-brand-50/40"
                       >
                         <div className="flex flex-wrap items-baseline gap-2">
                           <span className="text-sm font-bold text-ink">{a.title}</span>
@@ -358,10 +363,11 @@ export function LibrarySection({
                             {a.status.label}
                           </span>
                         </div>
-                        <p className="mt-1 text-xs text-ink-muted">
+                        <p className="mt-0.5 text-xs text-ink-muted">
+                          {/* The chip above already says it is not live. */}
                           {a.status.reachesOperatives
                             ? `On ${a.usage.onProjects} of ${totalProjects} projects`
-                            : 'Reaches nobody yet'}
+                            : 'Not in any induction'}
                           {a.usage.publishedInductions > 0 &&
                             ` · in ${a.usage.publishedInductions} published induction${a.usage.publishedInductions === 1 ? '' : 's'}`}
                           {a.moduleTitle && ` · shown instead of “${a.moduleTitle}”`}
@@ -372,9 +378,10 @@ export function LibrarySection({
                   ))}
                 </ul>
               )}
-            </section>
+            </div>
           );
-      })}
+        })}
+      </section>
     </div>
   );
 }

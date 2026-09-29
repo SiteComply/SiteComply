@@ -2,31 +2,35 @@ import Link from 'next/link';
 import type { Attention, AttentionTarget } from '@/services/inductionVideo/attentionService';
 
 /**
- * A SMALL STATUS AREA: what needs somebody, above the list.
+ * A COMPACT ATTENTION SUMMARY: counts on one line, detail on demand.
  *
- * ── WHAT IT IS AND WHAT IT IS NOT ─────────────────────────────────────────
+ * ── WHY IT IS COUNTS AND NOT SENTENCES ────────────────────────────────────
  *
- * It is a summary, not a dashboard. The owner chose Option A's master–detail lists
- * with "a lightweight attention summary rather than the full D layout", so this sits
- * in a few lines above the list and never pushes it off the screen: the most urgent
- * items, then a count of the rest.
+ * The first version printed a row per item — a title, an explanation and a button,
+ * four of them — which repeated what the list underneath already said and took up as
+ * much room as the content it was introducing. Counts collapse five drafts into "5
+ * modules in draft": the strip tells you the SHAPE of the work, and the list tells you
+ * which rows. Expand it when you want the specifics.
+ *
+ * ── STILL NO JAVASCRIPT ───────────────────────────────────────────────────
+ *
+ * The expansion is a native <details>/<summary>, so this stays a Server Component
+ * with no state and nothing shipped to the browser. A useState toggle would have
+ * turned a summary line into a client bundle, and the browser already does disclosure
+ * properly — including for a keyboard and a screen reader.
  *
  * ── IT DISAPPEARS WHEN THERE IS NOTHING TO SAY ────────────────────────────
  *
- * No "all clear" panel, no green tick taking up the top of the page every day. A
- * strip that is always there stops being read, and the whole value of this is that
- * its presence means something.
+ * No "all clear" panel. A strip that is always there stops being read, and the whole
+ * value of this one is that its presence means something.
  *
- * ── A SERVER COMPONENT, AND THE HREFS ARE BUILT HERE ──────────────────────
+ * ── THE HREFS ARE BUILT HERE ──────────────────────────────────────────────
  *
- * No state and no handlers, so nothing ships to the browser. The service returns what
- * each item POINTS AT - a kind and an id - and this joins it to the base paths its
- * tier passes in. Returning built URLs would make the service tier-aware; passing a
- * builder in would be a function prop across the boundary, which is what took the
- * Library index down in production.
+ * The service returns what each item POINTS AT — a kind and an id — and this joins it
+ * to the base paths its tier passes in. Returning built URLs would make the service
+ * tier-aware; passing a builder in would be a function prop across the boundary,
+ * which is what took the Library index down in production.
  */
-
-const MAX_SHOWN = 4;
 
 export function AttentionSummary({
   attention,
@@ -59,30 +63,70 @@ export function AttentionSummary({
     }
   };
 
-  const shown = attention.items.slice(0, MAX_SHOWN);
-  const hidden = attention.items.length - shown.length;
+  const headline =
+    attention.actionCount > 0
+      ? `${attention.actionCount} need${attention.actionCount === 1 ? 's' : ''} action`
+      : 'Worth knowing';
 
   return (
-    <section
-      aria-labelledby="attention-heading"
-      className="mb-3 rounded-xl border border-line bg-surface p-4 shadow-card"
-    >
-      <h2 id="attention-heading" className="text-sm font-bold text-ink">
-        {attention.actionCount > 0
-          ? `${attention.actionCount} ${attention.actionCount === 1 ? 'thing needs' : 'things need'} you`
-          : 'Worth knowing'}
-      </h2>
+    <details className="group mb-3 rounded-xl border border-line bg-surface shadow-card">
+      {/*
+        * ONE LINE, CLOSED. The count chips are the summary; the caret is the only
+        * control. `list-none` removes the browser's default marker so the layout is
+        * ours, and the caret rotates with `group-open` — no script involved.
+        */}
+      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-4 py-2.5">
+        <span
+          className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+            attention.actionCount > 0
+              ? 'bg-hivis-400/20 text-ink'
+              : 'bg-surface-sunken text-ink-muted'
+          }`}
+        >
+          {headline}
+        </span>
 
-      <ul className="mt-2 space-y-2">
-        {shown.map((item) => (
-          <li
-            key={item.key}
-            className={`flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 ${
-              item.severity === 'action'
-                ? 'border-hivis-500/40 bg-hivis-400/10'
-                : 'border-line bg-surface-sunken'
+        {attention.counts.map((c) => (
+          <span
+            key={c.category}
+            className={`text-xs ${
+              c.severity === 'action' ? 'font-semibold text-ink' : 'text-ink-muted'
             }`}
           >
+            {c.label}
+          </span>
+        ))}
+
+        <span className="ml-auto flex items-center gap-1 text-xs font-semibold text-brand-700">
+          <span className="group-open:hidden">Show detail</span>
+          <span className="hidden group-open:inline">Hide detail</span>
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 16 16"
+            className="h-3 w-3 transition-transform group-open:rotate-180"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M4 6l4 4 4-4" />
+          </svg>
+        </span>
+      </summary>
+
+      {/*
+        * EXPANDED: every item, not a capped subset. The cap existed because these rows
+        * were always on screen; behind a disclosure they cost nothing until asked for,
+        * and a truncated expansion would be a worse answer than a long one.
+        */}
+      <ul className="divide-y divide-line border-t border-line">
+        {attention.items.map((item) => (
+          <li key={item.key} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
+            <span
+              aria-hidden="true"
+              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                item.severity === 'action' ? 'bg-hivis-600' : 'bg-ink-subtle'
+              }`}
+            />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-ink">{item.title}</p>
               <p className="mt-0.5 text-xs text-ink-muted">{item.detail}</p>
@@ -96,18 +140,6 @@ export function AttentionSummary({
           </li>
         ))}
       </ul>
-
-      {hidden > 0 && (
-        <p className="mt-2 text-xs text-ink-subtle">
-          {/*
-            * CAPPED, and honest about it. An uncapped strip on a company with thirty
-            * assets would be the whole page, which is the thing Option D was rejected
-            * for.
-            */}
-          and {hidden} more — {hidden === 1 ? 'it is' : 'they are'} in the lists below,
-          marked on their rows.
-        </p>
-      )}
-    </section>
+    </details>
   );
 }

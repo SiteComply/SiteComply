@@ -203,7 +203,7 @@ export function ModuleDetail({
           {detail.inForce && (
             <span className="text-xs text-ink-subtle">
               revision {detail.inForce.version}
-              {detail.inForce.isDraft ? ' · draft, reaches nobody' : ' · in force'}
+              {detail.inForce.isDraft ? ' · draft, not live' : ' · live'}
             </span>
           )}
           {canDraft && !editing && (
