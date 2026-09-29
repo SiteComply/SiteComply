@@ -5,6 +5,8 @@ import { AdminInductionVideoWorkspace } from '@/components/admin/AdminInductionV
 import { ModulesIndex } from '@/components/inductionModules/ModulesIndex';
 import { moduleRowsForIndex } from '@/services/inductionModules/moduleRows';
 import { inductionVideoHref } from '@/services/inductionVideo/inductionVideoAreas';
+import { AttentionSummary } from '@/components/inductionVideo/AttentionSummary';
+import { attentionItems } from '@/services/inductionVideo/attentionService';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +40,7 @@ export default async function AdminInductionModulesPage() {
   if (!session) redirect('/admin/login');
 
   const manages = adminCanManage(session.role);
-  const rows = await moduleRowsForIndex();
+  const [rows, attention] = await Promise.all([moduleRowsForIndex(), attentionItems()]);
 
   return (
     <AdminInductionVideoWorkspace active="modules">
@@ -52,6 +54,12 @@ export default async function AdminInductionModulesPage() {
         {!manages && ' Your role can view these but not change them.'}
       </p>
 
+      <AttentionSummary
+        attention={attention}
+        modulesBasePath="/admin/induction-videos/modules"
+        libraryBasePath="/admin/induction-videos/library"
+        videoBasePath="/admin/induction-videos"
+      />
       <ModulesIndex
         modules={rows}
         canDraft={manages}

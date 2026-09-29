@@ -519,5 +519,49 @@ chk('  and an unissued stand-in says the wording still wins',
   'a video set to replace a module but never issued replaces nothing');
 
 
+
+console.log('\nTHE ATTENTION SUMMARY SITS ABOVE THE LIST WITHOUT TAKING IT OVER');
+/*
+ * The owner asked for "a small status area at the top" rather than Option D's full
+ * layout. Rendered here because the thing that makes it small is what it does NOT
+ * draw: nothing when quiet, four items at most when busy.
+ */
+const { AttentionSummary } = require('../components/inductionVideo/AttentionSummary');
+const renderAttention = (attention: unknown) =>
+  renderToStaticMarkup(
+    React.createElement(AttentionSummary, {
+      attention,
+      modulesBasePath: '/platform/dashboard/induction-videos/modules',
+      libraryBasePath: '/platform/dashboard/induction-videos/library',
+      videoBasePath: '/platform/dashboard/induction-videos',
+    }),
+  ) as string;
+const attentionItem = (over: Record<string, unknown> = {}) => ({
+  key: 'module:m1:unissued', severity: 'action',
+  title: '“Company introduction” reaches nobody',
+  detail: 'Never issued, so it reaches nobody.',
+  target: { kind: 'module', id: 'm1' }, action: 'Read it and issue it', ...over,
+});
+chk('a quiet summary draws nothing whatsoever',
+  renderAttention({ items: [], actionCount: 0 }) === '',
+  'a strip that is always there stops being read');
+const busyStrip = renderAttention({ items: [attentionItem()], actionCount: 1 });
+chk('one action reads as one thing needing you', /1 thing needs you/.test(busyStrip));
+chk('  it names the subject', busyStrip.includes('reaches nobody'));
+chk('  and links to that module',
+  busyStrip.includes('/platform/dashboard/induction-videos/modules/m1'),
+  'joined from the base path this tier passed in');
+const noteOnly = renderAttention({
+  items: [attentionItem({ key: 'a:1', severity: 'watch', title: 'Revision 2 is prepared',
+    target: { kind: 'asset', id: 'a1' }, action: 'Review it' })],
+  actionCount: 0,
+});
+chk('notes alone do not claim anything needs you', /Worth knowing/.test(noteOnly) &&
+  !/needs you/.test(noteOnly),
+  'crying wolf over a note is how a strip loses its meaning');
+chk('  and a note links to its asset',
+  noteOnly.includes('/platform/dashboard/induction-videos/library/a1'));
+
+
 console.log(`\n${fails} failed\n`);
 process.exit(fails === 0 ? 0 : 1);

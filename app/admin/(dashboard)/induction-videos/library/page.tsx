@@ -4,6 +4,8 @@ import { adminCanManage } from '@/lib/adminAuth';
 import { AdminInductionVideoWorkspace } from '@/components/admin/AdminInductionVideoWorkspace';
 import { LibrarySection } from '@/components/inductionVideo/LibrarySection';
 import { libraryRowsForEditor } from '@/services/inductionVideo/libraryRows';
+import { AttentionSummary } from '@/components/inductionVideo/AttentionSummary';
+import { attentionItems } from '@/services/inductionVideo/attentionService';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +21,10 @@ export default async function AdminInductionLibraryPage() {
   if (!session) redirect('/admin/login');
 
   const manages = adminCanManage(session.role);
-  const { assets, modules, totalProjects } = await libraryRowsForEditor();
+  const [{ assets, modules, totalProjects }, attention] = await Promise.all([
+    libraryRowsForEditor(),
+    attentionItems(),
+  ]);
 
   return (
     <AdminInductionVideoWorkspace active="library">
@@ -30,6 +35,12 @@ export default async function AdminInductionLibraryPage() {
         history records that it came from the Admin Centre.
         {!manages && ' Your role can view these but not change them.'}
       </p>
+      <AttentionSummary
+        attention={attention}
+        modulesBasePath="/admin/induction-videos/modules"
+        libraryBasePath="/admin/induction-videos/library"
+        videoBasePath="/admin/induction-videos"
+      />
       <LibrarySection
         assets={assets}
         modules={modules}

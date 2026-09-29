@@ -13,6 +13,8 @@ import {
   canViewInductionModules,
 } from '@/services/inductionModules/inductionModuleService';
 import { moduleRowsForIndex } from '@/services/inductionModules/moduleRows';
+import { AttentionSummary } from '@/components/inductionVideo/AttentionSummary';
+import { attentionItems } from '@/services/inductionVideo/attentionService';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +40,7 @@ export default async function InductionModulesPage() {
   // administration.
   if (!canViewInductionModules(viewer.role)) redirect('/platform/dashboard');
 
-  const rows = await moduleRowsForIndex();
+  const [rows, attention] = await Promise.all([moduleRowsForIndex(), attentionItems()]);
 
   return (
     <PlatformShell>
@@ -59,6 +61,12 @@ export default async function InductionModulesPage() {
           Centre. Whichever place a change is made, it is the same content and the
           history records where it came from.
         </p>
+        <AttentionSummary
+          attention={attention}
+          modulesBasePath="/platform/dashboard/induction-videos/modules"
+          libraryBasePath="/platform/dashboard/induction-videos/library"
+          videoBasePath="/platform/dashboard/induction-videos"
+        />
         <ModulesIndex
           modules={rows}
           canDraft={canDraftInductionModule(viewer.role)}

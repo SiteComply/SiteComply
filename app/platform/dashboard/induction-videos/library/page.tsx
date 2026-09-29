@@ -13,6 +13,8 @@ import {
   canViewInductionModules,
 } from '@/services/inductionModules/inductionModuleService';
 import { libraryRowsForEditor } from '@/services/inductionVideo/libraryRows';
+import { AttentionSummary } from '@/components/inductionVideo/AttentionSummary';
+import { attentionItems } from '@/services/inductionVideo/attentionService';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +32,10 @@ export default async function InductionLibraryPage() {
   const viewer = await requirePlatformViewer();
   if (!canViewInductionModules(viewer.role)) redirect('/platform/dashboard');
 
-  const { assets, modules, totalProjects } = await libraryRowsForEditor();
+  const [{ assets, modules, totalProjects }, attention] = await Promise.all([
+    libraryRowsForEditor(),
+    attentionItems(),
+  ]);
 
   return (
     <PlatformShell>
@@ -51,6 +56,12 @@ export default async function InductionLibraryPage() {
           Centre. Whichever place a change is made, it is the same footage and the
           history records where it came from.
         </p>
+        <AttentionSummary
+          attention={attention}
+          modulesBasePath="/platform/dashboard/induction-videos/modules"
+          libraryBasePath="/platform/dashboard/induction-videos/library"
+          videoBasePath="/platform/dashboard/induction-videos"
+        />
         <LibrarySection
           assets={assets}
           modules={modules}
