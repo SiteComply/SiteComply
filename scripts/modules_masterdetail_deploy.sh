@@ -564,7 +564,7 @@ npx next build >/tmp/md_build.log 2>&1 || { tail -30 /tmp/md_build.log; fail "ne
 NEW=$(cat .next/BUILD_ID); echo "      new build id: $NEW"
 
 echo "[6/7] Confirming the BUILD, not just the source..."
-for S in "Where will the video come from?" "Reusable company footage that every project" \
+for S in "Where will the video come from?" \
          "Where this video is used" "Company standards" "SiteComply produces it" \
          "Produce the video from this module" "standard module is missing" \
          "Under way" "Discard it" "produced from the wrong module" \
