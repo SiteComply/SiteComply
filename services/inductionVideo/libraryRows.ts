@@ -17,7 +17,14 @@ import type { LibraryRow } from '@/components/inductionVideo/LibrarySection';
  */
 export async function libraryRowsForEditor(): Promise<{
   assets: LibraryRow[];
-  modules: { id: string; title: string }[];
+  modules: {
+    id: string;
+    title: string;
+    slug: string;
+    category: string;
+    /** Has issued wording, so a video can actually be produced from it. */
+    hasIssued: boolean;
+  }[];
   totalProjects: number;
 }> {
   const [assets, modules, usage] = await Promise.all([
@@ -78,8 +85,25 @@ export async function libraryRowsForEditor(): Promise<{
         : null,
       revisionCount: a.revisionCount,
     })),
-    // Only issued modules can be stood in for: an unissued one reaches nobody, so
-    // there would be nothing to replace.
-    modules: modules.filter((m) => m.issued).map((m) => ({ id: m.id, title: m.title })),
+    /*
+     * EVERY MODULE, WITH ITS READINESS — not only the issued ones.
+     *
+     * This filtered to issued modules, and the effect was a silent dead end: a user
+     * creating a "Company introduction" video saw a picker offering only "PPE
+     * expectations", with nothing to say that the module they wanted existed as a
+     * draft three clicks away. The obvious next move was to pick PPE and produce a
+     * company introduction made of PPE content.
+     *
+     * A module with no issued wording still cannot produce a video - the generation
+     * step refuses, and rightly. But it should be VISIBLE and marked, because
+     * "issue that module first" is a useful instruction and an absence is not.
+     */
+    modules: modules.map((m) => ({
+      id: m.id,
+      title: m.title,
+      slug: m.slug,
+      category: m.category as string,
+      hasIssued: Boolean(m.issued),
+    })),
   };
 }

@@ -44,6 +44,52 @@ export interface CatalogueModule {
 }
 
 export const MODULE_CATALOGUE: CatalogueModule[] = [
+  /*
+   * ── THE ONE NOBODY ELSE CAN WRITE ─────────────────────────────────────
+   *
+   * Every other module in this list is a safety standard that reads much the same
+   * on any British construction site, so a sensible draft can be offered and a
+   * Director need only agree with it.
+   *
+   * A company introduction is not like that. It is the one piece of an induction
+   * that is ABOUT THIS COMPANY - who we are, what we build, how we expect people to
+   * be treated - and nobody outside it can write a word of that. It is here anyway,
+   * and first, for three reasons:
+   *
+   *   it is the piece an operative meets before any other, so it should exist;
+   *   its absence was actively confusing - a user could create a "Company
+   *     Introduction" library video and find the only module to generate it from was
+   *     PPE expectations, which would have produced a company introduction made of
+   *     PPE content;
+   *   a module that is present but unwritten asks a question, where a module that
+   *     is missing entirely does not.
+   *
+   * So the narration below is deliberately NOT usable wording. It is a brief, in the
+   * second person, telling whoever opens it what to write. It cannot be issued by
+   * accident in the way generic-sounding filler could, because it plainly is not
+   * about anybody's company.
+   */
+  {
+    slug: 'COMPANY_INTRODUCTION',
+    title: 'Company introduction',
+    category: 'BEHAVIOUR',
+    // First in the running order: it is the welcome.
+    order: 5,
+    // NOT mandatory and NOT included by default, because until somebody writes it
+    // this module says nothing. Both become worth turning on once it is written.
+    mandatory: false,
+    defaultIncluded: false,
+    heading: 'Welcome to the company',
+    narration:
+      'REPLACE THIS TEXT BEFORE ISSUING. This module is your company’s own ' +
+      'introduction, and it is the first thing an operative hears. Say who the ' +
+      'company is and what it builds. Say how long it has been doing it, if that ' +
+      'matters to you. Say what you expect of people on your sites and what they can ' +
+      'expect of you in return — how someone raises a concern, and what happens when ' +
+      'they do. Keep it to about forty seconds spoken: short sentences, second ' +
+      'person, no sub-clauses. Somebody hears this once, standing up, on a phone, ' +
+      'before a shift.',
+  },
   {
     slug: 'PPE_EXPECTATIONS',
     title: 'PPE expectations',

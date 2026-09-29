@@ -27,7 +27,9 @@ export default async function AdminLibraryAssetPage({ params }: { params: { asse
     <AdminInductionVideoWorkspace active="library">
       <LibraryAssetDetail
         asset={asset}
-        modules={modules.map((m: { id: string; title: string }) => ({ id: m.id, title: m.title }))}
+        modules={modules.map((m: { id: string; title: string; issued: unknown }) => ({
+            id: m.id, title: m.title, hasIssued: Boolean(m.issued),
+          }))}
         canDraft={manages}
         canIssue={manages}
         endpoint="/api/admin/induction-library"

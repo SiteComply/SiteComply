@@ -27,6 +27,10 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import {
+  LibraryCreatePanel,
+  type LibraryDraft,
+} from '@/components/inductionVideo/LibraryCreatePanel';
 // Values from modules with no Prisma in them: a value import from a service that
 // touches the database would ship the client to the browser, and tsc cannot see it.
 import {
@@ -101,8 +105,15 @@ export function LibrarySection({
   basePath,
 }: {
   assets: LibraryRow[];
-  /** Company modules a video can stand in for. */
-  modules: { id: string; title: string }[];
+  /** Company modules a video can stand in for, or be produced from. */
+  modules: {
+    id: string;
+    title: string;
+    slug: string;
+    category: string;
+    /** Has issued wording. Without it, nothing can be produced from this module. */
+    hasIssued: boolean;
+  }[];
   canDraft: boolean;
   canIssue: boolean;
   /** This tier's library API. */
@@ -128,17 +139,6 @@ export function LibrarySection({
   const [provenance, setProvenance] = useState('');
   const [status, setStatus] = useState('');
   const [showRetired, setShowRetired] = useState(false);
-  const [draft, setDraft] = useState({
-    slug: '',
-    title: '',
-    description: '',
-    placement: 'COMPANY_BAND',
-    category: 'OTHER',
-    moduleId: '',
-    provenance: 'UPLOADED',
-  });
-  const setProvenanceChoice = (provenance: 'UPLOADED' | 'GENERATED') =>
-    setDraft((d) => ({ ...d, provenance }));
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -160,7 +160,7 @@ export function LibrarySection({
   const retiredCount = assets.filter((a) => !a.active).length;
   const filtered = Boolean(q.trim() || category || provenance || status);
 
-  async function create() {
+  async function create(draft: LibraryDraft) {
     setBusy(true);
     setError(null);
     try {
@@ -218,141 +218,14 @@ export function LibrarySection({
         </p>
       )}
 
-      {/* ── CREATION. The first question is the one that decides everything else. ── */}
+      {/* Creating is its own job with its own rules — see LibraryCreatePanel. */}
       {adding && canDraft && (
-        <section className="rounded-xl border border-brand-200 bg-brand-50/40 p-4 shadow-card">
-          <h3 className="text-sm font-bold text-ink">Where will the video come from?</h3>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => setProvenanceChoice('UPLOADED')}
-              className={`rounded-lg border p-3 text-left ${
-                draft.provenance === 'UPLOADED'
-                  ? 'border-brand-400 bg-brand-50 ring-1 ring-brand-300'
-                  : 'border-line bg-surface hover:border-brand-300'
-              }`}
-            >
-              <p className="text-sm font-bold text-ink">I have footage</p>
-              <p className="mt-1 text-xs text-ink-muted">
-                Filmed elsewhere and exported as a video file. You will upload it and a caption
-                file on the next screen.
-              </p>
-            </button>
-            <button
-              type="button"
-              onClick={() => setProvenanceChoice('GENERATED')}
-              className={`rounded-lg border p-3 text-left ${
-                draft.provenance === 'GENERATED'
-                  ? 'border-brand-400 bg-brand-50 ring-1 ring-brand-300'
-                  : 'border-line bg-surface hover:border-brand-300'
-              }`}
-            >
-              <p className="text-sm font-bold text-ink">SiteComply produces it</p>
-              <p className="mt-1 text-xs text-ink-muted">
-                Generated from a Company Module: its approved wording becomes the narration,
-                word for word. The module stays the source of truth — to change the video you
-                edit the module and produce it again, so there is never a second version of the
-                same content.
-              </p>
-            </button>
-          </div>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className="text-xs font-semibold text-ink">
-              Title
-              <input
-                value={draft.title}
-                onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                placeholder="Company introduction"
-                className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm font-normal"
-              />
-            </label>
-            <label className="text-xs font-semibold text-ink">
-              Short reference
-              <input
-                value={draft.slug}
-                onChange={(e) => setDraft({ ...draft, slug: e.target.value.toUpperCase() })}
-                placeholder="COMPANY_INTRO"
-                className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm font-normal"
-              />
-            </label>
-            <label className="text-xs font-semibold text-ink">
-              What is it about?
-              <select
-                value={draft.category}
-                onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm font-normal"
-              >
-                {LIBRARY_CATEGORIES.map((c) => (
-                  <option key={c.key} value={c.key}>{c.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="text-xs font-semibold text-ink">
-              Where does it play?
-              <select
-                value={draft.placement}
-                onChange={(e) => setDraft({ ...draft, placement: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm font-normal"
-              >
-                {BANDS.map((b) => (
-                  <option key={b.key} value={b.key}>{b.title} — {b.when}</option>
-                ))}
-              </select>
-            </label>
-            <label className="sm:col-span-2 text-xs font-semibold text-ink">
-              Description (optional)
-              <input
-                value={draft.description}
-                onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm font-normal"
-              />
-            </label>
-            <label className="sm:col-span-2 text-xs font-semibold text-ink">
-              {draft.provenance === 'GENERATED'
-                ? 'Which company module is it produced from?'
-                : 'Does it cover a company module? (optional)'}
-              <select
-                value={draft.moduleId}
-                onChange={(e) => setDraft({ ...draft, moduleId: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm font-normal"
-              >
-                <option value="">
-                  {draft.provenance === 'GENERATED'
-                    ? 'Choose the module whose wording becomes the video'
-                    : 'No — it plays alongside the modules'}
-                </option>
-                {modules.map((m) => (
-                  <option key={m.id} value={m.id}>{m.title}</option>
-                ))}
-              </select>
-              <span className="mt-1 block font-normal text-ink-subtle">
-                {draft.provenance === 'GENERATED'
-                  ? 'Its approved wording becomes the narration, unchanged, and the written ' +
-                    'module is left out of the induction so nobody is told the same thing twice.'
-                  : 'If it does, the written module is left out of the induction so an operative ' +
-                    'is not told the same thing twice.'}
-              </span>
-            </label>
-          </div>
-          <button
-            type="button"
-            disabled={
-              busy ||
-              draft.title.trim().length < 3 ||
-              draft.slug.trim().length < 3 ||
-              (draft.provenance === 'GENERATED' && !draft.moduleId)
-            }
-            onClick={() => void create()}
-            className="mt-3 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
-          >
-            {busy
-              ? 'Adding…'
-              : draft.provenance === 'GENERATED'
-                ? 'Add and produce the video'
-                : 'Add and upload footage'}
-          </button>
-        </section>
+        <LibraryCreatePanel
+          modules={modules}
+          modulesHref={`${basePath.replace(/\/library$/, '')}/modules`}
+          busy={busy}
+          onCreate={(d) => void create(d)}
+        />
       )}
 
       {/* ── SEARCH AND FILTER ── */}
@@ -502,3 +375,4 @@ export function LibrarySection({
     </div>
   );
 }
+

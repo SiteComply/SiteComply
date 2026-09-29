@@ -44,6 +44,14 @@ const draft = (over: Record<string, unknown> = {}) => ({
   try {
     console.log('\nONE STATUS VOCABULARY, DERIVED AND SHARED');
     const INDEX = read('components/inductionVideo/LibrarySection.tsx');
+    /*
+     * The creation form moved into its own component when it grew past half the
+     * index file. These assertions named LibrarySection.tsx and broke, with the
+     * behaviour intact — the same "test pointing at the old address" that the upload
+     * checks hit earlier. Read BOTH, so where the markup lives is not the test's
+     * business.
+     */
+    const CREATE = INDEX + '\n' + read('components/inductionVideo/LibraryCreatePanel.tsx');
     const DETAIL = read('components/inductionVideo/LibraryAssetDetail.tsx');
     chk('nothing stores a status column',
       !/status\s+LibraryAssetStatus/.test(read('prisma/schema.prisma')),
@@ -307,18 +315,18 @@ const draft = (over: Record<string, unknown> = {}) => ({
       /built entirely from that\s*\n?\s*project’s own information/.test(INDEX) ||
         /project’s own information/.test(INDEX));
     chk('creation asks where the video comes from FIRST',
-      /Where will the video come from\?/.test(INDEX),
+      /Where will the video come from\?/.test(CREATE),
       'the answer decides everything else about the asset');
     // It IS available now. What must stay true is that choosing it commits you to a
     // module, because a generated video with no source wording cannot be produced.
     chk('  and the generated option is offered as a real choice',
-      /setProvenanceChoice\('GENERATED'\)/.test(INDEX) && !/not available yet/.test(INDEX),
+      /setProvenanceChoice\('GENERATED'\)/.test(CREATE) && !/not available yet/.test(CREATE),
       'SiteComply now produces these; the placeholder is gone');
     chk('  and choosing it requires the module the wording comes from',
-      /draft\.provenance === 'GENERATED' && !draft\.moduleId/.test(INDEX),
+      /draft\.provenance === 'GENERATED' && !draft\.moduleId/.test(CREATE),
       'a generated video with no source module could never be produced');
     chk('  and says the module stays the source of truth',
-      /source of truth/.test(INDEX));
+      /source of truth/.test(CREATE));
     chk('the caption requirement is stated up front, not at issue time',
       /needs a video file[\s\S]{0,120}caption file/.test(DETAIL));
   } finally {

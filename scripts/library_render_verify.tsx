@@ -45,6 +45,7 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
 };
 
 const { renderToStaticMarkup } = require('react-dom/server');
+const { readFileSync } = require('node:fs');
 const { LibrarySection } = require('../components/inductionVideo/LibrarySection');
 
 let fails = 0;
@@ -53,11 +54,18 @@ const chk = (t: string, ok: boolean, d = '') => {
   if (!ok) fails++;
 };
 
-const render = (assets: unknown[]) =>
+const MODULES = [
+  { id: 'm1', title: 'Company introduction', slug: 'COMPANY_INTRODUCTION',
+    category: 'BEHAVIOUR', hasIssued: false },
+  { id: 'm2', title: 'PPE expectations', slug: 'PPE_EXPECTATIONS',
+    category: 'SAFETY', hasIssued: true },
+];
+
+const render = (assets: unknown[], modules: unknown[] = MODULES) =>
   renderToStaticMarkup(
     React.createElement(LibrarySection, {
       assets,
-      modules: [],
+      modules,
       canDraft: true,
       canIssue: true,
       endpoint: '/api/platform/induction-library',
@@ -101,6 +109,84 @@ chk('and each explains WHEN it plays',
 chk('the filter bar is NOT shown, because there is nothing to filter',
   !empty.includes('Any subject'),
   'controls that can only return nothing are noise');
+
+console.log('\nTHE MODULE IS OFFERED BEFORE THE TITLE, AND SAYS WHEN IT IS NOT READY');
+/*
+ * THE PROBLEM THIS FIXES. A user could create a library video called "Company
+ * introduction" and find the only module on offer was "PPE expectations" — because
+ * the picker hid every module without issued wording, and PPE was the one that had
+ * it. The obvious next step produced a company introduction made of PPE content.
+ */
+const { LibraryCreatePanel } = require('../components/inductionVideo/LibraryCreatePanel');
+const { EMPTY_LIBRARY_DRAFT } = require('../components/inductionVideo/LibraryCreatePanel');
+const renderCreate = (modules: unknown[] = MODULES, provenance = 'GENERATED') =>
+  renderToStaticMarkup(
+    React.createElement(LibraryCreatePanel, {
+      modules,
+      modulesHref: '/platform/dashboard/induction-videos/modules',
+      busy: false,
+      onCreate: () => {},
+      initialDraft: { ...EMPTY_LIBRARY_DRAFT, provenance },
+    }),
+  ) as string;
+const creating = renderCreate();
+chk('an unissued module is LISTED, not hidden',
+  creating.includes('Company introduction'),
+  'hiding it reads as "that topic does not exist" when somebody just has to issue it');
+chk('  and is marked as not ready', /not issued yet/.test(creating));
+chk('a module with issued wording is offered plainly',
+  creating.includes('PPE expectations'));
+const uploading = renderCreate(MODULES, 'UPLOADED');
+chk('the uploaded branch does NOT ask which module it is',
+  !uploading.includes('Which company module is this video?'),
+  'uploaded footage is not produced from anything');
+// Scoped to the OPTIONS. A bare includes() matched the Title field's placeholder,
+// which happens to read "Company introduction" — the assertion was wrong, not the code.
+const optionsIn = (html: string) =>
+  (html.match(/<option[^>]*>([\s\S]*?)<\/option>/g) ?? []).join(' ');
+chk('  and offers only ISSUED modules to stand in for',
+  optionsIn(uploading).includes('PPE expectations') &&
+    !optionsIn(uploading).includes('Company introduction'),
+  'an unissued module reaches nobody, so there is nothing to displace');
+chk('the generated branch offers BOTH, marking the unissued one',
+  optionsIn(creating).includes('Company introduction') &&
+    optionsIn(creating).includes('PPE expectations'));
+chk('the module question is asked BEFORE the title',
+  creating.indexOf('Which company module is this video?') > 0 &&
+    creating.indexOf('Which company module is this video?') < creating.indexOf('Short reference'),
+  'the module is what the video IS; the title follows from it');
+const noModules = renderCreate([], 'GENERATED');
+chk('with no modules at all, it says to write one first',
+  /There are no company modules yet/.test(noModules) &&
+    /Company modules/.test(noModules),
+  'an empty picker with no explanation is a dead end');
+
+console.log('\nCHOOSING THE MODULE FILLS IN WHAT IT IMPLIES');
+const { applyModuleToDraft } = require('../components/inductionVideo/LibraryCreatePanel');
+const intro = MODULES[0];
+const blank = { ...EMPTY_LIBRARY_DRAFT, provenance: 'GENERATED' };
+const filled = applyModuleToDraft(blank, intro);
+chk('the title comes from the module', filled.title === 'Company introduction',
+  'this is what stops a "Company introduction" made of PPE wording');
+chk('  and the reference', filled.slug === 'COMPANY_INTRODUCTION');
+chk('  and a sensible subject', filled.category === 'COMPANY_CULTURE',
+  `${filled.category}`);
+const typed = applyModuleToDraft(
+  { ...blank, title: 'Our people', slug: 'OUR_PEOPLE', category: 'BEHAVIOUR' }, intro);
+chk('what somebody typed is never overwritten',
+  typed.title === 'Our people' && typed.slug === 'OUR_PEOPLE' && typed.category === 'BEHAVIOUR',
+  'a form that rewrites your words is worse than one that lets you fix a mismatch');
+chk('clearing the choice clears the link but keeps the words',
+  applyModuleToDraft({ ...blank, title: 'Kept' }, undefined).moduleId === '' &&
+    applyModuleToDraft({ ...blank, title: 'Kept' }, undefined).title === 'Kept');
+
+console.log('\nTHE SERVER SENDS EVERY MODULE, NOT ONLY THE ISSUED ONES');
+const rowsSrc = readFileSync('services/inductionVideo/libraryRows.ts', 'utf8');
+chk('libraryRows no longer filters the picker down to issued modules',
+  !/modules\.filter\(\(m\) => m\.issued\)/.test(rowsSrc),
+  'filtering there is what made the wanted module invisible in the first place');
+chk('  and sends each one\'s readiness instead',
+  /hasIssued: Boolean\(m\.issued\)/.test(rowsSrc));
 
 console.log('\nONE ASSET — THE SUMMARY A MANAGER READS');
 const one = render([asset()]);

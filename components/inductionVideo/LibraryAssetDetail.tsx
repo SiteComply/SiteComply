@@ -55,7 +55,12 @@ export function LibraryAssetDetail({
   videoHrefBase,
 }: {
   asset: Detail;
-  modules: { id: string; title: string }[];
+  modules: {
+    id: string;
+    title: string;
+    /** Without issued wording nothing can be produced from it. */
+    hasIssued: boolean;
+  }[];
   canDraft: boolean;
   canIssue: boolean;
   endpoint: string;
@@ -71,6 +76,11 @@ export function LibraryAssetDetail({
   const [issueNote, setIssueNote] = useState('');
 
   const editableContent = contentEditableHere(asset.provenance);
+  // Producing reads the module's ISSUED wording, so an unissued source is a wall the
+  // button should not walk into.
+  const sourceModuleReady = Boolean(
+    asset.moduleId && modules.find((m) => m.id === asset.moduleId)?.hasIssued,
+  );
 
   async function call(body: Record<string, unknown>, key: string) {
     setBusy(key);
@@ -328,8 +338,16 @@ export function LibraryAssetDetail({
                 className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm font-normal"
               >
                 <option value="">Nothing — it plays alongside the modules</option>
+                {/*
+                  * Unissued modules are LISTED AND MARKED rather than hidden. For a
+                  * generated asset this picker chooses the source of the wording, and
+                  * an absent module reads as "that topic does not exist" when the
+                  * truth is "somebody still has to issue it".
+                  */}
                 {modules.map((m) => (
-                  <option key={m.id} value={m.id}>{m.title}</option>
+                  <option key={m.id} value={m.id}>
+                    {m.title}{m.hasIssued ? '' : '  — not issued yet'}
+                  </option>
                 ))}
               </select>
               <span className="mt-1 block font-normal text-ink-subtle">
@@ -378,15 +396,21 @@ export function LibraryAssetDetail({
             the script, approve it, generate the voice-over and captions, render it, watch it, and
             publish it into this library video as a new revision.
           </p>
-          {!asset.moduleId && (
+          {!asset.moduleId ? (
             <p className="mt-2 rounded-lg border border-danger-200 bg-danger-50 px-3 py-2 text-xs text-danger-700">
               No company module is chosen yet. Pick one in Settings above — it is where the wording
               comes from.
             </p>
-          )}
+          ) : !sourceModuleReady ? (
+            <p className="mt-2 rounded-lg border border-hivis-200 bg-hivis-50 px-3 py-2 text-xs text-hivis-800">
+              <span className="font-semibold">“{asset.moduleTitle}” has no issued wording yet.</span>{' '}
+              The video is produced from that wording word for word, so it has to be written and
+              issued first. Nothing here is lost in the meantime.
+            </p>
+          ) : null}
           <button
             type="button"
-            disabled={busy !== null || !asset.moduleId}
+            disabled={busy !== null || !asset.moduleId || !sourceModuleReady}
             onClick={async () => {
               setBusy('produce');
               setError(null);

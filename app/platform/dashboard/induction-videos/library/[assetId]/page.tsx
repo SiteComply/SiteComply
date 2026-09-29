@@ -48,7 +48,9 @@ export default async function LibraryAssetPage({ params }: { params: { assetId: 
       >
         <LibraryAssetDetail
           asset={asset}
-          modules={modules.map((m: { id: string; title: string }) => ({ id: m.id, title: m.title }))}
+          modules={modules.map((m: { id: string; title: string; issued: unknown }) => ({
+            id: m.id, title: m.title, hasIssued: Boolean(m.issued),
+          }))}
           canDraft={canDraftInductionModule(viewer.role)}
           canIssue={canIssueInductionModule(viewer.role)}
           endpoint="/api/platform/induction-library"
