@@ -192,12 +192,15 @@ export function LibrarySection({
         <div className="flex flex-wrap items-start gap-2">
           <div className="min-w-0">
             <h2 className="text-sm font-bold text-ink">Company video library</h2>
+            {/*
+              * ONE LINE, NOT FIVE. This paragraph explained what the Library is, why it
+              * exists, and how versioning works — useful once, then in the way every
+              * time after. What a video is and what it costs to change belong on its own
+              * page, where somebody is about to act on them.
+              */}
             <p className="mt-1 max-w-2xl text-sm text-ink-muted">
-              Reusable company footage that every project’s induction can include — a company
-              introduction, PPE expectations, behavioural standards and so on. Filmed once,
-              approved once, and used by every site, so the same briefing is never produced
-              twice. Each video is versioned: a published induction keeps the revision it was
-              made with.
+              Reusable company footage every project’s induction can include. Open a video to
+              see its revisions, where it is used and what changing it would do.
             </p>
           </div>
           {canDraft && (

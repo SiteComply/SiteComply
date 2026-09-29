@@ -2,8 +2,8 @@ import { redirect } from 'next/navigation';
 import { getAdminSession } from '@/lib/session';
 import { adminCanManage } from '@/lib/adminAuth';
 import { AdminInductionVideoWorkspace } from '@/components/admin/AdminInductionVideoWorkspace';
-import { InductionModulesSection } from '@/components/platform/InductionModulesSection';
-import { moduleRowsForEditor } from '@/services/inductionModules/moduleRows';
+import { ModulesIndex } from '@/components/inductionModules/ModulesIndex';
+import { moduleRowsForIndex } from '@/services/inductionModules/moduleRows';
 import { inductionVideoHref } from '@/services/inductionVideo/inductionVideoAreas';
 
 export const dynamic = 'force-dynamic';
@@ -38,7 +38,7 @@ export default async function AdminInductionModulesPage() {
   if (!session) redirect('/admin/login');
 
   const manages = adminCanManage(session.role);
-  const rows = await moduleRowsForEditor();
+  const rows = await moduleRowsForIndex();
 
   return (
     <AdminInductionVideoWorkspace active="modules">
@@ -52,11 +52,13 @@ export default async function AdminInductionModulesPage() {
         {!manages && ' Your role can view these but not change them.'}
       </p>
 
-      <InductionModulesSection
+      <ModulesIndex
         modules={rows}
         canDraft={manages}
         canIssue={manages}
         endpoint="/api/admin/induction-modules"
+        basePath="/admin/induction-videos/modules"
+        libraryBasePath="/admin/induction-videos/library"
       />
 
       <p className="text-xs text-ink-subtle">

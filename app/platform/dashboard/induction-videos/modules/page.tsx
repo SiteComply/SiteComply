@@ -5,14 +5,14 @@ import {
   InductionVideoWorkspace,
   INDUCTION_VIDEO_AREAS,
 } from '@/components/platform/InductionVideoWorkspace';
-import { InductionModulesSection } from '@/components/platform/InductionModulesSection';
+import { ModulesIndex } from '@/components/inductionModules/ModulesIndex';
 import { requirePlatformViewer } from '@/services/platformUsers/platformAccess';
 import {
   canDraftInductionModule,
   canIssueInductionModule,
   canViewInductionModules,
 } from '@/services/inductionModules/inductionModuleService';
-import { moduleRowsForEditor } from '@/services/inductionModules/moduleRows';
+import { moduleRowsForIndex } from '@/services/inductionModules/moduleRows';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +38,7 @@ export default async function InductionModulesPage() {
   // administration.
   if (!canViewInductionModules(viewer.role)) redirect('/platform/dashboard');
 
-  const rows = await moduleRowsForEditor();
+  const rows = await moduleRowsForIndex();
 
   return (
     <PlatformShell>
@@ -59,11 +59,13 @@ export default async function InductionModulesPage() {
           Centre. Whichever place a change is made, it is the same content and the
           history records where it came from.
         </p>
-        <InductionModulesSection
+        <ModulesIndex
           modules={rows}
           canDraft={canDraftInductionModule(viewer.role)}
           canIssue={canIssueInductionModule(viewer.role)}
           endpoint="/api/platform/induction-modules"
+          basePath="/platform/dashboard/induction-videos/modules"
+          libraryBasePath="/platform/dashboard/induction-videos/library"
         />
       </InductionVideoWorkspace>
     </PlatformShell>

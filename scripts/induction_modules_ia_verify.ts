@@ -43,7 +43,11 @@ const VIDEOS_PAGE = 'app/platform/dashboard/induction-videos/page.tsx';
 const OLD_PAGE = 'app/platform/dashboard/settings/induction-modules/page.tsx';
 const NEW_API = 'app/api/platform/induction-modules/route.ts';
 const OLD_API = 'app/api/platform/settings/induction-modules/route.ts';
-const SECTION = 'components/platform/InductionModulesSection.tsx';
+// The landing page is a LIST and the editor is its own page now; both take their
+// endpoint as a prop, so the 'one editor, two front doors' property is asserted
+// across both files rather than one.
+const SECTION = 'components/inductionModules/ModulesIndex.tsx';
+const EDITOR = 'components/inductionModules/ModuleDetail.tsx';
 const NEW_HREF = '/platform/dashboard/induction-videos/modules';
 
 console.log('\nWHO MAY READ THE COMPANY MODULES SCREEN');
@@ -130,7 +134,8 @@ chk(
 chk(
   'the editor takes its endpoint rather than hard-coding one',
   // It now serves BOTH front doors, so a hard-coded path would be the bug.
-  /endpoint: string/.test(read(SECTION)) && !/fetch\('\/api\//.test(read(SECTION)),
+  /endpoint: string/.test(read(SECTION)) && !/fetch\('\/api\//.test(read(SECTION)) &&
+    /endpoint: string/.test(read(EDITOR)) && !/fetch\('\/api\//.test(read(EDITOR)),
 );
 chk(
   'the Induction Videos page passes the platform endpoint',
@@ -139,7 +144,8 @@ chk(
 );
 chk(
   'the editor posts to no settings path',
-  !read(SECTION).includes('/api/platform/settings/induction-modules'),
+  !read(SECTION).includes('/api/platform/settings/induction-modules') &&
+    !read(EDITOR).includes('/api/platform/settings/induction-modules'),
 );
 
 console.log('\nTHE AREA’S SHAPE');

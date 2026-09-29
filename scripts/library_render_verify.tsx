@@ -90,7 +90,7 @@ console.log('\nAN EMPTY LIBRARY — WHAT PRODUCTION ACTUALLY HAS');
 const empty = render([]);
 chk('the page renders at all', empty.length > 500, `${empty.length} bytes`);
 chk('it states what the Library is for',
-  empty.includes('Reusable company footage that every project'));
+  empty.includes('Reusable company footage every project'));
 chk('it says there is nothing yet', empty.includes('No library videos yet.'));
 chk('the way in is offered', empty.includes('Add a library video'));
 // THE REGRESSION THIS FILE WAS WRITTEN FOR.
@@ -119,18 +119,42 @@ console.log('\nA CATALOGUE THAT GREW AFTER YOU SEEDED IT');
  * "Company Introduction" library video was left picking PPE expectations as its
  * source — producing a company introduction made of PPE content.
  */
-const { InductionModulesSection } = require('../components/platform/InductionModulesSection');
+const { ModulesIndex } = require('../components/inductionModules/ModulesIndex');
 const { MODULE_CATALOGUE } = require('../services/inductionModules/moduleCatalogue');
-const asModule = (c: { slug: string; title: string }) => ({
-  id: c.slug, slug: c.slug, title: c.title, category: 'SAFETY', order: 10,
-  mandatory: false, defaultIncluded: true, active: true, replacesSceneType: null,
-  issued: null, draft: null, revisionCount: 0,
-});
+const { moduleStatus } = require('../services/inductionModules/moduleStatus');
+/*
+ * A row as moduleRowsForIndex builds one. The STATUS comes from the real derivation
+ * rather than a literal: a fixture that hard-coded a label would keep passing after
+ * the vocabulary changed, which is the whole class of bug moduleStatus exists to stop.
+ */
+const asModule = (
+  c: { slug: string; title: string },
+  over: Record<string, unknown> = {},
+) => {
+  const issued = (over.issued as { version: number } | null | undefined) ?? null;
+  const draft = (over.draft as { version: number } | null | undefined) ?? null;
+  const active = over.active === undefined ? true : Boolean(over.active);
+  return {
+    id: c.slug, slug: c.slug, title: c.title, category: 'SAFETY',
+    mandatory: false, defaultIncluded: true, active, replacesSceneType: null,
+    status: moduleStatus({ active, issued, draft }),
+    issued: issued
+      ? { version: issued.version, issuedOn: '24 Sep 2026', issuedByName: 'JC', issuedByRealm: 'Platform' }
+      : null,
+    draft: draft ? { id: `${c.slug}-d`, version: draft.version, preparedByName: 'JC' } : null,
+    revisionCount: (issued ? 1 : 0) + (draft ? 1 : 0),
+    usage: { onProjects: issued ? 6 : 0, totalProjects: 6, excludedBy: 0 },
+    standsInFor: null,
+    ...over,
+  };
+};
 const renderModules = (mods: unknown[]) =>
   renderToStaticMarkup(
-    React.createElement(InductionModulesSection, {
+    React.createElement(ModulesIndex, {
       modules: mods, canDraft: true, canIssue: true,
       endpoint: '/api/platform/induction-modules',
+      basePath: '/platform/dashboard/induction-videos/modules',
+      libraryBasePath: '/platform/dashboard/induction-videos/library',
     }),
   ) as string;
 
@@ -370,6 +394,130 @@ chk('somebody who may only read still SEES the production',
   'hiding the explanation from a viewer recreates the dead end for them');
 chk('  but is offered no discard', !viewerOnly.includes('Discard it'),
   'irreversible, so it belongs with the roles that own the record');
+
+
+console.log('\nTHE MODULES LIST IS A LIST — NO WORDING ON IT');
+/*
+ * THE COMPLAINT THIS ANSWERS. Every module printed its whole narration here: about
+ * 2,400 words across seven modules before a single click, growing with the catalogue.
+ * The wording moved to modules/[moduleId]; these assertions are what stop it coming
+ * back, and what prove the row still says enough to choose by.
+ */
+const PPE_WORDING =
+  'Your personal protective equipment is the last thing between you and an injury.';
+const listRows = [
+  asModule({ slug: 'COMPANY_INTRODUCTION', title: 'Company introduction' },
+    { draft: { version: 1 } }),
+  asModule({ slug: 'PPE_EXPECTATIONS', title: 'PPE expectations' },
+    { issued: { version: 1 }, mandatory: true,
+      standsInFor: { assetId: 'a1', title: 'PPE — site footage' } }),
+  asModule({ slug: 'HOUSEKEEPING', title: 'Housekeeping' }, { issued: { version: 2 } }),
+  asModule({ slug: 'OLD_ONE', title: 'Retired subject' },
+    { issued: { version: 1 }, active: false }),
+];
+const list = renderModules(listRows);
+chk('the list renders', list.length > 500, `${list.length} bytes`);
+chk('every module is named', ['Company introduction', 'PPE expectations', 'Housekeeping']
+  .every((t) => list.includes(t)));
+chk('NO narration appears anywhere on it', !list.includes(PPE_WORDING),
+  'this is the clutter the whole change exists to remove');
+chk('each row links to its own page',
+  list.includes('/platform/dashboard/induction-videos/modules/PPE_EXPECTATIONS'),
+  'built from basePath — a callback here is what took the Library index down');
+chk('the columns a manager chooses by are there',
+  ['Module', 'Status', 'Included', 'Subject', 'Used on'].every((h) => list.includes(h)));
+chk('a draft is shown as reaching nobody',
+  list.includes('Draft · rev 1') && list.includes('Reaches nobody'),
+  'the property that let a placeholder module sit in production looking issued');
+chk('an issued module shows its revision', list.includes('Issued · rev 1'));
+chk('usage is on the row', list.includes('6 of 6 projects'));
+chk('a video standing in for a module is declared',
+  list.includes('A library video stands in for this'),
+  'otherwise a module reads as reaching six projects when a film is what plays');
+chk('a retired module is hidden by default', !list.includes('Retired subject'),
+  'it reaches nobody, so it is not in the working list');
+chk('  but the page says it can be shown', list.includes('Show retired'));
+chk('mandatory and default inclusion are distinguished',
+  list.includes('Every site') && list.includes('On by default'));
+
+console.log('\nONE MODULE\'S PAGE CARRIES WHAT THE LIST DROPPED');
+const { ModuleDetail } = require('../components/inductionModules/ModuleDetail');
+const moduleFixture = (over: Record<string, unknown> = {}) => ({
+  id: 'm-ppe', slug: 'PPE_EXPECTATIONS', title: 'PPE expectations', category: 'SAFETY',
+  order: 10, mandatory: true, defaultIncluded: true, active: true, replacesSceneType: null,
+  status: moduleStatus({ active: true, issued: { version: 1 }, draft: { version: 2 } }),
+  usage: { onProjects: 6, totalProjects: 6, excludedBy: [], overriddenBy: [
+    { siteId: 's1', siteName: 'Dorchester Road' } ] },
+  inForce: { heading: 'What we expect of your PPE', narration: PPE_WORDING, version: 1,
+    isDraft: false },
+  draftId: 'rev-2',
+  issueConsequence: 'Issuing revision 2 makes it what operatives are told on all 6 active projects.',
+  retireConsequence: 'Retiring it removes this subject from 6 active projects.',
+  standsInFor: null,
+  revisions: [
+    { id: 'rev-2', version: 2, status: 'DRAFT', heading: 'What we expect of your PPE',
+      narration: 'A reworded draft.', preparedByName: 'JC', preparedByRealm: 'Platform',
+      preparedOn: '29 Sep 2026', issuedByName: null, issuedByRealm: null, issuedOn: null,
+      issueNote: null, supersededOn: null, events: [] },
+    { id: 'rev-1', version: 1, status: 'ISSUED', heading: 'What we expect of your PPE',
+      narration: PPE_WORDING, preparedByName: 'JC', preparedByRealm: 'Platform',
+      preparedOn: '24 Sep 2026', issuedByName: 'JC', issuedByRealm: 'Platform',
+      issuedOn: '24 Sep 2026', issueNote: 'First issue', supersededOn: null,
+      events: [{ id: 'e1', action: 'ISSUED', actorName: 'JC', actorRealm: 'Platform',
+        detail: 'Version 1', at: '24 Sep 2026, 09:14' }] },
+  ],
+  ...over,
+});
+const renderModuleDetail = (over: Record<string, unknown> = {}, can = true) =>
+  renderToStaticMarkup(
+    React.createElement(ModuleDetail, {
+      module: moduleFixture(over), canDraft: can, canIssue: can,
+      endpoint: '/api/platform/induction-modules',
+      backHref: '/platform/dashboard/induction-videos/modules',
+      libraryBasePath: '/platform/dashboard/induction-videos/library',
+    }),
+  ) as string;
+
+const detail = renderModuleDetail();
+chk('the detail page renders', detail.length > 800, `${detail.length} bytes`);
+chk('THE WORDING IS HERE', detail.includes(PPE_WORDING),
+  'the list dropped it, so this page has to carry it');
+chk('  with its on-screen heading', detail.includes('What we expect of your PPE'));
+chk('the state is stated in words, not just a chip',
+  detail.includes('is what operatives hear'),
+  'live-with-a-draft is the state that needed two places to read before');
+chk('usage is shown', detail.includes('6') && detail.includes('Where this module is used'));
+chk('a project that recorded its own wording is named',
+  detail.includes('Dorchester Road'));
+chk('the revision history is listed',
+  detail.includes('Revision 2') && detail.includes('Revision 1') && detail.includes('First issue'));
+chk('issuing says what it will do BEFORE the button',
+  detail.indexOf('makes it what operatives are told') < detail.indexOf('Issue this revision'),
+  'a consequence after the action is not a consequence');
+chk('retiring says what it will do too',
+  detail.includes('removes this subject from 6 active projects'));
+chk('editing is offered to somebody who may draft',
+  detail.includes('Continue the draft'));
+const readOnly = renderModuleDetail({}, false);
+chk('a read-only viewer sees the wording', readOnly.includes(PPE_WORDING));
+chk('  but is offered no edit, issue or retire',
+  !readOnly.includes('Continue the draft') && !readOnly.includes('Issue this revision') &&
+    !readOnly.includes('Retire this module'),
+  'the service refuses them anyway; the screen should not dangle the button');
+const standin = renderModuleDetail({
+  standsInFor: { assetId: 'a1', title: 'PPE — site footage', hasIssuedRevision: true },
+});
+chk('a video standing in for the module is explained on the page',
+  standin.includes('A library video stands in for this module') &&
+    standin.includes('/platform/dashboard/induction-videos/library/a1'),
+  'the wording is still edited here, but it is not what plays');
+const notIssuedStandin = renderModuleDetail({
+  standsInFor: { assetId: 'a1', title: 'PPE — site footage', hasIssuedRevision: false },
+});
+chk('  and an unissued stand-in says the wording still wins',
+  notIssuedStandin.includes('still what projects hear'),
+  'a video set to replace a module but never issued replaces nothing');
+
 
 console.log(`\n${fails} failed\n`);
 process.exit(fails === 0 ? 0 : 1);

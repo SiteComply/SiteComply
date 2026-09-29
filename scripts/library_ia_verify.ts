@@ -310,7 +310,9 @@ const draft = (over: Record<string, unknown> = {}) => ({
 
     console.log('\nTHE PAGE SAYS WHAT THE LIBRARY IS FOR');
     chk('the purpose is in the header, not only the empty state',
-      /Reusable company footage that every project/.test(INDEX));
+      // Trimmed from five lines to one: the header says what the Library is, and
+      // what a video costs to change now lives on the video's own page.
+      /Reusable company footage every project/.test(INDEX));
     chk('  and the empty state still explains the alternative',
       /built entirely from that\s*\n?\s*project’s own information/.test(INDEX) ||
         /project’s own information/.test(INDEX));

@@ -78,18 +78,23 @@ const director = { id: 'u1', name: 'Dee Director', role: 'DIRECTOR', siteIds: []
       /requireAdminRole\(ADMIN_WRITE_ROLES\)/.test(read(AR)));
 
     console.log('\nONE EDITOR COMPONENT, NOT A COPY');
-    const SEC = 'components/platform/InductionModulesSection.tsx';
-    chk('the editor takes its endpoint as a prop', /endpoint: string/.test(read(SEC)));
-    chk('the editor hard-codes no endpoint', !/fetch\('\/api\//.test(read(SEC)));
+    // Two files since the master-detail split: the list and the editor. Both must
+    // take their endpoint, because both act on behalf of whichever tier renders them.
+    const SEC = 'components/inductionModules/ModulesIndex.tsx';
+    const EDITOR = 'components/inductionModules/ModuleDetail.tsx';
+    chk('the list takes its endpoint as a prop', /endpoint: string/.test(read(SEC)));
+    chk('the editor takes its endpoint as a prop', /endpoint: string/.test(read(EDITOR)));
+    chk('neither hard-codes an endpoint',
+      !/fetch\('\/api\//.test(read(SEC)) && !/fetch\('\/api\//.test(read(EDITOR)));
     // Moved out of Settings into the Induction Videos area; the old path is now a
     // redirect stub, so asserting against it would prove nothing.
     const adminPage = read('app/admin/(dashboard)/induction-videos/modules/page.tsx');
     chk('the admin page renders the SAME editor',
-      /InductionModulesSection/.test(adminPage) &&
+      /ModulesIndex/.test(adminPage) &&
       /endpoint="\/api\/admin\/induction-modules"/.test(adminPage));
     chk('both pages build rows from the shared builder',
-      /moduleRowsForEditor/.test(adminPage) &&
-      /moduleRowsForEditor/.test(read('app/platform/dashboard/induction-videos/modules/page.tsx')));
+      /moduleRowsForIndex/.test(adminPage) &&
+      /moduleRowsForIndex/.test(read('app/platform/dashboard/induction-videos/modules/page.tsx')));
 
     console.log('\nAN ADMIN CAN ACTUALLY DO THE WORK, END TO END');
     const mod = await prisma.inductionModule.create({

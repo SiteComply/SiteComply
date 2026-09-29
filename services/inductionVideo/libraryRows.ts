@@ -10,7 +10,7 @@ import type { LibraryRow } from '@/components/inductionVideo/LibrarySection';
 /**
  * The library as the editor needs it, built ONCE for both tiers.
  *
- * Same reasoning as `moduleRowsForEditor`: if each tier assembled its own rows the
+ * Same reasoning as `moduleRowsForIndex`: if each tier assembled its own rows the
  * two screens could disagree about which revision is in force or what a draft is
  * still waiting for, and that drift is the thing the shared definition exists to
  * prevent.

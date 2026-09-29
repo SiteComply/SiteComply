@@ -404,6 +404,36 @@ export interface ResolvedModule {
  *
  * A module with no ISSUED revision is invisible: a draft never reaches a site.
  */
+/**
+ * DOES THIS MODULE REACH THIS PROJECT? — the one inclusion rule.
+ *
+ * Extracted from `resolveModulesForSite` so that COUNTING where a module is used
+ * and DECIDING what a site's induction contains cannot give different answers. The
+ * modules list shows "on 6 of 6 projects" next to each row; if that figure came
+ * from a second copy of these three conditions, the list would eventually claim a
+ * module reaches a site whose induction leaves it out.
+ *
+ * Takes the decision row rather than a site id: the caller has already loaded the
+ * decisions it needs, in one query for one site or in one query for all of them.
+ *
+ * The three conditions, in the order they were written:
+ *   A DRAFT REACHES NOBODY      an unissued module is not in anybody's induction.
+ *   A SITE MAY EXCLUDE          unless the module is mandatory, which no site may drop.
+ *   NO OPINION MEANS THE DEFAULT an absent decision row is "no opinion", so the
+ *                               company default decides - which is why DEFAULT
+ *                               deletes the row rather than storing INCLUDED.
+ */
+export function moduleReachesSite(
+  module: { mandatory: boolean; defaultIncluded: boolean },
+  decision: { state: SiteInductionModuleState } | null,
+): boolean {
+  if (decision?.state === SiteInductionModuleState.EXCLUDED && !module.mandatory) {
+    return false;
+  }
+  if (!decision && !module.defaultIncluded) return false;
+  return true;
+}
+
 export async function resolveModulesForSite(siteId: string): Promise<ResolvedModule[]> {
   const [modules, siteRows] = await Promise.all([
     prisma.inductionModule.findMany({
@@ -427,10 +457,7 @@ export async function resolveModulesForSite(siteId: string): Promise<ResolvedMod
     if (!issued) continue; // a draft never reaches a site
 
     const decision = decisions.get(m.id);
-    const excluded =
-      decision?.state === SiteInductionModuleState.EXCLUDED && !m.mandatory;
-    if (excluded) continue;
-    if (!decision && !m.defaultIncluded) continue;
+    if (!moduleReachesSite(m, decision ?? null)) continue;
 
     const overridden =
       decision?.state === SiteInductionModuleState.OVERRIDDEN &&

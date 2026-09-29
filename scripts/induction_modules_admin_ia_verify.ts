@@ -179,12 +179,12 @@ chk(
 console.log('\nSTILL ONE SYSTEM UNDERNEATH');
 chk(
   'the Admin modules page renders the shared editor with the admin endpoint',
-  /InductionModulesSection/.test(read(ADMIN_MODULES)) &&
+  /ModulesIndex/.test(read(ADMIN_MODULES)) &&
     /endpoint="\/api\/admin\/induction-modules"/.test(read(ADMIN_MODULES)),
 );
 chk(
   'and builds its rows with the shared builder',
-  /moduleRowsForEditor/.test(read(ADMIN_MODULES)),
+  /moduleRowsForIndex/.test(read(ADMIN_MODULES)),
 );
 chk(
   'neither workspace evaluates a permission',
