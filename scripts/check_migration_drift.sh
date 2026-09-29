@@ -27,17 +27,31 @@ cleanup
 psql "$URL" -X -q -c "CREATE DATABASE \"${SHADOW_DB}\"" >/dev/null 2>&1 \
   || { echo "  FAIL could not create the scratch database ${SHADOW_DB}"; exit 1; }
 
+# STDOUT ONLY, AND NO CHATTER.
+#
+# This merged stderr into the output it parsed, and counted every non-comment line as
+# a statement. Prisma prints an "update available" banner intermittently, so a deploy
+# was failed by ten lines of box-drawing characters announcing version 8.0.0 - with the
+# real answer, "This is an empty migration.", sitting in the middle of them. A gate
+# that fails at random is worse than no gate: it teaches you to ignore it.
+export PRISMA_HIDE_UPDATE_MESSAGE=1
+export CHECKPOINT_DISABLE=1
+ERRFILE="$(mktemp)"
 OUT=$(npx prisma migrate diff \
         --from-migrations prisma/migrations \
         --to-schema-datamodel prisma/schema.prisma \
         --shadow-database-url "$SHADOW" \
-        --script 2>&1) || { echo "  FAIL prisma migrate diff failed:"; echo "$OUT" | tail -5; exit 1; }
+        --script 2>"$ERRFILE") || {
+  echo "  FAIL prisma migrate diff failed:"; tail -5 "$ERRFILE"; rm -f "$ERRFILE"; exit 1; }
+rm -f "$ERRFILE"
 
-# Comments and blank lines are not drift.
-STATEMENTS=$(printf '%s\n' "$OUT" | grep -vcE '^\s*$|^--' || true)
+# A STATEMENT ENDS IN A SEMICOLON. Comments, blank lines, Prisma's own prose and any
+# banner that still finds its way here are not drift, and requiring real SQL is the
+# only description of "drift" that cannot be widened by someone else's console output.
+STATEMENTS=$(printf '%s\n' "$OUT" | grep -cE ';\s*$' || true)
 if [ "${STATEMENTS:-0}" != "0" ]; then
   echo "  FAIL the migration history does not reproduce schema.prisma (${STATEMENTS} statement(s) of drift):"
-  printf '%s\n' "$OUT" | grep -vE '^\s*$' | head -40
+  printf '%s\n' "$OUT" | grep -E ';\s*$|^--' | head -40
   echo
   echo "  A feature was applied without a migration. Generate one:"
   echo "    npx prisma migrate dev --name <what_it_adds>"
