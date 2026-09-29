@@ -162,6 +162,32 @@ const EXEMPT_MOBILE = '+447700900150';
         read('services/workerAccess/accessRequirements.ts')),
       'induction, knowledge check and the rest still apply to a test account');
 
+    console.log('\nA FAILURE TO REACH A VERDICT IS NOT A NEGATIVE VERDICT');
+    /*
+     * The profile save wrote `cscsVerified = verified` unconditionally, so an ERROR —
+     * Smart Check unreachable, not a rejection — silently stripped a good
+     * verification. Harmless while nothing enforced the requirement. Now that every
+     * project does, it is the difference between working and being turned away, and
+     * a CSCS outage would have locked out operatives whose cards are perfectly fine.
+     */
+    const profile = read('app/api/worker/profile/route.ts');
+    chk('an ERROR keeps whatever the previous answer was',
+      /const unreachable = verification\?\.status === 'ERROR';/.test(profile) &&
+        /const verified = unreachable\s*\n?\s*\? existing\?\.cscsVerified === true/.test(profile),
+      'a transient outage must not revoke a verified card');
+    chk('  a real verdict is still written exactly as before',
+      /: verification\?\.verified === true;/.test(profile),
+      'VALID, EXPIRED, REVOKED and NOT_FOUND are the scheme telling us about the card');
+    chk('  the errored status is still recorded, so it is visible',
+      /cscsVerificationStatus: verification\?\.status \?\? null,/.test(profile));
+    chk('  and the verified-at date is not moved by a failed check',
+      /cscsVerifiedAt: unreachable/.test(profile),
+      'otherwise a card that failed to check looks as though it had just been confirmed');
+    // The refusal wording and the write must agree about what ERROR means.
+    chk('the refusal text has always called ERROR temporary',
+      /could not be checked just now/.test(reqs.cscsRefusalAction('ERROR', true, true)),
+      'the wording and the write cannot both be right; the wording was');
+
     console.log('\nBOTH DOORS, NOT ONE');
     const sub = read('services/submissions/submissionService.ts');
     const exp = read('services/induction/inductionValidityService.ts');

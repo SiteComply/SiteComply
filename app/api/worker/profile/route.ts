@@ -7,7 +7,7 @@ import {
 } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 import { getAuthRuntimeConfig } from '@/services/auth/authConfigService';
-import { upsertWorkerProfile } from '@/services/workers/workerService';
+import { getWorkerByMobile, upsertWorkerProfile } from '@/services/workers/workerService';
 import { isValidCscsCardNumber, normaliseCscsCardNumber } from '@/lib/cscs';
 import { verifyCscsCard } from '@/services/cscs/cscsVerificationService';
 import type { CscsVerificationResult } from '@/services/cscs';
@@ -242,9 +242,33 @@ async function POSTHandler(req: NextRequest) {
     });
   }
 
-  // Resolve the persisted card/competency fields. Verified data is authoritative;
-  // otherwise we keep what the worker entered.
-  const verified = verification?.verified === true;
+  /*
+   * ── A FAILURE TO REACH A VERDICT IS NOT A NEGATIVE VERDICT ──────────────
+   *
+   * `verified` was written here unconditionally, so ANY non-VALID outcome set
+   * cscsVerified = false — including ERROR, which means Smart Check could not be
+   * reached or could not answer. A verified operative who re-saved their details
+   * during a CSCS outage was silently stripped of a good verification, and with the
+   * requirement now enforced on every project that is the difference between working
+   * and being turned away at the gate.
+   *
+   * The refusal wording has always treated ERROR as temporary — "your card could not
+   * be checked just now, try again in a few minutes" — while this write treated it as
+   * a rejection. Those two cannot both be right.
+   *
+   * So an ERROR now LEAVES THE PREVIOUS ANSWER ALONE. A card that verified stays
+   * verified; a card that never verified stays unverified. Every real verdict —
+   * VALID, EXPIRED, REVOKED, NOT_FOUND — is written exactly as before, because those
+   * are the scheme telling us something about the card.
+   *
+   * The STATUS is still recorded either way, so the operative and the site manager
+   * can both see that the last check errored.
+   */
+  const existing = await getWorkerByMobile(session.mobile);
+  const unreachable = verification?.status === 'ERROR';
+  const verified = unreachable
+    ? existing?.cscsVerified === true
+    : verification?.verified === true;
   const resolvedCardType =
     verified && verification?.cardType ? verification.cardType : cscsCardType;
   const resolvedExpiry =
@@ -261,8 +285,18 @@ async function POSTHandler(req: NextRequest) {
     cscsExpiry: resolvedExpiry,
     cscsScheme: verification?.scheme ?? null,
     cscsVerified: verified,
+    // The status is recorded whatever it was, so an errored check is visible.
     cscsVerificationStatus: verification?.status ?? null,
-    cscsVerifiedAt: verification ? verification.checkedAt : null,
+    /*
+     * WHEN the card was last VERIFIED, not when it was last checked. Overwriting this
+     * with the time of a failed attempt would make a card that has verified look as
+     * though it had just been confirmed, which is the opposite of what happened.
+     */
+    cscsVerifiedAt: unreachable
+      ? (existing?.cscsVerifiedAt ?? null)
+      : verification
+        ? verification.checkedAt
+        : null,
     cscsHolderName: verification?.holderName ?? null,
     cscsQualifications: verification?.qualifications ?? null,
   });
