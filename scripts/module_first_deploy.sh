@@ -118,13 +118,17 @@ done
 grep -q "<video" "$DETAIL" || fail "the player is gone - a video library you cannot watch"
 grep -qF "mediaSasUrl(path, 30)" "$SVC" \
   || fail "the preview URL is no longer short-lived, or no longer scoped to one blob"
-grep -qF "Where will the video come from?" "$INDEX" \
+# The creation form is its own component now — LibraryCreatePanel — so these read it
+# rather than the index. It had grown to half the index file, and inside the list it
+# only rendered after a click, which no static render could reach.
+CREATE_SRC=components/inductionVideo/LibraryCreatePanel.tsx
+grep -qF "Where will the video come from?" "$CREATE_SRC" \
   || fail "creation no longer asks the question that decides everything else"
 # The generated option IS available now. What must hold is that choosing it commits you
 # to a source module, because a generated video with no wording cannot be produced.
-grep -qF "setProvenanceChoice('GENERATED')" "$INDEX" \
+grep -qF "setProvenanceChoice('GENERATED')" "$CREATE_SRC" \
   || fail "the generated option is not offered as a real choice"
-grep -qF "draft.provenance === 'GENERATED' && !draft.moduleId" "$INDEX" \
+grep -qF "draft.provenance === 'GENERATED' && !draft.moduleId" "$CREATE_SRC" \
   || fail "a generated video can be created with no source module - it could never be produced"
 
 # --- NO PRISMA IN THE BROWSER, WRAPPED IMPORTS INCLUDED ---
