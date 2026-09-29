@@ -236,8 +236,46 @@ const NARRATION =
       'the module stays the source of truth');
     const after = await prisma.inductionVideo.findUnique({ where: { id: videoId } });
     chk('the production is marked published', after.status === 'PUBLISHED' && after.publishedAt);
+
+    console.log('\nA SECOND PRODUCTION MAKES THE FIRST HISTORY');
+    const second = await cvs.startCompanyVideo(vActor, assetId);
+    chk('a new production can start once the first is published', second.ok === true,
+      second.error ?? '');
+    await prisma.inductionVideo.update({
+      where: { id: second.value.videoId },
+      data: {
+        status: 'VIDEO_READY',
+        videoBlobPath: `induction-video/${assetId}/${second.value.videoId}/video-y.mp4`,
+        captionsBlobPath: `induction-video/${assetId}/${second.value.videoId}/captions.vtt`,
+      },
+    });
+    const pub2 = await cvs.publishCompanyVideoToLibrary(vActor, second.value.videoId);
+    chk('  and publishing it succeeds', pub2.ok === true, pub2.error ?? '');
+    const first = await prisma.inductionVideo.findUnique({ where: { id: videoId } });
+    chk('  the earlier production is superseded', first.supersededAt !== null,
+      'two "current" productions of one asset would be ambiguous');
+    // The scoping that matters: nothing belonging to another asset may be touched.
+    const otherAsset = await lib.createLibraryAsset(director, {
+      slug: SLUG + '_OTHER', title: 'Another generated video', placement: 'CLOSING',
+      provenance: 'GENERATED', moduleId: moduleRow.id,
+    });
+    const otherProd = await cvs.startCompanyVideo(vActor, otherAsset.value.assetId);
+    await prisma.inductionVideo.update({
+      where: { id: otherProd.value.videoId },
+      data: {
+        status: 'VIDEO_READY',
+        videoBlobPath: 'x.mp4', captionsBlobPath: 'x.vtt',
+      },
+    });
+    const beforeOther = await prisma.inductionVideo.findUnique({
+      where: { id: otherProd.value.videoId }, select: { supersededAt: true },
+    });
+    chk('  a different asset\'s production is untouched', beforeOther.supersededAt === null,
+      'scoping by "no site" would have swept every company video of every asset');
   } finally {
-    await prisma.libraryAsset.deleteMany({ where: { slug: { in: [SLUG, SLUG + '_X'] } } });
+    await prisma.libraryAsset.deleteMany({
+      where: { slug: { in: [SLUG, SLUG + '_X', SLUG + '_OTHER'] } },
+    });
     await prisma.inductionModule.deleteMany({ where: { slug: MOD_SLUG } });
     await prisma.$disconnect();
   }

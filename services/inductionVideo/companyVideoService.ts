@@ -286,6 +286,15 @@ export async function publishCompanyVideoToLibrary(
       publishedByRealm: actor.realm,
     },
   });
+  /*
+   * Earlier productions OF THIS ASSET become history, exactly as earlier versions of a
+   * site induction do. Scoped by libraryAssetId and not by "no site", because the
+   * latter is every company video of every asset.
+   */
+  await prisma.inductionVideo.updateMany({
+    where: { libraryAssetId: video.libraryAssetId, id: { not: video.id }, supersededAt: null },
+    data: { supersededAt: new Date() },
+  });
 
   return { ok: true, value: { revisionId: revision.id, version: revision.version } };
 }

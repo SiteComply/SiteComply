@@ -372,6 +372,8 @@ export async function publishVideo(
     select: {
       id: true,
       jobSiteId: true,
+      // Selected so the supersede below can scope itself; see the note there.
+      libraryAssetId: true,
       status: true,
       version: true,
       videoBlobPath: true,
@@ -408,10 +410,20 @@ export async function publishVideo(
         supersededAt: null,
       },
     }),
-    // Everything else for this project becomes history, in one statement so two
-    // versions can never both be current.
+    /*
+     * Everything else for this project becomes history, in one statement so two
+     * versions can never both be current.
+     *
+     * SCOPED SO IT CANNOT RUN WITH A NULL SITE. `jobSiteId: null` means IS NULL in
+     * Prisma, which would match every COMPANY video of every asset and supersede the
+     * lot. A company video never reaches this function - publishing one goes to the
+     * Library instead - but that is a fact about one call site today, and this query
+     * would be a landmine for whoever adds the next one.
+     */
     prisma.inductionVideo.updateMany({
-      where: { jobSiteId: video.jobSiteId, id: { not: videoId }, supersededAt: null },
+      where: video.jobSiteId
+        ? { jobSiteId: video.jobSiteId, id: { not: videoId }, supersededAt: null }
+        : { libraryAssetId: video.libraryAssetId, id: { not: videoId }, supersededAt: null },
       data: { supersededAt: now },
     }),
     prisma.inductionVideoEvent.create({
