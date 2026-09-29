@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { deprioritiseEncode } from '@/services/inductionVideo/childPriority';
 import { chmod, access } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { AUDIO_FORMAT, VIDEO_FORMAT, audioEncodeArgs } from '@/services/inductionVideo/videoFormat';
@@ -72,6 +73,8 @@ function run(
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, { cwd });
+    // A transcode is the heaviest thing this instance does; it yields to the page.
+    deprioritiseEncode(child.pid);
     let stdout = '';
     let stderr = '';
     const timer = setTimeout(() => {

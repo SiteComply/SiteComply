@@ -140,7 +140,8 @@ export function NarrationPanel({
       {generating && (
         <p className="mt-2 text-sm text-ink-muted">
           The script is being read aloud. This runs in the background, a scene at
-          a time; refresh to see it.
+          a time, and each one appears here as it is recorded. There is no need to
+          reload.
         </p>
       )}
 

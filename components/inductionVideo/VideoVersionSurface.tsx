@@ -101,6 +101,9 @@ export async function VideoVersionSurface({
       <RefreshWhileWorking
         working={isWorkingStatus(video.status)}
         label={describeWork(video.status)}
+        // Built from apiBase, so each tier polls its own route without this
+        // component knowing which tier it is in.
+        statusHref={`${apiBase}/status`}
       />
 
       {blocking.length > 0 && (

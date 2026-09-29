@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { deprioritiseEncode } from '@/services/inductionVideo/childPriority';
 import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
 import { accessSync, chmodSync, constants, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -107,6 +108,8 @@ function run(
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    // The page watching this render is a person waiting; the render is not.
+    deprioritiseEncode(child.pid);
     let stdout = '';
     let stderr = '';
     // KEPT, BUT CAPPED. ffmpeg's log is where the reason for a failure lives, and

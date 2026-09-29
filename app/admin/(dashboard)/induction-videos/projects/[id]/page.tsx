@@ -92,6 +92,7 @@ export default async function AdminProjectInductionVideoPage({
       <RefreshWhileWorking
         working={anyWorking(videos)}
         label={describeAnyWork(videos)}
+        statusHref={`/api/admin/sites/${params.id}/induction-video/status`}
       />
 
       <SiteLibraryPanel

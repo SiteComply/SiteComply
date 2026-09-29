@@ -140,7 +140,8 @@ export function RenderPanel({
       {rendering && (
         <p className="mt-2 text-sm text-ink-muted">
           The video is being rendered. This runs in the background and takes a few
-          minutes; refresh to see it.
+          minutes. This page updates by itself when it is ready — there is no need to
+          reload, and leaving the page will not stop it.
         </p>
       )}
 

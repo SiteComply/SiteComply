@@ -77,11 +77,30 @@ export function describeWork(status: string): string | null {
 export const WORK_POLL_CEILING_MS = 10 * 60 * 1000;
 
 /**
- * How often to check.
+ * How often to check, at the start.
  *
  * Jobs start immediately (`kickInductionJobs`), so a script is usually ready in a
- * few seconds and a three-second beat makes it feel instant. Each check is one
- * server render of a page the person is already looking at - cheap next to the
- * model call it is waiting for - and it stops the moment the work does.
+ * few seconds and a three-second beat makes it feel instant. A check is now a small
+ * JSON read rather than a whole-page render - see progressService.ts for what the
+ * whole-page version did to production - and it stops the moment the work does.
  */
 export const WORK_POLL_INTERVAL_MS = 3_000;
+
+/**
+ * THE BEAT SLOWS AS THE WAIT LENGTHENS.
+ *
+ * The three steps differ by an order of magnitude: a script is a model call of a few
+ * seconds, narration is a speech call per scene, a render is ffmpeg and has been
+ * measured at 123 seconds on the production instance. One fixed interval cannot suit
+ * both ends of that - fast enough to feel instant on a script is needlessly eager
+ * two minutes into a render, on the very instance whose CPU the render is using.
+ *
+ * So: three seconds while a quick job could still be finishing, then five, then ten
+ * for the long tail. A render finishing is noticed within ten seconds at worst,
+ * against forty-odd polls under the old fixed beat.
+ */
+export function workPollDelayMs(elapsedMs: number): number {
+  if (elapsedMs < 30_000) return WORK_POLL_INTERVAL_MS;
+  if (elapsedMs < 120_000) return 5_000;
+  return 10_000;
+}

@@ -112,6 +112,7 @@ export default async function SiteInductionVideoPage({
       <RefreshWhileWorking
         working={anyWorking(videos)}
         label={describeAnyWork(videos)}
+        statusHref={`/api/platform/sites/${params.id}/induction-video/status`}
       />
 
       {manifest.missing.length > 0 && (
