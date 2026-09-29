@@ -32,8 +32,8 @@ export default async function PlatformModuleDetailPage({
   const viewer = await requirePlatformViewer();
   if (!canViewInductionModules(viewer.role)) redirect('/platform/dashboard');
 
-  const module = await moduleDetail(params.moduleId);
-  if (!module) notFound();
+  const detail = await moduleDetail(params.moduleId);
+  if (!detail) notFound();
 
   return (
     <PlatformShell>
@@ -41,11 +41,11 @@ export default async function PlatformModuleDetailPage({
         items={[
           { label: 'Induction videos', href: '/platform/dashboard/induction-videos' },
           { label: 'Company modules', href: '/platform/dashboard/induction-videos/modules' },
-          { label: module.title },
+          { label: detail.title },
         ]}
       />
       <ModuleDetail
-        module={module}
+        detail={detail}
         canDraft={canDraftInductionModule(viewer.role)}
         canIssue={canIssueInductionModule(viewer.role)}
         endpoint="/api/platform/induction-modules"

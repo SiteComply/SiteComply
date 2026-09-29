@@ -471,7 +471,7 @@ const moduleFixture = (over: Record<string, unknown> = {}) => ({
 const renderModuleDetail = (over: Record<string, unknown> = {}, can = true) =>
   renderToStaticMarkup(
     React.createElement(ModuleDetail, {
-      module: moduleFixture(over), canDraft: can, canIssue: can,
+      detail: moduleFixture(over), canDraft: can, canIssue: can,
       endpoint: '/api/platform/induction-modules',
       backHref: '/platform/dashboard/induction-videos/modules',
       libraryBasePath: '/platform/dashboard/induction-videos/library',

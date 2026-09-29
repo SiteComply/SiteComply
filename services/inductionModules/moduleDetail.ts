@@ -111,8 +111,9 @@ function describeRetireConsequence(usage: ModuleUsage): string {
 }
 
 export async function moduleDetail(moduleId: string): Promise<ModuleDetail | null> {
-  const module = await getModule(moduleId);
-  if (!module) return null;
+  // `row`, not `module`: Next forbids assigning to the `module` identifier.
+  const row = await getModule(moduleId);
+  if (!row) return null;
 
   const [usage, asset] = await Promise.all([
     moduleUsage(moduleId),
@@ -130,26 +131,26 @@ export async function moduleDetail(moduleId: string): Promise<ModuleDetail | nul
     }),
   ]);
 
-  const issued = module.revisions.find((r) => r.status === 'ISSUED' && !r.supersededAt) ?? null;
-  const draft = module.revisions.find((r) => r.status === 'DRAFT') ?? null;
-  const inForceRow = issued ?? draft ?? module.revisions[0] ?? null;
+  const issued = row.revisions.find((r) => r.status === 'ISSUED' && !r.supersededAt) ?? null;
+  const draft = row.revisions.find((r) => r.status === 'DRAFT') ?? null;
+  const inForceRow = issued ?? draft ?? row.revisions[0] ?? null;
 
   const status = moduleStatus({
-    active: module.active,
+    active: row.active,
     issued: issued ? { version: issued.version } : null,
     draft: draft ? { version: draft.version } : null,
   });
 
   return {
-    id: module.id,
-    slug: module.slug,
-    title: module.title,
-    category: module.category,
-    order: module.order,
-    mandatory: module.mandatory,
-    defaultIncluded: module.defaultIncluded,
-    active: module.active,
-    replacesSceneType: module.replacesSceneType,
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    category: row.category,
+    order: row.order,
+    mandatory: row.mandatory,
+    defaultIncluded: row.defaultIncluded,
+    active: row.active,
+    replacesSceneType: row.replacesSceneType,
     status,
     usage,
     inForce: inForceRow
@@ -170,7 +171,7 @@ export async function moduleDetail(moduleId: string): Promise<ModuleDetail | nul
           hasIssuedRevision: asset.revisions.length > 0,
         }
       : null,
-    revisions: module.revisions.map((r) => ({
+    revisions: row.revisions.map((r) => ({
       id: r.id,
       version: r.version,
       status: r.status,

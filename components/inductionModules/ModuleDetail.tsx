@@ -35,14 +35,17 @@ const TONE: Record<string, string> = {
 };
 
 export function ModuleDetail({
-  module,
+  // Named `detail`, not `module`: Next forbids assigning to the identifier `module`
+  // (it is the CommonJS global), and a destructured prop is an assignment. tsc and
+  // every suite passed; only `next build` reports it.
+  detail,
   canDraft,
   canIssue,
   endpoint,
   backHref,
   libraryBasePath,
 }: {
-  module: Detail;
+  detail: Detail;
   canDraft: boolean;
   canIssue: boolean;
   endpoint: string;
@@ -54,8 +57,8 @@ export function ModuleDetail({
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({
-    heading: module.inForce?.heading ?? module.title,
-    narration: module.inForce?.narration ?? '',
+    heading: detail.inForce?.heading ?? detail.title,
+    narration: detail.inForce?.narration ?? '',
   });
   const [issuing, setIssuing] = useState(false);
   const [note, setNote] = useState('');
@@ -87,16 +90,16 @@ export function ModuleDetail({
   }
 
   async function startEditing() {
-    const started = await call({ action: 'startDraft', moduleId: module.id }, 'draft');
+    const started = await call({ action: 'startDraft', moduleId: detail.id }, 'draft');
     if (!started) return;
     setDraft({
-      heading: module.inForce?.heading ?? module.title,
-      narration: module.inForce?.narration ?? '',
+      heading: detail.inForce?.heading ?? detail.title,
+      narration: detail.inForce?.narration ?? '',
     });
     setEditing(true);
   }
 
-  const s = module.status;
+  const s = detail.status;
 
   return (
     <div className="space-y-4">
@@ -108,12 +111,12 @@ export function ModuleDetail({
       <header className="rounded-xl border border-line bg-surface p-4 shadow-card">
         <div className="flex flex-wrap items-start gap-2">
           <div className="min-w-0">
-            <h2 className="text-base font-bold text-ink">{module.title}</h2>
+            <h2 className="text-base font-bold text-ink">{detail.title}</h2>
             <p className="mt-0.5 text-xs text-ink-subtle">
-              {module.slug} · {module.category} ·{' '}
-              {module.mandatory
+              {detail.slug} · {detail.category} ·{' '}
+              {detail.mandatory
                 ? 'every site'
-                : module.defaultIncluded
+                : detail.defaultIncluded
                   ? 'on by default'
                   : 'off by default'}
             </p>
@@ -126,14 +129,14 @@ export function ModuleDetail({
         </div>
         <p className="mt-2 text-sm text-ink-muted">{s.detail}</p>
 
-        {module.standsInFor && (
+        {detail.standsInFor && (
           <p className="mt-3 rounded-lg border border-hivis-500/40 bg-hivis-400/10 px-3 py-2 text-xs text-ink">
             <span className="font-semibold">A library video stands in for this module.</span>{' '}
-            {module.standsInFor.hasIssuedRevision
-              ? `Projects are shown “${module.standsInFor.title}” instead of this wording, so an operative is not told the same thing twice.`
-              : `“${module.standsInFor.title}” is set to replace this, but it has no issued revision yet — so this wording is still what projects hear.`}{' '}
+            {detail.standsInFor.hasIssuedRevision
+              ? `Projects are shown “${detail.standsInFor.title}” instead of this wording, so an operative is not told the same thing twice.`
+              : `“${detail.standsInFor.title}” is set to replace this, but it has no issued revision yet — so this wording is still what projects hear.`}{' '}
             <Link
-              href={`${libraryBasePath}/${module.standsInFor.assetId}`}
+              href={`${libraryBasePath}/${detail.standsInFor.assetId}`}
               className="font-semibold underline"
             >
               Open that library video
@@ -156,35 +159,35 @@ export function ModuleDetail({
           <div>
             <dt className="text-xs text-ink-subtle">Projects including it</dt>
             <dd className="text-lg font-bold text-ink">
-              {module.usage.onProjects}
+              {detail.usage.onProjects}
               <span className="text-sm font-normal text-ink-subtle">
                 {' '}
-                of {module.usage.totalProjects}
+                of {detail.usage.totalProjects}
               </span>
             </dd>
           </div>
           <div>
             <dt className="text-xs text-ink-subtle">Revisions</dt>
-            <dd className="text-lg font-bold text-ink">{module.revisions.length}</dd>
+            <dd className="text-lg font-bold text-ink">{detail.revisions.length}</dd>
           </div>
           <div>
             <dt className="text-xs text-ink-subtle">Own wording recorded by</dt>
-            <dd className="text-lg font-bold text-ink">{module.usage.overriddenBy.length}</dd>
+            <dd className="text-lg font-bold text-ink">{detail.usage.overriddenBy.length}</dd>
           </div>
         </dl>
-        {module.usage.excludedBy.length > 0 && (
+        {detail.usage.excludedBy.length > 0 && (
           <p className="mt-3 text-xs text-ink-muted">
             <span className="font-semibold">Left out by:</span>{' '}
-            {module.usage.excludedBy.map((x) => x.siteName).join(', ')}
+            {detail.usage.excludedBy.map((x) => x.siteName).join(', ')}
           </p>
         )}
-        {module.usage.overriddenBy.length > 0 && (
+        {detail.usage.overriddenBy.length > 0 && (
           <p className="mt-1 text-xs text-ink-muted">
             <span className="font-semibold">Own wording recorded by:</span>{' '}
-            {module.usage.overriddenBy.map((x) => x.siteName).join(', ')}
+            {detail.usage.overriddenBy.map((x) => x.siteName).join(', ')}
           </p>
         )}
-        {module.mandatory && (
+        {detail.mandatory && (
           <p className="mt-3 text-xs text-ink-muted">
             This module is mandatory, so no project may leave it out.
           </p>
@@ -195,12 +198,12 @@ export function ModuleDetail({
       <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-sm font-bold text-ink">
-            {module.inForce?.isDraft ? 'What it will say' : 'What it says'}
+            {detail.inForce?.isDraft ? 'What it will say' : 'What it says'}
           </h3>
-          {module.inForce && (
+          {detail.inForce && (
             <span className="text-xs text-ink-subtle">
-              revision {module.inForce.version}
-              {module.inForce.isDraft ? ' · draft, reaches nobody' : ' · in force'}
+              revision {detail.inForce.version}
+              {detail.inForce.isDraft ? ' · draft, reaches nobody' : ' · in force'}
             </span>
           )}
           {canDraft && !editing && (
@@ -212,7 +215,7 @@ export function ModuleDetail({
             >
               {busy === 'draft'
                 ? 'Opening…'
-                : module.draftId
+                : detail.draftId
                   ? 'Continue the draft'
                   : 'Edit the wording'}
             </button>
@@ -223,11 +226,11 @@ export function ModuleDetail({
           <>
             <p className="mt-3 text-xs font-semibold text-ink">Heading shown on screen</p>
             <p className="mt-1 rounded-lg border border-line bg-surface-sunken px-3 py-2 text-sm text-ink">
-              {module.inForce?.heading ?? module.title}
+              {detail.inForce?.heading ?? detail.title}
             </p>
             <p className="mt-3 text-xs font-semibold text-ink">What is said</p>
             <p className="mt-1 whitespace-pre-line rounded-lg border border-line bg-surface-sunken px-3 py-2 text-sm text-ink-muted">
-              {module.inForce?.narration || 'Nothing written yet.'}
+              {detail.inForce?.narration || 'Nothing written yet.'}
             </p>
           </>
         ) : (
@@ -260,7 +263,7 @@ export function ModuleDetail({
                   const r = await call(
                     {
                       action: 'saveDraft',
-                      revisionId: module.draftId,
+                      revisionId: detail.draftId,
                       heading: draft.heading,
                       narration: draft.narration,
                     },
@@ -287,10 +290,10 @@ export function ModuleDetail({
         )}
 
         {/* ── ISSUING, WITH ITS CONSEQUENCE STATED FIRST ── */}
-        {canIssue && module.draftId && !editing && (
+        {canIssue && detail.draftId && !editing && (
           <div className="mt-3 rounded-lg border border-safe-500/40 bg-safe-50 p-3">
-            {module.issueConsequence && (
-              <p className="text-xs text-ink">{module.issueConsequence}</p>
+            {detail.issueConsequence && (
+              <p className="text-xs text-ink">{detail.issueConsequence}</p>
             )}
             {!issuing ? (
               <button
@@ -317,7 +320,7 @@ export function ModuleDetail({
                     disabled={note.trim().length < 5 || busy !== null}
                     onClick={async () => {
                       const r = await call(
-                        { action: 'issue', revisionId: module.draftId, issueNote: note },
+                        { action: 'issue', revisionId: detail.draftId, issueNote: note },
                         'issue',
                       );
                       if (r) {
@@ -354,7 +357,7 @@ export function ModuleDetail({
           Previous revisions are kept so you can show exactly what an operative was told.
         </p>
         <ul className="mt-3 divide-y divide-line">
-          {module.revisions.map((r) => (
+          {detail.revisions.map((r) => (
             <li key={r.id} className="py-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-semibold text-ink">Revision {r.version}</span>
@@ -428,10 +431,10 @@ export function ModuleDetail({
             <label className="flex items-center gap-2 font-semibold text-ink">
               <input
                 type="checkbox"
-                defaultChecked={module.mandatory}
+                defaultChecked={detail.mandatory}
                 onChange={(e) =>
                   void call(
-                    { action: 'settings', moduleId: module.id, mandatory: e.target.checked },
+                    { action: 'settings', moduleId: detail.id, mandatory: e.target.checked },
                     'mandatory',
                   )
                 }
@@ -441,13 +444,13 @@ export function ModuleDetail({
             <label className="flex items-center gap-2 font-semibold text-ink">
               <input
                 type="checkbox"
-                defaultChecked={module.defaultIncluded}
-                disabled={module.mandatory}
+                defaultChecked={detail.defaultIncluded}
+                disabled={detail.mandatory}
                 onChange={(e) =>
                   void call(
                     {
                       action: 'settings',
-                      moduleId: module.id,
+                      moduleId: detail.id,
                       defaultIncluded: e.target.checked,
                     },
                     'default',
@@ -458,19 +461,19 @@ export function ModuleDetail({
             </label>
           </div>
           <div className="mt-4 border-t border-line pt-3">
-            <p className="text-xs text-ink-muted">{module.retireConsequence}</p>
+            <p className="text-xs text-ink-muted">{detail.retireConsequence}</p>
             <button
               type="button"
               disabled={busy !== null}
               onClick={() =>
                 void call(
-                  { action: 'setActive', moduleId: module.id, active: !module.active },
+                  { action: 'setActive', moduleId: detail.id, active: !detail.active },
                   'active',
                 )
               }
               className="mt-2 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
             >
-              {module.active ? 'Retire this module' : 'Bring it back'}
+              {detail.active ? 'Retire this module' : 'Bring it back'}
             </button>
           </div>
         </section>

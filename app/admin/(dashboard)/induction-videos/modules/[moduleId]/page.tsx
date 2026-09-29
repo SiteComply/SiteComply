@@ -23,8 +23,8 @@ export default async function AdminModuleDetailPage({
   const session = getAdminSession();
   if (!session) redirect('/admin/login');
 
-  const module = await moduleDetail(params.moduleId);
-  if (!module) notFound();
+  const detail = await moduleDetail(params.moduleId);
+  if (!detail) notFound();
 
   const manages = adminCanManage(session.role);
 
@@ -37,7 +37,7 @@ export default async function AdminModuleDetailPage({
         ← Company modules
       </Link>
       <ModuleDetail
-        module={module}
+        detail={detail}
         canDraft={manages}
         canIssue={manages}
         endpoint="/api/admin/induction-modules"
