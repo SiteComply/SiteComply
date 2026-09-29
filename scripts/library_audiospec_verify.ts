@@ -169,8 +169,25 @@ async function main() {
         new RegExp(AUDIO_FORMAT.channels === 2 ? 'stereo' : 'mono')
           .test(audioLines(finalInfo)[0] ?? ''),
         (audioLines(finalInfo)[0] ?? '').trim().slice(0, 78));
-      chk(`[${label}] both parts are present`, /Duration: 00:00:0[45]/.test(finalInfo),
-        (finalInfo.match(/Duration: [^,]+/) ?? [''])[0]);
+      /*
+       * The induction is longer than its scenes now: the renderer splices branded
+       * clips into the running order. Compute what to expect from the same timeline
+       * function rather than hard-coding a duration that the visual layer changed.
+       */
+      const { buildTimeline, timelineDurationMs } =
+        require('../services/inductionVideo/timeline');
+      const plannedMs = timelineDurationMs(buildTimeline(
+        scenes.map((sc: { sceneType: string; durationMs: number }) =>
+          ({ sceneType: sc.sceneType, durationMs: sc.durationMs })),
+      ));
+      const actualMs = (() => {
+        const m = /Duration:\s*(\d+):(\d+):(\d+)\.(\d+)/.exec(finalInfo);
+        return m ? Number(m[1]) * 3600000 + Number(m[2]) * 60000 + Number(m[3]) * 1000 +
+          Number(m[4].padEnd(3, '0').slice(0, 3)) : 0;
+      })();
+      chk(`[${label}] both parts are present, plus the branded clips`,
+        Math.abs(actualMs - plannedMs) <= 250 && actualMs > 4000,
+        `${actualMs}ms rendered vs ${plannedMs}ms planned`);
       chk(`[${label}] the video is still portrait`, /1080x1920/.test(finalInfo));
 
       // The symptom the mismatch used to produce, on the actual joined file.

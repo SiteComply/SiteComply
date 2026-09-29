@@ -331,7 +331,10 @@ function main() {
     /status: InductionVideoStatus\.SCRIPT_APPROVED,[\s\S]{0,900}captionsBlobPath: null,[\s\S]{0,80}transcriptBlobPath: null,/.test(svc));
   ok('  but keeps the scenes it paid for', !/inductionVideoScene\.updateMany/.test(svc));
   ok('captions and the transcript are written in the same run as the audio',
-    /buildVtt\(captionScenes\)/.test(svc) && /buildTranscript\(/.test(svc));
+    // `timedScenes` since the visual layer: the VTT is timed against the RENDERED
+    // running order, which includes the branded clips the renderer splices in. Timing
+    // it against the scenes alone makes every subtitle after the first bumper early.
+    /buildVtt\(timedScenes\)/.test(svc) && /buildTranscript\(/.test(svc));
   ok('  and a version cannot be called narrated with a scene missing its audio',
     /have no audio; narration is incomplete/.test(svc));
   ok('NARRATION_READY is only ever set with both caption paths',
@@ -339,10 +342,10 @@ function main() {
   ok('the speech service is resolved only when there is work to do',
     /if \(jobs\.length === 0\) return 0;/.test(svc));
   ok('media routes go through one access rule, not a hand-written copy',
-    // Expressed as the actor's own site test now, so the same rule answers for a
-    // site-scoped Platform user and an organisation-wide Admin Centre one. What
-    // must never come back is a route or service rolling its own siteIds check.
-    /actor\.maySite\(/.test(svc) && !/viewer\.siteIds\.includes/.test(svc));
+    // `mayWorkOn` since company videos arrived: it asks the VIDEO, answering with site
+    // authority for a project's induction and company authority for a company one.
+    // What must never come back is a route or service rolling its own siteIds check.
+    /mayWorkOn\(actor, /.test(svc) && !/viewer\.siteIds\.includes/.test(svc));
 
   const video = read('services/inductionVideo/inductionVideoService.ts');
   ok('editing a scene clears its audio',

@@ -3,6 +3,8 @@ import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
 import { accessSync, chmodSync, constants, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { brandMotionFile } from '@/services/inductionVideo/brandMotion';
+import { buildTimeline } from '@/services/inductionVideo/timeline';
 import { VIDEO_FORMAT, audioEncodeArgs } from '@/services/inductionVideo/videoFormat';
 import { sceneVisual, type SceneVisual } from '@/services/inductionVideo/sceneVisual';
 import { sceneAss } from '@/services/inductionVideo/assDocument';
@@ -155,8 +157,35 @@ export class FfmpegVideoRenderer implements VideoRenderer {
     try {
       if (logo) await writeFile(join(work, 'logo.png'), await readFile(logo));
 
+      /*
+       * ── THE RUNNING ORDER COMES FROM timeline.ts, NOT FROM HERE ─────────
+       *
+       * Branded clips are spliced in between scenes, and the CAPTION BUILDER has
+       * already timed the subtitles against the same running order during narration.
+       * If this function decided the order independently the two would diverge and
+       * every subtitle after the first bumper would be early - a fault that gets
+       * worse through the video and is easy to ship. One pure function, both callers.
+       */
+      const timeline = buildTimeline(
+        request.scenes.map((sc) => ({ sceneType: sc.sceneType, durationMs: sc.durationMs })),
+      );
+
       const parts: string[] = [];
-      for (const [index, scene] of request.scenes.entries()) {
+      for (const part of timeline) {
+        if (part.kind === 'BRAND') {
+          /*
+           * A PRECOMPUTED CLIP, copied in. It was built to this pipeline's exact spec
+           * by scripts/build_brand_motion.sh, so it needs no encode at all: this is
+           * the whole reason an induction can carry real motion on a shared core.
+           */
+          const file = brandMotionFile(part.assetKey);
+          const target = `brand-${part.assetKey}.mp4`;
+          await writeFile(join(work, target), await readFile(file));
+          parts.push(target);
+          continue;
+        }
+        const index = part.index;
+        const scene = request.scenes[index];
         const stem = `${SCENE_PREFIX}-${String(index).padStart(2, '0')}`;
 
         /*
@@ -183,7 +212,7 @@ export class FfmpegVideoRenderer implements VideoRenderer {
           sceneAss(visual, scene.durationMs, `${request.siteName} · induction v${request.version}`),
           'utf8',
         );
-        await run(this.bin, this.sceneArgs(stem, visual, Boolean(logo)), work,
+        await run(this.bin, this.sceneArgs(stem, visual, Boolean(logo), scene.durationMs), work,
           this.opts.timeoutMsPerScene ?? 180_000);
         parts.push(`${stem}.mp4`);
       }
@@ -241,7 +270,12 @@ export class FfmpegVideoRenderer implements VideoRenderer {
   }
 
   /** One scene: colour, text layer, brand mark, its own audio. */
-  private sceneArgs(stem: string, visual: SceneVisual, withLogo: boolean): string[] {
+  private sceneArgs(
+    stem: string,
+    visual: SceneVisual,
+    withLogo: boolean,
+    durationMs: number,
+  ): string[] {
     const { width, height, fps } = VIDEO_FORMAT;
     const background = visual.palette.background;
     /*
@@ -251,9 +285,34 @@ export class FfmpegVideoRenderer implements VideoRenderer {
      * milliseconds per scene - which over a dozen scenes is a visible gap between
      * the last word and the cut.
      */
+    /*
+     * ── THE ACCENT, AND WHY IT IS drawbox ─────────────────────────────────
+     *
+     * A flat shape costs the encoder nothing measurable, and it is what makes a
+     * family recognisable before a word has been read: an alert bar on emergency
+     * information, a diagonal-feeling stripe band on hazards, a brand rule on the
+     * standards. `drawtext` is not in this build, so anything with words in it goes
+     * through ASS; anything that is just a shape goes here.
+     */
+    const accent = accentFilter(visual, width, height);
+
+    /*
+     * ── FADES AT THE EDGES, NOT CROSS-FADES BETWEEN ───────────────────────
+     *
+     * The induction is assembled with the concat demuxer and `-c copy`. A true
+     * cross-fade needs both neighbours decoded and re-encoded together, which would
+     * re-encode the whole video and multiply the cost by its length - unaffordable on
+     * a B1. Fading each part in and out at its own edges is free, because this encode
+     * is happening anyway, and where two faded parts meet a viewer sees a dip rather
+     * than a hard cut.
+     */
+    const edge = Math.min(0.35, Math.max(0.12, (durationMs / 1000) * 0.08));
+    const outAt = Math.max(0, durationMs / 1000 - edge);
+    const fades = `,fade=t=in:st=0:d=${edge.toFixed(2)},fade=t=out:st=${outAt.toFixed(2)}:d=${edge.toFixed(2)}`;
+
     const filter = withLogo
-      ? `[0:v]ass=${stem}.ass[t];[2:v]scale=${Math.round(width * 0.17)}:-1[lg];[t][lg]overlay=W-w-${Math.round(width * 0.055)}:${Math.round(height * 0.045)}:format=auto[v]`
-      : `[0:v]ass=${stem}.ass[v]`;
+      ? `[0:v]${accent}ass=${stem}.ass${fades}[t];[2:v]scale=${Math.round(width * 0.17)}:-1[lg];[t][lg]overlay=W-w-${Math.round(width * 0.055)}:${Math.round(height * 0.045)}:format=auto[v]`
+      : `[0:v]${accent}ass=${stem}.ass${fades}[v]`;
 
     return [
       '-hide_banner', '-nostdin', '-y',
@@ -304,4 +363,67 @@ export class FfmpegVideoRenderer implements VideoRenderer {
       return 0;
     }
   }
+}
+
+/**
+ * The flat graphic behind the text, as a filter fragment ending in a comma (or empty).
+ *
+ * Deliberately restrained. The point is to make a SECTION recognisable at a glance,
+ * not to decorate: an operative at a gate reading their phone in daylight benefits
+ * from a strong colour band far more than from anything intricate.
+ */
+/**
+ * Where an accent sits: above the heading's anchor, below the brand mark.
+ *
+ * SAFE_AREA.topFraction (0.12) puts the heading at 230px; the mark sits at about
+ * 0.045 and is roughly 55px tall, so it clears by 141px. 178 is between the two.
+ */
+const ACCENT_Y = Math.round(VIDEO_FORMAT.height * 0.093);
+
+function accentFilter(
+  visual: { accent: string | null; palette: { rule: string; heading: string } },
+  width: number,
+  height: number,
+): string {
+  switch (visual.accent) {
+    /*
+     * ── WHY EVERY ACCENT SITS ABOVE THE HEADING ───────────────────────────
+     *
+     * ACCENT_Y is above the safe-area line the heading starts on, and below the
+     * brand mark in the corner. The first version put these at 0.165 of the frame
+     * height, which is 317px — and the heading is top-anchored at 230px in a 72pt
+     * face, so it occupies roughly 230 to 320. The stripes ran straight THROUGH the
+     * words. Every automated check passed: the file rendered, the duration was right,
+     * the frame had content. It took looking at a frame to see it, which is the
+     * argument for looking at frames.
+     *
+     * A two-line heading grows DOWNWARDS from the same anchor, so sitting above it is
+     * the only position that is safe for every heading length.
+     */
+    case 'ALERT_BAR': {
+      // A band across the full width: this scene is an instruction, not information.
+      return `drawbox=x=0:y=${ACCENT_Y}:w=${width}:h=${Math.round(height * 0.009)}:color=${boxColour(visual.palette.rule)}:t=fill,`;
+    }
+    case 'HAZARD_STRIPE': {
+      // Alternating marks reading as a hazard band. Far more legible at phone size
+      // than a true diagonal, and it needs no second filter pass.
+      const h = Math.round(height * 0.011);
+      const seg = Math.round(width / 11);
+      return [1, 3, 5, 7, 9]
+        .map((i) => `drawbox=x=${i * seg}:y=${ACCENT_Y}:w=${seg}:h=${h}:color=${boxColour(visual.palette.rule)}:t=fill`)
+        .join(',') + ',';
+    }
+    case 'BRAND_RULE': {
+      // A short centred rule: the company speaking, not a warning.
+      const w = Math.round(width * 0.18);
+      return `drawbox=x=${Math.round((width - w) / 2)}:y=${ACCENT_Y}:w=${w}:h=${Math.round(height * 0.007)}:color=${boxColour(visual.palette.rule)}:t=fill,`;
+    }
+    default:
+      return '';
+  }
+}
+
+/** `#rrggbb` as ffmpeg wants it, with full opacity stated rather than assumed. */
+function boxColour(hex: string): string {
+  return `${hex.startsWith('#') ? '0x' + hex.slice(1) : hex}@1.0`;
 }

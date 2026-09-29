@@ -6,6 +6,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { formatDateTimeUK } from '@/lib/datetime';
+import { buildTimeline } from '@/services/inductionVideo/timeline';
 import { mayWorkOn } from '@/services/inductionVideo/videoActor';
 import { mediaOwnerId, videoDisplayName } from '@/services/inductionVideo/videoOwner';
 import type { VideoActor } from '@/services/inductionVideo/videoActor';
@@ -377,6 +378,9 @@ async function narrateVideo(videoId: string, ports: NarrationPorts): Promise<voi
       libraryRevisionId: true,
       libraryCaptionsBlobPath: true,
       libraryDurationMs: true,
+      // Needed to build the same running order the renderer will: the scene's family
+      // decides whether a branded bumper precedes it.
+      sceneType: true,
     },
   });
   /*
@@ -409,12 +413,38 @@ async function narrateVideo(videoId: string, ports: NarrationPorts): Promise<voi
   if (missingAudio > 0) {
     throw new Error(`${missingAudio} scene(s) have no audio; narration is incomplete.`);
   }
-  const totalMs = captionScenes.reduce((n, s) => n + s.durationMs, 0);
+
+  /*
+   * ── SUBTITLES ARE TIMED AGAINST THE RENDERED RUNNING ORDER ─────────────
+   *
+   * The finished video is not just these scenes: branded clips are spliced between
+   * them by the renderer. Each one occupies real time on the video's clock, so the
+   * captions have to account for it or everything after the first bumper is early -
+   * and each further bumper makes it worse, which is a fault that degrades through
+   * the video rather than announcing itself.
+   *
+   * buildTimeline is the SAME pure function the renderer calls, so the two orders
+   * cannot disagree. A branded clip becomes a caption scene with a duration and no
+   * words: buildCues consumes its time and emits nothing, which is exactly right.
+   */
+  const timeline = buildTimeline(
+    narrated.map((sc) => ({
+      sceneType: sc.sceneType,
+      durationMs: sc.libraryRevisionId ? (sc.libraryDurationMs ?? 0) : (sc.audioDurationMs ?? 0),
+    })),
+  );
+  const timedScenes: CaptionScene[] = timeline.map((part) =>
+    part.kind === 'BRAND'
+      ? { heading: part.label, narration: '', durationMs: part.durationMs }
+      : captionScenes[part.index],
+  );
+
+  const totalMs = timedScenes.reduce((n, s) => n + s.durationMs, 0);
 
   const narratedOn = new Date();
   const vttPath = captionsPath(mediaOwnerId(video), video.id);
   const txtPath = transcriptPath(mediaOwnerId(video), video.id);
-  await ports.put(vttPath, Buffer.from(buildVtt(captionScenes), 'utf8'), 'text/vtt; charset=utf-8');
+  await ports.put(vttPath, Buffer.from(buildVtt(timedScenes), 'utf8'), 'text/vtt; charset=utf-8');
   await ports.put(
     txtPath,
     Buffer.from(

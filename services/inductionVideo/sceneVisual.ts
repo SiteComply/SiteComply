@@ -1,4 +1,10 @@
 import { SAFE_AREA, VIDEO_FORMAT } from '@/services/inductionVideo/videoFormat';
+import {
+  templateFor,
+  type SceneAccent,
+  type SceneFamily,
+  type TextMotion,
+} from '@/services/inductionVideo/sceneTemplates';
 
 /**
  * What a scene LOOKS like: the frame behind the voice.
@@ -120,6 +126,12 @@ export interface SceneVisual {
   palette: VisualPalette;
   /** True when the narration says more than the frame shows. */
   moreSpokenThanShown: boolean;
+  /** How the text arrives — from the scene's template. See sceneTemplates.ts. */
+  textMotion: TextMotion;
+  /** Which family this belongs to, which decides its bumper. */
+  family: SceneFamily;
+  /** A flat graphic accent drawn behind the text, or none. */
+  accent: SceneAccent;
 }
 
 /* ── How much text a portrait frame holds ──────────────────────────────────
@@ -198,12 +210,21 @@ export function sceneVisual(scene: {
     shown++;
   }
 
+  /*
+   * THE TEMPLATE, which is the thing that was missing: `visualTemplate` used to be
+   * computed on every scene and then ignored, so all thirty scene types rendered as
+   * the same card in a different colour.
+   */
+  const template = templateFor(scene.sceneType);
   return {
     sceneType: scene.sceneType,
     heading: scene.heading,
     lines,
     tone,
     palette: PALETTES[tone],
+    textMotion: template.textMotion,
+    family: template.family,
+    accent: template.accent,
     moreSpokenThanShown: shown < sentences.length,
   };
 }

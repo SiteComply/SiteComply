@@ -98,6 +98,27 @@ const FOOTER_SIZE = 34;
  * body below the middle, so a long heading grows downwards into space rather
  * than pushing the body off the frame.
  */
+/*
+ * THE SETTLE, in frame coordinates. The heading is anchored top-centre, so these are
+ * absolute Y positions and the difference between them is how far it travels: about
+ * 2% of the frame height. Enough to read as motion, not enough to distract.
+ */
+const HEADING_SETTLE_FROM = 300;
+const HEADING_SETTLE_TO = 262;
+
+/*
+ * A STAGGERED LINE is positioned by its own margin rather than flowing with its
+ * siblings, because siblings that appear later would reflow the ones already on
+ * screen - text that nudges itself as more arrives looks like a fault.
+ */
+/*
+ * Where the body starts: below a heading of up to two lines at 72pt from its 230px
+ * anchor, with a clear gap. Staggered lines step down from the same origin so the two
+ * paths cannot disagree about where the text block begins.
+ */
+const BODY_TOP = 470;
+const BODY_LINE_STEP = 76;
+
 export function sceneAss(
   visual: SceneVisual,
   durationMs: number,
@@ -113,7 +134,16 @@ export function sceneAss(
     // Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR,
     // MarginV, Encoding
     `Style: Heading,${font},${HEADING_SIZE},${assColour(visual.palette.heading)},${assColour(visual.palette.heading)},${assColour(visual.palette.background)},${assColour(visual.palette.background)},-1,0,0,0,100,100,0,0,1,0,0,8,${box.left},${box.right},${box.top},1`,
-    `Style: Body,${font},${BODY_SIZE},${assColour(visual.palette.body)},${assColour(visual.palette.body)},${assColour(visual.palette.background)},${assColour(visual.palette.background)},0,0,0,0,100,100,0,0,1,0,0,4,${box.left},${box.right},0,1`,
+    /*
+     * TOP-ANCHORED (alignment 7), NOT MIDDLE-ANCHORED (4).
+     *
+     * The body used to be centred vertically, which left a third of a portrait frame
+     * empty between the heading and the first word and read exactly like a slide. It
+     * now begins just under the heading, so the eye goes heading → text with nothing
+     * in between. Five lines at this size run to about 1,120px, comfortably inside the
+     * bottom safe area.
+     */
+    `Style: Body,${font},${BODY_SIZE},${assColour(visual.palette.body)},${assColour(visual.palette.body)},${assColour(visual.palette.background)},${assColour(visual.palette.background)},0,0,0,0,100,100,0,0,1,0,0,7,${box.left},${box.right},${BODY_TOP},1`,
     `Style: Footer,${font},${FOOTER_SIZE},${assColour(visual.palette.rule)},${assColour(visual.palette.rule)},${assColour(visual.palette.background)},${assColour(visual.palette.background)},0,0,0,0,100,100,0,0,1,0,0,2,${box.left},${box.right},${Math.round(box.bottom / 2)},1`,
   ];
 
@@ -127,12 +157,74 @@ export function sceneAss(
   const dialogue = (style: string, text: string) =>
     `Dialogue: 0,0:00:00.00,${end},${style},,0,0,0,${assText(text)}`;
 
-  const events = [dialogue('Heading', visual.heading.toUpperCase())];
+  /*
+   * ── THE MOTION LAYER ──────────────────────────────────────────────────
+   *
+   * All of it is libass override tags, which is why it is nearly free: the encoder
+   * is already drawing this frame, and moving the text costs it 8% more CPU rather
+   * than the 120% that per-frame imagery costs. Measured on the B1's own figures.
+   *
+   * `drawtext` is NOT in the vendored ffmpeg build, so ASS is not merely the
+   * convenient route for text, it is the only one.
+   *
+   * \fad(in,out)  fade in and out, in milliseconds
+   * \move(x1,y1,x2,y2,t1,t2)  travel between two points over a window
+   * \t(t1,t2,\fscx..)  animate a property over a window
+   *
+   * Every timing is clamped to the scene: a 900 ms settle inside a 1.2 s scene would
+   * still be arriving as the scene ended.
+   */
+  const span = Math.max(1_000, durationMs);
+  const ms = (n: number) => Math.max(120, Math.min(n, Math.round(span * 0.35)));
+  const motion = visual.textMotion ?? 'SETTLE';
+
+  const headingTags = (() => {
+    if (motion === 'STILL') return '';
+    // The heading settles: it arrives slightly low and rises into place. Small
+    // distances only - text that flies across the frame reads as a slideshow
+    // transition, which is the thing this is meant to stop looking like.
+    const travel = ms(700);
+    return `{\\fad(${ms(320)},${ms(260)})\\move(540,${HEADING_SETTLE_FROM},540,${HEADING_SETTLE_TO},0,${travel})}`;
+  })();
+
+  const events = [
+    `Dialogue: 0,0:00:00.00,${end},Heading,,0,0,0,${headingTags}${assText(visual.heading.toUpperCase())}`,
+  ];
+
   if (visual.lines.length > 0) {
-    events.push(
-      `Dialogue: 0,0:00:00.00,${end},Body,,0,0,0,${visual.lines.map(assText).join('\\N')}`,
-    );
+    if (motion === 'STAGGER' && visual.lines.length > 1) {
+      /*
+       * ONE LINE AT A TIME, each held to the end of the scene. For a list somebody
+       * is meant to read in order - hazards, site rules, PPE - arriving together is
+       * a wall of text and arriving in turn is a briefing.
+       *
+       * Each line is its own event, positioned by its index so they stack in place
+       * rather than reflowing as siblings appear.
+       */
+      const step = Math.min(420, Math.floor((span * 0.45) / visual.lines.length));
+      visual.lines.forEach((line, i) => {
+        const at = assTime(i * step);
+        events.push(
+          `Dialogue: 0,${at},${end},Body,,0,0,${BODY_TOP + i * BODY_LINE_STEP},` +
+            `{\\fad(${ms(260)},${ms(200)})}${assText(line)}`,
+        );
+      });
+    } else if (motion === 'EMPHASIS') {
+      // One fact, arriving with a little weight behind it and then holding still.
+      events.push(
+        `Dialogue: 0,0:00:00.00,${end},Body,,0,0,0,` +
+          `{\\fad(${ms(300)},${ms(220)})\\fscx92\\fscy92\\t(0,${ms(500)},\\fscx100\\fscy100)}` +
+          `${visual.lines.map(assText).join('\\N')}`,
+      );
+    } else {
+      const tags = motion === 'STILL' ? '' : `{\\fad(${ms(380)},${ms(240)})}`;
+      events.push(
+        `Dialogue: 0,0:00:00.00,${end},Body,,0,0,0,${tags}${visual.lines.map(assText).join('\\N')}`,
+      );
+    }
   }
+
+  // The brand imprint does not move; it is furniture, not content.
   if (footer) events.push(dialogue('Footer', footer));
 
   return [
