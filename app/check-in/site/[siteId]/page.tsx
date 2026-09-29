@@ -83,10 +83,29 @@ export default async function SiteInductionPage({
               {/* The reason the access rules already produce — "not been
                   invited", "awaiting approval", "suspended", an access window
                   that has not started or has ended, or an unmet requirement. */}
-              <p className="mt-1 text-sm text-danger-700">{access.reason}</p>
+              <p className="mt-1 whitespace-pre-line text-sm text-danger-700">
+                {access.reason}
+              </p>
             </div>
           </div>
         </section>
+
+        {/*
+          * THE WAY OUT COMES FIRST when there is one.
+          *
+          * A card refusal has a journey that can actually change the answer — the
+          * details screen, where the number, surname and scheme are corrected and the
+          * check re-run. An operative standing at a gate needs that button more than
+          * they need the site list, so it is the primary action and "choose a
+          * different site" becomes the secondary one.
+          */}
+        {access.fix && (
+          <Link href={access.fix.href} className="block">
+            <Button size="lg" fullWidth>
+              {access.fix.label}
+            </Button>
+          </Link>
+        )}
 
         <Link href="/check-in/site" className="block">
           <Button size="lg" fullWidth variant="secondary">

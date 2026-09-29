@@ -75,6 +75,12 @@ export type CreateCheckInResult =
   | {
       ok: false;
       error: string;
+      /** A card refusal hands the worker the journey that can change the answer. */
+      fix: { href: string; label: string };
+    }
+  | {
+      ok: false;
+      error: string;
       gps: {
         reason: 'outside' | 'unavailable' | 'poor_accuracy';
         distanceM: number | null;
@@ -99,7 +105,9 @@ export async function createCheckIn(
   // speak to your site manager" is actionable.
   const access = await canWorkerCheckIn(input.workerId, input.siteId);
   if (!access.allowed) {
-    return { ok: false, error: access.reason };
+    return access.fix
+      ? { ok: false, error: access.reason, fix: access.fix }
+      : { ok: false, error: access.reason };
   }
 
   const items: FlowItem[] = site.checklist.items.map((i) => ({

@@ -244,6 +244,13 @@ export function InductionWizard({
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
+        // A card refusal carries the journey that can change the answer — see
+        // accessRequirements. Anything else is a conversation with a manager.
+        if (data.fix?.href) {
+          toast.error(data.error ?? 'You cannot check in yet.');
+          router.push(data.fix.href);
+          return;
+        }
         toast.error(
           data.error ?? 'We couldn’t record your check-in. Please try again.',
         );

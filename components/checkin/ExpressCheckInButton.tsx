@@ -37,6 +37,20 @@ export function ExpressCheckInButton({
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
+        /*
+         * A CARD REFUSAL IS A JOURNEY, NOT A MESSAGE.
+         *
+         * The server hands back where to go when there is somewhere to go, and for a
+         * card problem there always is: the details screen is where the number,
+         * surname and scheme are corrected and the check re-run. Showing the reason
+         * and then leaving somebody at a site gate with nothing to press is the
+         * behaviour this replaces.
+         */
+        if (data.fix?.href) {
+          toast.error(data.error ?? 'You cannot check in yet.');
+          router.push(data.fix.href);
+          return;
+        }
         toast.error(
           data.error ?? 'We couldn’t check you in. Please try again.',
         );

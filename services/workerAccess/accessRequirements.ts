@@ -1,4 +1,5 @@
 import { AccessRequirement } from '@prisma/client';
+import { CARD_FIX_HREF } from '@/services/cscs/cardFixFlow';
 import { prisma } from '@/lib/prisma';
 import { isKnownScheme } from '@/services/cscs/schemes';
 import { isCscsExemptMobile } from '@/services/cscs/cscsExemptAccounts';
@@ -84,6 +85,16 @@ export interface UnmetRequirement {
   label: string;
   /** Exactly what this worker must do — specific, not generic. */
   action: string;
+  /**
+   * Where the worker goes to FIX it, when there is somewhere to go.
+   *
+   * A refusal that only describes the problem leaves an operative standing at a
+   * gate reading a sentence. For a card problem there is a journey that already
+   * exists — review the details, re-check the card — and the refusal should hand
+   * them to it rather than describing it.
+   */
+  fixHref?: string;
+  fixLabel?: string;
 }
 
 /**
@@ -148,10 +159,7 @@ export async function evaluateRequirements(
   const enabled =
     enabledOverride !== undefined
       ? enabledOverride.map((requirement) => ({ requirement }))
-      : await prisma.siteAccessRequirement.findMany({
-          where: { jobSiteId: siteId, enabled: true },
-          select: { requirement: true },
-        });
+      : await enabledRequirementsForSite(siteId);
   if (enabled.length === 0) return [];
 
   const [worker, priorHere] = await Promise.all([
@@ -229,6 +237,16 @@ export async function evaluateRequirements(
               Boolean(worker.cscsCardNumber),
               isKnownScheme(worker.cscsSchemeId),
             ),
+            /*
+             * EVERY card refusal routes to the same place — missing, unverified,
+             * expired, withdrawn or not found. The details screen is where the
+             * number, surname and scheme are corrected and the check is re-run, and
+             * it is the only action that can change the answer. Even REVOKED sends
+             * them there: the scheme has to be contacted, but the recorded card may
+             * also simply be the wrong one.
+             */
+            fixHref: CARD_FIX_HREF,
+            fixLabel: 'Check my card details',
           });
         }
         break;
@@ -360,4 +378,55 @@ export function formatUnmetMessage(
     `You cannot check in to ${siteName} yet — ${unmet.length} requirement${unmet.length === 1 ? '' : 's'} not met:\n` +
     lines.join('\n')
   );
+}
+
+/**
+ * THE COMPANY RULE: A VERIFIED CARD IS REQUIRED UNLESS A SITE SAYS OTHERWISE.
+ *
+ * ── WHY THIS EXISTS ───────────────────────────────────────────────────────
+ *
+ * `SiteAccessRequirement.enabled` defaults to false and a row is only ever written
+ * when a manager toggles one, so a project enforced NOTHING until somebody
+ * remembered to switch it on. Five of six live projects had CSCS_VERIFIED explicitly
+ * off, and the effect was an operative being shown "No verified CSCS card on your
+ * profile" and then checking in anyway: the enforcement worked perfectly and had
+ * nothing switched on to enforce.
+ *
+ * A verified card is a COMPANY rule, not a per-project preference, so it is on
+ * unless a site deliberately turns it off. The per-site switch is kept for the
+ * genuine exception rather than being the only way to get the normal behaviour.
+ *
+ * ── AND WHY ONLY THIS ONE ─────────────────────────────────────────────────
+ *
+ * Every other requirement stays opt-in, deliberately:
+ *
+ *   INDUCTION_VALID and SIGNATURE_ON_FILE are OUTCOMES of inducting, not
+ *     preconditions for it. This gate runs at the START of a check-in, which is the
+ *     induction the operative is about to complete, so defaulting them on would
+ *     refuse a returning worker whose induction has lapsed at the exact moment they
+ *     are re-inducting to fix it. That is why they carry `blocksFirstTime: false`,
+ *     and why express check-in tests induction validity directly instead.
+ *   KNOWLEDGE_CHECK_PASSED is already enforced by its own gate in
+ *     submissionService, which knows about the site's skip policy.
+ *   CSCS_IN_DATE adds nothing to CSCS_VERIFIED: a VALID result means the scheme
+ *     itself said `expired: false`, and Smart Check V2.6 returns no date to check.
+ */
+export const REQUIRED_BY_DEFAULT: AccessRequirement[] = ['CSCS_VERIFIED'];
+
+export async function enabledRequirementsForSite(
+  siteId: string,
+): Promise<{ requirement: AccessRequirement }[]> {
+  const rows = await prisma.siteAccessRequirement.findMany({
+    where: { jobSiteId: siteId },
+    select: { requirement: true, enabled: true },
+  });
+  const explicit = new Map(rows.map((r) => [r.requirement, r.enabled]));
+  const on = new Set<AccessRequirement>();
+  for (const r of rows) if (r.enabled) on.add(r.requirement);
+  for (const r of REQUIRED_BY_DEFAULT) {
+    // `?? true` is the default; an explicit false still wins, so a site that has
+    // genuinely decided otherwise is not overridden without somebody noticing.
+    if (explicit.get(r) ?? true) on.add(r);
+  }
+  return [...on].map((requirement) => ({ requirement }));
 }

@@ -145,8 +145,11 @@ function withExemption<T>(fn: () => T): T {
 {
   const svc = read('services/workerAccess/workerAssignmentService.ts');
   ok('check-in evaluates the requirements', /const unmet = await evaluateRequirements\(workerId, siteId\);/.test(svc));
+  // Two facts, not one regex spanning them: the window was 160 characters and a
+  // comment added between them broke it. Distance between two lines is not the
+  // property being asserted.
   ok('  and refuses when any are unmet',
-    /if \(unmet\.length > 0\) \{[\s\S]{0,160}allowed: false/.test(svc), 'not enforced');
+    /if \(unmet\.length > 0\) \{/.test(svc) && /allowed: false,/.test(svc), 'not enforced');
   ok('  returning the reason, not a bare false', /reason: formatUnmetMessage\(/.test(svc));
 
   const req = read('services/workerAccess/accessRequirements.ts');

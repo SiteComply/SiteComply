@@ -139,6 +139,12 @@ export type ExpressCheckInResult =
   | {
       ok: false;
       error: string;
+      /** A card refusal hands the worker the journey that can change the answer. */
+      fix: { href: string; label: string };
+    }
+  | {
+      ok: false;
+      error: string;
       gps: {
         reason: 'outside' | 'unavailable' | 'poor_accuracy';
         distanceM: number | null;
@@ -171,7 +177,11 @@ export async function expressCheckIn(
   // walk straight past the assignment requirement — precisely the kind of
   // second door that makes access control fail in practice.
   const access = await canWorkerCheckIn(workerId, siteId);
-  if (!access.allowed) return { ok: false, error: access.reason };
+  if (!access.allowed) {
+    return access.fix
+      ? { ok: false, error: access.reason, fix: access.fix }
+      : { ok: false, error: access.reason };
+  }
 
   const validity = await getInductionValidity(workerId, siteId);
   if (!(validity.enabled && validity.state === 'valid')) {

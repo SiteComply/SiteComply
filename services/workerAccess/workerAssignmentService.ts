@@ -61,7 +61,18 @@ export function canSetEnforcement(role: PlatformRoleValue): boolean {
 
 export type AccessDecision =
   | { allowed: true; enforced: boolean }
-  | { allowed: false; reason: string };
+  | {
+      allowed: false;
+      reason: string;
+      /**
+       * Where the worker goes to FIX it, when there is somewhere to go.
+       *
+       * Carried through to the screen so a card refusal becomes a route rather than
+       * a sentence. An operative at a site gate reading "no verified card" and given
+       * nothing to press is exactly the experience this exists to stop.
+       */
+      fix?: { href: string; label: string };
+    };
 
 /**
  * May this worker check in to this site?
@@ -200,9 +211,16 @@ export async function canWorkerCheckIn(
   if (gate.requirementsPending) {
     const unmet = await evaluateRequirements(workerId, siteId);
     if (unmet.length > 0) {
+      // The first unmet requirement that HAS a route out supplies it. Card problems
+      // are the ones with a journey today; the rest are a conversation with a
+      // manager, and inventing a link for those would be worse than none.
+      const routed = unmet.find((u) => u.fixHref);
       return {
         allowed: false,
         reason: formatUnmetMessage(site.name ?? 'this project', unmet),
+        ...(routed?.fixHref
+          ? { fix: { href: routed.fixHref, label: routed.fixLabel ?? 'Review my details' } }
+          : {}),
       };
     }
   }
