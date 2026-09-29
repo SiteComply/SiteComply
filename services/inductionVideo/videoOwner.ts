@@ -51,3 +51,32 @@ export function videoDisplayName(v: {
 }): string {
   return v.jobSite?.name ?? v.libraryAsset?.title ?? 'Company induction';
 }
+
+/**
+ * WHERE THIS VERSION BELONGS — the page to go back to, and to land on after it is
+ * deleted.
+ *
+ * Both tiers interpolated `video.jobSiteId` straight into a project path, which for
+ * a company video is null: the breadcrumb read `/sites/null/induction-video`, and
+ * deleting one sent you there. A company video's home is its Library asset, so that
+ * is what this returns.
+ *
+ * Takes builders rather than a base path because the two tiers shape these URLs
+ * differently (`/sites/<id>/induction-video` against `/projects/<id>`), and a helper
+ * that only worked for one of them would leave the other interpolating a null again.
+ * Both callers are server components turning this into a plain string, so nothing
+ * crosses the server/client boundary.
+ */
+export function videoOwnerHref(
+  v: { jobSiteId: string | null; libraryAssetId: string | null },
+  hrefs: {
+    forSite: (siteId: string) => string;
+    forAsset: (assetId: string) => string;
+    /** Neither is set: a row that should not exist, so go somewhere real. */
+    whenNeither: string;
+  },
+): string {
+  if (v.jobSiteId) return hrefs.forSite(v.jobSiteId);
+  if (v.libraryAssetId) return hrefs.forAsset(v.libraryAssetId);
+  return hrefs.whenNeither;
+}

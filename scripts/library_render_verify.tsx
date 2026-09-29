@@ -259,5 +259,117 @@ chk('a retired asset is hidden by default', !retired.includes('Company introduct
 chk('  but the page says it is there and can be shown',
   retired.includes('Show retired'));
 
+
+console.log('\nA PRODUCTION UNDER WAY IS ON THE PAGE — THE WEDGE MADE VISIBLE');
+/*
+ * THE DEFECT THIS RENDERS. `startCompanyVideo` refuses a second production while an
+ * unpublished one exists, and nothing displayed that production: the asset page
+ * loaded revisions only, and project listings are `where: { jobSiteId }` while a
+ * company video has none. The only route to one was the redirect fired once when
+ * Produce was pressed.
+ *
+ * Production, 2026-09-29: the Company Introduction asset held a SCRIPT_READY
+ * production built from PPE EXPECTATIONS, created before the asset was re-pointed at
+ * the new module. Unfinishable (wrong wording) and undeletable (no link). Clearing it
+ * took hand-written SQL.
+ *
+ * A source assertion cannot catch this, because the strings were never the problem -
+ * the section did not exist. So it is rendered.
+ */
+const { LibraryAssetDetail } = require('../components/inductionVideo/LibraryAssetDetail');
+
+const production = (over: Record<string, unknown> = {}) => ({
+  id: 'v1', version: 1, status: 'SCRIPT_READY', startedOn: '29 Sep 2026', sceneCount: 3,
+  fromModuleId: 'm1', fromModuleTitle: 'Company introduction', fromModuleVersion: 1,
+  mismatched: false, stale: false, discardable: true, blockedReason: null, ...over,
+});
+
+const detailFixture = (over: Record<string, unknown> = {}) => ({
+  id: 'a1', slug: 'COMPANY_INTRO', title: 'Company Introduction', description: null,
+  category: 'COMPANY_CULTURE', provenance: 'GENERATED', placement: 'OPENING', order: 0,
+  mandatory: false, defaultIncluded: true, active: true,
+  moduleId: 'm1', moduleTitle: 'Company introduction',
+  status: { key: 'EMPTY', label: 'Nothing yet', detail: 'd', tone: 'neutral',
+    reachesOperatives: false },
+  usage: { onProjects: 0, totalProjects: 3, switchedOffBy: [], revisions: [],
+    publishedTotal: 0 },
+  retireConsequence: 'r', issueConsequence: null,
+  revisions: [], productions: [], draftId: null,
+  band: [{ id: 'a1', title: 'Company Introduction', order: 0, active: true }],
+  ...over,
+});
+
+const renderDetail = (over: Record<string, unknown> = {}) =>
+  renderToStaticMarkup(
+    React.createElement(LibraryAssetDetail, {
+      asset: detailFixture(over),
+      modules: [{ id: 'm1', title: 'Company introduction', hasIssued: true }],
+      canDraft: true, canIssue: true,
+      endpoint: '/api/platform/induction-library',
+      backHref: '/platform/dashboard/induction-videos/library',
+      videoHrefBase: '/platform/dashboard/induction-videos',
+    }),
+  ) as string;
+
+const idle = renderDetail();
+chk('with nothing under way the page renders', idle.length > 500, `${idle.length} bytes`);
+chk('  and says nothing about a production', !idle.includes('Under way'),
+  'a section that is always there is noise');
+chk('  and offers to produce the video', idle.includes('Produce the video from this module'));
+
+const busy = renderDetail({ productions: [production()] });
+chk('an in-flight production IS SHOWN', busy.includes('Under way'),
+  'THE regression: this section did not exist and the asset looked idle while wedged');
+chk('  named by version', busy.includes('Version 1'));
+chk('  with its stage', busy.includes('Ready for review'),
+  'from the shared status badge, not a second set of words');
+chk('  when it started and how big it is',
+  busy.includes('29 Sep 2026') && busy.includes('3 scenes'));
+chk('  the module it came from', busy.includes('Company introduction'));
+chk('  A LINK TO OPEN IT', busy.includes('/platform/dashboard/induction-videos/v1'),
+  'the one thing whose absence made the error unactionable');
+chk('  and a way to discard it', busy.includes('Discard it'));
+chk('the Produce button is disabled while one runs',
+  /Produce the video from this module<\/button>/.test(busy) && busy.includes('disabled'),
+  'walking into a refusal the panel above already explains');
+chk('  and the reason is stated, not just the disabling',
+  busy.includes('is already being produced'));
+
+const wrong = renderDetail({
+  moduleTitle: 'PPE expectations', moduleId: 'm2',
+  productions: [production({ mismatched: true, fromModuleTitle: 'Company introduction' })],
+});
+chk('A MISMATCHED PRODUCTION SAYS SO IN FULL',
+  wrong.includes('produced from the wrong module'),
+  'exactly what happened in production, and the state that made "finish it" wrong advice');
+chk('  naming what it was built from', wrong.includes('Company introduction'));
+chk('  and what the asset points at now', wrong.includes('PPE expectations'));
+chk('  and telling you to discard rather than finish',
+  /discard it and produce a new one/i.test(wrong));
+
+const held = renderDetail({
+  productions: [production({ discardable: false, blockedReason: 'Something is still running on it.' })],
+});
+chk('a production that cannot be discarded says why',
+  held.includes('Something is still running on it.') && !held.includes('Discard it'),
+  'offering a button the service would refuse is worse than explaining');
+
+const viewerOnly = renderToStaticMarkup(
+  React.createElement(LibraryAssetDetail, {
+    asset: detailFixture({ productions: [production()] }),
+    modules: [{ id: 'm1', title: 'Company introduction', hasIssued: true }],
+    canDraft: false, canIssue: false,
+    endpoint: '/api/platform/induction-library',
+    backHref: '/platform/dashboard/induction-videos/library',
+    videoHrefBase: '/platform/dashboard/induction-videos',
+  }),
+) as string;
+chk('somebody who may only read still SEES the production',
+  viewerOnly.includes('Under way') &&
+    viewerOnly.includes('/platform/dashboard/induction-videos/v1'),
+  'hiding the explanation from a viewer recreates the dead end for them');
+chk('  but is offered no discard', !viewerOnly.includes('Discard it'),
+  'irreversible, so it belongs with the roles that own the record');
+
 console.log(`\n${fails} failed\n`);
 process.exit(fails === 0 ? 0 : 1);

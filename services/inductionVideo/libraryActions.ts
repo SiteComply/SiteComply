@@ -153,6 +153,36 @@ export async function handleLibraryAction(
       const r = await startCompanyVideo(videoActorFromModuleActor(actor), assetId);
       return r.ok ? ok(r.value) : refuse(r.error);
     }
+    /*
+     * DISCARD A PRODUCTION THAT SHOULD NOT BE FINISHED.
+     *
+     * Needed because "Finish or delete it first" was, until the asset page showed
+     * productions, advice with no way to take it: a production re-pointed at another
+     * module cannot be finished - its wording is the wrong subject - and nothing
+     * linked to it, so it could not be deleted either.
+     *
+     * THE ASSET IS CHECKED BEFORE THE ACTOR IS TRUSTED WITH THE ID. Without it this
+     * endpoint would delete ANY induction video by id, site videos included, for
+     * anybody who may administer the Library. The guard inside deleteVideoVersion
+     * asks whether the actor may touch that video; it cannot know the caller reached
+     * it through a Library asset that has nothing to do with it.
+     */
+    case 'discardProduction': {
+      const assetId = str('assetId');
+      const videoId = str('videoId');
+      if (!assetId || !videoId) return refuse('Which production?');
+      const video = await prisma.inductionVideo.findUnique({
+        where: { id: videoId },
+        select: { id: true, libraryAssetId: true },
+      });
+      if (!video || video.libraryAssetId !== assetId) {
+        return refuse('That production does not belong to this library video.');
+      }
+      const { deleteVideoVersion } = await import('@/services/inductionVideo/inductionVideoService');
+      const { videoActorFromModuleActor } = await import('@/services/inductionVideo/videoActor');
+      const r = await deleteVideoVersion(videoActorFromModuleActor(actor), videoId);
+      return r.ok ? ok(r.value) : refuse(r.error);
+    }
     case 'settings': {
       const r = await updateLibraryAssetSettings(actor, str('assetId'), {
         ...(body.title === undefined ? {} : { title: str('title') }),

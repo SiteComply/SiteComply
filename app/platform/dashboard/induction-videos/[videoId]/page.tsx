@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { PlatformShell } from '@/components/platform/PlatformShell';
 import { Breadcrumbs } from '@/components/platform/Breadcrumbs';
-import { videoDisplayName } from '@/services/inductionVideo/videoOwner';
+import { videoDisplayName, videoOwnerHref } from '@/services/inductionVideo/videoOwner';
 import { requirePlatformViewer } from '@/services/platformUsers/platformAccess';
 import { canManageInductionVideos } from '@/services/inductionVideo/inductionVideoPermissions';
 import { getVideo } from '@/services/inductionVideo/inductionVideoService';
@@ -31,15 +31,20 @@ export default async function InductionVideoVersionPage({
   if (!detail) notFound();
   const { video, stale } = detail;
 
+  // A company video belongs to its Library asset, not to a project. Interpolating
+  // video.jobSiteId here built `/sites/null/induction-video`.
+  const ownerHref = videoOwnerHref(video, {
+    forSite: (siteId) => `/platform/dashboard/sites/${siteId}/induction-video`,
+    forAsset: (assetId) => `/platform/dashboard/induction-videos/library/${assetId}`,
+    whenNeither: '/platform/dashboard/induction-videos',
+  });
+
   return (
     <PlatformShell>
       <Breadcrumbs
         items={[
           { label: 'Induction videos', href: '/platform/dashboard/induction-videos' },
-          {
-            label: videoDisplayName(video),
-            href: `/platform/dashboard/sites/${video.jobSiteId}/induction-video`,
-          },
+          { label: videoDisplayName(video), href: ownerHref },
           { label: `Version ${video.version}` },
         ]}
       />
@@ -58,7 +63,7 @@ export default async function InductionVideoVersionPage({
       <VideoVersionSurface
         detail={detail}
         apiBase={`/api/platform/induction-video/${video.id}`}
-        projectHref={`/platform/dashboard/sites/${video.jobSiteId}/induction-video`}
+        projectHref={ownerHref}
       />
     </PlatformShell>
   );

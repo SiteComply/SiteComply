@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getAdminSession } from '@/lib/session';
-import { videoDisplayName } from '@/services/inductionVideo/videoOwner';
+import { videoDisplayName, videoOwnerHref } from '@/services/inductionVideo/videoOwner';
 import { getVideo } from '@/services/inductionVideo/inductionVideoService';
 import { videoActorFromAdmin } from '@/services/inductionVideo/videoActor';
 import { InductionVideoStatusBadge } from '@/components/platform/InductionVideoStatusBadge';
@@ -34,11 +34,19 @@ export default async function AdminInductionVideoVersionPage({
   if (!detail) notFound();
   const { video, stale } = detail;
 
+  // A company video belongs to its Library asset, not to a project. Interpolating
+  // video.jobSiteId here built `/projects/null`.
+  const ownerHref = videoOwnerHref(video, {
+    forSite: (siteId) => `/admin/induction-videos/projects/${siteId}`,
+    forAsset: (assetId) => `/admin/induction-videos/library/${assetId}`,
+    whenNeither: '/admin/induction-videos',
+  });
+
   return (
     <div className="space-y-6">
       <header className="space-y-1">
         <Link
-          href={`/admin/induction-videos/projects/${video.jobSiteId}`}
+          href={ownerHref}
           className="text-sm font-semibold text-brand-700 hover:underline"
         >
           ← {videoDisplayName(video)}
@@ -57,7 +65,7 @@ export default async function AdminInductionVideoVersionPage({
       <VideoVersionSurface
         detail={detail}
         apiBase={`/api/admin/induction-video/${video.id}`}
-        projectHref={`/admin/induction-videos/projects/${video.jobSiteId}`}
+        projectHref={ownerHref}
       />
     </div>
   );

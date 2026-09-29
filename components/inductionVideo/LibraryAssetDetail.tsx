@@ -24,6 +24,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+// Imports nothing but `cn`, so bundling it into this client component is safe - and
+// reusing it keeps one set of status words rather than a second, quieter copy.
+import { InductionVideoStatusBadge } from '@/components/platform/InductionVideoStatusBadge';
 // Values from modules with no Prisma in them - see libraryLimits.ts for why that
 // matters in a client component.
 import { LIBRARY_CATEGORIES, categoryLabel, provenanceLabel, provenanceHint, contentEditableHere }
@@ -76,6 +79,7 @@ export function LibraryAssetDetail({
   const [issueNote, setIssueNote] = useState('');
 
   const editableContent = contentEditableHere(asset.provenance);
+  const underWay = asset.productions;
   // Producing reads the module's ISSUED wording, so an unissued source is a wall the
   // button should not walk into.
   const sourceModuleReady = Boolean(
@@ -385,6 +389,104 @@ export function LibraryAssetDetail({
         </section>
       )}
 
+      {/* ── UNDER WAY. A company video being produced for this asset.
+             Before this existed the refusal "version N is already being produced"
+             named something no screen rendered, so the asset could be wedged with
+             no way to see, finish or discard the production holding it. ── */}
+      {underWay.length > 0 && (
+        <section className="rounded-xl border border-hivis-200 bg-hivis-50/50 p-4 shadow-card">
+          <h3 className="text-sm font-bold text-ink">Under way</h3>
+          <p className="mt-1 text-xs text-ink-muted">
+            {underWay.length === 1 ? 'A video is' : `${underWay.length} videos are`} being produced
+            for this library video. Only one production runs at a time, so this has to be finished
+            or discarded before another can start.
+          </p>
+          <ul className="mt-3 space-y-3">
+            {underWay.map((p) => (
+              <li key={p.id} className="rounded-lg border border-line bg-surface p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-ink">Version {p.version}</span>
+                  <InductionVideoStatusBadge status={p.status} stale={p.stale} />
+                  <span className="text-xs text-ink-subtle">
+                    started {p.startedOn} · {p.sceneCount}{' '}
+                    {p.sceneCount === 1 ? 'scene' : 'scenes'}
+                  </span>
+                </div>
+
+                {/*
+                  * THE MISMATCH IS STATED IN FULL, naming both modules. This is the
+                  * state that trapped Company Introduction: the asset had been
+                  * re-pointed at a new module while the production kept the old
+                  * one's wording, so "finish it" was never the right advice - the
+                  * video would have been the wrong subject under this title.
+                  */}
+                {p.mismatched ? (
+                  <p className="mt-2 rounded-lg border border-danger-200 bg-danger-50 px-3 py-2 text-xs text-danger-700">
+                    <span className="font-semibold">This was produced from the wrong module.</span>{' '}
+                    Its wording came from{' '}
+                    <span className="font-semibold">“{p.fromModuleTitle}”</span>, but this library
+                    video now stands in for{' '}
+                    <span className="font-semibold">“{asset.moduleTitle}”</span>. Finishing it would
+                    publish the wrong subject under this title — discard it and produce a new one.
+                  </p>
+                ) : p.stale ? (
+                  <p className="mt-2 text-xs text-ink-muted">
+                    “{p.fromModuleTitle}” has been issued again since this was produced
+                    {p.fromModuleVersion ? ` from revision ${p.fromModuleVersion}` : ''}. Discard it
+                    and produce a new one to pick up the current wording.
+                  </p>
+                ) : (
+                  <p className="mt-2 text-xs text-ink-muted">
+                    Produced from “{p.fromModuleTitle ?? 'a company module'}”
+                    {p.fromModuleVersion ? ` revision ${p.fromModuleVersion}` : ''}.
+                  </p>
+                )}
+
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <Link
+                    href={`${videoHrefBase}/${p.id}`}
+                    className="rounded-lg border border-brand-300 bg-surface px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+                  >
+                    Open version {p.version}
+                  </Link>
+                  {/*
+                    * Discarding is offered only where deleteVideoVersion would allow
+                    * it - the page asks the same predicate the service enforces - and
+                    * only to canIssue, because it is irreversible.
+                    */}
+                  {canIssue && p.discardable && (
+                    <button
+                      type="button"
+                      disabled={busy !== null}
+                      onClick={async () => {
+                        if (
+                          !window.confirm(
+                            `Discard version ${p.version} permanently? Its script and any ` +
+                              'narration are deleted. This cannot be undone.',
+                          )
+                        ) {
+                          return;
+                        }
+                        await call(
+                          { action: 'discardProduction', assetId: asset.id, videoId: p.id },
+                          `discard-${p.id}`,
+                        );
+                      }}
+                      className="rounded-lg border border-danger-300 bg-surface px-3 py-1.5 text-xs font-semibold text-danger-700 hover:bg-danger-50 disabled:opacity-50"
+                    >
+                      {busy === `discard-${p.id}` ? 'Discarding…' : 'Discard it'}
+                    </button>
+                  )}
+                  {!p.discardable && p.blockedReason && (
+                    <span className="text-xs text-ink-subtle">{p.blockedReason}</span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* ── PRODUCE IT. The generated path: no upload, no external supplier. ── */}
       {canDraft && !editableContent && asset.active && (
         <section className="rounded-xl border border-brand-200 bg-brand-50/40 p-4 shadow-card">
@@ -396,7 +498,15 @@ export function LibraryAssetDetail({
             the script, approve it, generate the voice-over and captions, render it, watch it, and
             publish it into this library video as a new revision.
           </p>
-          {!asset.moduleId ? (
+          {underWay.length > 0 ? (
+            <p className="mt-2 rounded-lg border border-hivis-200 bg-hivis-50 px-3 py-2 text-xs text-hivis-800">
+              <span className="font-semibold">
+                Version {underWay[0].version} is already being produced.
+              </span>{' '}
+              Only one production runs at a time. Open it above to finish it, or discard it if it is
+              no longer the video you want.
+            </p>
+          ) : !asset.moduleId ? (
             <p className="mt-2 rounded-lg border border-danger-200 bg-danger-50 px-3 py-2 text-xs text-danger-700">
               No company module is chosen yet. Pick one in Settings above — it is where the wording
               comes from.
@@ -410,7 +520,9 @@ export function LibraryAssetDetail({
           ) : null}
           <button
             type="button"
-            disabled={busy !== null || !asset.moduleId || !sourceModuleReady}
+            disabled={
+              busy !== null || !asset.moduleId || !sourceModuleReady || underWay.length > 0
+            }
             onClick={async () => {
               setBusy('produce');
               setError(null);
@@ -423,6 +535,14 @@ export function LibraryAssetDetail({
                 const json = await res.json().catch(() => ({}));
                 if (!res.ok || !json?.videoId) {
                   setError(json?.error ?? 'That could not be started.');
+                  /*
+                   * REFRESH ON FAILURE TOO. The commonest refusal is "one is already
+                   * being produced", and if this page was loaded before that
+                   * production existed the panel naming it is not on screen yet -
+                   * which is precisely the dead end being fixed. Refreshing brings
+                   * the thing the message refers to into view.
+                   */
+                  router.refresh();
                   return;
                 }
                 router.push(`${videoHrefBase}/${json.videoId}`);

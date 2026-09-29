@@ -8,6 +8,7 @@
  */
 import { prisma } from '@/lib/prisma';
 import { revisionReadiness } from '@/services/inductionVideo/libraryAssetService';
+import { versionMayBeDeleted } from '@/services/inductionVideo/inductionVideoService';
 import {
   libraryAssetUsage,
   describeIssueConsequence,
@@ -44,6 +45,47 @@ export interface DetailRevision {
   usage: { publishedInductions: number; unpublishedInductions: number; projects: number };
 }
 
+/**
+ * A PRODUCTION UNDER WAY — a company video being made for this asset.
+ *
+ * ── WHY THIS IS ON THE PAGE AT ALL ────────────────────────────────────────
+ *
+ * `startCompanyVideo` refuses a second production while an unpublished one exists,
+ * and until this was added NOTHING rendered it. The asset page loaded `revisions`
+ * only, and the project listings are `where: { jobSiteId }` while a company video's
+ * jobSiteId is null — so the single route to a production was the redirect fired
+ * once when Produce was pressed. Navigate away and the asset was wedged behind an
+ * error naming a version with no link to it, which is what happened to Company
+ * Introduction in production on 2026-09-29.
+ *
+ * Every field below is the answer to a question somebody had to open the database
+ * to ask.
+ */
+export interface DetailProduction {
+  id: string;
+  version: number;
+  /** An InductionVideoStatus. Rendered by the shared badge, never relabelled here. */
+  status: string;
+  startedOn: string;
+  sceneCount: number;
+  /** The module the wording actually came from, which is not always the one the
+   *  asset points at now. */
+  fromModuleId: string | null;
+  fromModuleTitle: string | null;
+  fromModuleVersion: number | null;
+  /**
+   * The asset has been re-pointed at a DIFFERENT module since this was produced, so
+   * finishing it would publish the wrong subject under this title. This is the state
+   * that trapped Company Introduction and it deserves its own name.
+   */
+  mismatched: boolean;
+  /** Same module, but issued again since — the ordinary "out of date". */
+  stale: boolean;
+  discardable: boolean;
+  /** Why it cannot be discarded from here, when it cannot. */
+  blockedReason: string | null;
+}
+
 export interface LibraryAssetDetail {
   id: string;
   slug: string;
@@ -64,6 +106,13 @@ export interface LibraryAssetDetail {
   retireConsequence: string;
   issueConsequence: string | null;
   revisions: DetailRevision[];
+  /**
+   * Company videos being produced for this asset that have not been published.
+   * An ARRAY even though the service permits only one: if data ever holds two, the
+   * page must show both rather than hide the second behind the same silence that
+   * hid the first.
+   */
+  productions: DetailProduction[];
   /** The open draft, if there is one. */
   draftId: string | null;
   /** Siblings in the same band, so the running order is visible from here. */
@@ -74,20 +123,119 @@ export async function libraryAssetDetail(assetId: string): Promise<LibraryAssetD
   const asset = await prisma.libraryAsset.findUnique({
     where: { id: assetId },
     include: {
-      module: { select: { id: true, title: true } },
+      module: {
+        select: {
+          id: true,
+          title: true,
+          // The wording in force NOW, so a production built from an earlier
+          // revision can be told apart from one built from another module entirely.
+          revisions: {
+            where: { status: 'ISSUED' },
+            orderBy: { version: 'desc' },
+            take: 1,
+            select: { id: true },
+          },
+        },
+      },
       revisions: { orderBy: { version: 'desc' } },
     },
   });
   if (!asset) return null;
 
-  const [usage, band] = await Promise.all([
+  const [usage, band, productionRows] = await Promise.all([
     libraryAssetUsage(assetId),
     prisma.libraryAsset.findMany({
       where: { placement: asset.placement },
       select: { id: true, title: true, order: true, active: true },
       orderBy: [{ order: 'asc' }, { title: 'asc' }],
     }),
+    /*
+     * IN FLIGHT means "not published", the same test startCompanyVideo applies when
+     * it refuses a second production. Matching it exactly is the point: a page that
+     * showed a narrower set than the refusal uses would still leave somebody staring
+     * at an error about a version they cannot see.
+     */
+    prisma.inductionVideo.findMany({
+      where: { libraryAssetId: assetId, status: { not: 'PUBLISHED' } },
+      orderBy: { version: 'desc' },
+      select: {
+        id: true,
+        version: true,
+        status: true,
+        createdAt: true,
+        publishedAt: true,
+        supersededAt: true,
+        sourceModuleRevisionId: true,
+        _count: { select: { scenes: true, views: true } },
+        jobs: { select: { status: true } },
+      },
+    }),
   ]);
+
+  // The module each production's wording actually came from, resolved in one query.
+  const sourceRevisionIds = productionRows
+    .map((p) => p.sourceModuleRevisionId)
+    .filter((id): id is string => Boolean(id));
+  const sourceRevisions = sourceRevisionIds.length
+    ? await prisma.inductionModuleRevision.findMany({
+        where: { id: { in: sourceRevisionIds } },
+        select: { id: true, version: true, moduleId: true, module: { select: { title: true } } },
+      })
+    : [];
+  const sourceById = new Map(sourceRevisions.map((r) => [r.id, r]));
+  const currentIssuedRevisionId = asset.module?.revisions[0]?.id ?? null;
+
+  const productions: DetailProduction[] = productionRows.map((p) => {
+    const source = p.sourceModuleRevisionId ? sourceById.get(p.sourceModuleRevisionId) : undefined;
+    const busyJob = p.jobs.some((j) => j.status === 'QUEUED' || j.status === 'RUNNING');
+    /*
+     * THE SAME PREDICATE THE SERVICE ENFORCES, asked here so the page never offers a
+     * Discard that deleteVideoVersion would refuse - and never withholds one it
+     * would allow. The job check is separate because the predicate takes no jobs: a
+     * job row is this version's lock.
+     */
+    const deletable =
+      versionMayBeDeleted({
+        status: p.status,
+        publishedAt: p.publishedAt,
+        supersededAt: p.supersededAt,
+        viewCount: p._count.views,
+      }) && !busyJob;
+
+    let blockedReason: string | null = null;
+    if (!deletable) {
+      if (busyJob) blockedReason = 'Something is still running on it. It can be discarded once that finishes.';
+      else if (p._count.views > 0) blockedReason = 'Somebody has watched it, so it is the record of their induction.';
+      else if (p.supersededAt) blockedReason = 'It has been superseded and is kept as history.';
+      else if (p.publishedAt) blockedReason = 'It has been published to operatives.';
+      else blockedReason = 'It has been approved, so it is part of the approval workflow. Produce a new version instead.';
+    }
+
+    return {
+      id: p.id,
+      version: p.version,
+      status: p.status,
+      startedOn: formatDateUK(p.createdAt),
+      sceneCount: p._count.scenes,
+      fromModuleId: source?.moduleId ?? null,
+      fromModuleTitle: source?.module.title ?? null,
+      fromModuleVersion: source?.version ?? null,
+      // Only a mismatch when BOTH are known: an asset with no module chosen, or a
+      // production with no recorded source, is an unknown rather than a conflict.
+      mismatched: Boolean(
+        source && asset.moduleId && source.moduleId !== asset.moduleId,
+      ),
+      stale: Boolean(
+        source &&
+          asset.moduleId &&
+          source.moduleId === asset.moduleId &&
+          currentIssuedRevisionId &&
+          currentIssuedRevisionId !== p.sourceModuleRevisionId,
+      ),
+      discardable: deletable,
+      blockedReason,
+    };
+  });
 
   const issued = asset.revisions.find((r) => r.status === 'ISSUED' && !r.supersededAt) ?? null;
   const draft = asset.revisions.find((r) => r.status === 'DRAFT') ?? null;
@@ -131,6 +279,7 @@ export async function libraryAssetDetail(assetId: string): Promise<LibraryAssetD
     usage,
     retireConsequence: describeRetireConsequence(usage),
     issueConsequence: draft ? describeIssueConsequence(usage, draft.version) : null,
+    productions,
     draftId: draft?.id ?? null,
     band: band.map((b) => ({ id: b.id, title: b.title, order: b.order, active: b.active })),
     revisions: asset.revisions.map((r) => {

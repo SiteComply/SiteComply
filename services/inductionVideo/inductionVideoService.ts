@@ -761,9 +761,19 @@ export async function deleteVideoVersion(
    * from roles that may prepare one.
    */
   if (!actor.canApprove) {
+    /*
+     * THE TWO REALMS DO NOT GRANT THIS TO THE SAME PEOPLE, so one sentence cannot
+     * describe both. For a site induction canApprove is a Director or Site Manager.
+     * For a company video the actor comes from videoActorFromModuleActor, where
+     * canApprove is the module's canIssue - a Director only, because issuing company
+     * content is a Director's decision. Naming Site Managers there told a Site
+     * Manager that Site Managers may do the thing being refused to them.
+     */
     return {
       ok: false,
-      error: 'Only a Director or Site Manager may delete an induction script version.',
+      error: video.jobSiteId
+        ? 'Only a Director or Site Manager may delete an induction script version.'
+        : 'Only a Director or an Admin Centre administrator may discard a company video production.',
     };
   }
 
@@ -874,6 +884,10 @@ export async function getVideo(actor: VideoActor, videoId: string) {
     where: { id: videoId },
     include: {
       jobSite: { select: { id: true, name: true } },
+      // A company video has no project, and videoDisplayName names it by its Library
+      // asset instead. Without this include that fallback could never fire and every
+      // company version was headed "Company induction".
+      libraryAsset: { select: { id: true, title: true } },
       scenes: { orderBy: { order: 'asc' } },
       events: { orderBy: { createdAt: 'desc' }, take: 50 },
       jobs: { orderBy: { createdAt: 'desc' }, take: 5 },

@@ -128,14 +128,24 @@ export async function startCompanyVideo(
     };
   }
 
-  // One production at a time: a second in flight would race the first to publish.
-  // There is no SUPERSEDED status - superseding is recorded with supersededAt - so
-  // "in flight" means anything not yet published.
+  /*
+   * One production at a time: a second in flight would race the first to publish.
+   * There is no SUPERSEDED status - superseding is recorded with supersededAt - so
+   * "in flight" means anything not yet published.
+   *
+   * THE MESSAGE NAMES WHERE THE THING IS. It used to say only "Finish or delete it
+   * first", which was advice with nowhere to take it: no screen rendered a company
+   * production, so the version it named could not be reached, finished or deleted.
+   * "Under way" on this asset's page is now that screen, and the wording points at
+   * it - a refusal that names an obstacle owes the reader its location.
+   */
   const inFlight = asset.productions.find((p) => p.status !== InductionVideoStatus.PUBLISHED);
   if (inFlight) {
     return {
       ok: false,
-      error: `Version ${inFlight.version} of this video is already being produced. Finish or delete it first.`,
+      error:
+        `Version ${inFlight.version} of this video is already being produced. It is listed ` +
+        'under “Under way” on this page, where you can open it to finish it or discard it.',
     };
   }
 
