@@ -447,14 +447,39 @@ const madeVideos: string[] = [];
      * finally of its own.
      */
     const standardSlug = cat.MODULE_CATALOGUE[0].slug;
-    const standard = await prisma.inductionModule.findUnique({
+    /*
+     * SELF-SUFFICIENT, NOT AMBIENT. This looked the row up and skipped the whole
+     * section when it was absent — and `induction_modules_verify` DELETES every
+     * catalogue slug in its teardown ("this suite owns the catalogue slugs"), so
+     * running the two in one gate left this one reporting a failure that was really
+     * about test ordering. Now the row is created when missing and removed again,
+     * while still using the REAL catalogue slug so the rule is tested against
+     * Company Introduction rather than an invented one.
+     */
+    let standard = await prisma.inductionModule.findUnique({
       where: { slug: standardSlug },
       select: { id: true, active: true },
     });
     if (!standard) {
-      chk('standard subject guard', false,
-        `${standardSlug} is not in this database - seed the catalogue and re-run`);
-    } else {
+      standard = await prisma.inductionModule.create({
+        data: {
+          slug: standardSlug,
+          title: `Standard subject (${standardSlug})`,
+          order: 903,
+          active: true,
+          mandatory: true,
+          revisions: {
+            create: {
+              version: 1, status: 'DRAFT', heading: 'H', narration: 'x'.repeat(80),
+              contentHash: 'h', preparedByName: 'Test',
+            },
+          },
+        },
+        select: { id: true, active: true },
+      });
+      madeModules.push(standard.id);
+    }
+    {
       buildMode();
       // It must be ACTIVE for the guard to apply; put whatever it was back after.
       await prisma.inductionModule.update({
