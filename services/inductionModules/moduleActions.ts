@@ -91,6 +91,18 @@ export async function handleModuleAction(
       const result = await seedModuleCatalogue(actor);
       return ok(result as unknown as Record<string, unknown>);
     }
+    /*
+     * ADD ONE CATALOGUE MODULE ON REQUEST. Seeding creates the STANDARD set; this is
+     * how the optional tier (manual handling) and any retired standard module come
+     * into being, because nothing else in the product creates a module at all.
+     */
+    case 'addCatalogueModule': {
+      const { addCatalogueModule } = await import(
+        '@/services/inductionModules/inductionModuleService'
+      );
+      const r = await addCatalogueModule(actor, str('slug'));
+      return r.ok ? ok(r.value) : refuse(r.error);
+    }
     default:
       return refuse('Unknown action.');
   }

@@ -6,7 +6,10 @@ import {
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { ModuleActor } from '@/services/inductionModules/moduleActor';
-import { MODULE_CATALOGUE } from '@/services/inductionModules/moduleCatalogue';
+import {
+  ALL_CATALOGUE_MODULES,
+  MODULE_CATALOGUE,
+} from '@/services/inductionModules/moduleCatalogue';
 
 /**
  * Company induction modules: the standard content every induction carries.
@@ -730,4 +733,84 @@ export async function seedModuleCatalogue(
     created++;
   }
   return { created, skipped };
+}
+
+/**
+ * CREATE ONE CATALOGUE MODULE ON REQUEST — the only route to a module outside the
+ * standard set.
+ *
+ * Seeding creates the STANDARD set and skips whatever exists. Manual handling is
+ * deliberately not in that set (it is training, not induction) but must remain
+ * available to a company that wants it, and there is no other way to bring a module
+ * into being: nothing in the product creates one from scratch.
+ *
+ * Accepts any slug either tier defines, so this is also the route for re-adding a
+ * standard module somebody retired. It refuses a slug the catalogue does not define,
+ * because a module with invented wording is exactly what the catalogue exists to
+ * prevent - and it creates a DRAFT, like every other seeded module, so nothing
+ * reaches an induction until a Director has read it.
+ */
+export async function addCatalogueModule(
+  actor: ModuleActor,
+  slug: string,
+): Promise<ModuleResult<{ moduleId: string; created: boolean }>> {
+  if (!actor.canIssue) {
+    return { ok: false, error: 'Only a Director may add a company module.' };
+  }
+  const entry = ALL_CATALOGUE_MODULES.find((c) => c.slug === slug);
+  if (!entry) {
+    return { ok: false, error: 'That is not a module this platform can create.' };
+  }
+  const existing = await prisma.inductionModule.findUnique({
+    where: { slug },
+    select: { id: true, active: true },
+  });
+  if (existing) {
+    /*
+     * ALREADY THERE. If it was retired, bringing it back is what the caller meant -
+     * and it keeps its own history rather than starting again with catalogue wording
+     * that somebody may have edited away from years ago.
+     */
+    if (!existing.active) {
+      await prisma.inductionModule.update({
+        where: { id: existing.id },
+        data: { active: true },
+      });
+    }
+    return { ok: true, value: { moduleId: existing.id, created: false } };
+  }
+
+  const module = await prisma.inductionModule.create({
+    data: {
+      slug: entry.slug,
+      title: entry.title,
+      category: entry.category,
+      order: entry.order,
+      mandatory: entry.mandatory,
+      defaultIncluded: entry.defaultIncluded,
+      replacesSceneType: entry.replacesSceneType ?? null,
+      createdByName: actor.name,
+    },
+    select: { id: true },
+  });
+  const revision = await prisma.inductionModuleRevision.create({
+    data: {
+      moduleId: module.id,
+      version: 1,
+      status: InductionModuleRevisionStatus.DRAFT,
+      heading: entry.heading,
+      narration: entry.narration,
+      contentHash: contentHash(entry.heading, entry.narration),
+      preparedByName: actor.name,
+      preparedByRealm: actor.realm,
+    },
+    select: { id: true },
+  });
+  await record(
+    revision.id,
+    'DRAFTED',
+    actor,
+    'Suggested starting wording — read it, change what does not match how this company works, then issue it.',
+  );
+  return { ok: true, value: { moduleId: module.id, created: true } };
 }

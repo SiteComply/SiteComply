@@ -44,31 +44,6 @@ export interface CatalogueModule {
 }
 
 export const MODULE_CATALOGUE: CatalogueModule[] = [
-  /*
-   * ── THE ONE NOBODY ELSE CAN WRITE ─────────────────────────────────────
-   *
-   * Every other module in this list is a safety standard that reads much the same
-   * on any British construction site, so a sensible draft can be offered and a
-   * Director need only agree with it.
-   *
-   * A company introduction is not like that. It is the one piece of an induction
-   * that is ABOUT THIS COMPANY - who we are, what we build, how we expect people to
-   * be treated - and nobody outside it can write a word of that. It is here anyway,
-   * and first, for three reasons:
-   *
-   *   it is the piece an operative meets before any other, so it should exist;
-   *   its absence was actively confusing - a user could create a "Company
-   *     Introduction" library video and find the only module to generate it from was
-   *     PPE expectations, which would have produced a company introduction made of
-   *     PPE content;
-   *   a module that is present but unwritten asks a question, where a module that
-   *     is missing entirely does not.
-   *
-   * So the narration below is deliberately NOT usable wording. It is a brief, in the
-   * second person, telling whoever opens it what to write. It cannot be issued by
-   * accident in the way generic-sounding filler could, because it plainly is not
-   * about anybody's company.
-   */
   {
     slug: 'COMPANY_INTRODUCTION',
     title: 'Company introduction',
@@ -77,8 +52,8 @@ export const MODULE_CATALOGUE: CatalogueModule[] = [
     order: 5,
     // NOT mandatory and NOT included by default, because until somebody writes it
     // this module says nothing. Both become worth turning on once it is written.
-    mandatory: false,
-    defaultIncluded: false,
+    mandatory: true,
+    defaultIncluded: true,
     heading: 'Welcome to the company',
     narration:
       'REPLACE THIS TEXT BEFORE ISSUING. This module is your company’s own ' +
@@ -89,23 +64,6 @@ export const MODULE_CATALOGUE: CatalogueModule[] = [
       'they do. Keep it to about forty seconds spoken: short sentences, second ' +
       'person, no sub-clauses. Somebody hears this once, standing up, on a phone, ' +
       'before a shift.',
-  },
-  {
-    slug: 'PPE_EXPECTATIONS',
-    title: 'PPE expectations',
-    category: 'SAFETY',
-    order: 10,
-    mandatory: true,
-    defaultIncluded: true,
-    heading: 'What we expect of your PPE',
-    narration:
-      'Your personal protective equipment is the last thing between you and an ' +
-      'injury, so we expect it to be worn properly and kept in good condition. ' +
-      'Wear it from the moment you enter the working area, not from the moment ' +
-      'somebody asks. If any of it is damaged, worn out or does not fit, stop ' +
-      'and speak to your supervisor, and we will replace it. Do not borrow ' +
-      'somebody else’s and do not make do. The specific items this site requires ' +
-      'are covered separately in your induction.',
   },
   {
     slug: 'BEHAVIOURAL_STANDARDS',
@@ -148,29 +106,36 @@ export const MODULE_CATALOGUE: CatalogueModule[] = [
       'reporting one. Tell your supervisor or the site manager straight away, ' +
       'and make sure it is written down before you leave site.',
   },
-  {
-    slug: 'HOUSEKEEPING',
-    title: 'Housekeeping',
-    category: 'SAFETY',
-    order: 40,
-    mandatory: false,
-    defaultIncluded: true,
-    heading: 'Keeping the site tidy',
-    narration:
-      'Most slips, trips and falls on a construction site come down to ' +
-      'housekeeping. Clear up as you go rather than leaving it to the end of the ' +
-      'shift. Keep walkways, stairs and escape routes clear at all times, ' +
-      'including of trailing leads. Put waste in the right skip, and keep ' +
-      'materials stacked so they cannot topple. If you find a mess that is not ' +
-      'yours and it is unsafe, deal with it or report it — do not walk past it.',
-  },
+];
+
+/**
+ * AVAILABLE, BUT NOT PART OF THE STANDARD SET.
+ *
+ * ── WHY THIS TIER EXISTS ──────────────────────────────────────────────────
+ *
+ * Manual handling is TRAINING, not induction. An induction tells an operative about
+ * the site they are standing on; manual-handling technique does not change with the
+ * project and is not learned by watching a card. So it does not belong in the set
+ * every company is prompted to create - but a company that wants it should not have
+ * to do without, and a module can be created by NO OTHER ROUTE than seeding a
+ * catalogue entry (there is no "new module" action).
+ *
+ * This is the same shape as the site rules library: `UK_SITE_RULES_DEFAULT` is
+ * seeded into every site, while the optional templates are switched on by whoever
+ * runs the site when they apply. Copied rather than invented, deliberately.
+ *
+ * Entries here are NEVER seeded automatically and NEVER counted as missing, so the
+ * modules page cannot nag a company for declining one. `defaultIncluded: false`, so
+ * even once created it reaches a project only when that project opts in.
+ */
+export const OPTIONAL_MODULE_CATALOGUE: CatalogueModule[] = [
   {
     slug: 'MANUAL_HANDLING',
     title: 'Manual handling',
     category: 'SAFETY',
     order: 50,
     mandatory: false,
-    defaultIncluded: true,
+    defaultIncluded: false,
     heading: 'Lifting and carrying',
     narration:
       'Before you lift anything, ask whether it needs to be lifted by hand at ' +
@@ -181,24 +146,48 @@ export const MODULE_CATALOGUE: CatalogueModule[] = [
       'prize for managing on your own. Back injuries are the most common reason ' +
       'people leave this industry early.',
   },
-  {
-    slug: 'ENVIRONMENTAL_AWARENESS',
-    title: 'Environmental awareness',
-    category: 'ENVIRONMENT',
-    order: 60,
-    mandatory: false,
-    defaultIncluded: true,
-    heading: 'Looking after the environment',
-    narration:
-      'What we do on site affects the people around it and the ground underneath ' +
-      'it. Keep fuels, oils and chemicals in their bunds or spill trays, and ' +
-      'never pour anything down a drain. If you spill something, contain it and ' +
-      'report it immediately — a small spill dealt with straight away is not an ' +
-      'incident. Segregate waste into the right skips. Keep noise and dust down ' +
-      'where you can, especially near occupied buildings, and switch plant off ' +
-      'rather than leaving it running.',
-  },
 ];
+
+/**
+ * EVERY entry either tier can offer, for the one place that needs to resolve a slug
+ * to its wording. Never use this for "what is missing" - that is the standard set
+ * alone, or the prompt would ask for the optional ones too.
+ */
+export const ALL_CATALOGUE_MODULES: CatalogueModule[] = [
+  ...MODULE_CATALOGUE,
+  ...OPTIONAL_MODULE_CATALOGUE,
+];
+
+/**
+ * SUBJECTS DELIBERATELY RETIRED FROM THE STANDARD SET (2026-09-30), and what covers
+ * them instead. Recorded here so that re-adding one is a decision somebody argues
+ * for, rather than a gap somebody "fixes".
+ *
+ *   PPE expectations        Site PPE GATES video generation
+ *                           (siteSetupCompletion: "At least one PPE requirement",
+ *                           gates: 'VIDEO'), so every video already carries a
+ *                           required PPE scene built from that site's own list. A
+ *                           company-wide PPE module could only ever duplicate a
+ *                           scene guaranteed to be there - and PPE genuinely varies
+ *                           by site, so the site's version is the better one.
+ *   Housekeeping            Two DEFAULT site rules say it almost verbatim: "Keep
+ *                           walkways, access routes and fire exits clear at all
+ *                           times." and "Keep your work area clean and tidy as you
+ *                           go." - and the operative acknowledges them.
+ *   Environmental awareness The site's own ENVIRONMENTAL scene, plus the optional
+ *                           waste-segregation rule. Environmental controls vary
+ *                           enormously between sites (watercourses, dust, protected
+ *                           species), so generic wording is the weaker answer.
+ *
+ * The rows themselves are RETIRED in the database, not deleted: a published
+ * induction keeps the wording it was approved with, and the history stays readable.
+ */
+export const RETIRED_STANDARD_SLUGS = [
+  'PPE_EXPECTATIONS',
+  'HOUSEKEEPING',
+  'ENVIRONMENTAL_AWARENESS',
+] as const;
+
 
 /** The seed set, keyed for lookups. */
 export const CATALOGUE_BY_SLUG = new Map(

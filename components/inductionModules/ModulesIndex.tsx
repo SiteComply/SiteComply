@@ -5,7 +5,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 // The catalogue is a plain data table with no Prisma in it, so a client component
 // may import it by value — see moduleCatalogue.ts, and the guard that pins it.
-import { MODULE_CATALOGUE } from '@/services/inductionModules/moduleCatalogue';
+import {
+  MODULE_CATALOGUE,
+  OPTIONAL_MODULE_CATALOGUE,
+} from '@/services/inductionModules/moduleCatalogue';
 import type { ModuleRow } from '@/services/inductionModules/moduleRows';
 
 /**
@@ -125,6 +128,15 @@ export function ModulesIndex({
    * touches wording somebody has written.
    */
   const missing = MODULE_CATALOGUE.filter((c) => !modules.some((m) => m.slug === c.slug));
+  /*
+   * AVAILABLE, NOT MISSING. Optional modules are never counted as a gap - a company
+   * that declines manual handling must not be nagged about it forever - but a module
+   * can be created by no other route than a catalogue entry, so the offer has to
+   * exist somewhere. One quiet line under the list, not a banner.
+   */
+  const available = OPTIONAL_MODULE_CATALOGUE.filter(
+    (c) => !modules.some((m) => m.slug === c.slug),
+  );
 
   if (modules.length === 0) {
     return (
@@ -329,6 +341,28 @@ export function ModulesIndex({
           {shown.length} of {modules.length} shown
           {!canDraft && ' · your role can read these but not change them'}
         </div>
+        {available.length > 0 && canIssue && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-line bg-surface-sunken px-4 py-2 text-xs">
+            <span className="text-ink-muted">
+              Also available:{' '}
+              <span className="font-semibold text-ink">
+                {available.map((c) => c.title).join(', ')}
+              </span>{' '}
+              — training content, not part of the standard induction set.
+            </span>
+            {available.map((c) => (
+              <button
+                key={c.slug}
+                type="button"
+                disabled={busy !== null}
+                onClick={() => call({ action: 'addCatalogueModule', slug: c.slug }, `add-${c.slug}`)}
+                className="rounded-lg border border-line bg-surface px-2.5 py-1 font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-40"
+              >
+                {busy === `add-${c.slug}` ? 'Adding…' : `Add ${c.title}`}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
