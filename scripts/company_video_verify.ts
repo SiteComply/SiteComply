@@ -237,6 +237,32 @@ const NARRATION =
     const after = await prisma.inductionVideo.findUnique({ where: { id: videoId } });
     chk('the production is marked published', after.status === 'PUBLISHED' && after.publishedAt);
 
+    /*
+     * ── AND THEN IT CAN ACTUALLY GO LIVE ──────────────────────────────────
+     *
+     * THE HOLE THIS FILLS. Every assertion above passed while the workflow was
+     * impossible to finish: `revisionReadiness` computed `hasFootage` from
+     * `sourceBlobPath`, which a GENERATED revision never has, so the finished MP4 in
+     * `normalisedBlobPath` counted for nothing. The asset page's issue panel never
+     * rendered and `issueRevision` refused with "This revision still needs a video
+     * file". A suite that checks the draft was FILED but never that it can be ISSUED
+     * verifies a pipeline that stops one step short of the point.
+     */
+    const readiness = lib.revisionReadiness(rev);
+    chk('THE PUBLISHED REVISION IS READY TO ISSUE', readiness.ready === true,
+      readiness.ready ? '' : `missing: ${JSON.stringify(readiness.missing)}`);
+    chk('  the render counts as its footage, with no upload',
+      readiness.hasFootage === true && rev.sourceBlobPath === null,
+      'a generated revision has no source file and never will');
+    const goLive = await lib.issueRevision(director, rev.id, 'Produced from the module and issued.');
+    chk('A DIRECTOR CAN ISSUE IT — the workflow completes', goLive.ok === true,
+      goLive.ok ? '' : goLive.error);
+    const live = await prisma.libraryAssetRevision.findUnique({
+      where: { id: rev.id }, select: { status: true, issuedAt: true },
+    });
+    chk('  and it is in force', live.status === 'ISSUED' && live.issuedAt !== null,
+      'from here the normal library inclusion rules decide which sites show it');
+
     console.log('\nA SECOND PRODUCTION MAKES THE FIRST HISTORY');
     const second = await cvs.startCompanyVideo(vActor, assetId);
     chk('a new production can start once the first is published', second.ok === true,

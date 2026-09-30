@@ -60,13 +60,35 @@ export interface RevisionReadiness {
   missing: string[];
 }
 
+/**
+ * Is this revision complete enough to issue?
+ *
+ * ── "FOOTAGE" MEANS SOMETHING PLAYABLE, NOT SOMETHING UPLOADED ────────────
+ *
+ * `hasFootage` used to be `Boolean(sourceBlobPath)`, which is only true of the
+ * UPLOADED path, where a file arrives as `source` and is transcoded into
+ * `normalised`. A GENERATED revision has no upload at all: `publishCompanyVideoToLibrary`
+ * puts the rendered MP4 straight into `normalisedBlobPath` because the render is
+ * already the pipeline's exact output spec and there is nothing to transcode.
+ *
+ * So every company-module video reported `missing: ['a video file']` with the
+ * finished MP4 sitting in `normalisedBlobPath`, `ready` stayed false, the asset
+ * page's issue panel never rendered, and `issueRevision` refused with "This
+ * revision still needs a video file." The whole Company Module video workflow could
+ * be produced, narrated, rendered and published, and then never go live. Proven on
+ * 2026-09-30 by running the real services end to end.
+ *
+ * Either path satisfies it now, and the two later checks still say the right thing:
+ * an upload that has not been transcoded yet is "waiting to be prepared" (it has a
+ * source but no normalised), and a revision with neither is still missing a video.
+ */
 export function revisionReadiness(rev: {
   sourceBlobPath: string | null;
   normalisedBlobPath: string | null;
   captionsBlobPath: string | null;
   normaliseError: string | null;
 }): RevisionReadiness {
-  const hasFootage = Boolean(rev.sourceBlobPath);
+  const hasFootage = Boolean(rev.sourceBlobPath || rev.normalisedBlobPath);
   const normalised = Boolean(rev.normalisedBlobPath);
   const hasCaptions = Boolean(rev.captionsBlobPath);
   const failed = Boolean(rev.normaliseError);
