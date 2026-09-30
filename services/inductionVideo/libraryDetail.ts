@@ -7,7 +7,15 @@
  * the shape of the page that replaces that.
  */
 import { prisma } from '@/lib/prisma';
-import { revisionReadiness } from '@/services/inductionVideo/libraryAssetService';
+import {
+  revisionReadiness,
+  assetDeletion,
+  type AssetDeletion,
+} from '@/services/inductionVideo/libraryAssetService';
+import {
+  BUILD_PHASE_NOTICE,
+  contentResetEnabled,
+} from '@/services/inductionContent/buildPhase';
 import { versionMayBeDeleted } from '@/services/inductionVideo/inductionVideoService';
 import {
   libraryAssetUsage,
@@ -43,6 +51,10 @@ export interface DetailRevision {
   /** For a generated revision: which module revision was rendered. */
   sourceModuleRevisionId: string | null;
   usage: { publishedInductions: number; unpublishedInductions: number; projects: number };
+  /** Whether `discardLibraryRevision` would remove this revision. */
+  discardable: boolean;
+  /** Why not, when it would not. Null when discardable. */
+  discardBlockedReason: string | null;
 }
 
 /**
@@ -117,6 +129,13 @@ export interface LibraryAssetDetail {
   draftId: string | null;
   /** Siblings in the same band, so the running order is visible from here. */
   band: { id: string; title: string; order: number; active: boolean }[];
+  /**
+   * Whether the whole asset can be deleted or started again, and what would go.
+   * The page asks the same function the service enforces.
+   */
+  deletion: AssetDeletion;
+  /** The build-phase sentence, or null under the strict lifecycle. */
+  buildPhaseNotice: string | null;
 }
 
 export async function libraryAssetDetail(assetId: string): Promise<LibraryAssetDetail | null> {
@@ -254,6 +273,8 @@ export async function libraryAssetDetail(assetId: string): Promise<LibraryAssetD
       : null,
   });
 
+  const deletion = await assetDeletion(asset.id);
+
   const usageFor = (revisionId: string) =>
     usage.revisions.find((r) => r.revisionId === revisionId) ?? {
       publishedInductions: 0,
@@ -282,9 +303,27 @@ export async function libraryAssetDetail(assetId: string): Promise<LibraryAssetD
     productions,
     draftId: draft?.id ?? null,
     band: band.map((b) => ({ id: b.id, title: b.title, order: b.order, active: b.active })),
+    deletion,
+    buildPhaseNotice: contentResetEnabled() ? BUILD_PHASE_NOTICE : null,
     revisions: asset.revisions.map((r) => {
       const readiness = revisionReadiness(r);
+      /*
+       * A DRAFT IS ALWAYS DISCARDABLE — it reaches nobody by definition, the same
+       * rule a construction phase plan's draft follows. Anything issued or
+       * superseded is version history: discardable only while build-phase reset is
+       * on, and only when no induction carrying this asset was published or
+       * watched. `deletion.consumed` is the evidence fact on its own, which is why
+       * it is exposed separately from `deletion.deletable`.
+       */
+      const isDraft = r.status === 'DRAFT';
+      const discardable = isDraft || (contentResetEnabled() && !deletion.consumed);
       return {
+        discardable,
+        discardBlockedReason: discardable
+          ? null
+          : deletion.consumed
+            ? deletion.blockedReason
+            : 'Issued footage is kept as version history.',
         id: r.id,
         version: r.version,
         status: r.status,

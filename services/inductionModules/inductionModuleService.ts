@@ -5,6 +5,8 @@ import {
   type InductionModuleCategory,
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { contentResetEnabled } from '@/services/inductionContent/buildPhase';
+import { moduleConsumption } from '@/services/inductionContent/consumption';
 import type { ModuleActor } from '@/services/inductionModules/moduleActor';
 import {
   ALL_CATALOGUE_MODULES,
@@ -813,4 +815,175 @@ export async function addCatalogueModule(
     'Suggested starting wording — read it, change what does not match how this company works, then issue it.',
   );
   return { ok: true, value: { moduleId: module.id, created: true } };
+}
+
+/**
+ * What deleting a module would actually do, asked before the press.
+ *
+ * The screen and the service ask the SAME function, so a button is never offered
+ * for something the service will refuse — the pattern the Library already uses
+ * for discarding a production.
+ */
+export interface ModuleDeletion {
+  /** True when `deleteModule` would go ahead. */
+  deletable: boolean;
+  /** Why not, phrased for a manager. Null when deletable. */
+  blockedReason: string | null;
+  /** Issued revisions that would go with it. */
+  issuedRevisions: number;
+  /** Draft revisions that would go with it. */
+  draftRevisions: number;
+  /** Per-project include/exclude/override decisions that would go with it. */
+  siteDecisions: number;
+  /** Library videos that would lose their "stands in for this module" link. */
+  unlinkedAssets: string[];
+}
+
+/**
+ * Can this module be deleted outright, and what goes with it?
+ *
+ * ── TWO SEPARATE REASONS TO REFUSE, AND ONLY ONE IS ABSOLUTE ──────────────
+ *
+ * CONSUMED — a video carrying this module's wording was published to operatives
+ *            or watched by one. Refused always. The words themselves survive on
+ *            the scene rows, but `moduleRevisionId` would become a dangling id,
+ *            and "which revision of the manual-handling briefing did this
+ *            operative hear?" would stop being answerable by lookup. That is a
+ *            hole in the record, so it is not offered at any stage.
+ *
+ * ISSUED    — wording a Director put into force, which no induction has carried
+ *             to an operative yet. Keeping this is version discipline, not
+ *             evidence, so it is refused only while build-phase reset is off.
+ *
+ * Never-issued modules are deletable in either mode: a module whose wording was
+ * never issued reached nobody by construction, so it is a false start rather
+ * than history.
+ */
+export async function moduleDeletion(moduleId: string): Promise<ModuleDeletion> {
+  const module = await prisma.inductionModule.findUnique({
+    where: { id: moduleId },
+    select: {
+      id: true,
+      revisions: { select: { status: true } },
+      _count: { select: { sites: true } },
+      libraryAssets: { select: { title: true, provenance: true } },
+    },
+  });
+  if (!module) {
+    return {
+      deletable: false,
+      blockedReason: 'That module does not exist.',
+      issuedRevisions: 0,
+      draftRevisions: 0,
+      siteDecisions: 0,
+      unlinkedAssets: [],
+    };
+  }
+
+  const issuedRevisions = module.revisions.filter(
+    (r) => r.status !== InductionModuleRevisionStatus.DRAFT,
+  ).length;
+  const draftRevisions = module.revisions.length - issuedRevisions;
+  const facts = {
+    issuedRevisions,
+    draftRevisions,
+    siteDecisions: module._count.sites,
+    unlinkedAssets: module.libraryAssets.map((a) => a.title),
+  };
+
+  const consumption = await moduleConsumption(moduleId);
+  if (consumption.consumed) {
+    return { deletable: false, blockedReason: consumption.reason, ...facts };
+  }
+
+  /*
+   * A GENERATED library video is PRODUCED from this module, so the SetNull on
+   * LibraryAsset.moduleId would leave it pointing at nothing and
+   * `startCompanyVideo` would then refuse it ("Choose the company module this
+   * video is produced from"). Refused with the asset named, because the fix is a
+   * decision about that asset — re-point it or delete it — not something to do
+   * silently on the way past. An UPLOADED asset merely stops standing in for the
+   * module, which is reported rather than refused.
+   */
+  const generated = module.libraryAssets.filter((a) => a.provenance === 'GENERATED');
+  if (generated.length > 0) {
+    return {
+      deletable: false,
+      blockedReason:
+        `“${generated[0].title}” is produced from this module, so deleting it would ` +
+        'leave that library video with nothing to generate from. Point it at another ' +
+        'module, or delete it first.',
+      ...facts,
+    };
+  }
+
+  if (issuedRevisions > 0 && !contentResetEnabled()) {
+    return {
+      deletable: false,
+      blockedReason:
+        'This module has issued wording, which is kept as version history. ' +
+        'Retire it instead — it then reaches no new induction.',
+      ...facts,
+    };
+  }
+
+  return { deletable: true, blockedReason: null, ...facts };
+}
+
+/**
+ * Delete a module and its wording outright.
+ *
+ * ── WHY A DELETE EXISTS AT ALL, NEXT TO RETIRE ────────────────────────────
+ *
+ * Retire is the right answer for a module that did its job and should stop
+ * reaching new inductions: the history stays and the archive can show it. It is
+ * the wrong answer for a module that was a mistake — a wrong topic, a duplicate,
+ * a test — because a retired module is still a row somebody has to read past for
+ * ever, and calling a false start "history" makes the history harder to read
+ * rather than easier.
+ *
+ * ── THE CASCADE IS THE POINT, AND IT IS SAFE HERE ─────────────────────────
+ *
+ * Revisions, their events and every per-project decision are all `onDelete:
+ * Cascade`, so one delete clears the module completely. Nothing else holds a
+ * foreign key: the three columns that reference module content
+ * (`InductionVideoScene.moduleRevisionId`, `InductionVideo.sourceModuleRevisionId`,
+ * `LibraryAssetRevision.sourceModuleRevisionId`) are plain Strings with no
+ * constraint, chosen for exactly this case — a cascade there would rewrite a
+ * published record and a restrict would block every delete. `moduleDeletion` is
+ * what makes sure we are not leaving one of those ids dangling on something an
+ * operative saw.
+ *
+ * ── NO AUDIT ROW SURVIVES, AND THAT IS ACCEPTED ───────────────────────────
+ *
+ * `InductionModuleEvent` hangs off a revision, so it cascades away with the
+ * module and there is nowhere left to record the deletion — the same position
+ * `deleteVideoVersion` is in. What makes it acceptable is the guard rather than
+ * the bookkeeping: what is deleted here was never issued to anybody, or was
+ * issued and never carried to a single operative. It was not part of the record,
+ * so its removal leaves no hole in one.
+ */
+export async function deleteModule(
+  actor: ModuleActor,
+  moduleId: string,
+): Promise<ModuleResult<{ deleted: true; title: string; siteDecisions: number }>> {
+  if (!actor.canIssue) {
+    return { ok: false, error: 'Only a Director may delete a company module.' };
+  }
+  const module = await prisma.inductionModule.findUnique({
+    where: { id: moduleId },
+    select: { id: true, title: true },
+  });
+  if (!module) return { ok: false, error: 'That module does not exist.' };
+
+  const deletion = await moduleDeletion(moduleId);
+  if (!deletion.deletable) {
+    return { ok: false, error: deletion.blockedReason ?? 'That module cannot be deleted.' };
+  }
+
+  await prisma.inductionModule.delete({ where: { id: moduleId } });
+  return {
+    ok: true,
+    value: { deleted: true, title: module.title, siteDecisions: deletion.siteDecisions },
+  };
 }

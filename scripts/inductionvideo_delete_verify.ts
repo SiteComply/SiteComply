@@ -33,6 +33,18 @@ const chk = (t: string, ok: boolean, d = '') => {
 };
 const read = (p: string) => readFileSync(p, 'utf8');
 
+/*
+ * THIS SUITE IS THE STRICT LIFECYCLE, so the build-phase flag is cleared rather
+ * than assumed absent. Two of the refusals below — superseded, and
+ * approved-but-unpublished — stand down when INDUCTION_CONTENT_RESET_ENABLED is
+ * "1", by design (see services/inductionContent/buildPhase.ts). Left to the
+ * ambient environment, this file would fail on a machine where the flag is set
+ * and the failure would look like a regression in the delete guard rather than
+ * the suite reading its own switch. `content_reset_verify.ts` is where both modes
+ * are exercised on purpose.
+ */
+delete process.env.INDUCTION_CONTENT_RESET_ENABLED;
+
 (async () => {
   const site = await prisma.jobSite.findFirst({
     where: { status: 'ACTIVE' },

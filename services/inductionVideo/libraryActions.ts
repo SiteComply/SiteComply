@@ -198,6 +198,35 @@ export async function handleLibraryAction(
       });
       return r.ok ? ok(r.value) : refuse(r.error);
     }
+    /*
+     * DISCARDING AND STARTING AGAIN. Each one's conditions live in the service, which
+     * re-checks the Director role and asks `consumption.ts` about evidence; these
+     * cases only carry the ids across. `discardRevision` takes the assetId as well
+     * because the service verifies the revision belongs to that asset, for the same
+     * reason `discardProduction` does — otherwise the endpoint discards any revision
+     * of any asset by id.
+     */
+    case 'discardRevision': {
+      const { discardLibraryRevision } = await import(
+        '@/services/inductionVideo/libraryAssetService'
+      );
+      const r = await discardLibraryRevision(actor, str('assetId'), str('revisionId'));
+      return r.ok ? ok(r.value) : refuse(r.error);
+    }
+    case 'resetAsset': {
+      const { resetLibraryAsset } = await import(
+        '@/services/inductionVideo/libraryAssetService'
+      );
+      const r = await resetLibraryAsset(actor, str('assetId'));
+      return r.ok ? ok(r.value) : refuse(r.error);
+    }
+    case 'deleteAsset': {
+      const { deleteLibraryAsset } = await import(
+        '@/services/inductionVideo/libraryAssetService'
+      );
+      const r = await deleteLibraryAsset(actor, str('assetId'));
+      return r.ok ? ok(r.value) : refuse(r.error);
+    }
     default:
       return refuse('Unknown action.');
   }

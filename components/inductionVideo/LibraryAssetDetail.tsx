@@ -706,6 +706,49 @@ export function LibraryAssetDetail({
                     </button>
                   </div>
                 )}
+
+                {/*
+                  ── DISCARD THIS REVISION ──
+                  There was no way to remove a revision at all, not even an unissued
+                  draft with the wrong file attached — so a mis-upload became
+                  permanent history. A draft is always discardable; issued footage
+                  only while build-phase reset is on, and never once an induction
+                  carrying it has been published or watched. The page shows the
+                  service's own reason rather than hiding the control silently.
+                */}
+                {canIssue && (
+                  <div className="mt-3 border-t border-line pt-2">
+                    {r.discardable ? (
+                      <button
+                        type="button"
+                        disabled={busy !== null}
+                        onClick={() => {
+                          if (
+                            !window.confirm(
+                              `Discard revision ${r.version} permanently? Its video file ` +
+                                'and captions are deleted. This cannot be undone.',
+                            )
+                          ) {
+                            return;
+                          }
+                          void call(
+                            {
+                              action: 'discardRevision',
+                              assetId: asset.id,
+                              revisionId: r.id,
+                            },
+                            `discard-rev-${r.id}`,
+                          );
+                        }}
+                        className="rounded-lg border border-danger-300 bg-surface px-3 py-1.5 text-xs font-semibold text-danger-700 hover:bg-danger-50 disabled:opacity-50"
+                      >
+                        {busy === `discard-rev-${r.id}` ? 'Discarding…' : 'Discard this revision'}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-ink-subtle">{r.discardBlockedReason}</span>
+                    )}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -733,6 +776,98 @@ export function LibraryAssetDetail({
           >
             {busy === 'active' ? 'Saving…' : asset.active ? 'Retire' : 'Bring back'}
           </button>
+        </section>
+      )}
+
+      {/*
+        ── START AGAIN, OR DELETE ──
+        Two different intentions, deliberately not one button.
+
+        START AGAIN keeps the asset and clears its content. The asset row carries the
+        wiring — its slug, the module it stands in for, its placement and running
+        order, whether it is mandatory, and every project's decision about it — so
+        when the footage is what came out wrong, deleting and re-creating would throw
+        away the part nobody wanted to lose, and hand back a new id.
+
+        DELETE removes the asset itself, for one that should never have existed.
+
+        Both refuse on identical terms, so neither can be used to get round the
+        other's refusal.
+      */}
+      {canIssue && (
+        <section className="rounded-xl border border-danger-200 bg-surface p-4 shadow-card">
+          <h3 className="text-sm font-bold text-ink">Start again, or delete</h3>
+          {asset.buildPhaseNotice && (
+            <p className="mt-1 rounded-lg bg-surface-sunken px-2 py-1.5 text-xs text-ink-muted">
+              {asset.buildPhaseNotice}
+            </p>
+          )}
+          {asset.deletion.deletable ? (
+            <>
+              <p className="mt-2 text-xs text-ink-muted">
+                {asset.deletion.issuedRevisions + asset.deletion.draftRevisions === 0
+                  ? 'This video has no footage yet.'
+                  : `${asset.deletion.issuedRevisions + asset.deletion.draftRevisions} ${
+                      asset.deletion.issuedRevisions + asset.deletion.draftRevisions === 1
+                        ? 'revision'
+                        : 'revisions'
+                    }${
+                      asset.deletion.productions > 0
+                        ? ` and ${asset.deletion.productions} ${
+                            asset.deletion.productions === 1 ? 'production' : 'productions'
+                          }`
+                        : ''
+                    } would go, with their video files.`}{' '}
+                No induction anybody has seen carries this footage.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        'Start this video again? Every revision, production and video ' +
+                          'file is deleted. Its settings, its place in the running order ' +
+                          'and each project’s decision about it are kept. This cannot be undone.',
+                      )
+                    ) {
+                      return;
+                    }
+                    void call({ action: 'resetAsset', assetId: asset.id }, 'reset');
+                  }}
+                  className="touch-target inline-flex items-center rounded-lg border border-danger-300 bg-surface px-3 py-2 text-xs font-semibold text-danger-700 hover:bg-danger-50 disabled:opacity-50"
+                >
+                  {busy === 'reset' ? 'Clearing…' : 'Start again, keep the settings'}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={async () => {
+                    if (
+                      !window.confirm(
+                        `Delete “${asset.title}” permanently? The video, every revision ` +
+                          'and every video file are deleted. This cannot be undone.',
+                      )
+                    ) {
+                      return;
+                    }
+                    // Push, not refresh: this page's asset will not exist.
+                    const done = await call(
+                      { action: 'deleteAsset', assetId: asset.id },
+                      'deleteAsset',
+                    );
+                    if (done) router.push(backHref);
+                  }}
+                  className="touch-target inline-flex items-center rounded-lg border border-danger-500/40 px-3 py-2 text-xs font-semibold text-danger-600 hover:bg-danger-50 disabled:opacity-50"
+                >
+                  {busy === 'deleteAsset' ? 'Deleting…' : 'Delete this video'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="mt-2 text-xs text-ink-muted">{asset.deletion.blockedReason}</p>
+          )}
         </section>
       )}
     </div>

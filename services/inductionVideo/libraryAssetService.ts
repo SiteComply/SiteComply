@@ -7,6 +7,8 @@ import {
   InductionVideoJobStatus,
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { contentResetEnabled } from '@/services/inductionContent/buildPhase';
+import { assetConsumption } from '@/services/inductionContent/consumption';
 import { kickInductionJobs } from '@/services/inductionVideo/jobKicker';
 import { deleteMedia, mediaProperties } from '@/services/inductionVideo/mediaStorage';
 import {
@@ -994,4 +996,376 @@ export async function previewUrlForRevision(
   const { mediaSasUrl } = await import('@/services/inductionVideo/mediaStorage');
   // Long enough to watch a ten-minute video with a pause in the middle, no longer.
   return { ok: true, value: await mediaSasUrl(path, 30) };
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * DELETING AND STARTING AGAIN
+ *
+ * The Library had no delete at all: an asset could only be retired, and a
+ * revision — even an unissued draft with the wrong footage attached — could not
+ * be removed by any means. That is right for a platform inducting operatives and
+ * wrong for one whose library is still being assembled, where a bad upload is
+ * simply a bad upload.
+ *
+ * Everything below asks `consumption.ts` and nothing else about evidence, and the
+ * asset delete in particular exists BECAUSE the raw delete is dangerous: see the
+ * cascade note on `assetDeletion`.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Every blob a revision owns. Collected in one place so no delete forgets one. */
+function revisionBlobs(r: {
+  sourceBlobPath: string | null;
+  normalisedBlobPath: string | null;
+  captionsBlobPath: string | null;
+}): string[] {
+  return [r.sourceBlobPath, r.normalisedBlobPath, r.captionsBlobPath].filter(
+    (p): p is string => Boolean(p),
+  );
+}
+
+/**
+ * Blobs a revision points at but does NOT own, and which must therefore survive
+ * it.
+ *
+ * A company production publishes into the Library by pointing the new revision's
+ * `normalisedBlobPath` at the video's own rendered MP4, under
+ * `induction-video/<assetId>/<videoId>/`. That file belongs to the video
+ * lifecycle: the renderer replaces it, and the retention sweep may remove it.
+ * Deleting the revision must not take it, and deleting the video must not take it
+ * while a revision still serves it — which is what `productionSharesBlob` below
+ * is for. Ownership is decided by the path prefix, because that is what actually
+ * determines which lifecycle writes the file.
+ */
+function ownsBlob(path: string): boolean {
+  return path.startsWith('library/');
+}
+
+/**
+ * Discard one library revision.
+ *
+ * A DRAFT is always discardable: it reaches nobody by definition, the same rule
+ * as `discardDraftRevision` on a construction phase plan. An ISSUED or SUPERSEDED
+ * revision is version history and is discardable only while build-phase reset is
+ * on, and only when no induction carrying it was published or watched.
+ */
+export async function discardLibraryRevision(
+  actor: ModuleActor,
+  assetId: string,
+  revisionId: string,
+): Promise<LibraryResult<{ discarded: true; version: number }>> {
+  if (!actor.canIssue) {
+    return { ok: false, error: 'Only a Director may discard a library revision.' };
+  }
+  const revision = await prisma.libraryAssetRevision.findUnique({
+    where: { id: revisionId },
+    select: {
+      id: true,
+      assetId: true,
+      version: true,
+      status: true,
+      sourceBlobPath: true,
+      normalisedBlobPath: true,
+      captionsBlobPath: true,
+    },
+  });
+  /*
+   * OWNERSHIP CHECKED HERE, not left to the caller: without it this endpoint
+   * would discard any revision of any asset by id. The same reason
+   * `discardProduction` re-checks the production belongs to the asset.
+   */
+  if (!revision || revision.assetId !== assetId) {
+    return { ok: false, error: 'That revision does not belong to this library video.' };
+  }
+
+  if (revision.status !== LibraryRevisionStatus.DRAFT) {
+    if (!contentResetEnabled()) {
+      return {
+        ok: false,
+        error:
+          'An issued revision is kept as version history. Issue a new revision to replace it.',
+      };
+    }
+    const consumption = await assetConsumption(assetId);
+    if (consumption.consumed) {
+      return { ok: false, error: consumption.reason ?? 'That revision cannot be discarded.' };
+    }
+  }
+
+  /*
+   * A scene may have frozen this revision's segment onto an induction. Published
+   * and watched inductions are already refused above; an unpublished one would be
+   * left pointing at a blob that is gone, so its footage is cleared and it will
+   * be rebuilt on the next generation rather than rendering a hole.
+   */
+  await prisma.inductionVideoScene.updateMany({
+    where: { libraryRevisionId: revisionId },
+    data: {
+      libraryRevisionId: null,
+      libraryBlobPath: null,
+      libraryCaptionsBlobPath: null,
+      libraryDurationMs: null,
+    },
+  });
+
+  // Media first, row second: a failed blob delete leaves the revision intact and
+  // retryable rather than orphaning a file nothing points at any more.
+  for (const path of revisionBlobs(revision).filter(ownsBlob)) await deleteMedia(path);
+  await prisma.libraryAssetRevision.delete({ where: { id: revisionId } });
+
+  return { ok: true, value: { discarded: true, version: revision.version } };
+}
+
+/** What deleting a whole library asset would do, asked before the press. */
+export interface AssetDeletion {
+  deletable: boolean;
+  blockedReason: string | null;
+  /**
+   * Whether an operative has seen any of this asset's footage. Separate from
+   * `deletable`, because the two refusals are not equivalent: a consumed asset can
+   * never be deleted, whereas an unconsumed one with issued footage is refused only
+   * while build-phase reset is off. A screen deciding what to offer per REVISION
+   * needs the evidence fact on its own.
+   */
+  consumed: boolean;
+  issuedRevisions: number;
+  draftRevisions: number;
+  productions: number;
+  siteDecisions: number;
+}
+
+/**
+ * Can this library asset be deleted outright, and what goes with it?
+ *
+ * ── THIS IS THE DANGEROUS ONE, AND THE DATABASE WILL NOT HELP ─────────────
+ *
+ * `InductionVideo.libraryAssetId` is `onDelete: Cascade` and `InductionVideoView`
+ * cascades from the video, so a bare `prisma.libraryAsset.delete()` on an asset
+ * with published productions destroys operative viewing records — the exact
+ * evidence every other refusal in this file protects — and reports nothing,
+ * because from the database's point of view the cascade succeeded. There is no FK
+ * anywhere that refuses it.
+ *
+ * So this predicate is not a convenience for the UI. It is the only thing
+ * standing between a delete button and someone's induction record, and
+ * `deleteLibraryAsset` must never be rewritten to skip it.
+ */
+export async function assetDeletion(assetId: string): Promise<AssetDeletion> {
+  const asset = await prisma.libraryAsset.findUnique({
+    where: { id: assetId },
+    select: {
+      id: true,
+      revisions: { select: { status: true } },
+      _count: { select: { productions: true, sites: true } },
+    },
+  });
+  if (!asset) {
+    return {
+      deletable: false,
+      blockedReason: 'That library video does not exist.',
+      consumed: false,
+      issuedRevisions: 0,
+      draftRevisions: 0,
+      productions: 0,
+      siteDecisions: 0,
+    };
+  }
+
+  const issuedRevisions = asset.revisions.filter(
+    (r) => r.status !== LibraryRevisionStatus.DRAFT,
+  ).length;
+  const facts = {
+    issuedRevisions,
+    draftRevisions: asset.revisions.length - issuedRevisions,
+    productions: asset._count.productions,
+    siteDecisions: asset._count.sites,
+  };
+
+  const consumption = await assetConsumption(assetId);
+  if (consumption.consumed) {
+    return { deletable: false, blockedReason: consumption.reason, consumed: true, ...facts };
+  }
+
+  if (issuedRevisions > 0 && !contentResetEnabled()) {
+    return {
+      deletable: false,
+      blockedReason:
+        'This library video has issued footage, which is kept as version history. ' +
+        'Retire it instead — it then reaches no new induction.',
+      consumed: false,
+      ...facts,
+    };
+  }
+
+  return { deletable: true, blockedReason: null, consumed: false, ...facts };
+}
+
+/**
+ * Delete a library asset, its revisions, its productions and its footage.
+ *
+ * Guarded by `assetDeletion` for the cascade reason above. Blobs are removed
+ * first and explicitly — the cascade takes rows, never files, so relying on it
+ * alone would leave every segment and master in storage with nothing pointing at
+ * them.
+ */
+export async function deleteLibraryAsset(
+  actor: ModuleActor,
+  assetId: string,
+): Promise<LibraryResult<{ deleted: true; title: string }>> {
+  if (!actor.canIssue) {
+    return { ok: false, error: 'Only a Director may delete a library video.' };
+  }
+  const asset = await prisma.libraryAsset.findUnique({
+    where: { id: assetId },
+    select: {
+      id: true,
+      title: true,
+      revisions: {
+        select: { sourceBlobPath: true, normalisedBlobPath: true, captionsBlobPath: true },
+      },
+      productions: {
+        select: {
+          id: true,
+          videoBlobPath: true,
+          captionsBlobPath: true,
+          transcriptBlobPath: true,
+          scenes: { select: { audioBlobPath: true } },
+        },
+      },
+    },
+  });
+  if (!asset) return { ok: false, error: 'That library video does not exist.' };
+
+  const deletion = await assetDeletion(assetId);
+  if (!deletion.deletable) {
+    return { ok: false, error: deletion.blockedReason ?? 'That library video cannot be deleted.' };
+  }
+
+  /*
+   * Unpublished inductions that froze this asset's footage lose it, for the same
+   * reason as a discarded revision: better a scene that regenerates than one
+   * rendering a blob that no longer exists. Published and watched inductions
+   * cannot reach here — `assetDeletion` refused them.
+   */
+  const revisionIds = await prisma.libraryAssetRevision.findMany({
+    where: { assetId },
+    select: { id: true },
+  });
+  if (revisionIds.length > 0) {
+    await prisma.inductionVideoScene.updateMany({
+      where: { libraryRevisionId: { in: revisionIds.map((r) => r.id) } },
+      data: {
+        libraryRevisionId: null,
+        libraryBlobPath: null,
+        libraryCaptionsBlobPath: null,
+        libraryDurationMs: null,
+      },
+    });
+  }
+
+  const paths = [
+    ...asset.revisions.flatMap(revisionBlobs).filter(ownsBlob),
+    ...asset.productions.flatMap((p) => [
+      p.videoBlobPath,
+      p.captionsBlobPath,
+      p.transcriptBlobPath,
+      ...p.scenes.map((s) => s.audioBlobPath),
+    ]),
+  ].filter((p): p is string => Boolean(p));
+  for (const path of new Set(paths)) await deleteMedia(path);
+
+  // Revisions, events, normalise jobs, productions, their scenes/jobs/events and
+  // the per-project decisions all cascade from this one row.
+  await prisma.libraryAsset.delete({ where: { id: assetId } });
+
+  return { ok: true, value: { deleted: true, title: asset.title } };
+}
+
+/**
+ * Start this library asset again: clear its content, keep the asset.
+ *
+ * ── WHY THIS IS NOT JUST "DELETE AND RE-CREATE" ───────────────────────────
+ *
+ * The asset row carries the wiring — its slug, the module it stands in for, its
+ * placement and running order, whether it is mandatory, and every project's
+ * decision about it. Re-creating it means setting all of that up again and
+ * getting a new id, which silently discards those per-project decisions. When the
+ * footage is what came out wrong, the wiring is not what anybody wanted to lose.
+ *
+ * Refuses on the same terms as the delete, so it can never be used as a way round
+ * an evidence refusal.
+ */
+export async function resetLibraryAsset(
+  actor: ModuleActor,
+  assetId: string,
+): Promise<LibraryResult<{ revisionsRemoved: number; productionsRemoved: number }>> {
+  if (!actor.canIssue) {
+    return { ok: false, error: 'Only a Director may start a library video again.' };
+  }
+  const deletion = await assetDeletion(assetId);
+  if (!deletion.deletable) {
+    return {
+      ok: false,
+      error: deletion.blockedReason ?? 'That library video cannot be started again.',
+    };
+  }
+
+  const asset = await prisma.libraryAsset.findUnique({
+    where: { id: assetId },
+    select: {
+      revisions: {
+        select: {
+          id: true,
+          sourceBlobPath: true,
+          normalisedBlobPath: true,
+          captionsBlobPath: true,
+        },
+      },
+      productions: {
+        select: {
+          id: true,
+          videoBlobPath: true,
+          captionsBlobPath: true,
+          transcriptBlobPath: true,
+          scenes: { select: { audioBlobPath: true } },
+        },
+      },
+    },
+  });
+  if (!asset) return { ok: false, error: 'That library video does not exist.' };
+
+  if (asset.revisions.length > 0) {
+    await prisma.inductionVideoScene.updateMany({
+      where: { libraryRevisionId: { in: asset.revisions.map((r) => r.id) } },
+      data: {
+        libraryRevisionId: null,
+        libraryBlobPath: null,
+        libraryCaptionsBlobPath: null,
+        libraryDurationMs: null,
+      },
+    });
+  }
+
+  const paths = [
+    ...asset.revisions.flatMap(revisionBlobs).filter(ownsBlob),
+    ...asset.productions.flatMap((p) => [
+      p.videoBlobPath,
+      p.captionsBlobPath,
+      p.transcriptBlobPath,
+      ...p.scenes.map((s) => s.audioBlobPath),
+    ]),
+  ].filter((p): p is string => Boolean(p));
+  for (const path of new Set(paths)) await deleteMedia(path);
+
+  await prisma.$transaction([
+    prisma.inductionVideo.deleteMany({ where: { libraryAssetId: assetId } }),
+    prisma.libraryAssetRevision.deleteMany({ where: { assetId } }),
+  ]);
+
+  return {
+    ok: true,
+    value: {
+      revisionsRemoved: asset.revisions.length,
+      productionsRemoved: asset.productions.length,
+    },
+  };
 }

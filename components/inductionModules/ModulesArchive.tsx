@@ -20,7 +20,12 @@ import type { ModuleRow } from '@/services/inductionModules/moduleRows';
  * wording's own history, which IS recorded, on the module's page.
  *
  * A Server Component: no state, no handlers, nothing shipped to the browser.
- * Restoring happens on the module's own page, where the consequence is spelled out.
+ * Restoring happens on the module's own page, where the consequence is spelled out —
+ * and so does DELETING, for the same reason. A retired module that was a mistake
+ * rather than history can be removed outright, but the decision needs the module's
+ * own page: what its wording was, how many projects hold a decision about it, and
+ * whether any induction anybody saw carries it. A delete button on a table row is a
+ * press without any of that in front of it.
  */
 export function ModulesArchive({
   modules,
@@ -44,7 +49,8 @@ export function ModulesArchive({
         <p className="mt-0.5 text-xs text-ink-muted">
           Kept for the record and left out of every induction. A published induction still
           holds the wording it was approved with, so nothing an operative was told has
-          changed. Open one to read its history or bring it back.
+          changed. Open one to read its history, bring it back, or delete it for good
+          if it was never part of an induction anybody saw.
         </p>
       </header>
 
@@ -119,8 +125,8 @@ export function ModulesArchive({
             </tbody>
           </table>
           <div className="border-t border-line px-4 py-2 text-xs text-ink-subtle">
-            {modules.length} retired · restoring happens on a module’s own page, where the
-            consequence is stated
+            {modules.length} retired · restoring and deleting both happen on a module’s own
+            page, where the consequence is stated
           </div>
         </div>
       )}

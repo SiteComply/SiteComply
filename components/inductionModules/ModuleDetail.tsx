@@ -478,6 +478,86 @@ export function ModuleDetail({
           </div>
         </section>
       )}
+
+      {/*
+        ── DELETE, BESIDE RETIRE AND DELIBERATELY NOT THE SAME THING ──
+        Retire is for a module that did its job and should stop reaching new
+        inductions. Delete is for one that was a mistake — a wrong topic, a
+        duplicate, a test — because a retired module is still a row somebody reads
+        past for ever, and calling a false start "history" makes the history
+        harder to read rather than easier.
+
+        Shown to a Director only, and only where `moduleDeletion` says it would go
+        ahead; otherwise its own reason is shown in place of the button, so the
+        page never offers a press that the service will refuse and never stays
+        silent about why it cannot.
+      */}
+      {canIssue && (
+        <section className="rounded-xl border border-danger-200 bg-surface p-4 shadow-card">
+          <h3 className="text-sm font-bold text-ink">Delete this module</h3>
+          {/*
+            Never a silent capability: where build-phase reset is what makes this
+            button possible, the panel says so, so nobody is looking at a delete
+            control without knowing why it is there or that it is temporary.
+          */}
+          {detail.buildPhaseNotice && (
+            <p className="mt-1 rounded-lg bg-surface-sunken px-2 py-1.5 text-xs text-ink-muted">
+              {detail.buildPhaseNotice}
+            </p>
+          )}
+          {detail.deletion.deletable ? (
+            <>
+              <p className="mt-1 text-xs text-ink-muted">
+                Deletes the module and{' '}
+                {detail.deletion.issuedRevisions + detail.deletion.draftRevisions === 1
+                  ? 'its wording'
+                  : `all ${detail.deletion.issuedRevisions + detail.deletion.draftRevisions} revisions of its wording`}
+                {detail.deletion.siteDecisions > 0
+                  ? `, and ${detail.deletion.siteDecisions} project ${
+                      detail.deletion.siteDecisions === 1 ? 'decision' : 'decisions'
+                    } about it`
+                  : ''}
+                . No induction anybody has seen carries it. This cannot be undone.
+              </p>
+              {detail.deletion.unlinkedAssets.length > 0 && (
+                <p className="mt-2 text-xs text-ink-muted">
+                  {detail.deletion.unlinkedAssets.join(', ')} will stop standing in for this
+                  module and play alongside the rest of the induction instead.
+                </p>
+              )}
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={async () => {
+                  if (
+                    !window.confirm(
+                      `Delete “${detail.title}” permanently? Its wording and revision ` +
+                        'history are deleted. This cannot be undone.',
+                    )
+                  ) {
+                    return;
+                  }
+                  /*
+                   * PUSH, NOT REFRESH. `call` refreshes, which on this page would
+                   * re-render a module that no longer exists. The list is where the
+                   * person now needs to be.
+                   */
+                  const done = await call(
+                    { action: 'deleteModule', moduleId: detail.id },
+                    'delete',
+                  );
+                  if (done) router.push(backHref);
+                }}
+                className="mt-3 touch-target inline-flex items-center rounded-lg border border-danger-500/40 px-3 py-2 text-xs font-semibold text-danger-600 hover:bg-danger-50 disabled:opacity-50"
+              >
+                {busy === 'delete' ? 'Deleting…' : 'Delete permanently'}
+              </button>
+            </>
+          ) : (
+            <p className="mt-1 text-xs text-ink-muted">{detail.deletion.blockedReason}</p>
+          )}
+        </section>
+      )}
     </div>
   );
 }

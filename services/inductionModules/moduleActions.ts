@@ -103,6 +103,20 @@ export async function handleModuleAction(
       const r = await addCatalogueModule(actor, str('slug'));
       return r.ok ? ok(r.value) : refuse(r.error);
     }
+    /*
+     * DELETE A MODULE OUTRIGHT, as opposed to retiring it. Every condition lives in
+     * `deleteModule` / `moduleDeletion`, including the Director check, so there is
+     * nothing to repeat here: unlike `discardProduction` below it, the id names the
+     * thing being deleted rather than a second object reached through it, so there
+     * is no ownership to verify first.
+     */
+    case 'deleteModule': {
+      const { deleteModule } = await import(
+        '@/services/inductionModules/inductionModuleService'
+      );
+      const r = await deleteModule(actor, str('moduleId'));
+      return r.ok ? ok(r.value) : refuse(r.error);
+    }
     default:
       return refuse('Unknown action.');
   }

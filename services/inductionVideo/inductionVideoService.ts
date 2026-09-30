@@ -5,6 +5,8 @@ import {
   Prisma,
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { contentResetEnabled } from '@/services/inductionContent/buildPhase';
+import { blobServedByLibrary } from '@/services/inductionContent/consumption';
 import type { PlatformViewer } from '@/services/platformUsers/platformAccess';
 import type { VideoActor } from '@/services/inductionVideo/videoActor';
 import {
@@ -684,6 +686,13 @@ export function versionMayBeDeleted(v: {
 }): boolean {
   if (v.publishedAt || v.status === InductionVideoStatus.PUBLISHED) return false;
   if (v.viewCount > 0) return false;
+  /*
+   * The two housekeeping conditions, relaxed on exactly the same flag as the
+   * service. Read together with `deleteVideoVersion`: if these two ever stop
+   * matching, a Director is offered a button that refuses, or refused one that
+   * would have worked.
+   */
+  if (contentResetEnabled()) return true;
   if (v.supersededAt) return false;
   return (DELETABLE as string[]).includes(v.status);
 }
@@ -791,23 +800,43 @@ export async function deleteVideoVersion(
         'An operative has watched this version, so it is the record of their induction and cannot be deleted.',
     };
   }
-  if (video.supersededAt) {
-    return {
-      ok: false,
-      error: 'This version has been superseded. It is kept as history rather than deleted.',
-    };
+  /*
+   * ── THE TWO HOUSEKEEPING REFUSALS ─────────────────────────────────────────
+   *
+   * Superseded, and approved-but-unpublished. Neither is about the record: by
+   * this line the version is known to be unpublished AND unwatched, so nobody
+   * outside the platform has seen any of it. Both exist to keep the version
+   * history honest on a live platform, and both are exactly what makes the build
+   * phase painful — a rejected render is not history, it is a failed experiment.
+   *
+   * So they stand down when build-phase reset is on, and the two refusals above
+   * (published, watched) do not, ever. See `buildPhase.ts`.
+   */
+  if (!contentResetEnabled()) {
+    if (video.supersededAt) {
+      return {
+        ok: false,
+        error: 'This version has been superseded. It is kept as history rather than deleted.',
+      };
+    }
+    if (!(DELETABLE as string[]).includes(video.status)) {
+      return {
+        ok: false,
+        error:
+          'This version has been approved, so it is part of the approval workflow. Generate a new version instead, which supersedes it.',
+      };
+    }
   }
+  /*
+   * NOT RELAXED BY THE FLAG: a job holds this row as its lock, so deleting it
+   * mid-run would leave the runner writing to something that is gone. That is a
+   * technical fact about the render, not a policy about history, and "wait for it
+   * to finish" is a few minutes rather than a workflow.
+   */
   if (video.jobs.some((j) => j.status === 'QUEUED' || j.status === 'RUNNING')) {
     return {
       ok: false,
       error: 'Something is still running on this version. It can be deleted once that finishes.',
-    };
-  }
-  if (!(DELETABLE as string[]).includes(video.status)) {
-    return {
-      ok: false,
-      error:
-        'This version has been approved, so it is part of the approval workflow. Generate a new version instead, which supersedes it.',
     };
   }
 
@@ -816,11 +845,25 @@ export async function deleteVideoVersion(
    * the file would be orphaned with nothing left pointing at it. This way a
    * failure leaves the version intact and the operation can be retried.
    */
+  /*
+   * THE RENDERED MP4 MAY NOT BE OURS TO DELETE. Publishing a company production
+   * into the Library points the new revision's `normalisedBlobPath` at this very
+   * file instead of copying it, so a library revision can still be serving it to
+   * operatives. Deleting the row is fine — the revision holds a path, not a
+   * foreign key — but deleting the file would break playback of issued footage
+   * with no error anywhere. So it is kept when anything is still serving it, and
+   * the retention sweep will not reclaim it either (it only touches versions with
+   * no viewing records, and never unlinks a path another record points at).
+   */
+  const rendered =
+    video.videoBlobPath && !(await blobServedByLibrary(video.videoBlobPath))
+      ? video.videoBlobPath
+      : null;
   const media = [
     ...video.scenes.map((s) => s.audioBlobPath),
     video.captionsBlobPath,
     video.transcriptBlobPath,
-    video.videoBlobPath,
+    rendered,
   ].filter((p): p is string => Boolean(p));
   for (const path of media) await deleteMedia(path);
 

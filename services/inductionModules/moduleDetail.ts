@@ -1,5 +1,13 @@
 import { prisma } from '@/lib/prisma';
-import { getModule } from '@/services/inductionModules/inductionModuleService';
+import {
+  BUILD_PHASE_NOTICE,
+  contentResetEnabled,
+} from '@/services/inductionContent/buildPhase';
+import {
+  getModule,
+  moduleDeletion,
+  type ModuleDeletion,
+} from '@/services/inductionModules/inductionModuleService';
 import { moduleUsage, type ModuleUsage } from '@/services/inductionModules/moduleUsage';
 import { moduleStatus, type ModuleStatus } from '@/services/inductionModules/moduleStatus';
 import { describeRealm } from '@/services/inductionModules/moduleActor';
@@ -72,6 +80,20 @@ export interface ModuleDetail {
   retireConsequence: string;
   /** A library video that plays instead of this wording. */
   standsInFor: { assetId: string; title: string; hasIssuedRevision: boolean } | null;
+  /**
+   * Whether this module can be deleted outright, and what would go with it.
+   *
+   * The page asks the same function the service enforces, so a delete control is
+   * never offered for something that would then be refused.
+   */
+  deletion: ModuleDeletion;
+  /**
+   * The build-phase sentence, or null when the platform is running the strict
+   * lifecycle. Carried on the detail rather than passed down from each page so the
+   * two tiers cannot describe the capability differently — and so no page has to be
+   * edited to add it.
+   */
+  buildPhaseNotice: string | null;
 }
 
 /**
@@ -115,8 +137,12 @@ export async function moduleDetail(moduleId: string): Promise<ModuleDetail | nul
   const row = await getModule(moduleId);
   if (!row) return null;
 
-  const [usage, asset] = await Promise.all([
+  const [usage, deletion, asset] = await Promise.all([
     moduleUsage(moduleId),
+    // Deliberately alongside usage rather than inside it: usage answers "who hears
+    // this", deletion answers "may this go", and conflating them would make one
+    // cache invalidate the other.
+    moduleDeletion(moduleId),
     prisma.libraryAsset.findFirst({
       where: { moduleId, active: true },
       select: {
@@ -171,6 +197,8 @@ export async function moduleDetail(moduleId: string): Promise<ModuleDetail | nul
           hasIssuedRevision: asset.revisions.length > 0,
         }
       : null,
+    deletion,
+    buildPhaseNotice: contentResetEnabled() ? BUILD_PHASE_NOTICE : null,
     revisions: row.revisions.map((r) => ({
       id: r.id,
       version: r.version,
