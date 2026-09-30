@@ -1115,6 +1115,125 @@ export async function discardLibraryRevision(
   return { ok: true, value: { discarded: true, version: revision.version } };
 }
 
+/**
+ * The facts both "start again" and "delete" need, computed once.
+ *
+ * ── WHY THE TWO PREDICATES ARE SEPARATE ───────────────────────────────────
+ *
+ * They were one function, and that produced a refusal which told the reader to
+ * "Start again" — and then refused Start again for the same reason, because it
+ * asked the same predicate. A mandatory video is exactly the case where clearing
+ * the footage and keeping the slot is the RIGHT answer, so the rule that protects
+ * the slot must not also block the thing it recommends.
+ *
+ * So: the shared checks live here, each public predicate adds only its own.
+ */
+interface AssetContentState {
+  exists: boolean;
+  active: boolean;
+  mandatory: boolean;
+  issuedRevisions: number;
+  draftRevisions: number;
+  productions: number;
+  siteDecisions: number;
+  /** An operative has been shown this. Refused by BOTH, in either mode. */
+  consumed: boolean;
+  consumedReason: string | null;
+  /** A narration or render is running on one of its productions. */
+  inFlight: boolean;
+}
+
+async function assetContentState(assetId: string): Promise<AssetContentState> {
+  const asset = await prisma.libraryAsset.findUnique({
+    where: { id: assetId },
+    select: {
+      id: true,
+      active: true,
+      mandatory: true,
+      revisions: { select: { status: true } },
+      productions: { select: { jobs: { select: { status: true } } } },
+      _count: { select: { productions: true, sites: true } },
+    },
+  });
+  if (!asset) {
+    return {
+      exists: false, active: false, mandatory: false,
+      issuedRevisions: 0, draftRevisions: 0, productions: 0, siteDecisions: 0,
+      consumed: false, consumedReason: null, inFlight: false,
+    };
+  }
+  const issuedRevisions = asset.revisions.filter(
+    (r) => r.status !== LibraryRevisionStatus.DRAFT,
+  ).length;
+  const consumption = await assetConsumption(assetId);
+  return {
+    exists: true,
+    active: asset.active,
+    mandatory: asset.mandatory,
+    issuedRevisions,
+    draftRevisions: asset.revisions.length - issuedRevisions,
+    productions: asset._count.productions,
+    siteDecisions: asset._count.sites,
+    consumed: consumption.consumed,
+    consumedReason: consumption.reason,
+    inFlight: asset.productions.some((p) =>
+      p.jobs.some((j) => j.status === InductionVideoJobStatus.QUEUED
+        || j.status === InductionVideoJobStatus.RUNNING),
+    ),
+  };
+}
+
+/**
+ * The refusals that apply to clearing an asset's content, whichever way it is
+ * cleared. Returns null when there is none.
+ *
+ * Evidence first, then the render lock, then version history. Evidence is checked
+ * before the flag is ever consulted, so no flag can reach it.
+ */
+function sharedContentRefusal(state: AssetContentState): string | null {
+  if (!state.exists) return 'That library video does not exist.';
+  if (state.consumed) return state.consumedReason;
+  if (state.inFlight) {
+    return 'Something is still being generated for this video. It can be cleared once '
+      + 'that finishes.';
+  }
+  if (state.issuedRevisions > 0 && !contentResetEnabled()) {
+    return 'This library video has issued footage, which is kept as version history. '
+      + 'Issue a new revision to replace it.';
+  }
+  return null;
+}
+
+/** What starting a library video again would clear, and what it would keep. */
+export interface AssetReset {
+  resettable: boolean;
+  blockedReason: string | null;
+  revisions: number;
+  productions: number;
+  /** Project decisions KEPT. Reported because it is the point of the action. */
+  siteDecisionsKept: number;
+}
+
+/**
+ * Can this asset's content be cleared, leaving the asset standing?
+ *
+ * Deliberately does NOT inherit the mandatory rule from `assetDeletion`: a video
+ * every project must show is the clearest case for clearing the footage and keeping
+ * the slot.
+ */
+export async function assetReset(assetId: string): Promise<AssetReset> {
+  const state = await assetContentState(assetId);
+  const facts = {
+    revisions: state.issuedRevisions + state.draftRevisions,
+    productions: state.productions,
+    siteDecisionsKept: state.siteDecisions,
+  };
+  const refusal = sharedContentRefusal(state);
+  return refusal
+    ? { resettable: false, blockedReason: refusal, ...facts }
+    : { resettable: true, blockedReason: null, ...facts };
+}
+
 /** What deleting a whole library asset would do, asked before the press. */
 export interface AssetDeletion {
   deletable: boolean;
@@ -1150,52 +1269,55 @@ export interface AssetDeletion {
  * `deleteLibraryAsset` must never be rewritten to skip it.
  */
 export async function assetDeletion(assetId: string): Promise<AssetDeletion> {
-  const asset = await prisma.libraryAsset.findUnique({
-    where: { id: assetId },
-    select: {
-      id: true,
-      revisions: { select: { status: true } },
-      _count: { select: { productions: true, sites: true } },
-    },
-  });
-  if (!asset) {
+  const state = await assetContentState(assetId);
+  const facts = {
+    issuedRevisions: state.issuedRevisions,
+    draftRevisions: state.draftRevisions,
+    productions: state.productions,
+    siteDecisions: state.siteDecisions,
+  };
+
+  if (!state.exists) {
     return {
       deletable: false,
       blockedReason: 'That library video does not exist.',
-      consumed: false,
-      issuedRevisions: 0,
-      draftRevisions: 0,
-      productions: 0,
-      siteDecisions: 0,
-    };
-  }
-
-  const issuedRevisions = asset.revisions.filter(
-    (r) => r.status !== LibraryRevisionStatus.DRAFT,
-  ).length;
-  const facts = {
-    issuedRevisions,
-    draftRevisions: asset.revisions.length - issuedRevisions,
-    productions: asset._count.productions,
-    siteDecisions: asset._count.sites,
-  };
-
-  const consumption = await assetConsumption(assetId);
-  if (consumption.consumed) {
-    return { deletable: false, blockedReason: consumption.reason, consumed: true, ...facts };
-  }
-
-  if (issuedRevisions > 0 && !contentResetEnabled()) {
-    return {
-      deletable: false,
-      blockedReason:
-        'This library video has issued footage, which is kept as version history. ' +
-        'Retire it instead — it then reaches no new induction.',
       consumed: false,
       ...facts,
     };
   }
 
+  /*
+   * ── A VIDEO EVERY PROJECT MUST SHOW IS NOT DELETED TO REPLACE ITS FOOTAGE ──
+   *
+   * The same rule Company Modules applies to a standard subject, and the same rule
+   * `setLibraryAssetActive` already applies to RETIRING: a mandatory asset is one
+   * the company shows every operative, so wanting different footage is not a reason
+   * to remove the slot it plays in. Making it optional is the escape hatch, exactly
+   * as it is for retiring.
+   *
+   * THIS IS THE ONE REFUSAL `assetReset` DOES NOT SHARE, and that is the point: the
+   * sentence below recommends starting again, so it must not also block it. It did,
+   * briefly, when both predicates were one function.
+   *
+   * Checked before consumption because it is the more useful sentence: a mandatory
+   * asset with no footage yet would otherwise read as freely deletable.
+   */
+  if (state.active && state.mandatory) {
+    return {
+      deletable: false,
+      blockedReason:
+        'This video is required on every project, so it is kept even while its footage is '
+        + 'being replaced. Start again to clear its revisions and productions, or make it '
+        + 'optional first if it should no longer play at all.',
+      consumed: false,
+      ...facts,
+    };
+  }
+
+  const refusal = sharedContentRefusal(state);
+  if (refusal) {
+    return { deletable: false, blockedReason: refusal, consumed: state.consumed, ...facts };
+  }
   return { deletable: true, blockedReason: null, consumed: false, ...facts };
 }
 
@@ -1301,11 +1423,16 @@ export async function resetLibraryAsset(
   if (!actor.canIssue) {
     return { ok: false, error: 'Only a Director may start a library video again.' };
   }
-  const deletion = await assetDeletion(assetId);
-  if (!deletion.deletable) {
+  /*
+   * `assetReset`, NOT `assetDeletion`: the mandatory rule protects the slot this
+   * action is clearing, and asking the delete predicate made the refusal recommend
+   * something it then refused.
+   */
+  const reset = await assetReset(assetId);
+  if (!reset.resettable) {
     return {
       ok: false,
-      error: deletion.blockedReason ?? 'That library video cannot be started again.',
+      error: reset.blockedReason ?? 'That library video cannot be started again.',
     };
   }
 

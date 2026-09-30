@@ -490,6 +490,25 @@ const madeVideos: string[] = [];
     /* ─────────────────────────────────────────────────────────────────────── */
     console.log('\nSTART AGAIN KEEPS THE WIRING');
     const resetAsset = await mkAsset('reset');
+    /*
+     * THE WIRING, SET EXPLICITLY so its survival is a measurement rather than a
+     * default. These are the fields the owner named: placement, category and the
+     * module linkage. A reset that quietly dropped any of them would be
+     * delete-and-recreate wearing a different label.
+     */
+    const resetModuleLink = await mkModule('assetlink');
+    await prisma.libraryAsset.update({
+      where: { id: resetAsset.id },
+      data: {
+        placement: 'CLOSING',
+        category: 'PPE',
+        moduleId: resetModuleLink.id,
+        mandatory: true,
+        defaultIncluded: true,
+        order: 42,
+        description: 'Kept through a reset.',
+      },
+    });
     await prisma.siteLibraryAsset.create({
       data: { jobSiteId: site.id, assetId: resetAsset.id, included: true, decidedByName: 'Test' },
     });
@@ -501,11 +520,60 @@ const madeVideos: string[] = [];
       where: { assetId: resetAsset.id } })) === 0);
     chk('  its productions went', (await prisma.inductionVideo.count({
       where: { libraryAssetId: resetAsset.id } })) === 0);
-    chk('  THE ASSET ITSELF STAYED', Boolean(
-      await prisma.libraryAsset.findUnique({ where: { id: resetAsset.id } })));
+    const kept = await prisma.libraryAsset.findUnique({
+      where: { id: resetAsset.id },
+      select: {
+        id: true, slug: true, title: true, description: true, placement: true,
+        category: true, moduleId: true, mandatory: true, defaultIncluded: true,
+        order: true, active: true,
+      },
+    });
+    chk('  THE ASSET ITSELF STAYED', Boolean(kept));
+    chk('  its PLACEMENT survived', kept?.placement === 'CLOSING', String(kept?.placement));
+    chk('  its CATEGORY survived', kept?.category === 'PPE', String(kept?.category));
+    chk('  ITS MODULE LINKAGE survived', kept?.moduleId === resetModuleLink.id,
+      'a generated asset with no module cannot be produced at all');
+    chk('  its inclusion rules survived',
+      kept?.mandatory === true && kept?.defaultIncluded === true);
+    chk('  its running order survived', kept?.order === 42);
+    chk('  its title and description survived',
+      kept?.title?.length > 0 && kept?.description === 'Kept through a reset.');
     chk('  and so did the project’s decision about it',
       (await prisma.siteLibraryAsset.count({ where: { assetId: resetAsset.id } })) === 1,
       'the whole reason this is not delete-and-recreate');
+
+    /* ─────────────────────────────────────────────────────────────────────── */
+    console.log('\nA MANDATORY VIDEO CAN BE STARTED AGAIN BUT NOT DELETED');
+    /*
+     * THE BUG THIS PINS: the mandatory guard was added to the shared predicate, so
+     * the refusal said "Start again to clear its revisions" and Start again then
+     * refused for the same reason. Caught in one run; it must not come back.
+     */
+    const mand = await mkAsset('mandatory');
+    await prisma.libraryAsset.update({
+      where: { id: mand.id }, data: { mandatory: true, active: true },
+    });
+    buildMode();
+    const mandDel = await libSvc.assetDeletion(mand.id);
+    chk('an ACTIVE MANDATORY video cannot be deleted', mandDel.deletable === false,
+      mandDel.blockedReason ?? '');
+    chk('  and the refusal recommends starting again',
+      /Start again to clear/.test(mandDel.blockedReason ?? ''));
+    const mandReset = await libSvc.assetReset(mand.id);
+    chk('  AND STARTING AGAIN IS ACTUALLY ALLOWED', mandReset.resettable === true,
+      mandReset.blockedReason ?? 'the refusal above must not block what it recommends');
+    const didMandReset = await libSvc.resetLibraryAsset(director, mand.id);
+    chk('  the service agrees', didMandReset.ok === true,
+      didMandReset.ok ? '' : didMandReset.error);
+    chk('  and the video is still required on every project',
+      (await prisma.libraryAsset.findUnique({
+        where: { id: mand.id }, select: { mandatory: true, active: true },
+      }))?.mandatory === true);
+    // Making it optional is the escape hatch, as it is for retiring.
+    await prisma.libraryAsset.update({ where: { id: mand.id }, data: { mandatory: false } });
+    chk('  once OPTIONAL it becomes deletable',
+      (await libSvc.assetDeletion(mand.id)).deletable === true,
+      'protection without a dead end');
 
     /* ─────────────────────────────────────────────────────────────────────── */
     console.log('\nDISCARDING ONE REVISION');
@@ -620,9 +688,37 @@ const madeVideos: string[] = [];
     chk('the asset delete asks assetDeletion rather than deleting bare',
       /const deletion = await assetDeletion\(assetId\);/.test(ls) &&
       /if \(!deletion\.deletable\)/.test(ls));
-    chk('  and resetLibraryAsset asks the same predicate',
-      (ls.match(/await assetDeletion\(assetId\)/g) ?? []).length >= 2,
+    /*
+     * BOTH PREDICATES ROUTE THEIR EVIDENCE CHECK THROUGH ONE FUNCTION. They used to
+     * be literally the same function, which made the mandatory refusal block the
+     * Start again it recommends. Split, the invariant is no longer "same predicate"
+     * but "same shared refusal" — so that is what is asserted.
+     */
+    chk('  and resetLibraryAsset asks assetReset, not the delete predicate',
+      /const reset = await assetReset\(assetId\);/.test(ls) &&
+      !/const deletion = await assetDeletion\(assetId\);[\s\S]{0,400}cannot be started again/.test(ls));
+    chk('  and BOTH predicates share one evidence refusal',
+      /function sharedContentRefusal/.test(ls) &&
+      (ls.match(/sharedContentRefusal\(state\)/g) ?? []).length >= 2,
       'so neither can be used to get round the other');
+    /*
+     * SCOPED TO THE FUNCTION BODY. A whole-file index comparison failed here
+     * because `contentResetEnabled()` also appears earlier, in
+     * `discardLibraryRevision` — the assertion was measuring the wrong two
+     * positions, not a real ordering problem.
+     */
+    const shared = (() => {
+      const at = ls.indexOf('function sharedContentRefusal');
+      if (at < 0) return '';
+      const rest = ls.slice(at);
+      const nxt = rest.indexOf('\nexport ', 1);
+      return nxt > 0 ? rest.slice(0, nxt) : rest;
+    })();
+    chk('  which checks evidence before it consults the flag',
+      shared.length > 0 &&
+      shared.indexOf('state.consumed') >= 0 &&
+      shared.indexOf('contentResetEnabled()') > shared.indexOf('state.consumed'),
+      'no flag can reach a refusal about somebody’s induction record');
   } finally {
     strict();
     // Productions first: they cascade from the asset anyway, but a stray one from a

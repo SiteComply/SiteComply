@@ -335,6 +335,10 @@ const detailFixture = (over: Record<string, unknown> = {}) => ({
     issuedRevisions: 0, draftRevisions: 0, productions: 0, siteDecisions: 0,
   },
   buildPhaseNotice: null,
+  reset: {
+    resettable: true, blockedReason: null, revisions: 2, productions: 1,
+    siteDecisionsKept: 4,
+  },
   ...over,
 });
 
@@ -393,30 +397,68 @@ chk('a production that cannot be discarded says why',
   held.includes('Something is still running on it.') && !held.includes('Discard it'),
   'offering a button the service would refuse is worse than explaining');
 
-/* ── DELETING, STARTING AGAIN, AND DISCARDING ONE REVISION ── */
-console.log('\nTHE ASSET CAN BE STARTED AGAIN OR DELETED');
+/* ── STARTING AGAIN, DELETING, AND DISCARDING ONE REVISION ── */
+console.log('\nTHE ASSET PAGE LEADS WITH START AGAIN, LIKE THE MODULE PAGE');
 const clean = renderDetail();
-chk('the panel offers both, and they are not the same button',
-  clean.includes('Start again, keep the settings') && clean.includes('Delete this video'),
-  'start again keeps the slug, placement, settings and every project decision');
-chk('  and says what "start again" keeps, ON THE PAGE',
-  /place in the running order/.test(clean) &&
-  /decision about it/.test(clean) &&
-  /only the footage goes/.test(clean),
-  'a consequence you must press a destructive button to read is not stated');
+chk('START AGAIN is offered as an ordinary action',
+  clean.includes('Clear the footage and start again'));
+chk('  and it says what it KEEPS, on the page',
+  /Keeps this video itself/.test(clean) &&
+  /where it plays in the running order/.test(clean) &&
+  /the company module it stands in for/.test(clean) &&
+  /4 project decisions about it/.test(clean),
+  'placement, category and module linkage are exactly what the owner asked to keep');
+chk('  and what it clears, naming the generated artefacts',
+  /all 2 revisions/.test(clean) &&
+  /scripts, narration, captions and rendered video files/.test(clean));
+chk('DELETE IS BEHIND A DISCLOSURE, described by what it means',
+  clean.includes('This video should not exist at all') && /<details/.test(clean),
+  'a delete button beside a reset invites the wrong press');
+chk('  and it points back at Start again', /use Start again above/.test(clean));
+chk('START AGAIN COMES FIRST on the page',
+  clean.indexOf('Clear the footage and start again') <
+    clean.indexOf('This video should not exist at all'));
+
+const mandatoryAsset = renderDetail({
+  deletion: {
+    deletable: false,
+    blockedReason: 'This video is required on every project, so it is kept even while its footage is being replaced. Start again to clear its revisions and productions, or make it optional first if it should no longer play at all.',
+    consumed: false, issuedRevisions: 1, draftRevisions: 0, productions: 0, siteDecisions: 4,
+  },
+});
+chk('A MANDATORY VIDEO CANNOT BE DELETED but CAN be started again',
+  mandatoryAsset.includes('required on every project') &&
+  !mandatoryAsset.includes('Delete this video') &&
+  mandatoryAsset.includes('Clear the footage and start again'),
+  'THE BUG: the refusal recommends starting again, so it must not block it');
 
 const consumed = renderDetail({
+  reset: {
+    resettable: false,
+    blockedReason: 'An operative has watched this library video, so it is the record of their induction and is kept permanently.',
+    revisions: 1, productions: 1, siteDecisionsKept: 0,
+  },
   deletion: {
     deletable: false,
     blockedReason: 'An operative has watched this library video, so it is the record of their induction and is kept permanently.',
     consumed: true, issuedRevisions: 1, draftRevisions: 0, productions: 1, siteDecisions: 0,
   },
 });
-chk('CONSUMED FOOTAGE SHOWS THE REASON AND NO BUTTON',
+chk('CONSUMED FOOTAGE SHOWS THE REASON AND NEITHER BUTTON',
   consumed.includes('operative has watched') &&
   !consumed.includes('Delete this video') &&
-  !consumed.includes('Start again, keep the settings'),
-  'the page asks the same predicate the service enforces');
+  !consumed.includes('Clear the footage and start again'),
+  'the page asks the same predicates the service enforces');
+
+chk('nothing to clear disables the button rather than pretending',
+  /disabled/.test(renderDetail({
+    reset: { resettable: true, blockedReason: null, revisions: 0, productions: 0,
+      siteDecisionsKept: 0 },
+  })) &&
+  renderDetail({
+    reset: { resettable: true, blockedReason: null, revisions: 0, productions: 0,
+      siteDecisionsKept: 0 },
+  }).includes('no footage yet, so there is nothing to clear'));
 
 const noticed = renderDetail({ buildPhaseNotice: 'SiteComply is in its build phase, so content nobody has seen can be deleted.' });
 chk('the build-phase notice appears when the flag is on',

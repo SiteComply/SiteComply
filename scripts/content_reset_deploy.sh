@@ -1,4 +1,24 @@
 #!/usr/bin/env bash
+# THE SAME START-AGAIN MODEL ON BOTH SIDES (owner's follow-up, 2026-09-30).
+#
+# The module page was fixed first, leaving the Library page still offering Delete as
+# a peer button beside Start again - the framing the owner objected to.
+#
+# WHAT MUST BE TRUE:
+#   RESET KEEPS THE WIRING   resetLibraryAsset writes no LibraryAsset column and no
+#                            SiteLibraryAsset row, so slug, category, placement,
+#                            running order, inclusion rules, the module linkage and
+#                            every project decision survive by construction.
+#   TWO PREDICATES, ONE LINE assetReset and assetDeletion share ONE evidence
+#                            refusal, but only the delete carries the mandatory rule.
+#                            They were one function, and the mandatory refusal then
+#                            blocked the Start again it recommends.
+#   MANDATORY IS PROTECTED   an ACTIVE mandatory video cannot be deleted; making it
+#                            optional is the escape hatch, as it is for retiring.
+#   BOTH PAGES READ ALIKE    reset panel first, delete inside a <details>.
+#
+# (Inherited: the module reset gate.)
+#
 # RESETTING A MODULE IS NOT DELETING IT (owner's correction, 2026-09-30).
 #
 # The first cut gave a module page only "Delete permanently", so the only way to
@@ -242,11 +262,8 @@ BUILD_STRINGS=(
   "Retired modules"
   "Nothing is retired"
   "Delete permanently"
-  "Start again, or delete"
-  "Start again, keep the settings"
   "Discard this revision"
   "build phase"
-  "only the footage goes"
   "will stop standing in for this"
   "Clear the content and start again"
   "This subject is no longer wanted"
@@ -254,6 +271,11 @@ BUILD_STRINGS=(
   "use Start again above"
   "standard company subject"
   "is not cleared here"
+  "Clear the footage and start again"
+  "This video should not exist at all"
+  "Keeps this video itself"
+  "the company module it stands in for"
+  "required on every project"
 )
 
 echo "[3/7] Asserting the source, the history and the database..."
@@ -375,11 +397,106 @@ grep -qF "if (contentResetEnabled()) return true;" "$VIDSVC" \
 # --- THE CASCADE TRAP IS GUARDED, AND NOTHING DELETES AN ASSET BARE ---
 grep -qF "const deletion = await assetDeletion(assetId);" "$SVC" \
   || fail "deleteLibraryAsset does not ask assetDeletion"
-# resetLibraryAsset must ask the SAME predicate, or it becomes the way round it.
-[ "$(grep -cF "await assetDeletion(assetId)" "$SVC")" -ge 2 ] \
-  || fail "reset does not ask the same predicate as the delete - it would be a bypass"
-grep -qF "consumed: true" "$SVC" \
+grep -qF "const reset = await assetReset(assetId);" "$SVC" \
+  || fail "resetLibraryAsset does not ask assetReset"
+# The evidence fact is reported SEPARATELY from `deletable`, because a per-revision
+# decision needs it on its own. Expressed as `consumed: state.consumed` since the
+# predicates were split; the old grep looked for the literal `consumed: true`.
+grep -qF "consumed: state.consumed" "$SVC" \
   || fail "assetDeletion no longer reports the evidence fact separately"
+
+# --- TWO PREDICATES, ONE EVIDENCE REFUSAL, AND ONLY DELETE CARRIES `mandatory` ---
+python3 - "$SVC" <<'PYSPLIT' || fail "the reset and delete predicates have drifted or re-merged"
+import re, sys
+src = open(sys.argv[1]).read()
+src = re.sub(r'/\*[\s\S]*?\*/', '', src)
+src = re.sub(r'^\s*//.*$', '', src, flags=re.M)
+
+def body(name, src=src):
+    at = src.find(f'export async function {name}(')
+    if at < 0:
+        at = src.find(f'function {name}(')
+    if at < 0:
+        return ''
+    rest = src[at:]
+    nxt = rest.find('\nexport ', 1)
+    return rest[:nxt] if nxt > 0 else rest
+
+shared = body('sharedContentRefusal')
+reset = body('assetReset')
+delete = body('assetDeletion')
+bad = []
+if not shared:
+    bad.append('sharedContentRefusal is gone - the two predicates no longer share an evidence rule')
+else:
+    if 'state.consumed' not in shared:
+        bad.append('the shared refusal does not check consumption')
+    if shared.index('state.consumed') > shared.index('contentResetEnabled()'):
+        bad.append('the shared refusal consults the flag before evidence')
+for name, b in (('assetReset', reset), ('assetDeletion', delete)):
+    if not b:
+        bad.append(f'{name} is gone')
+    elif 'sharedContentRefusal(state)' not in b:
+        bad.append(f'{name} no longer asks the shared evidence refusal')
+# THE BUG: the mandatory rule must live in the DELETE only. In the reset it blocks
+# the very action its own refusal text recommends.
+if reset and 'state.mandatory' in reset:
+    bad.append('assetReset checks `mandatory` - that blocks the Start again the delete refusal recommends')
+# ...and it must not hide in the SHARED refusal either, which assetReset calls. That
+# mutation slipped past this assert until the shared body was checked too; only the
+# behavioural suite caught it.
+if shared and 'state.mandatory' in shared:
+    bad.append('sharedContentRefusal checks `mandatory` - assetReset calls it, so the reset is blocked too')
+if delete and 'state.mandatory' not in delete:
+    bad.append('assetDeletion lost the mandatory guard')
+for x in bad:
+    print(f'      {x}')
+sys.exit(1 if bad else 0)
+PYSPLIT
+
+# --- RESET MUST NOT TOUCH THE ASSET ROW OR THE PROJECT DECISIONS ---
+python3 - "$SVC" <<'PYASSETRESET' || fail "resetLibraryAsset writes something it is supposed to keep"
+import re, sys
+src = open(sys.argv[1]).read()
+src = re.sub(r'/\*[\s\S]*?\*/', '', src)
+src = re.sub(r'^\s*//.*$', '', src, flags=re.M)
+at = src.find('export async function resetLibraryAsset(')
+if at < 0:
+    print('      resetLibraryAsset not found')
+    sys.exit(1)
+rest = src[at:]
+nxt = rest.find('\nexport ', 1)
+b = rest[:nxt] if nxt > 0 else rest
+bad = []
+if 'libraryAsset.update' in b or 'prisma.libraryAsset.delete' in b:
+    bad.append('it writes the LibraryAsset row - slug, category, placement and the module link must survive')
+if 'siteLibraryAsset' in b:
+    bad.append('it touches SiteLibraryAsset - the project decisions are the point of reset')
+if 'libraryAssetRevision.deleteMany' not in b:
+    bad.append('it does not clear the revisions')
+if 'inductionVideo.deleteMany' not in b:
+    bad.append('it does not clear the productions')
+for x in bad: print(f'      {x}')
+sys.exit(1 if bad else 0)
+PYASSETRESET
+
+# --- THE ASSET PAGE READS LIKE THE MODULE PAGE ---
+grep -qF "Clear the footage and start again" "$DETAIL" \
+  || fail "the asset page does not offer Start again"
+grep -qF "This video should not exist at all" "$DETAIL" \
+  || fail "asset delete is not behind a meaning-first disclosure"
+python3 - "$DETAIL" <<'PYASSETUI' || fail "asset delete is rendered before Start again"
+import sys
+src = open(sys.argv[1]).read()
+r = src.find('Clear the footage and start again')
+d = src.find('This video should not exist at all')
+if r < 0 or d < 0:
+    print('      one of the two panels is missing')
+    sys.exit(1)
+sys.exit(0 if r < d else 1)
+PYASSETUI
+grep -qF "asset.reset.resettable" "$DETAIL" \
+  || fail "the asset page asks the DELETE predicate for its reset panel - a mandatory video would be refused"
 # Exactly one libraryAsset.delete, in deleteLibraryAsset, and counted against
 # COMMENT-STRIPPED source: the doc comment above it quotes
 # `prisma.libraryAsset.delete()` while explaining why it is dangerous, so a plain

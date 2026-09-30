@@ -780,77 +780,117 @@ export function LibraryAssetDetail({
       )}
 
       {/*
-        ── START AGAIN, OR DELETE ──
-        Two different intentions, deliberately not one button.
+        ── START AGAIN: THE PRIMARY WAY TO CLEAR CONTENT ──
+        The same shape as a Company Module's page, because the distinction is the
+        same one and reading it differently in two places is how it gets lost:
 
-        START AGAIN keeps the asset and clears its content. The asset row carries the
-        wiring — its slug, the module it stands in for, its placement and running
-        order, whether it is mandatory, and every project's decision about it — so
-        when the footage is what came out wrong, deleting and re-creating would throw
-        away the part nobody wanted to lose, and hand back a new id.
+          START AGAIN  the video still belongs in the induction; its FOOTAGE is
+                       wrong and should go. The asset, its slug, category,
+                       placement, running order, inclusion rules, module linkage
+                       and every project's decision about it all survive.
+          RETIRE       it should no longer play at all; everything is kept.
+          DELETE       the slot itself should never have existed.
 
-        DELETE removes the asset itself, for one that should never have existed.
-
-        Both refuse on identical terms, so neither can be used to get round the
-        other's refusal.
+        `reset`, not `deletion`: a video every project must show cannot be deleted,
+        and is exactly the case where clearing the footage is right. Asking the
+        delete predicate here made the refusal recommend something it then refused.
       */}
       {canIssue && (
-        <section className="rounded-xl border border-danger-200 bg-surface p-4 shadow-card">
-          <h3 className="text-sm font-bold text-ink">Start again, or delete</h3>
+        <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
+          <h3 className="text-sm font-bold text-ink">Start again</h3>
           {asset.buildPhaseNotice && (
             <p className="mt-1 rounded-lg bg-surface-sunken px-2 py-1.5 text-xs text-ink-muted">
               {asset.buildPhaseNotice}
             </p>
           )}
-          {asset.deletion.deletable ? (
+          {asset.reset.resettable ? (
             <>
               <p className="mt-2 text-xs text-ink-muted">
-                {asset.deletion.issuedRevisions + asset.deletion.draftRevisions === 0
-                  ? 'This video has no footage yet.'
-                  : `${asset.deletion.issuedRevisions + asset.deletion.draftRevisions} ${
-                      asset.deletion.issuedRevisions + asset.deletion.draftRevisions === 1
-                        ? 'revision'
-                        : 'revisions'
+                {asset.reset.revisions + asset.reset.productions === 0
+                  ? 'This video has no footage yet, so there is nothing to clear.'
+                  : `Clears ${
+                      asset.reset.revisions === 1
+                        ? '1 revision'
+                        : `all ${asset.reset.revisions} revisions`
                     }${
-                      asset.deletion.productions > 0
-                        ? ` and ${asset.deletion.productions} ${
-                            asset.deletion.productions === 1 ? 'production' : 'productions'
+                      asset.reset.productions > 0
+                        ? ` and ${asset.reset.productions} ${
+                            asset.reset.productions === 1 ? 'production' : 'productions'
                           }`
                         : ''
-                    } would go, with their video files.`}{' '}
-                No induction anybody has seen carries this footage.
+                    } — the scripts, narration, captions and rendered video files with them.`}
               </p>
-              {/*
-                THE CONSEQUENCE BEFORE THE PRESS, as the retire and issue panels do
-                it. This sentence was only in the browser confirm dialog until the
-                render harness asked for it on the page — and a consequence you have
-                to press a destructive button to read is not stated.
-              */}
               <p className="mt-1 text-xs text-ink-muted">
-                Starting again keeps this video’s settings, its place in the running order
-                and each project’s decision about it; only the footage goes. Deleting takes
-                all of it.
+                Keeps this video itself, its subject, where it plays in the running order,
+                its inclusion rules, the company module it stands in for
+                {asset.reset.siteDecisionsKept > 0
+                  ? ` and ${asset.reset.siteDecisionsKept} project ${
+                      asset.reset.siteDecisionsKept === 1 ? 'decision' : 'decisions'
+                    } about it`
+                  : ''}
+                .
               </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={busy !== null}
-                  onClick={() => {
-                    if (
-                      !window.confirm(
-                        'Start this video again? Every revision, production and video ' +
-                          'file is deleted. Its settings, its place in the running order ' +
-                          'and each project’s decision about it are kept. This cannot be undone.',
-                      )
-                    ) {
-                      return;
-                    }
-                    void call({ action: 'resetAsset', assetId: asset.id }, 'reset');
-                  }}
-                  className="touch-target inline-flex items-center rounded-lg border border-danger-300 bg-surface px-3 py-2 text-xs font-semibold text-danger-700 hover:bg-danger-50 disabled:opacity-50"
-                >
-                  {busy === 'reset' ? 'Clearing…' : 'Start again, keep the settings'}
-                </button>
+              <button
+                type="button"
+                disabled={busy !== null || asset.reset.revisions + asset.reset.productions === 0}
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      'Start this video again? Every revision, production and video ' +
+                        'file is deleted. Its settings, its place in the running order ' +
+                        'and each project’s decision about it are kept. This cannot be undone.',
+                    )
+                  ) {
+                    return;
+                  }
+                  void call({ action: 'resetAsset', assetId: asset.id }, 'reset');
+                }}
+                className="mt-3 touch-target inline-flex items-center rounded-lg border border-danger-300 bg-surface px-3 py-2 text-xs font-semibold text-danger-700 hover:bg-danger-50 disabled:opacity-40"
+              >
+                {busy === 'reset' ? 'Clearing…' : 'Clear the footage and start again'}
+              </button>
+            </>
+          ) : (
+            <p className="mt-2 text-xs text-ink-muted">{asset.reset.blockedReason}</p>
+          )}
+        </section>
+      )}
+
+      {/*
+        ── DELETE THE VIDEO: A DISCLOSURE, NOT A BUTTON ──
+        Closed by default and described by what it means, for the same reason as the
+        module page: a delete button sitting beside a reset invites the wrong press,
+        and this one cascades into every production of the asset.
+      */}
+      {canIssue && (
+        <details className="rounded-xl border border-line bg-surface p-4 shadow-card">
+          <summary className="cursor-pointer text-sm font-semibold text-ink-muted">
+            This video should not exist at all
+          </summary>
+          <div className="mt-3 border-t border-line pt-3">
+            {asset.deletion.deletable ? (
+              <>
+                <p className="text-xs text-ink-muted">
+                  Deletes the video itself, with{' '}
+                  {asset.deletion.issuedRevisions + asset.deletion.draftRevisions === 0
+                    ? 'no footage to remove'
+                    : `${asset.deletion.issuedRevisions + asset.deletion.draftRevisions} ${
+                        asset.deletion.issuedRevisions + asset.deletion.draftRevisions === 1
+                          ? 'revision'
+                          : 'revisions'
+                      }`}
+                  {asset.deletion.productions > 0
+                    ? `, ${asset.deletion.productions} ${
+                        asset.deletion.productions === 1 ? 'production' : 'productions'
+                      }`
+                    : ''}
+                  {asset.deletion.siteDecisions > 0
+                    ? ` and ${asset.deletion.siteDecisions} project ${
+                        asset.deletion.siteDecisions === 1 ? 'decision' : 'decisions'
+                      } about it`
+                    : ''}
+                  . To keep the video and only clear its footage, use Start again above.
+                </p>
                 <button
                   type="button"
                   disabled={busy !== null}
@@ -870,17 +910,18 @@ export function LibraryAssetDetail({
                     );
                     if (done) router.push(backHref);
                   }}
-                  className="touch-target inline-flex items-center rounded-lg border border-danger-500/40 px-3 py-2 text-xs font-semibold text-danger-600 hover:bg-danger-50 disabled:opacity-50"
+                  className="mt-3 touch-target inline-flex items-center rounded-lg border border-danger-500/40 px-3 py-2 text-xs font-semibold text-danger-600 hover:bg-danger-50 disabled:opacity-50"
                 >
                   {busy === 'deleteAsset' ? 'Deleting…' : 'Delete this video'}
                 </button>
-              </div>
-            </>
-          ) : (
-            <p className="mt-2 text-xs text-ink-muted">{asset.deletion.blockedReason}</p>
-          )}
-        </section>
+              </>
+            ) : (
+              <p className="text-xs text-ink-muted">{asset.deletion.blockedReason}</p>
+            )}
+          </div>
+        </details>
       )}
+
     </div>
   );
 }

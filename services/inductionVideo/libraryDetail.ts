@@ -10,7 +10,9 @@ import { prisma } from '@/lib/prisma';
 import {
   revisionReadiness,
   assetDeletion,
+  assetReset,
   type AssetDeletion,
+  type AssetReset,
 } from '@/services/inductionVideo/libraryAssetService';
 import {
   BUILD_PHASE_NOTICE,
@@ -134,6 +136,12 @@ export interface LibraryAssetDetail {
    * The page asks the same function the service enforces.
    */
   deletion: AssetDeletion;
+  /**
+   * Whether the asset's CONTENT can be cleared while the asset stays. The primary
+   * restart, and the one the page leads with — separate from `deletion` because a
+   * mandatory video can be started again but not deleted.
+   */
+  reset: AssetReset;
   /** The build-phase sentence, or null under the strict lifecycle. */
   buildPhaseNotice: string | null;
 }
@@ -273,7 +281,10 @@ export async function libraryAssetDetail(assetId: string): Promise<LibraryAssetD
       : null,
   });
 
-  const deletion = await assetDeletion(asset.id);
+  const [deletion, reset] = await Promise.all([
+    assetDeletion(asset.id),
+    assetReset(asset.id),
+  ]);
 
   const usageFor = (revisionId: string) =>
     usage.revisions.find((r) => r.revisionId === revisionId) ?? {
@@ -304,6 +315,7 @@ export async function libraryAssetDetail(assetId: string): Promise<LibraryAssetD
     draftId: draft?.id ?? null,
     band: band.map((b) => ({ id: b.id, title: b.title, order: b.order, active: b.active })),
     deletion,
+    reset,
     buildPhaseNotice: contentResetEnabled() ? BUILD_PHASE_NOTICE : null,
     revisions: asset.revisions.map((r) => {
       const readiness = revisionReadiness(r);
