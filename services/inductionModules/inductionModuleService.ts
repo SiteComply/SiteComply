@@ -6,7 +6,11 @@ import {
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { contentResetEnabled } from '@/services/inductionContent/buildPhase';
-import { moduleConsumption } from '@/services/inductionContent/consumption';
+import {
+  blobServedByLibrary,
+  moduleConsumption,
+} from '@/services/inductionContent/consumption';
+import { deleteMedia } from '@/services/inductionVideo/mediaStorage';
 import type { ModuleActor } from '@/services/inductionModules/moduleActor';
 import {
   ALL_CATALOGUE_MODULES,
@@ -864,6 +868,8 @@ export async function moduleDeletion(moduleId: string): Promise<ModuleDeletion> 
     where: { id: moduleId },
     select: {
       id: true,
+      slug: true,
+      active: true,
       revisions: { select: { status: true } },
       _count: { select: { sites: true } },
       libraryAssets: { select: { title: true, provenance: true } },
@@ -890,6 +896,37 @@ export async function moduleDeletion(moduleId: string): Promise<ModuleDeletion> 
     siteDecisions: module._count.sites,
     unlinkedAssets: module.libraryAssets.map((a) => a.title),
   };
+
+  /*
+   * ── A STANDARD COMPANY SUBJECT IS NOT DELETED TO RESTART CONTENT ──────────
+   *
+   * Company Introduction, Behavioural Standards and Accident & Near-Miss
+   * Reporting are permanent subjects: the company briefs on them whatever state
+   * the wording is in. Until `resetModule` existed, deleting was the only way to
+   * clear a module's content, so the page pushed a Director towards destroying a
+   * subject in order to re-write it — the wrong verb for the intent, and
+   * irreversible.
+   *
+   * So delete is simply not offered on an ACTIVE standard subject, and the reason
+   * names the two right answers. Retiring first is the escape hatch rather than a
+   * dead end: one press, and it is then a subject the company has stopped using,
+   * which is a decision somebody took rather than a side effect of wanting a
+   * clean slate.
+   *
+   * Checked FIRST, before consumption, because it is the more useful sentence: a
+   * never-issued standard module would otherwise read "this is deletable" and be
+   * deleted for the wrong reason.
+   */
+  if (module.active && MODULE_CATALOGUE.some((c) => c.slug === module.slug)) {
+    return {
+      deletable: false,
+      blockedReason:
+        'This is a standard company subject, so it is kept even while its content is ' +
+        'being rewritten. Start again to clear its revisions and productions, or retire ' +
+        'it first if the company has genuinely stopped briefing on it.',
+      ...facts,
+    };
+  }
 
   const consumption = await moduleConsumption(moduleId);
   if (consumption.consumed) {
@@ -985,5 +1022,250 @@ export async function deleteModule(
   return {
     ok: true,
     value: { deleted: true, title: module.title, siteDecisions: deletion.siteDecisions },
+  };
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * STARTING A MODULE'S CONTENT AGAIN, WITHOUT TOUCHING THE SUBJECT
+ *
+ * The distinction this exists to draw:
+ *
+ *   START AGAIN  the company still briefs on this subject; the WORDING and
+ *                everything generated from it are wrong and should go. The module,
+ *                its category, its running order, its inclusion rules and every
+ *                project's decision about it all survive.
+ *   RETIRE       the company has stopped briefing on this subject. Everything is
+ *                kept; it simply reaches no new induction.
+ *   DELETE       the subject itself should never have existed — a duplicate, a
+ *                test, a mistake. Refused outright on a standard subject.
+ *
+ * Until this function existed only the third was available, so clearing a module's
+ * content meant destroying a permanent company subject to get at it. That is the
+ * wrong verb for the intent and it cannot be undone.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** What starting a module again would clear, and what it would keep. */
+export interface ModuleReset {
+  /** True when `resetModule` would go ahead. */
+  resettable: boolean;
+  blockedReason: string | null;
+  /** Revisions that would go — all of them; a reset is to a blank module. */
+  revisions: number;
+  /** Company video productions generated from this module's wording. */
+  productions: number;
+  /** Per-project decisions KEPT. Reported because it is the point of the action. */
+  siteDecisionsKept: number;
+  /**
+   * Library videos produced from this module whose ISSUED footage this does NOT
+   * clear. Named so the page can point at them: each object's content is cleared
+   * from its own page, and a module reaching across to delete another object's
+   * published footage would be a surprise rather than a convenience.
+   */
+  producedVideos: { id: string; title: string; issuedRevisions: number }[];
+  /**
+   * True when the module is mandatory or included by default, i.e. clearing its
+   * wording silently removes the subject from inductions until something is issued
+   * again. `resolveModulesForSite` does `if (!issued) continue`, so there is no
+   * warning anywhere else.
+   */
+  wouldLeaveSubjectSilent: boolean;
+}
+
+/**
+ * Can this module's content be cleared, and what goes?
+ *
+ * Refuses on the same evidence line as everything else — published to operatives
+ * or watched by one — and, when build-phase reset is off, on issued wording, which
+ * is version history rather than a by-product. A module with only drafts can be
+ * started again at any time: a draft reached nobody by construction.
+ */
+export async function moduleReset(moduleId: string): Promise<ModuleReset> {
+  const module = await prisma.inductionModule.findUnique({
+    where: { id: moduleId },
+    select: {
+      id: true,
+      mandatory: true,
+      defaultIncluded: true,
+      revisions: { select: { id: true, status: true } },
+      _count: { select: { sites: true } },
+      libraryAssets: {
+        select: {
+          id: true,
+          title: true,
+          revisions: { where: { status: { not: 'DRAFT' } }, select: { id: true } },
+        },
+      },
+    },
+  });
+  if (!module) {
+    return {
+      resettable: false,
+      blockedReason: 'That module does not exist.',
+      revisions: 0,
+      productions: 0,
+      siteDecisionsKept: 0,
+      producedVideos: [],
+      wouldLeaveSubjectSilent: false,
+    };
+  }
+
+  const revisionIds = module.revisions.map((r) => r.id);
+  const productions =
+    revisionIds.length === 0
+      ? []
+      : await prisma.inductionVideo.findMany({
+          where: { sourceModuleRevisionId: { in: revisionIds } },
+          select: { id: true, status: true, jobs: { select: { status: true } } },
+        });
+
+  const facts = {
+    revisions: module.revisions.length,
+    productions: productions.length,
+    siteDecisionsKept: module._count.sites,
+    producedVideos: module.libraryAssets
+      .filter((a) => a.revisions.length > 0)
+      .map((a) => ({ id: a.id, title: a.title, issuedRevisions: a.revisions.length })),
+    wouldLeaveSubjectSilent: module.mandatory || module.defaultIncluded,
+  };
+
+  const consumption = await moduleConsumption(moduleId);
+  if (consumption.consumed) {
+    return { resettable: false, blockedReason: consumption.reason, ...facts };
+  }
+
+  /*
+   * A JOB IN FLIGHT IS NOT RELAXED BY ANY FLAG, here as in `deleteVideoVersion`:
+   * the production row is that job's lock, and clearing it mid-render leaves the
+   * runner writing to something that is gone. Checked across ALL productions
+   * before anything is removed, because a reset that half-succeeds is worse than
+   * one that waits.
+   */
+  if (productions.some((p) => p.jobs.some((j) => j.status === 'QUEUED' || j.status === 'RUNNING'))) {
+    return {
+      resettable: false,
+      blockedReason:
+        'Something is still being generated from this module. It can be started again ' +
+        'once that finishes.',
+      ...facts,
+    };
+  }
+
+  const issued = module.revisions.filter(
+    (r) => r.status !== InductionModuleRevisionStatus.DRAFT,
+  ).length;
+  if (issued > 0 && !contentResetEnabled()) {
+    return {
+      resettable: false,
+      blockedReason:
+        'This module has issued wording, which is kept as version history. Start a new ' +
+        'draft to change what it says.',
+      ...facts,
+    };
+  }
+
+  return { resettable: true, blockedReason: null, ...facts };
+}
+
+/**
+ * Clear a module's content and leave the module standing.
+ *
+ * ── WHAT SURVIVES, AND WHY EACH ONE MATTERS ───────────────────────────────
+ *
+ * The module row itself, so the subject still exists and still has its id: the
+ * slug, title, category, running order, `replacesSceneType`, and the mandatory /
+ * default-included rules. Every `SiteInductionModule` row, so a project that
+ * excluded this subject with a reason, or overrode its wording, does not silently
+ * lose that decision and its attribution. And the `LibraryAsset.moduleId` links,
+ * so a video that stands in for this subject still does.
+ *
+ * ── WHAT GOES ─────────────────────────────────────────────────────────────
+ *
+ * Every revision (their events cascade), and every company production generated
+ * from one of them along with its scenes, jobs and media. After this the module
+ * has no revisions at all, so `startDraft` begins again at version 1.
+ *
+ * ── WHAT IT DELIBERATELY DOES NOT REACH ───────────────────────────────────
+ *
+ * The ISSUED footage of a Library video produced from this module. That is a
+ * different object with its own page, its own lifecycle and its own "start again",
+ * and a module quietly deleting another object's published content would be a
+ * surprise. `moduleReset` names those videos so the page can point at them.
+ */
+export async function resetModule(
+  actor: ModuleActor,
+  moduleId: string,
+): Promise<ModuleResult<{ revisions: number; productions: number; decisionsKept: number }>> {
+  if (!actor.canIssue) {
+    return { ok: false, error: 'Only a Director may start a company module again.' };
+  }
+  const reset = await moduleReset(moduleId);
+  if (!reset.resettable) {
+    return { ok: false, error: reset.blockedReason ?? 'That module cannot be started again.' };
+  }
+
+  const revisions = await prisma.inductionModuleRevision.findMany({
+    where: { moduleId },
+    select: { id: true },
+  });
+  const revisionIds = revisions.map((r) => r.id);
+
+  if (revisionIds.length > 0) {
+    const productions = await prisma.inductionVideo.findMany({
+      where: { sourceModuleRevisionId: { in: revisionIds } },
+      select: {
+        id: true,
+        videoBlobPath: true,
+        captionsBlobPath: true,
+        transcriptBlobPath: true,
+        scenes: { select: { audioBlobPath: true } },
+      },
+    });
+
+    /*
+     * MEDIA FIRST, ROWS SECOND, as everywhere else here: a row deleted before its
+     * files leaves blobs with nothing pointing at them. The rendered MP4 goes
+     * through the shared-blob guard because publishing a production into the
+     * Library points a revision at that exact file.
+     */
+    for (const p of productions) {
+      const rendered = (await blobServedByLibrary(p.videoBlobPath)) ? null : p.videoBlobPath;
+      const media = [
+        ...p.scenes.map((s) => s.audioBlobPath),
+        p.captionsBlobPath,
+        p.transcriptBlobPath,
+        rendered,
+      ].filter((path): path is string => Boolean(path));
+      for (const path of media) await deleteMedia(path);
+    }
+
+    /*
+     * Scenes of OTHER videos that carry this module's wording lose the reference.
+     * They keep their own `heading` and `narration` columns, so nothing an
+     * operative was shown changes; what goes is a pointer to a revision that will
+     * no longer exist. Published and watched videos cannot reach here — the
+     * consumption check refused them — so these are unpublished scripts, and the
+     * next generation rebuilds them from whatever is issued next.
+     */
+    await prisma.inductionVideoScene.updateMany({
+      where: { moduleRevisionId: { in: revisionIds } },
+      data: { moduleRevisionId: null },
+    });
+
+    await prisma.$transaction([
+      prisma.inductionVideo.deleteMany({
+        where: { sourceModuleRevisionId: { in: revisionIds } },
+      }),
+      // Events cascade from the revisions. The module row is untouched.
+      prisma.inductionModuleRevision.deleteMany({ where: { moduleId } }),
+    ]);
+  }
+
+  return {
+    ok: true,
+    value: {
+      revisions: reset.revisions,
+      productions: reset.productions,
+      decisionsKept: reset.siteDecisionsKept,
+    },
   };
 }

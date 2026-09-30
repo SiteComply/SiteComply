@@ -1,4 +1,34 @@
 #!/usr/bin/env bash
+# RESETTING A MODULE IS NOT DELETING IT (owner's correction, 2026-09-30).
+#
+# The first cut gave a module page only "Delete permanently", so the only way to
+# reach a clean state was to destroy a permanent company subject. Wrong verb for the
+# intent, and irreversible.
+#
+# FOUR ACTIONS, ONE VIEW:
+#   START AGAIN  clears revisions + productions generated from them. KEEPS the
+#                module, its subject, category, running order, inclusion rules and
+#                EVERY project's decision about it. The primary restart.
+#   RETIRE       the company has stopped briefing on this subject; all history kept.
+#   ARCHIVE      not an action - it is where retired modules are listed.
+#   DELETE       only when the SUBJECT itself is unwanted. Refused outright on an
+#                ACTIVE standard subject; retiring first is the escape hatch.
+#
+# WHAT MUST BE TRUE:
+#   RESET KEEPS THE ROW      resetModule touches no InductionModule column and no
+#                            SiteInductionModule row.
+#   RESET IS NOT A BYPASS    it asks moduleConsumption before anything, so it cannot
+#                            clear content an operative has seen.
+#   A JOB IN FLIGHT BLOCKS   no flag relaxes it; the production row is the job's lock.
+#   STANDARD SUBJECTS STAY   MODULE_CATALOGUE slugs cannot be deleted while active.
+#   DELETE IS SECONDARY      behind a <details>, labelled by meaning, pointing back
+#                            at Start again.
+#   THE SILENT DROP IS SAID  a module with no issued revision reaches nobody
+#                            (resolveModulesForSite: `if (!issued) continue`), so
+#                            the page warns before the press.
+#
+# (Inherited: the build-phase reset gate.)
+#
 # CONTENT CAN BE RESET, DELETED AND STARTED AGAIN DURING THE BUILD PHASE.
 #
 # THE ONE IDEA: there are two reasons the lifecycle refuses a delete, and only one of
@@ -211,7 +241,6 @@ BUILD_STRINGS=(
   "Not started"
   "Retired modules"
   "Nothing is retired"
-  "Delete this module"
   "Delete permanently"
   "Start again, or delete"
   "Start again, keep the settings"
@@ -219,6 +248,12 @@ BUILD_STRINGS=(
   "build phase"
   "only the footage goes"
   "will stop standing in for this"
+  "Clear the content and start again"
+  "This subject is no longer wanted"
+  "Keeps the module itself"
+  "use Start again above"
+  "standard company subject"
+  "is not cleared here"
 )
 
 echo "[3/7] Asserting the source, the history and the database..."
@@ -425,6 +460,126 @@ for C in components/inductionModules/ModuleDetail.tsx "$DETAIL"; do
   grep -qF "buildPhaseNotice" "$C" || fail "$C does not render the notice"
 done
 echo "  ok   build-phase reset: evidence is outside the flag, the cascade is guarded"
+
+# ════════════════════════════════════════════════════════════════════════════
+# RESET IS NOT DELETE
+# ════════════════════════════════════════════════════════════════════════════
+MDETAIL=components/inductionModules/ModuleDetail.tsx
+
+for FN in moduleReset resetModule; do
+  grep -q "export async function $FN" "$MODSVC" || fail "$FN is gone - clearing content would mean deleting the subject again"
+done
+
+# --- RESET MUST NOT TOUCH THE MODULE ROW OR THE PROJECT DECISIONS ---
+# The whole distinction. Read the function body rather than the file, because
+# `setModuleActive` and `updateModuleSettings` legitimately update the module row.
+python3 - "$MODSVC" <<'PYRESET' || fail "resetModule writes something it is supposed to keep"
+import re, sys
+src = open(sys.argv[1]).read()
+src = re.sub(r'/\*[\s\S]*?\*/', '', src)
+src = re.sub(r'^\s*//.*$', '', src, flags=re.M)
+at = src.find('export async function resetModule(')
+if at < 0:
+    print('      resetModule not found')
+    sys.exit(1)
+body = src[at:]
+nxt = body.find('\nexport ', 1)
+if nxt > 0:
+    body = body[:nxt]
+bad = []
+# The subject itself, and every project's decision about it, must survive.
+if 'inductionModule.update' in body or 'inductionModule.delete' in body:
+    bad.append('it writes the InductionModule row')
+if 'siteInductionModule' in body:
+    bad.append('it touches SiteInductionModule - the decisions are the point of reset')
+if 'libraryAsset' in body and 'libraryAssetRevision' in body:
+    bad.append('it clears Library footage - that belongs to the asset\'s own page')
+# And it must actually clear the revisions.
+if 'inductionModuleRevision.deleteMany' not in body:
+    bad.append('it does not clear the revisions')
+for b in bad:
+    print(f'      {b}')
+sys.exit(1 if bad else 0)
+PYRESET
+
+# --- RESET ASKS CONSUMPTION FIRST, AND A JOB IN FLIGHT IS NOT RELAXED ---
+python3 - "$MODSVC" <<'PYRESETGUARD' || fail "moduleReset consults the flag before evidence, or lost the in-flight check"
+import re, sys
+src = open(sys.argv[1]).read()
+src = re.sub(r'/\*[\s\S]*?\*/', '', src)
+src = re.sub(r'^\s*//.*$', '', src, flags=re.M)
+at = src.find('export async function moduleReset(')
+body = src[at:src.find('export async function resetModule(')]
+cons = body.find('consumption.consumed')
+flag = body.find('contentResetEnabled()')
+job = body.find("j.status === 'QUEUED' || j.status === 'RUNNING'")
+bad = []
+if cons < 0: bad.append('moduleReset does not ask about consumption')
+if flag < 0: bad.append('moduleReset does not consult the flag at all')
+if job < 0: bad.append('moduleReset lost the in-flight-job check')
+if cons >= 0 and flag >= 0 and cons > flag:
+    bad.append('the flag is consulted BEFORE evidence')
+if cons >= 0 and job >= 0 and job < cons:
+    bad.append('the job check precedes the evidence check - evidence comes first')
+for b in bad: print(f'      {b}')
+sys.exit(1 if bad else 0)
+PYRESETGUARD
+
+# --- A STANDARD SUBJECT IS NOT DELETED TO RESTART IT ---
+# THE WHOLE CONDITION, PINNED. A substring grep cannot see a neutralised guard:
+# `if (false && module.active && MODULE_CATALOGUE.some(...))` still contains
+# "module.active && MODULE_CATALOGUE.some", and that mutation survived this assert
+# until the condition itself was matched end to end.
+python3 - "$MODSVC" <<'PYSTANDARD' || fail "the standard-subject delete guard is gone, neutralised or reworded"
+import re, sys
+src = open(sys.argv[1]).read()
+src = re.sub(r'/\*[\s\S]*?\*/', '', src)
+src = re.sub(r'^\s*//.*$', '', src, flags=re.M)
+want = re.compile(
+    r'^\s*if \(module\.active && MODULE_CATALOGUE\.some\(\(c\) => c\.slug === module\.slug\)\) \{$',
+    re.M,
+)
+if not want.search(src):
+    print('      the guard is not exactly `if (module.active && MODULE_CATALOGUE.some((c) => c.slug === module.slug)) {`')
+    for line in src.splitlines():
+        if 'MODULE_CATALOGUE.some' in line:
+            print(f'      found instead: {line.strip()}')
+    sys.exit(1)
+sys.exit(0)
+PYSTANDARD
+# deleteModule delegates entirely, which is why the suite does not call it against
+# the real seeded row (a mutation run would then delete Company Introduction - it did).
+python3 - "$MODSVC" <<'PYDELEGATE' || fail "deleteModule does not delegate to moduleDeletion"
+import re, sys
+src = open(sys.argv[1]).read()
+at = src.find('export async function deleteModule(')
+body = src[at:at + 1600]
+sys.exit(0 if 'await moduleDeletion(moduleId)' in body and '!deletion.deletable' in body else 1)
+PYDELEGATE
+
+# --- THE PAGE LEADS WITH RESET AND HIDES DELETE ---
+grep -qF "Clear the content and start again" "$MDETAIL" \
+  || fail "the module page does not offer Start again"
+grep -qF "This subject is no longer wanted" "$MDETAIL" \
+  || fail "delete is not behind a meaning-first disclosure"
+grep -qF "<details" "$MDETAIL" \
+  || fail "delete is not in a <details> - a delete button beside a reset invites the wrong press"
+# Reset must come FIRST on the page: it is the ordinary action.
+python3 - "$MDETAIL" <<'PYORDERUI' || fail "delete is rendered before Start again"
+import sys
+src = open(sys.argv[1]).read()
+r = src.find('Clear the content and start again')
+d = src.find('This subject is no longer wanted')
+if r < 0 or d < 0:
+    print('      one of the two panels is missing')
+    sys.exit(1)
+sys.exit(0 if r < d else 1)
+PYORDERUI
+grep -qF "will not appear in any" "$MDETAIL" \
+  || fail "the page does not warn that clearing the wording drops the subject from inductions"
+grep -qF "case 'resetModule'" services/inductionModules/moduleActions.ts \
+  || fail "the dispatcher does not expose resetModule"
+echo "  ok   reset keeps the subject; delete is secondary and guarded on standard subjects"
 
 # --- ONE PAGE PER ASSET, SHARED ---
 for P in "$PP" "$AP"; do

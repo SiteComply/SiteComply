@@ -26,6 +26,7 @@ const { prisma } = require('../lib/prisma');
 const consumption = require('../services/inductionContent/consumption');
 const buildPhase = require('../services/inductionContent/buildPhase');
 const modSvc = require('../services/inductionModules/inductionModuleService');
+const cat = require('../services/inductionModules/moduleCatalogue');
 const libSvc = require('../services/inductionVideo/libraryAssetService');
 const vidSvc = require('../services/inductionVideo/inductionVideoService');
 const { moduleActorFromPlatformViewer } = require('../services/inductionModules/moduleActor');
@@ -254,6 +255,153 @@ const madeVideos: string[] = [];
       delDecided.ok ? '' : delDecided.error);
     chk('  and the decision row is gone',
       (await prisma.siteInductionModule.count({ where: { moduleId: decided.id } })) === 0);
+
+    /* ─────────────────────────────────────────────────────────────────────── */
+    console.log('\nSTART AGAIN KEEPS THE SUBJECT — THE DISTINCTION THAT MATTERS');
+    buildMode();
+    const resetMod = await mkModule('resetme', { issued: true });
+    // A project decision and a production, both of which the reset must treat
+    // differently: the decision survives, the production goes.
+    await prisma.siteInductionModule.create({
+      data: {
+        jobSiteId: site.id, moduleId: resetMod.id, state: 'EXCLUDED',
+        reason: 'covered by our own briefing', decidedByName: 'Test',
+      },
+    });
+    const rmAsset = await mkAsset('resetmeasset');
+    const rmProd = await mkProduction(rmAsset.id, { status: 'SCRIPT_READY' });
+    await prisma.inductionVideo.update({
+      where: { id: rmProd.id },
+      data: { sourceModuleRevisionId: resetMod.revisions[0].id },
+    });
+    let mr = await modSvc.moduleReset(resetMod.id);
+    chk('the reset counts the revisions and the production', mr.resettable === true &&
+      mr.revisions === 1 && mr.productions === 1, mr.blockedReason ?? '');
+    chk('  and reports the decision it will KEEP', mr.siteDecisionsKept === 1);
+    chk('a Site Manager may not start a module again',
+      (await modSvc.resetModule(manager, resetMod.id)).ok === false);
+    const didReset = await modSvc.resetModule(director, resetMod.id);
+    chk('a Director may', didReset.ok === true, didReset.ok ? '' : didReset.error);
+    chk('  THE MODULE ITSELF SURVIVED', Boolean(
+      await prisma.inductionModule.findUnique({ where: { id: resetMod.id } })),
+      'this is the whole point: the subject is permanent, the wording is not');
+    chk('  its revisions went',
+      (await prisma.inductionModuleRevision.count({ where: { moduleId: resetMod.id } })) === 0);
+    chk('  the production generated from it went',
+      (await prisma.inductionVideo.findUnique({ where: { id: rmProd.id } })) === null);
+    chk('  AND THE PROJECT DECISION SURVIVED',
+      (await prisma.siteInductionModule.count({ where: { moduleId: resetMod.id } })) === 1,
+      'delete took these; reset must not, or a reason somebody recorded is lost');
+    const afterSettings = await prisma.inductionModule.findUnique({
+      where: { id: resetMod.id },
+      select: { slug: true, category: true, order: true, mandatory: true, defaultIncluded: true },
+    });
+    chk('  and so did its settings and running order',
+      afterSettings.order === 900 && afterSettings.slug.startsWith('CRV_resetme'));
+
+    console.log('\nA CONSUMED MODULE CANNOT BE RESET EITHER');
+    const seenMod = await mkModule('seenmod', { issued: true });
+    const seenAsset = await mkAsset('seenassetr');
+    const seenProd = await mkProduction(seenAsset.id, { published: true });
+    await prisma.inductionVideoScene.create({
+      data: {
+        videoId: seenProd.id, sceneType: 'COMPANY_MODULE', order: 1,
+        heading: 'Seen', narration: 'x'.repeat(50),
+        moduleRevisionId: seenMod.revisions[0].id,
+      },
+    });
+    for (const [label, set] of [['strict', strict], ['BUILD', buildMode]] as const) {
+      set();
+      const r = await modSvc.moduleReset(seenMod.id);
+      chk(`reset is refused on a published module (${label} mode)`, r.resettable === false,
+        r.blockedReason ?? '');
+      chk(`  and the service refuses it (${label} mode)`,
+        (await modSvc.resetModule(director, seenMod.id)).ok === false);
+    }
+    chk('  its revisions are still there',
+      (await prisma.inductionModuleRevision.count({ where: { moduleId: seenMod.id } })) === 1,
+      'reset is not a way round the evidence line');
+
+    console.log('\nA JOB IN FLIGHT BLOCKS THE RESET, WHATEVER THE FLAG SAYS');
+    const busyMod = await mkModule('busymod');
+    const bmAsset = await mkAsset('busymodasset');
+    const bmProd = await mkProduction(bmAsset.id, { status: 'SCRIPT_READY' });
+    await prisma.inductionVideo.update({
+      where: { id: bmProd.id },
+      data: { sourceModuleRevisionId: busyMod.revisions[0].id },
+    });
+    await prisma.inductionVideoJob.create({
+      data: { videoId: bmProd.id, kind: 'RENDER', status: 'RUNNING', requestedByName: 'test' },
+    });
+    buildMode();
+    const bmReset = await modSvc.moduleReset(busyMod.id);
+    chk('refused while something is being generated from it', bmReset.resettable === false,
+      bmReset.blockedReason ?? '');
+    chk('  because the row is that job’s lock',
+      /still being generated/.test(bmReset.blockedReason ?? ''));
+
+    console.log('\nA STANDARD SUBJECT IS NOT DELETED TO RESTART IT');
+    /*
+     * THE REAL ROW, NOT A FIXTURE. The standard slugs are unique and already exist
+     * in any database with a seeded catalogue, so creating one fails - and a
+     * fixture would prove the rule against a slug nobody uses rather than against
+     * Company Introduction itself. `moduleDeletion` and `moduleReset` are reads, so
+     * the only mutation here is the retire/restore pair, which is put back in a
+     * finally of its own.
+     */
+    const standardSlug = cat.MODULE_CATALOGUE[0].slug;
+    const standard = await prisma.inductionModule.findUnique({
+      where: { slug: standardSlug },
+      select: { id: true, active: true },
+    });
+    if (!standard) {
+      chk('standard subject guard', false,
+        `${standardSlug} is not in this database - seed the catalogue and re-run`);
+    } else {
+      buildMode();
+      // It must be ACTIVE for the guard to apply; put whatever it was back after.
+      await prisma.inductionModule.update({
+        where: { id: standard.id }, data: { active: true },
+      });
+      try {
+        const sd = await modSvc.moduleDeletion(standard.id);
+        chk(`an ACTIVE standard subject (${standardSlug}) cannot be deleted`,
+          sd.deletable === false, sd.blockedReason ?? '');
+        chk('  and the refusal names start-again and retire instead',
+          /Start again/.test(sd.blockedReason ?? '') &&
+          /retire it/.test(sd.blockedReason ?? ''));
+        /*
+         * ⚠ NO `deleteModule` CALL AGAINST THIS ROW, DELIBERATELY. It is the real
+         * seeded Company Introduction, and mutation-testing this guard means
+         * DISABLING it and re-running — at which point a destructive call here
+         * succeeds and takes the row with it. That is not hypothetical: it deleted
+         * the local row on 2026-09-30 and the catalogue had to be re-seeded.
+         *
+         * The predicate above IS the guard — `deleteModule` does nothing but ask
+         * `moduleDeletion` and return its reason — and the deploy gate asserts that
+         * delegation in the source, so refusing to call it here costs no coverage.
+         */
+
+        /*
+         * RETIRING IS THE ESCAPE HATCH, not a dead end: one press and the subject
+         * becomes deletable, because by then somebody has decided the company has
+         * stopped briefing on it rather than merely wanting a clean slate. Asserted
+         * so the protection cannot quietly become absolute.
+         */
+        await prisma.inductionModule.update({
+          where: { id: standard.id }, data: { active: false },
+        });
+        const retired = await modSvc.moduleDeletion(standard.id);
+        chk('  once RETIRED the standard-subject guard lifts',
+          retired.blockedReason === null ||
+          !/standard company subject/.test(retired.blockedReason ?? ''),
+          retired.blockedReason ?? 'deletable');
+      } finally {
+        await prisma.inductionModule.update({
+          where: { id: standard.id }, data: { active: standard.active },
+        });
+      }
+    }
 
     /* ─────────────────────────────────────────────────────────────────────── */
     console.log('\nA MODULE THAT AN INDUCTION CARRIED: REFUSED IN BOTH MODES');

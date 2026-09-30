@@ -104,11 +104,24 @@ export async function handleModuleAction(
       return r.ok ? ok(r.value) : refuse(r.error);
     }
     /*
-     * DELETE A MODULE OUTRIGHT, as opposed to retiring it. Every condition lives in
+     * START AGAIN — the primary way to clear a module's content: the revisions and
+     * everything generated from them go, the subject and its settings stay. Listed
+     * before deleteModule deliberately, because deleting a permanent company
+     * subject in order to rewrite its wording is the workflow this replaces.
+     */
+    case 'resetModule': {
+      const { resetModule } = await import(
+        '@/services/inductionModules/inductionModuleService'
+      );
+      const r = await resetModule(actor, str('moduleId'));
+      return r.ok ? ok(r.value) : refuse(r.error);
+    }
+    /*
+     * DELETE A MODULE OUTRIGHT — only when the SUBJECT itself is unwanted, and
+     * refused on an active standard subject. Every condition lives in
      * `deleteModule` / `moduleDeletion`, including the Director check, so there is
-     * nothing to repeat here: unlike `discardProduction` below it, the id names the
-     * thing being deleted rather than a second object reached through it, so there
-     * is no ownership to verify first.
+     * nothing to repeat here: the id names the thing being deleted rather than a
+     * second object reached through it, so there is no ownership to verify first.
      */
     case 'deleteModule': {
       const { deleteModule } = await import(

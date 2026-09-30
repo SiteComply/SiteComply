@@ -6,7 +6,9 @@ import {
 import {
   getModule,
   moduleDeletion,
+  moduleReset,
   type ModuleDeletion,
+  type ModuleReset,
 } from '@/services/inductionModules/inductionModuleService';
 import { moduleUsage, type ModuleUsage } from '@/services/inductionModules/moduleUsage';
 import { moduleStatus, type ModuleStatus } from '@/services/inductionModules/moduleStatus';
@@ -88,6 +90,11 @@ export interface ModuleDetail {
    */
   deletion: ModuleDeletion;
   /**
+   * Whether the module's CONTENT can be cleared while the subject stays. The
+   * primary restart, and the one the page leads with.
+   */
+  reset: ModuleReset;
+  /**
    * The build-phase sentence, or null when the platform is running the strict
    * lifecycle. Carried on the detail rather than passed down from each page so the
    * two tiers cannot describe the capability differently — and so no page has to be
@@ -137,12 +144,13 @@ export async function moduleDetail(moduleId: string): Promise<ModuleDetail | nul
   const row = await getModule(moduleId);
   if (!row) return null;
 
-  const [usage, deletion, asset] = await Promise.all([
+  const [usage, deletion, reset, asset] = await Promise.all([
     moduleUsage(moduleId),
     // Deliberately alongside usage rather than inside it: usage answers "who hears
     // this", deletion answers "may this go", and conflating them would make one
     // cache invalidate the other.
     moduleDeletion(moduleId),
+    moduleReset(moduleId),
     prisma.libraryAsset.findFirst({
       where: { moduleId, active: true },
       select: {
@@ -198,6 +206,7 @@ export async function moduleDetail(moduleId: string): Promise<ModuleDetail | nul
         }
       : null,
     deletion,
+    reset,
     buildPhaseNotice: contentResetEnabled() ? BUILD_PHASE_NOTICE : null,
     revisions: row.revisions.map((r) => ({
       id: r.id,

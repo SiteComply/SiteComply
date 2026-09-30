@@ -480,84 +480,175 @@ export function ModuleDetail({
       )}
 
       {/*
-        ── DELETE, BESIDE RETIRE AND DELIBERATELY NOT THE SAME THING ──
-        Retire is for a module that did its job and should stop reaching new
-        inductions. Delete is for one that was a mistake — a wrong topic, a
-        duplicate, a test — because a retired module is still a row somebody reads
-        past for ever, and calling a false start "history" makes the history
-        harder to read rather than easier.
+        ── START AGAIN: THE PRIMARY WAY TO CLEAR CONTENT ──
+        The distinction the page has to make, because getting it wrong is
+        irreversible:
 
-        Shown to a Director only, and only where `moduleDeletion` says it would go
-        ahead; otherwise its own reason is shown in place of the button, so the
-        page never offers a press that the service will refuse and never stays
-        silent about why it cannot.
+          START AGAIN  the company still briefs on this subject; its WORDING and
+                       everything generated from it should go.
+          RETIRE       the company has stopped briefing on this subject.
+          DELETE       the subject itself should never have existed.
+
+        This panel comes first and is the ordinary action. Delete sits below it,
+        behind a disclosure, described by what it means rather than offered as a
+        way to restart — clearing a module's content used to require deleting a
+        permanent company subject, which is the wrong verb for the intent.
       */}
       {canIssue && (
-        <section className="rounded-xl border border-danger-200 bg-surface p-4 shadow-card">
-          <h3 className="text-sm font-bold text-ink">Delete this module</h3>
-          {/*
-            Never a silent capability: where build-phase reset is what makes this
-            button possible, the panel says so, so nobody is looking at a delete
-            control without knowing why it is there or that it is temporary.
-          */}
+        <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
+          <h3 className="text-sm font-bold text-ink">Start again</h3>
           {detail.buildPhaseNotice && (
             <p className="mt-1 rounded-lg bg-surface-sunken px-2 py-1.5 text-xs text-ink-muted">
               {detail.buildPhaseNotice}
             </p>
           )}
-          {detail.deletion.deletable ? (
+          {detail.reset.resettable ? (
             <>
+              <p className="mt-2 text-xs text-ink-muted">
+                Clears{' '}
+                <span className="font-semibold text-ink">
+                  {detail.reset.revisions === 1
+                    ? '1 revision'
+                    : `all ${detail.reset.revisions} revisions`}
+                </span>
+                {detail.reset.productions > 0
+                  ? ` and ${detail.reset.productions} video ${
+                      detail.reset.productions === 1 ? 'production' : 'productions'
+                    } generated from them`
+                  : ''}
+                , so this subject starts from a blank page at revision 1.
+              </p>
               <p className="mt-1 text-xs text-ink-muted">
-                Deletes the module and{' '}
-                {detail.deletion.issuedRevisions + detail.deletion.draftRevisions === 1
-                  ? 'its wording'
-                  : `all ${detail.deletion.issuedRevisions + detail.deletion.draftRevisions} revisions of its wording`}
-                {detail.deletion.siteDecisions > 0
-                  ? `, and ${detail.deletion.siteDecisions} project ${
-                      detail.deletion.siteDecisions === 1 ? 'decision' : 'decisions'
+                Keeps the module itself, its subject, its running order, its inclusion
+                rules
+                {detail.reset.siteDecisionsKept > 0
+                  ? ` and ${detail.reset.siteDecisionsKept} project ${
+                      detail.reset.siteDecisionsKept === 1 ? 'decision' : 'decisions'
                     } about it`
                   : ''}
-                . No induction anybody has seen carries it. This cannot be undone.
+                .
               </p>
-              {detail.deletion.unlinkedAssets.length > 0 && (
+              {/*
+                THE CONSEQUENCE NOBODY ELSE STATES. resolveModulesForSite skips a
+                module with no issued revision, so clearing the wording silently
+                drops the subject out of new inductions until something is issued
+                again. For a mandatory subject that is worth seeing first.
+              */}
+              {detail.reset.wouldLeaveSubjectSilent && (
+                <p className="mt-2 rounded-lg border border-hivis-500/40 bg-hivis-400/10 px-2 py-1.5 text-xs text-ink">
+                  Until new wording is issued, this subject will not appear in any
+                  induction generated from now on.
+                </p>
+              )}
+              {detail.reset.producedVideos.length > 0 && (
                 <p className="mt-2 text-xs text-ink-muted">
-                  {detail.deletion.unlinkedAssets.join(', ')} will stop standing in for this
-                  module and play alongside the rest of the induction instead.
+                  {detail.reset.producedVideos.map((v) => `“${v.title}”`).join(', ')} was
+                  produced from this wording. Its issued footage is not cleared here — start
+                  that video again on its own page.{' '}
+                  {detail.reset.producedVideos.map((v) => (
+                    <Link
+                      key={v.id}
+                      href={`${libraryBasePath}/${v.id}`}
+                      className="font-semibold text-brand-700 hover:underline"
+                    >
+                      Open {v.title}
+                    </Link>
+                  ))}
                 </p>
               )}
               <button
                 type="button"
                 disabled={busy !== null}
-                onClick={async () => {
+                onClick={() => {
                   if (
                     !window.confirm(
-                      `Delete “${detail.title}” permanently? Its wording and revision ` +
-                        'history are deleted. This cannot be undone.',
+                      `Start “${detail.title}” again? Its wording and everything generated ` +
+                        'from it are deleted. The module, its settings and every project’s ' +
+                        'decision about it are kept. This cannot be undone.',
                     )
                   ) {
                     return;
                   }
-                  /*
-                   * PUSH, NOT REFRESH. `call` refreshes, which on this page would
-                   * re-render a module that no longer exists. The list is where the
-                   * person now needs to be.
-                   */
-                  const done = await call(
-                    { action: 'deleteModule', moduleId: detail.id },
-                    'delete',
-                  );
-                  if (done) router.push(backHref);
+                  void call({ action: 'resetModule', moduleId: detail.id }, 'reset');
                 }}
-                className="mt-3 touch-target inline-flex items-center rounded-lg border border-danger-500/40 px-3 py-2 text-xs font-semibold text-danger-600 hover:bg-danger-50 disabled:opacity-50"
+                className="mt-3 touch-target inline-flex items-center rounded-lg border border-danger-300 bg-surface px-3 py-2 text-xs font-semibold text-danger-700 hover:bg-danger-50 disabled:opacity-50"
               >
-                {busy === 'delete' ? 'Deleting…' : 'Delete permanently'}
+                {busy === 'reset' ? 'Clearing…' : 'Clear the content and start again'}
               </button>
             </>
           ) : (
-            <p className="mt-1 text-xs text-ink-muted">{detail.deletion.blockedReason}</p>
+            <p className="mt-2 text-xs text-ink-muted">{detail.reset.blockedReason}</p>
           )}
         </section>
       )}
+
+      {/*
+        ── DELETE THE SUBJECT: A DISCLOSURE, NOT A BUTTON ──
+        Native <details>, so it ships no JavaScript and is closed until somebody
+        opens it. The summary says what deleting MEANS rather than naming the
+        mechanism, because the wrong reason to press it is "I want to start again".
+      */}
+      {canIssue && (
+        <details className="rounded-xl border border-line bg-surface p-4 shadow-card">
+          <summary className="cursor-pointer text-sm font-semibold text-ink-muted">
+            This subject is no longer wanted
+          </summary>
+          <div className="mt-3 border-t border-line pt-3">
+            {detail.deletion.deletable ? (
+              <>
+                <p className="text-xs text-ink-muted">
+                  Deletes the subject itself, with{' '}
+                  {detail.deletion.issuedRevisions + detail.deletion.draftRevisions === 1
+                    ? 'its wording'
+                    : `all ${detail.deletion.issuedRevisions + detail.deletion.draftRevisions} revisions of its wording`}
+                  {detail.deletion.siteDecisions > 0
+                    ? `, and ${detail.deletion.siteDecisions} project ${
+                        detail.deletion.siteDecisions === 1 ? 'decision' : 'decisions'
+                      } about it`
+                    : ''}
+                  . To keep the subject and only clear its content, use Start again above.
+                </p>
+                {detail.deletion.unlinkedAssets.length > 0 && (
+                  <p className="mt-2 text-xs text-ink-muted">
+                    {detail.deletion.unlinkedAssets.join(', ')} will stop standing in for this
+                    module and play alongside the rest of the induction instead.
+                  </p>
+                )}
+                <button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={async () => {
+                    if (
+                      !window.confirm(
+                        `Delete “${detail.title}” permanently? Its wording and revision ` +
+                          'history are deleted. This cannot be undone.',
+                      )
+                    ) {
+                      return;
+                    }
+                    /*
+                     * PUSH, NOT REFRESH. `call` refreshes, which on this page would
+                     * re-render a module that no longer exists. The list is where the
+                     * person now needs to be.
+                     */
+                    const done = await call(
+                      { action: 'deleteModule', moduleId: detail.id },
+                      'delete',
+                    );
+                    if (done) router.push(backHref);
+                  }}
+                  className="mt-3 touch-target inline-flex items-center rounded-lg border border-danger-500/40 px-3 py-2 text-xs font-semibold text-danger-600 hover:bg-danger-50 disabled:opacity-50"
+                >
+                  {busy === 'delete' ? 'Deleting…' : 'Delete permanently'}
+                </button>
+              </>
+            ) : (
+              <p className="text-xs text-ink-muted">{detail.deletion.blockedReason}</p>
+            )}
+          </div>
+        </details>
+      )}
+
     </div>
   );
 }

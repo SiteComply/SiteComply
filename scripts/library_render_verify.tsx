@@ -569,6 +569,10 @@ const moduleFixture = (over: Record<string, unknown> = {}) => ({
     issuedRevisions: 1, draftRevisions: 1, siteDecisions: 0, unlinkedAssets: [],
   },
   buildPhaseNotice: null,
+  reset: {
+    resettable: true, blockedReason: null, revisions: 2, productions: 1,
+    siteDecisionsKept: 6, producedVideos: [], wouldLeaveSubjectSilent: true,
+  },
   revisions: [
     { id: 'rev-2', version: 2, status: 'DRAFT', heading: 'What we expect of your PPE',
       narration: 'A reworded draft.', preparedByName: 'JC', preparedByRealm: 'Platform',
@@ -596,27 +600,93 @@ const renderModuleDetail = (over: Record<string, unknown> = {}, can = true) =>
 const detail = renderModuleDetail();
 chk('the detail page renders', detail.length > 800, `${detail.length} bytes`);
 
-/* ── DELETING A MODULE, BESIDE RETIRING IT ── */
-chk('a module whose wording is issued shows the REASON, not a delete button',
-  detail.includes('kept as version history') && !detail.includes('Delete permanently'),
-  'the base fixture is issued-but-unconsumed: strict mode refuses it');
+/* ── START AGAIN IS THE PRIMARY RESTART; DELETE IS A DISCLOSURE ── */
+console.log('\nRESET AND DELETE ARE DIFFERENT THINGS, AND THE PAGE LEADS WITH RESET');
+chk('START AGAIN is offered as an ordinary action',
+  detail.includes('Clear the content and start again'),
+  'clearing content used to require deleting the whole subject');
+chk('  and it says what it KEEPS, which is the point of it',
+  /Keeps the module itself/.test(detail) &&
+  /6 project decisions about it/.test(detail),
+  'the settings and the project decisions are exactly what delete-and-recreate lost');
+chk('  and what it clears', /all 2 revisions/.test(detail) &&
+  /1 video production/.test(detail));
+chk('THE SILENT-SUBJECT WARNING IS SHOWN for a module inductions include',
+  detail.includes('will not appear in any'),
+  'resolveModulesForSite skips a module with no issued revision — nothing else says so');
+chk('  and not for one nothing includes',
+  !renderModuleDetail({
+    reset: { resettable: true, blockedReason: null, revisions: 1, productions: 0,
+      siteDecisionsKept: 0, producedVideos: [], wouldLeaveSubjectSilent: false },
+  }).includes('will not appear in any'));
+
+chk('DELETE IS BEHIND A DISCLOSURE, described by what it means',
+  detail.includes('This subject is no longer wanted') &&
+  /<details/.test(detail),
+  'a delete button next to a reset button invites the wrong press');
+chk('  and it ships no JavaScript to do that', /<details/.test(detail));
+
+const standardSubject = renderModuleDetail({
+  deletion: {
+    deletable: false,
+    blockedReason:
+      'This is a standard company subject, so it is kept even while its content is being rewritten. Start again to clear its revisions and productions, or retire it first if the company has genuinely stopped briefing on it.',
+    issuedRevisions: 1, draftRevisions: 0, siteDecisions: 6, unlinkedAssets: [],
+  },
+});
+chk('A STANDARD SUBJECT CANNOT BE DELETED while it is active',
+  standardSubject.includes('standard company subject') &&
+  !standardSubject.includes('Delete permanently'),
+  'Company Introduction, Behavioural Standards and Accident reporting are permanent');
+chk('  and the refusal names the two right answers instead',
+  /Start again to clear/.test(standardSubject) && /retire it first/.test(standardSubject));
+
 const deletableModule = renderModuleDetail({
   deletion: {
     deletable: true, blockedReason: null, issuedRevisions: 0, draftRevisions: 1,
     siteDecisions: 2, unlinkedAssets: ['Company introduction'],
   },
 });
-chk('a never-issued module CAN be deleted', deletableModule.includes('Delete permanently'));
-chk('  and the page counts what goes with it, before the press',
-  /2 project decisions about it/.test(deletableModule),
-  'retire and issue both state their consequence here; delete does too');
+chk('a non-standard module CAN still be deleted', deletableModule.includes('Delete permanently'));
+chk('  and the disclosure points back at Start again first',
+  /use Start again above/.test(deletableModule),
+  'so the cheaper, reversible-in-spirit action is the one in front of you');
+chk('  it counts what goes', /2 project decisions about it/.test(deletableModule));
 chk('  including a library video that stops standing in for it',
-  deletableModule.includes('stop standing in for this module'));
-chk('  and it is Director-only', !renderModuleDetail({
+  deletableModule.includes('will stop standing in for this'));
+chk('NEITHER is offered to somebody who may not issue',
+  !renderModuleDetail({}, false).includes('Clear the content and start again') &&
+  !renderModuleDetail({
     deletion: { deletable: true, blockedReason: null, issuedRevisions: 0,
       draftRevisions: 1, siteDecisions: 0, unlinkedAssets: [] },
   }, false).includes('Delete permanently'),
-  'irreversible, so it belongs with the role that owns the record');
+  'irreversible, so both belong with the role that owns the record');
+
+const consumedModule = renderModuleDetail({
+  reset: {
+    resettable: false,
+    blockedReason: 'An operative has watched this module, so it is the record of their induction and is kept permanently.',
+    revisions: 2, productions: 0, siteDecisionsKept: 6, producedVideos: [],
+    wouldLeaveSubjectSilent: true,
+  },
+});
+chk('a module an operative has seen cannot be started again either',
+  consumedModule.includes('operative has watched') &&
+  !consumedModule.includes('Clear the content and start again'),
+  'reset is not a way round the evidence line');
+
+const withVideo = renderModuleDetail({
+  reset: {
+    resettable: true, blockedReason: null, revisions: 2, productions: 0,
+    siteDecisionsKept: 0, wouldLeaveSubjectSilent: false,
+    producedVideos: [{ id: 'a1', title: 'Company Introduction', issuedRevisions: 2 }],
+  },
+});
+chk('a Library video produced from the module is NAMED, not silently cleared',
+  withVideo.includes('is not cleared here') &&
+  withVideo.includes('Company Introduction'),
+  'each object clears its own content; a module reaching across would surprise');
+chk('  with a link to go and do it', withVideo.includes('/library/a1'));
 chk('THE WORDING IS HERE', detail.includes(PPE_WORDING),
   'the list dropped it, so this page has to carry it');
 chk('  with its on-screen heading', detail.includes('What we expect of your PPE'));
