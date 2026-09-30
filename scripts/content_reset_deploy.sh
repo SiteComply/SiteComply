@@ -1060,6 +1060,24 @@ grep -qF "hidden flex-wrap" components/inductionVideo/VideoStepper.tsx \
   || fail "the labelled stepper is no longer the wide-screen form"
 echo "  ok   the workflow leads the page, and everything else is folded behind it"
 
+# --- A FOLDED PANEL MUST LOOK FOLDABLE ---
+# `display:flex` on a <summary> removes its list-item marker, so three of the four
+# panels shipped with no disclosure triangle and no hint they opened. Measured on a
+# real headless render, not guessed. Wrap the content in a span instead of flexing the
+# summary itself.
+grep -qE '<summary className="flex ' "$MDETAIL" \
+  && fail "a <summary> is display:flex again - it loses its disclosure marker"
+
+# --- THE PRIMARY ACTION IS ABOVE THE FOLD ---
+# The preview card holds a PORTRAIT 1080x1920 player. At max-w-xs that is 569px tall,
+# which put "Publish & issue" at 685px against a 640px viewport on a 1366x768 laptop.
+# Capped by height and paired with the note instead.
+grep -qF "max-h-48 w-auto" "$CARD" \
+  || fail "the preview player is not height-capped - a portrait video pushes the action below the fold"
+grep -qF "video.stage !== 'PREVIEW'" "$CARD" \
+  || fail "the generic action block renders at PREVIEW too - the publish button would appear twice"
+echo "  ok   folded panels look foldable, and the action stays above the fold"
+
 # --- ONE PAGE PER ASSET, SHARED ---
 for P in "$PP" "$AP"; do
   grep -q "<LibraryAssetDetail" "$P" || fail "$P does not render the shared asset component"

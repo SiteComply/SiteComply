@@ -177,7 +177,8 @@ export function ModuleDetail({
         see `wordingIsPrimary`.
       */}
       <details open={wordingIsPrimary} className={`${SECONDARY} p-4`}>
-        <summary className="flex cursor-pointer flex-wrap items-center gap-2">
+        <summary className="cursor-pointer">
+          <span className="inline-flex flex-wrap items-center gap-2 align-middle">
           <h3 className="text-sm font-bold text-ink">
             {detail.inForce?.isDraft ? 'What it will say' : 'What it says'}
           </h3>
@@ -187,6 +188,7 @@ export function ModuleDetail({
               {detail.inForce.isDraft ? ' · draft, not live' : ' · live'}
             </span>
           )}
+          </span>
         </summary>
 
         {/*
@@ -396,10 +398,12 @@ export function ModuleDetail({
         something they act on, and it was sitting between the title and the work.
       */}
       <details className={`${SECONDARY} p-4`}>
-        <summary className="flex cursor-pointer flex-wrap items-baseline gap-2">
+        <summary className="cursor-pointer">
+          <span className="inline-flex flex-wrap items-baseline gap-2 align-middle">
           <h3 className="text-sm font-bold text-ink">Where this module is used</h3>
           <span className="text-xs text-ink-subtle">
             {detail.usage.onProjects} of {detail.usage.totalProjects} projects
+          </span>
           </span>
         </summary>
         <dl className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -443,12 +447,14 @@ export function ModuleDetail({
 
       {/* ── THE HISTORY. One line until somebody wants it. ── */}
       <details className={`${SECONDARY} p-4`}>
-        <summary className="flex cursor-pointer flex-wrap items-baseline gap-2">
+        <summary className="cursor-pointer">
+          <span className="inline-flex flex-wrap items-baseline gap-2 align-middle">
           <h3 className="text-sm font-bold text-ink">Revisions</h3>
           <span className="text-xs text-ink-subtle">
             {detail.revisions.length === 1
               ? '1 kept'
               : `${detail.revisions.length} kept`}
+          </span>
           </span>
         </summary>
         <p className="mt-2 text-xs text-ink-subtle">

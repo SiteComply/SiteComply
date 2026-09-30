@@ -237,10 +237,24 @@ export function ModuleWorkflowCard({
       {video.stage === 'PREVIEW' && video.videoId && (
         <div className="mt-3 rounded-lg border border-line bg-surface-sunken p-3">
           <p className="text-xs font-semibold text-ink">Watch it through</p>
+          {/*
+            ── THE PLAYER IS CAPPED BY HEIGHT, AND SITS BESIDE THE NOTE ──
+            An induction video is PORTRAIT, 1080x1920. At `max-w-xs` that is 320 wide
+            and five hundred and sixty-nine tall, which pushed this card past a
+            thousand pixels and put "Publish & issue" below the fold on a 1366x768
+            laptop — measured at 677px against a 640px viewport, so the one action on
+            the page needed a scroll to reach.
+
+            Capping the HEIGHT instead fixes the tall dimension directly: 224px tall is
+            126 wide at this aspect, which is ample to check a video you rendered and
+            can open full-screen. Beside it rather than above it, so the row is as tall
+            as the taller of the two rather than the sum.
+          */}
+          <div className="mt-2 sm:flex sm:items-start sm:gap-4">
           <video
             controls
             preload="metadata"
-            className="mt-2 w-full max-w-xs rounded-lg bg-black"
+            className="max-h-48 w-auto rounded-lg bg-black"
             src={`${videoApiBase}/${video.videoId}/video`}
           >
             <track
@@ -252,9 +266,9 @@ export function ModuleWorkflowCard({
             />
           </video>
           {mayAct && (
-            <>
+            <div className="mt-3 min-w-0 flex-1 sm:mt-0">
               <label
-                className="mt-3 block text-xs font-semibold text-ink"
+                className="block text-xs font-semibold text-ink"
                 htmlFor="module-video-note"
               >
                 What does this version say? Kept on the record.
@@ -266,13 +280,33 @@ export function ModuleWorkflowCard({
                 placeholder="e.g. First version, read from the issued wording."
                 className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
               />
-            </>
+              {/*
+                THE ACTION SITS WITH THE NOTE IT DEPENDS ON, rather than in the generic
+                block below. Two reasons, and the second is measurable: filling a field
+                and then pressing the thing it feeds belongs together, and keeping the
+                button out of a third row is what brings "Publish & issue" back above
+                the fold on a 1366x768 laptop — it was at 685px against a 640px
+                viewport, so the page's one action needed a scroll.
+              */}
+              <button
+                type="button"
+                disabled={busy !== null || note.trim().length < 5}
+                onClick={() => void run('publishAndIssue', { videoId: video.videoId, issueNote: note })}
+                className="mt-2 touch-target inline-flex items-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+              >
+                {busy ? 'Working…' : 'Publish & issue'}
+              </button>
+            </div>
           )}
+          </div>
         </div>
       )}
 
-      {/* ── THE ONE NEXT ACTION ── */}
-      {next && (
+      {/*
+        ── THE ONE NEXT ACTION ──
+        Skipped at PREVIEW, where the button lives beside the note it depends on.
+      */}
+      {next && video.stage !== 'PREVIEW' && (
         <div className="mt-3">
           {next.action === null ? (
             /*
@@ -287,24 +321,20 @@ export function ModuleWorkflowCard({
             <>
               <button
                 type="button"
-                disabled={
-                  busy !== null ||
-                  (video.stage === 'PREVIEW' && note.trim().length < 5)
-                }
+                disabled={busy !== null}
                 onClick={() =>
                   void run(
                     next.action as string,
                     /*
-                     * Each action takes exactly what it needs: publishAndIssue and
-                     * generateVideo act on the production, generateNarration on the
-                     * MODULE, because it may still have to provision the asset and
-                     * start the production before there is a videoId at all.
+                     * Each action takes what it needs: generateVideo acts on the
+                     * production, generateNarration on the MODULE, because it may
+                     * still have to provision the asset and start the production
+                     * before there is a videoId at all. publishAndIssue is not here —
+                     * it lives beside the note it depends on, in the preview row.
                      */
-                    next.action === 'publishAndIssue'
-                      ? { videoId: video.videoId, issueNote: note }
-                      : next.action === 'generateVideo'
-                        ? { videoId: video.videoId }
-                        : { moduleId },
+                    next.action === 'generateVideo'
+                      ? { videoId: video.videoId }
+                      : { moduleId },
                   )
                 }
                 className="touch-target inline-flex items-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
