@@ -75,15 +75,29 @@ const comp = read(COMP);
 chk('it is a client component', /^'use client';/.test(comp));
 chk(
   'the effect does nothing when not working',
-  /if \(!working\)/.test(comp),
+  /if \(!isWorking\)\s*\{/.test(comp),
   'the server flipping `working` to false is what ends the polling',
 );
-chk('the interval is cleared on teardown', /clearInterval\(id\)/.test(comp));
+/*
+ * `isWorking`, not `working`: the component prefers the value its own poll last
+ * returned over the prop the server rendered with, so a job that finishes between
+ * renders stops the polling without waiting for a new page.
+ *
+ * And clearTimeout, not clearInterval: the poll re-schedules ITSELF with a growing
+ * delay, because a fixed interval is what made this component refresh the whole page
+ * every few seconds and starve the render it was watching. Do not "fix" it back to
+ * setInterval - see services/inductionVideo/progressService.ts.
+ */
+chk('the scheduled poll is cancelled on teardown', /clearTimeout\(timer\)/.test(comp),
+  'a self-scheduling timeout, so there is no interval id to clear');
+chk('  and it backs off rather than polling at a fixed rate',
+  /workPollDelayMs\(elapsed\)/.test(comp),
+  'a fixed 3s full-page refresh is what crashed the page it was watching');
 chk('the focus listener is removed on teardown', /removeEventListener\('focus'/.test(comp));
 chk('it refreshes on tab focus', /addEventListener\('focus'/.test(comp));
 chk(
   'it renders nothing at all when settled',
-  /if \(!working\) return null;/.test(comp),
+  /if \(!isWorking\) return null;/.test(comp),
   'no leftover banner on a finished version',
 );
 chk(

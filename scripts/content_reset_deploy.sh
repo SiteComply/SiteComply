@@ -1431,13 +1431,26 @@ fi
 
 echo "[4/7] Running the verification suites..."
 export FFMPEG_PATH="$PWD/vendor/ffmpeg/ffmpeg"
+# ELEVEN SUITES WERE ADDED HERE ON 2026-09-30, and the reason is worth keeping: the
+# induction-module suites were NOT in any gate, so two of them went stale without
+# anybody noticing. `induction_modules_verify` still expected SIX standard modules and
+# PPE_EXPECTATIONS to be mandatory - both changed when the owner reduced the catalogue
+# - and it crashed on an undefined property rather than reporting a legible failure.
+# `inductionvideo_liveupdate_verify` still expected `clearInterval`, left behind by the
+# polling rewrite. A suite nobody runs is not a test; it is a file that looks like one.
 # library_render_verify ACTUALLY RENDERS the index to HTML. Every other suite reads
 # source or calls a service, and that gap cost twice in one day: a function prop that
 # threw before rendering, and a page whose whole new structure was gated on having
 # assets so an empty library looked untouched. Both passed every string assertion.
 for S in content_reset_verify inductionvideo_delete_verify module_catalogue_reduction_verify attention_summary_verify module_master_detail_verify video_progress_verify library_production_visibility_verify cscs_enforcement_verify cscs_access_gate_verify cscs_exempt_verify brand_motion_verify company_video_verify library_render_verify library_ia_verify library_pipeline_verify library_audiospec_verify \
          inductionvideo_library_verify inductionvideo_verify inductionvideo_e2e_verify \
-         setup_video_readiness_verify cpp_completion_verify site_rules_verify; do
+         setup_video_readiness_verify cpp_completion_verify site_rules_verify \
+         induction_modules_verify induction_modules_phaseb_verify \
+         induction_modules_phasec_verify induction_modules_realm_verify \
+         induction_modules_ia_verify induction_modules_admin_ia_verify \
+         induction_briefing_verify induction_grouping_verify \
+         inductionvideo_liveupdate_verify inductionvideo_realm_verify \
+         inductionvalidity_verify; do
   SRC="scripts/$S.ts"; [ -f "$SRC" ] || SRC="scripts/$S.tsx"
   OUT=$(npx tsx "$SRC" 2>&1) || { echo "$OUT" | tail -20; fail "$S failed"; }
   echo "$OUT" | grep -qE "(^| )0 failed" || { echo "$OUT" | tail -20; fail "$S did not report 0 failed"; }
