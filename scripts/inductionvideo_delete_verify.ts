@@ -208,7 +208,26 @@ delete process.env.INDUCTION_CONTENT_RESET_ENABLED;
     chk('every media path is collected, including each scene’s audio',
       /video\.scenes\.map\(\(s\) => s\.audioBlobPath\)/.test(src) &&
       /video\.captionsBlobPath,/.test(src) &&
-      /video\.videoBlobPath,/.test(src));
+      /video\.transcriptBlobPath,/.test(src));
+    /*
+     * THE RENDERED MP4 IS COLLECTED CONDITIONALLY, and that is deliberate rather
+     * than an omission. Publishing a company production into the Library points the
+     * new revision's normalisedBlobPath at THIS file instead of copying it, so the
+     * video and the library revision share one blob joined by a string rather than a
+     * key. Deleting the row is fine; deleting the file would stop issued footage
+     * playing, silently. So it goes through `rendered`, which is null when anything
+     * still serves it.
+     *
+     * This assertion used to require a bare `video.videoBlobPath,` in the array and
+     * failed when the guard was added - correctly, because it is the assertion that
+     * knows the MP4 must not be forgotten. It now checks the guarded form instead of
+     * being deleted, so "forgotten" and "deliberately kept" stay distinguishable.
+     */
+    chk('  and the MP4 through the shared-blob guard, not bare',
+      /rendered,/.test(src) &&
+      /blobServedByLibrary\(video\.videoBlobPath\)/.test(src) &&
+      !/^\s*video\.videoBlobPath,$/m.test(src),
+      'a library revision may be serving the very file this would delete');
     chk('withdrawing an approval now clears the realm too',
       /approvedByAdminId: null,\s*\n\s*approvedByRealm: null,/.test(src),
       'a withdrawn approval must not keep "approved from the Admin Centre"');
