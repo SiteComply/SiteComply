@@ -820,6 +820,17 @@ export function LibraryAssetDetail({
                     } would go, with their video files.`}{' '}
                 No induction anybody has seen carries this footage.
               </p>
+              {/*
+                THE CONSEQUENCE BEFORE THE PRESS, as the retire and issue panels do
+                it. This sentence was only in the browser confirm dialog until the
+                render harness asked for it on the page — and a consequence you have
+                to press a destructive button to read is not stated.
+              */}
+              <p className="mt-1 text-xs text-ink-muted">
+                Starting again keeps this video’s settings, its place in the running order
+                and each project’s decision about it; only the footage goes. Deleting takes
+                all of it.
+              </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"

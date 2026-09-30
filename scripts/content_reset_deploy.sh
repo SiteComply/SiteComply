@@ -217,6 +217,8 @@ BUILD_STRINGS=(
   "Start again, keep the settings"
   "Discard this revision"
   "build phase"
+  "only the footage goes"
+  "will stop standing in for this"
 )
 
 echo "[3/7] Asserting the source, the history and the database..."

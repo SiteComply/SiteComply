@@ -323,6 +323,18 @@ const detailFixture = (over: Record<string, unknown> = {}) => ({
   retireConsequence: 'r', issueConsequence: null,
   revisions: [], productions: [], draftId: null,
   band: [{ id: 'a1', title: 'Company Introduction', order: 0, active: true }],
+  /*
+   * The delete/reset facts. Present in the BASE fixture rather than only in the
+   * cases that exercise them: a fixture missing a field the component reads throws
+   * at render, and tsc cannot see it because fixtures arrive through `require`.
+   * That is precisely what this harness exists to catch — it caught this field's
+   * absence on 2026-09-30, as it caught `counts` before it.
+   */
+  deletion: {
+    deletable: true, blockedReason: null, consumed: false,
+    issuedRevisions: 0, draftRevisions: 0, productions: 0, siteDecisions: 0,
+  },
+  buildPhaseNotice: null,
   ...over,
 });
 
@@ -380,6 +392,67 @@ const held = renderDetail({
 chk('a production that cannot be discarded says why',
   held.includes('Something is still running on it.') && !held.includes('Discard it'),
   'offering a button the service would refuse is worse than explaining');
+
+/* ── DELETING, STARTING AGAIN, AND DISCARDING ONE REVISION ── */
+console.log('\nTHE ASSET CAN BE STARTED AGAIN OR DELETED');
+const clean = renderDetail();
+chk('the panel offers both, and they are not the same button',
+  clean.includes('Start again, keep the settings') && clean.includes('Delete this video'),
+  'start again keeps the slug, placement, settings and every project decision');
+chk('  and says what "start again" keeps, ON THE PAGE',
+  /place in the running order/.test(clean) &&
+  /decision about it/.test(clean) &&
+  /only the footage goes/.test(clean),
+  'a consequence you must press a destructive button to read is not stated');
+
+const consumed = renderDetail({
+  deletion: {
+    deletable: false,
+    blockedReason: 'An operative has watched this library video, so it is the record of their induction and is kept permanently.',
+    consumed: true, issuedRevisions: 1, draftRevisions: 0, productions: 1, siteDecisions: 0,
+  },
+});
+chk('CONSUMED FOOTAGE SHOWS THE REASON AND NO BUTTON',
+  consumed.includes('operative has watched') &&
+  !consumed.includes('Delete this video') &&
+  !consumed.includes('Start again, keep the settings'),
+  'the page asks the same predicate the service enforces');
+
+const noticed = renderDetail({ buildPhaseNotice: 'SiteComply is in its build phase, so content nobody has seen can be deleted.' });
+chk('the build-phase notice appears when the flag is on',
+  noticed.includes('in its build phase'),
+  'a delete button whose existence is unexplained is worse than none');
+chk('  and nothing says it when the flag is off', !clean.includes('in its build phase'));
+
+const withRevision = renderDetail({
+  revisions: [{
+    id: 'rev-1', version: 1, status: 'ISSUED', playable: true, durationLabel: '1:20',
+    sourceFileName: 'intro.mp4', captionsFileName: 'intro.vtt', normaliseError: null,
+    missing: [], ready: true, preparedByName: 'JC', preparedByRealm: 'Platform',
+    preparedOn: '29 Sep 2026', issuedByName: 'JC', issuedByRealm: 'Platform',
+    issuedOn: '29 Sep 2026', issueNote: 'First cut', supersededOn: null,
+    sourceModuleRevisionId: null, discardable: true, discardBlockedReason: null,
+    usage: { publishedInductions: 0, unpublishedInductions: 0, projects: 0 },
+  }],
+});
+chk('a discardable revision offers it', withRevision.includes('Discard this revision'),
+  'there was no way to remove a revision at all, not even a bad upload');
+
+const heldRevision = renderDetail({
+  revisions: [{
+    id: 'rev-1', version: 1, status: 'ISSUED', playable: true, durationLabel: '1:20',
+    sourceFileName: 'intro.mp4', captionsFileName: 'intro.vtt', normaliseError: null,
+    missing: [], ready: true, preparedByName: 'JC', preparedByRealm: 'Platform',
+    preparedOn: '29 Sep 2026', issuedByName: 'JC', issuedByRealm: 'Platform',
+    issuedOn: '29 Sep 2026', issueNote: 'First cut', supersededOn: null,
+    sourceModuleRevisionId: null, discardable: false,
+    discardBlockedReason: 'Issued footage is kept as version history.',
+    usage: { publishedInductions: 0, unpublishedInductions: 0, projects: 0 },
+  }],
+});
+chk('  and one that cannot be says why instead',
+  heldRevision.includes('kept as version history') &&
+  !heldRevision.includes('Discard this revision'));
 
 const viewerOnly = renderToStaticMarkup(
   React.createElement(LibraryAssetDetail, {
@@ -490,6 +563,12 @@ const moduleFixture = (over: Record<string, unknown> = {}) => ({
   issueConsequence: 'Issuing revision 2 makes it what operatives are told on all 6 active projects.',
   retireConsequence: 'Retiring it removes this subject from 6 active projects.',
   standsInFor: null,
+  deletion: {
+    deletable: false,
+    blockedReason: 'This module has issued wording, which is kept as version history.',
+    issuedRevisions: 1, draftRevisions: 1, siteDecisions: 0, unlinkedAssets: [],
+  },
+  buildPhaseNotice: null,
   revisions: [
     { id: 'rev-2', version: 2, status: 'DRAFT', heading: 'What we expect of your PPE',
       narration: 'A reworded draft.', preparedByName: 'JC', preparedByRealm: 'Platform',
@@ -516,6 +595,28 @@ const renderModuleDetail = (over: Record<string, unknown> = {}, can = true) =>
 
 const detail = renderModuleDetail();
 chk('the detail page renders', detail.length > 800, `${detail.length} bytes`);
+
+/* ── DELETING A MODULE, BESIDE RETIRING IT ── */
+chk('a module whose wording is issued shows the REASON, not a delete button',
+  detail.includes('kept as version history') && !detail.includes('Delete permanently'),
+  'the base fixture is issued-but-unconsumed: strict mode refuses it');
+const deletableModule = renderModuleDetail({
+  deletion: {
+    deletable: true, blockedReason: null, issuedRevisions: 0, draftRevisions: 1,
+    siteDecisions: 2, unlinkedAssets: ['Company introduction'],
+  },
+});
+chk('a never-issued module CAN be deleted', deletableModule.includes('Delete permanently'));
+chk('  and the page counts what goes with it, before the press',
+  /2 project decisions about it/.test(deletableModule),
+  'retire and issue both state their consequence here; delete does too');
+chk('  including a library video that stops standing in for it',
+  deletableModule.includes('stop standing in for this module'));
+chk('  and it is Director-only', !renderModuleDetail({
+    deletion: { deletable: true, blockedReason: null, issuedRevisions: 0,
+      draftRevisions: 1, siteDecisions: 0, unlinkedAssets: [] },
+  }, false).includes('Delete permanently'),
+  'irreversible, so it belongs with the role that owns the record');
 chk('THE WORDING IS HERE', detail.includes(PPE_WORDING),
   'the list dropped it, so this page has to carry it');
 chk('  with its on-screen heading', detail.includes('What we expect of your PPE'));
