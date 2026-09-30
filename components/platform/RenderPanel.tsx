@@ -31,6 +31,7 @@ export function RenderPanel({
   completedCount,
   lastError,
   endpoint,
+  isCompany = false,
 }: {
   videoId: string;
   status: string;
@@ -43,6 +44,18 @@ export function RenderPanel({
    * component serves both and there is no second copy to keep in step.
    */
   endpoint: string;
+  /**
+   * A COMPANY video, i.e. one produced from a company module rather than for a
+   * project. Publishing one does NOT reach operatives: it files a draft revision on
+   * the Library video, which then has to be issued. This panel said "Publish to
+   * operatives" and "Operatives will be shown this version when they induct" for
+   * both, which was simply false for half of them.
+   *
+   * The ordinary route for a company video is now the module's own page, where
+   * publish and issue are one action. This panel is still reachable by opening a
+   * production directly, so it has to tell the truth about which it is.
+   */
+  isCompany?: boolean;
   /** The narration changed after the render: what exists is out of date. */
   stale: boolean;
   canPublish: boolean;
@@ -169,14 +182,14 @@ export function RenderPanel({
               preload="metadata"
               playsInline
               className="max-h-[70vh] w-full max-w-[320px] rounded-xl bg-black"
-              src={`/api/platform/induction-video/${videoId}/video`}
+              src={`${endpoint}/video`}
             >
               <track
                 kind="captions"
                 srcLang="en"
                 label="English"
                 default
-                src={`/api/platform/induction-video/${videoId}/captions`}
+                src={`${endpoint}/captions`}
               />
               Your browser cannot play this video.
             </video>
@@ -204,9 +217,13 @@ export function RenderPanel({
             ) : (
               <>
                 <p className="text-sm text-ink-muted">
-                  {canPublish
-                    ? 'Watch it through, then publish it. Operatives will be shown this version when they induct, and every earlier version becomes history.'
-                    : 'Only a Director or Site Manager may publish an induction video.'}
+                  {!canPublish
+                    ? isCompany
+                      ? 'Only a Director or an Admin Centre administrator may publish a company video.'
+                      : 'Only a Director or Site Manager may publish an induction video.'
+                    : isCompany
+                      ? 'Watch it through, then file it against the Library video. Operatives see it only once that revision is issued — the step after this one.'
+                      : 'Watch it through, then publish it. Operatives will be shown this version when they induct, and every earlier version becomes history.'}
                 </p>
                 <button
                   type="button"
@@ -214,7 +231,11 @@ export function RenderPanel({
                   onClick={() => call({ action: 'publish' }, 'publish')}
                   className="ml-auto rounded-lg bg-safe-500 px-4 py-2 text-sm font-semibold text-white hover:bg-safe-600 disabled:opacity-40"
                 >
-                  {busy === 'publish' ? 'Publishing…' : 'Publish to operatives'}
+                  {busy === 'publish'
+                    ? 'Publishing…'
+                    : isCompany
+                      ? 'Publish into the Library'
+                      : 'Publish to operatives'}
                 </button>
               </>
             )}

@@ -1,4 +1,28 @@
 #!/usr/bin/env bash
+# A COMPANY MODULE VIDEO IS MADE FROM THE MODULE PAGE (owner's redesign, 2026-09-30).
+#
+# BEFORE: five pages, three objects the user had no reason to know about, and a flow
+# that COULD NOT BE FINISHED - revisionReadiness asked for an uploaded file a generated
+# video never has, so the last step refused with "This revision still needs a video
+# file". Proven by running the real services end to end.
+#
+# WHAT MUST BE TRUE:
+#   THE BLOCKER STAYS FIXED  a generated revision's render counts as its footage, and
+#                            company_video_verify completes produce -> publish -> ISSUE.
+#   ONE DERIVED STAGE        moduleVideoStage maps four status vocabularies onto eight
+#                            steps with ONE next action. Derived, never stored.
+#   THE EIGHT ARE THE OWNER'S write / issue / narrate / review / video / preview /
+#                            publish & issue / live.
+#   NO DEAD END              every stage but LIVE offers a next action.
+#   THE ASSET IS INVISIBLE   provisioned in the background, in the COMPANY_BAND at the
+#                            module's own order, and the panel never names assets,
+#                            productions or revisions to the user.
+#   BOTH TIERS CAN WATCH     the shared panels follow apiBase, and the admin tier has
+#                            the four media routes it was missing.
+#   SCOPE-AWARE WORDING      a company video is not "published to operatives".
+#
+# (Inherited: the per-draft discard gate.)
+#
 # A BAD DRAFT IS UNDONE WITHOUT RESETTING ANYTHING (owner's follow-up, 2026-09-30).
 #
 # The Library could discard a single revision; a module could not discard a single
@@ -300,6 +324,12 @@ BUILD_STRINGS=(
   "Discard this draft"
   "the issued revision stays in force"
   "leaves this module with nothing written"
+  "Turn it into a video by reading it aloud first"
+  "This page updates itself"
+  "Watch it through before it goes live"
+  "Review narration"
+  "Preview video"
+  "Publish into the Library"
 )
 
 echo "[3/7] Asserting the source, the history and the database..."
@@ -805,6 +835,145 @@ if d < 0 or r < 0:
 sys.exit(0 if d < r else 1)
 PYDRAFTORDER
 echo "  ok   a bad draft is undone on its own, and nothing live moves"
+
+# ════════════════════════════════════════════════════════════════════════════
+# THE MODULE PAGE OWNS THE VIDEO WORKFLOW
+# ════════════════════════════════════════════════════════════════════════════
+STAGE=services/inductionVideo/moduleVideoStage.ts
+SHAPE=services/inductionVideo/videoStageShape.ts
+PANEL=components/inductionModules/ModuleVideoPanel.tsx
+STEPPER=components/inductionVideo/VideoStepper.tsx
+
+for f in "$STAGE" "$SHAPE" "$PANEL" "$STEPPER"; do test -f "$f" || fail "missing: $f"; done
+
+# --- THE SHARED VOCABULARY STAYS FREE OF THE SERVER ---
+# The stepper imports the step names. When they lived beside the queries, that dragged
+# the Prisma client into the browser bundle - caught by the leak check below the first
+# time this gate ran. Keep them apart.
+grep -qE "from '@prisma/client'|@/lib/prisma" "$SHAPE" \
+  && fail "$SHAPE imports the server - the stepper would pull Prisma into the bundle"
+grep -qF "videoStageShape" "$STEPPER" \
+  || fail "the stepper no longer takes its vocabulary from the pure module"
+
+# --- THE BLOCKER THAT MADE THE WHOLE FLOW IMPOSSIBLE ---
+# A generated revision has no uploaded source; its render IS its footage. Pinned as the
+# exact expression, because a substring check cannot see it narrowed back.
+grep -qF "Boolean(rev.sourceBlobPath || rev.normalisedBlobPath)" "$SVC" \
+  || fail "revisionReadiness is back to requiring an upload - no generated video could be issued"
+
+# --- ONE DERIVED STAGE, NEVER STORED ---
+grep -qE "videoStage\s+String|videoStep\s+Int" prisma/schema.prisma \
+  && fail "a stage column appeared - a stored stage is a fifth source of truth"
+grep -q "export async function moduleVideoStage" "$STAGE" || fail "the derived stage is gone"
+
+# --- THE EIGHT STEPS ARE THE OWNER'S, IN ORDER ---
+python3 - "$SHAPE" <<'PYSTEPS' || fail "the eight steps are not the ones the owner specified"
+import re, sys
+src = open(sys.argv[1]).read()
+m = re.search(r'export const VIDEO_STEPS = \[(.*?)\] as const;', src, re.S)
+if not m:
+    print('      VIDEO_STEPS is gone')
+    sys.exit(1)
+got = re.findall(r"'([^']+)'", m.group(1))
+want = ['Write wording', 'Issue wording', 'Generate narration', 'Review narration',
+        'Generate video', 'Preview video', 'Publish & issue', 'Live']
+if got != want:
+    print(f'      got:  {got}')
+    print(f'      want: {want}')
+    sys.exit(1)
+sys.exit(0)
+PYSTEPS
+
+# --- NO DEAD END: every stage that is not LIVE and not mid-job offers an action ---
+python3 - "$STAGE" <<'PYNODEAD' || fail "a stage returns no next action and is not LIVE or a wait"
+import re, sys
+src = open(sys.argv[1]).read()
+src = re.sub(r'/\*[\s\S]*?\*/', '', src)
+src = re.sub(r'^\s*//.*$', '', src, flags=re.M)
+
+def args_of(text, at):
+    """The top-level arguments of the call whose '(' is at `at`. A window-based regex
+    read into the NEXT stageOf call and mis-flagged LIVE_WORDING_MOVED_ON, which does
+    offer an action — so the parentheses are actually counted."""
+    depth, start, out = 0, at + 1, []
+    i = at
+    while i < len(text):
+        c = text[i]
+        if c in '([{':
+            depth += 1
+        elif c in ')]}':
+            depth -= 1
+            if depth == 0:
+                out.append(text[start:i].strip())
+                return out
+        elif c == ',' and depth == 1:
+            out.append(text[start:i].strip())
+            start = i + 1
+        i += 1
+    return out
+
+# A stage may legitimately have nothing to press: it is finished, or a job is running,
+# or the module does not exist.
+ALLOWED_NULL = {'LIVE', 'NARRATING', 'RENDERING', 'NO_WORDING'}
+bad = []
+for m in re.finditer(r"stageOf\(", src):
+    a = args_of(src, m.end() - 1)
+    if len(a) < 4:
+        continue
+    key = a[0].strip().strip("'")
+    if a[3].strip() == 'null' and key not in ALLOWED_NULL:
+        bad.append(key)
+for b in sorted(set(bad)):
+    print(f'      {b} offers no next action but is not LIVE or a wait')
+sys.exit(1 if bad else 0)
+PYNODEAD
+
+# --- THE ASSET IS PROVISIONED, AND INVISIBLE ---
+grep -q "export async function ensureGeneratedAssetForModule" \
+  services/inductionVideo/companyVideoService.ts \
+  || fail "the asset is no longer provisioned - the user is back to creating one by hand"
+grep -qF "LibraryPlacement.COMPANY_BAND" services/inductionVideo/companyVideoService.ts \
+  || fail "the provisioned asset is not in the company band - it would move the running order"
+grep -qF "order: module.order" services/inductionVideo/companyVideoService.ts \
+  || fail "the provisioned asset does not take the module's own order"
+# The words the redesign exists to keep off the page.
+python3 - "$PANEL" <<'PYHIDDEN' || fail "the panel names an internal concept to the user"
+import re, sys
+src = open(sys.argv[1]).read()
+src = re.sub(r'\{/\*[\s\S]*?\*/\}', '', src)
+src = re.sub(r'/\*[\s\S]*?\*/', '', src)
+src = re.sub(r'^\s*//.*$', '', src, flags=re.M)
+bad = [w for w in ('LibraryAsset', 'revision', 'production', 'asset')
+       if re.search(r'>[^<{}]*\b' + w, src, re.I)]
+for w in bad:
+    print(f'      the panel says "{w}" in visible text')
+sys.exit(1 if bad else 0)
+PYHIDDEN
+
+# --- THE THREE ACTIONS, AND THE PAGE THAT MOUNTS THEM ---
+for A in generateNarration generateVideo publishAndIssue; do
+  grep -qF "case '$A'" services/inductionModules/moduleActions.ts \
+    || fail "the dispatcher does not expose $A"
+done
+grep -qF "<ModuleVideoPanel" "$MDETAIL" || fail "the module page does not mount the video panel"
+grep -qF "detail.video" "$MDETAIL" || fail "the module page does not pass the derived stage"
+grep -qF "m.video.step" components/inductionModules/ModulesIndex.tsx \
+  || fail "the index lost its Video column - the workflow state is invisible from the list"
+
+# --- BOTH TIERS CAN ACTUALLY WATCH IT ---
+for R in video captions transcript "audio/[sceneId]"; do
+  test -f "app/api/admin/induction-video/[videoId]/$R/route.ts" \
+    || fail "admin media route missing: $R"
+done
+for C in components/platform/NarrationPanel.tsx components/platform/RenderPanel.tsx; do
+  grep -qF "/api/platform/induction-video" "$C" \
+    && fail "$C hard-codes the platform API again - the Admin Centre would 401 on media"
+done
+grep -qF "isCompany" components/platform/RenderPanel.tsx \
+  || fail "RenderPanel is not scope-aware - it would tell a company video it reaches operatives"
+grep -qF "Publish into the Library" components/platform/RenderPanel.tsx \
+  || fail "the company publish label is gone"
+echo "  ok   the module page owns the workflow, and the blocker stays fixed"
 
 # --- ONE PAGE PER ASSET, SHARED ---
 for P in "$PP" "$AP"; do
@@ -1442,7 +1611,7 @@ export FFMPEG_PATH="$PWD/vendor/ffmpeg/ffmpeg"
 # source or calls a service, and that gap cost twice in one day: a function prop that
 # threw before rendering, and a page whose whole new structure was gated on having
 # assets so an empty library looked untouched. Both passed every string assertion.
-for S in content_reset_verify inductionvideo_delete_verify module_catalogue_reduction_verify attention_summary_verify module_master_detail_verify video_progress_verify library_production_visibility_verify cscs_enforcement_verify cscs_access_gate_verify cscs_exempt_verify brand_motion_verify company_video_verify library_render_verify library_ia_verify library_pipeline_verify library_audiospec_verify \
+for S in module_video_flow_verify content_reset_verify inductionvideo_delete_verify module_catalogue_reduction_verify attention_summary_verify module_master_detail_verify video_progress_verify library_production_visibility_verify cscs_enforcement_verify cscs_access_gate_verify cscs_exempt_verify brand_motion_verify company_video_verify library_render_verify library_ia_verify library_pipeline_verify library_audiospec_verify \
          inductionvideo_library_verify inductionvideo_verify inductionvideo_e2e_verify \
          setup_video_readiness_verify cpp_completion_verify site_rules_verify \
          induction_modules_verify induction_modules_phaseb_verify \

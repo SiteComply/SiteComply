@@ -3,6 +3,7 @@ import { moduleUsageSummaries } from '@/services/inductionModules/moduleUsage';
 import { moduleStatus, type ModuleStatus } from '@/services/inductionModules/moduleStatus';
 import { describeRealm } from '@/services/inductionModules/moduleActor';
 import { formatDateUK } from '@/lib/datetime';
+import { moduleVideoStages } from '@/services/inductionVideo/moduleVideoStage';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -48,6 +49,13 @@ export interface ModuleRow {
   } | null;
   draft: { id: string; version: number; preparedByName: string } | null;
   revisionCount: number;
+  /**
+   * How far this module's VIDEO has got, as one step of eight. On the list so the
+   * workflow's state is visible without opening every module — the old index said
+   * nothing about video at all, so "which of these still needs finishing?" could
+   * only be answered by clicking through them one at a time.
+   */
+  video: { step: number; label: string; working: boolean; live: boolean };
   usage: { onProjects: number; totalProjects: number; excludedBy: number };
   /**
    * A library video that plays INSTEAD of this module's wording, if one is set. The
@@ -81,6 +89,19 @@ export interface ModuleIndex {
   retired: { count: number; slugs: string[] };
 }
 
+/**
+ * The row's view of a video stage. One shaper, so the index and the archive cannot
+ * describe the same absence differently.
+ */
+function stageRow(v: { step: number; label: string; working: boolean; live: boolean } | undefined) {
+  return {
+    step: v?.step ?? 1,
+    label: v?.label ?? 'Write wording',
+    working: v?.working ?? false,
+    live: v?.live ?? false,
+  };
+}
+
 export async function moduleRowsForIndex(): Promise<ModuleIndex> {
   const [summaries, usage, libraryAssets] = await Promise.all([
     listModules(),
@@ -92,6 +113,14 @@ export async function moduleRowsForIndex(): Promise<ModuleIndex> {
     }),
   ]);
   const byModule = new Map(libraryAssets.map((a) => [a.moduleId as string, a]));
+
+  /*
+   * The video stage per ACTIVE module. Retired ones are not offered a video, so there
+   * is nothing to say about them and no reason to pay for the queries.
+   */
+  const stages = await moduleVideoStages(
+    summaries.filter((m) => m.active).map((m) => m.id),
+  );
 
   const retired = summaries.filter((m) => !m.active);
   const toRow = (m: (typeof summaries)[number]): ModuleRow => {
@@ -126,6 +155,7 @@ export async function moduleRowsForIndex(): Promise<ModuleIndex> {
       },
       standsInFor: asset ? { assetId: asset.id, title: asset.title } : null,
       replacesSceneType: m.replacesSceneType,
+      video: stageRow(stages.get(m.id)),
     };
   };
 
@@ -195,5 +225,8 @@ async function moduleRowsForIndexAll(): Promise<ModuleRow[]> {
       ? { assetId: byModule.get(m.id)!.id, title: byModule.get(m.id)!.title }
       : null,
     replacesSceneType: m.replacesSceneType,
+    // No stage is computed here: this feeds the archive, and a retired module is
+    // offered no video at all, so there is nothing to report and nothing to query for.
+    video: stageRow(undefined),
   }));
 }

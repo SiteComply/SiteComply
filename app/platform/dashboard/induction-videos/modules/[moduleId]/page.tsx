@@ -50,7 +50,8 @@ export default async function PlatformModuleDetailPage({
         canIssue={canIssueInductionModule(viewer.role)}
         endpoint="/api/platform/induction-modules"
         backHref="/platform/dashboard/induction-videos/modules"
-        libraryBasePath="/platform/dashboard/induction-videos/library"
+        videoApiBase="/api/platform/induction-video"
+      libraryBasePath="/platform/dashboard/induction-videos/library"
       />
     </PlatformShell>
   );

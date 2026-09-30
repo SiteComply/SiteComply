@@ -25,9 +25,20 @@
  * revision's normalised footage, with no LibraryNormaliseJob at all. The captions
  * come free too, because narration already writes a WebVTT track.
  */
-import { InductionVideoStatus, LibraryRevisionStatus } from '@prisma/client';
+import {
+  InductionVideoStatus,
+  LibraryPlacement,
+  LibraryProvenance,
+  LibraryRevisionStatus,
+} from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { VideoActor } from '@/services/inductionVideo/videoActor';
+import type { ModuleActor } from '@/services/inductionModules/moduleActor';
+/*
+ * A STATIC import is safe here: libraryAssetService does not import this module, and
+ * the only path back (libraryActions -> companyVideoService) is a dynamic import.
+ */
+import { createLibraryAsset } from '@/services/inductionVideo/libraryAssetService';
 import { renderPath } from '@/services/inductionVideo/mediaStorage';
 
 export type CompanyVideoResult<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -307,4 +318,89 @@ export async function publishCompanyVideoToLibrary(
   });
 
   return { ok: true, value: { revisionId: revision.id, version: revision.version } };
+}
+
+/**
+ * The Library asset a module's video lives in, creating it if there is not one yet.
+ *
+ * ── WHY THIS IS PROVISIONED AND NOT ASKED FOR ─────────────────────────────
+ *
+ * A generated company video has to live in a `LibraryAsset`, because that is the
+ * object a site resolves footage from. But the user's intention is "make a video of
+ * this module" — the asset is bookkeeping, and making them create one, mark it
+ * GENERATED and point it back at the module they started from was the first and
+ * worst step of the old flow. Nobody would guess it, and getting it wrong produced a
+ * production that could not be finished.
+ *
+ * ── AND WHY PROVISIONING IT CHANGES NOTHING UNTIL THE VIDEO IS LIVE ───────
+ *
+ * Worth stating because it is the safety property that makes this acceptable. A site
+ * leaves out a module's written scene only when footage REPLACES it, and
+ * `replacedModuleIds` in `sceneRules` is built from `resolveLibraryForSite`, which
+ * requires an ISSUED revision with a normalised segment and captions. An asset with
+ * no issued revision resolves to nothing, so it appears in no manifest and suppresses
+ * no wording. The swap happens at the moment the video is issued, which is exactly
+ * when it should.
+ *
+ * Placement is COMPANY_BAND and the order is the module's own, so the footage takes
+ * the module's place in the running order rather than moving it. The inclusion rules
+ * are mirrored from the module for the same reason: the video is a richer delivery of
+ * the same content, not a different decision about who sees it.
+ */
+export async function ensureGeneratedAssetForModule(
+  actor: ModuleActor,
+  moduleId: string,
+): Promise<{ ok: true; assetId: string; created: boolean } | { ok: false; error: string }> {
+  const module = await prisma.inductionModule.findUnique({
+    where: { id: moduleId },
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      order: true,
+      mandatory: true,
+      defaultIncluded: true,
+      active: true,
+      libraryAssets: {
+        where: { provenance: 'GENERATED' },
+        select: { id: true, active: true },
+        orderBy: { createdAt: 'asc' },
+      },
+    },
+  });
+  if (!module) return { ok: false, error: 'That module does not exist.' };
+  if (!module.active) {
+    return {
+      ok: false,
+      error: 'This module is retired, so there is nothing to make a video for. Bring it back first.',
+    };
+  }
+
+  const existing = module.libraryAssets.find((a) => a.active) ?? null;
+  if (existing) return { ok: true, assetId: existing.id, created: false };
+
+  /*
+   * A RETIRED one is brought back rather than joined by a second. Two generated
+   * assets for one module would both claim to replace it, and `replacedModuleIds`
+   * would be satisfied by whichever resolved first.
+   */
+  const retired = module.libraryAssets[0] ?? null;
+  if (retired) {
+    await prisma.libraryAsset.update({ where: { id: retired.id }, data: { active: true } });
+    return { ok: true, assetId: retired.id, created: false };
+  }
+
+  const created = await createLibraryAsset(actor, {
+    // Prefixed so it cannot collide with a slug somebody typed for uploaded footage.
+    slug: `MODULE_${module.slug}`,
+    title: module.title,
+    placement: LibraryPlacement.COMPANY_BAND,
+    provenance: LibraryProvenance.GENERATED,
+    order: module.order,
+    moduleId: module.id,
+    mandatory: module.mandatory,
+    defaultIncluded: module.defaultIncluded,
+  });
+  if (!created.ok) return { ok: false, error: created.error };
+  return { ok: true, assetId: created.value.assetId, created: true };
 }

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { ModuleVideoPanel } from '@/components/inductionModules/ModuleVideoPanel';
 import type { ModuleDetail as Detail } from '@/services/inductionModules/moduleDetail';
 
 /**
@@ -44,6 +45,7 @@ export function ModuleDetail({
   endpoint,
   backHref,
   libraryBasePath,
+  videoApiBase,
 }: {
   detail: Detail;
   canDraft: boolean;
@@ -51,6 +53,8 @@ export function ModuleDetail({
   endpoint: string;
   backHref: string;
   libraryBasePath: string;
+  /** This tier's video media base, e.g. /api/platform/induction-video. */
+  videoApiBase: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -400,6 +404,21 @@ export function ModuleDetail({
           </div>
         )}
       </section>
+
+      {/*
+        ── THE VIDEO, RIGHT AFTER THE WORDING IT IS MADE FROM ──
+        Steps 1 and 2 of the eight are the wording above; the remaining six live here.
+        Placed between the wording and the history deliberately: it is the next thing
+        you do, and the old flow's whole problem was that nothing on this page said so.
+      */}
+      <ModuleVideoPanel
+        moduleId={detail.id}
+        moduleTitle={detail.title}
+        video={detail.video}
+        canIssue={canIssue}
+        endpoint={endpoint}
+        videoApiBase={videoApiBase}
+      />
 
       {/* ── THE HISTORY. Every revision, and what each one was for. ── */}
       <section className="rounded-xl border border-line bg-surface p-4 shadow-card">

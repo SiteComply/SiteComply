@@ -184,6 +184,8 @@ export async function VideoVersionSurface({
       />
 
       <RenderPanel
+        // A company video belongs to no project, which is the whole distinction.
+        isCompany={video.jobSiteId === null}
         endpoint={apiBase}
         videoId={video.id}
         status={video.status}

@@ -42,7 +42,8 @@ export default async function AdminModuleDetailPage({
         canIssue={manages}
         endpoint="/api/admin/induction-modules"
         backHref="/admin/induction-videos/modules"
-        libraryBasePath="/admin/induction-videos/library"
+        videoApiBase="/api/admin/induction-video"
+      libraryBasePath="/admin/induction-videos/library"
       />
     </div>
   );

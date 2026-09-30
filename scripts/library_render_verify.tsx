@@ -145,6 +145,18 @@ const asModule = (
     revisionCount: (issued ? 1 : 0) + (draft ? 1 : 0),
     usage: { onProjects: issued ? 6 : 0, totalProjects: 6, excludedBy: 0 },
     standsInFor: null,
+    /*
+     * The video stage. In the BASE fixture, not only in the cases that exercise it:
+     * the index reads `m.video.step`, and a fixture missing it threw at render the
+     * moment the column was added — which is the third time this harness has caught
+     * exactly that, and the reason it exists.
+     *
+     * Default: wording issued means step 3 (ready to narrate); nothing issued means
+     * step 1. The same mapping the service makes, so the fixture is not a fiction.
+     */
+    video: issued
+      ? { step: 3, label: 'Generate narration', working: false, live: false }
+      : { step: 1, label: 'Write wording', working: false, live: false },
     ...over,
   };
 };
@@ -617,6 +629,20 @@ const moduleFixture = (over: Record<string, unknown> = {}) => ({
   },
   // The fixture has an open draft (rev-2) over a live revision (rev-1).
   draftDiscard: { revisionId: 'rev-2', version: 2, leavesNothingWritten: false },
+  /*
+   * The video stage. The fixture's wording is live, so step 3: ready to narrate — the
+   * point at which the old flow dead-ended with nothing to click.
+   */
+  video: {
+    stage: 'READY_TO_NARRATE', step: 3, label: 'Generate narration',
+    detail: 'The wording is in force. Turn it into a video by reading it aloud first.',
+    working: false,
+    next: {
+      label: 'Generate the narration', action: 'generateNarration',
+      directorOnly: true, estimate: 'about 30 seconds',
+    },
+    videoId: null, assetId: null, live: false,
+  },
   revisions: [
     { id: 'rev-2', version: 2, status: 'DRAFT', heading: 'What we expect of your PPE',
       narration: 'A reworded draft.', preparedByName: 'JC', preparedByRealm: 'Platform',
@@ -643,6 +669,41 @@ const renderModuleDetail = (over: Record<string, unknown> = {}, can = true) =>
 
 const detail = renderModuleDetail();
 chk('the detail page renders', detail.length > 800, `${detail.length} bytes`);
+
+/* ── THE VIDEO WORKFLOW IS ON THE MODULE PAGE ── */
+console.log('\nTHE MODULE PAGE NOW CARRIES THE WHOLE VIDEO WORKFLOW');
+chk('the video panel is on the module page', detail.includes('Step 3 of 8'),
+  'the old page said nothing about video unless one already existed');
+chk('  with the eight steps visible', detail.includes('Video progress') &&
+  detail.includes('Write wording') && detail.includes('Publish &amp; issue') &&
+  detail.includes('Live'));
+chk('  ONE next action, named for what it does',
+  detail.includes('Generate the narration'),
+  'not "produce", not "start a production"');
+chk('  and how long it takes', /Takes about 30 seconds/.test(detail),
+  'a wait nobody warned about reads as a hang');
+for (const internal of ['Library asset', 'LibraryAsset', 'production', 'revision of this video']) {
+  chk(`  it never says "${internal}" on the page`,
+    !new RegExp(`>[^<]*${internal}`, 'i').test(
+      detail.slice(detail.indexOf('Step 3 of 8'), detail.indexOf('Step 3 of 8') + 3000),
+    ),
+    'assets, productions and revisions are implementation detail');
+}
+const liveModule = renderModuleDetail({
+  video: {
+    stage: 'LIVE', step: 8, label: 'Live',
+    detail: 'The video is live. Operatives are shown it in place of the written wording.',
+    working: false, next: null, videoId: null, assetId: null, live: true,
+  },
+});
+chk('a LIVE module says so and offers nothing more',
+  liveModule.includes('Step 8 of 8') &&
+  liveModule.includes('The video is live') &&
+  !liveModule.includes('Generate the narration</button>'));
+const siteManagerView = renderModuleDetail({}, false);
+chk('a Site Manager is told who can do it, not shown a button that fails',
+  siteManagerView.includes('only a Director can do this') &&
+  !siteManagerView.includes('>Generate the narration<'));
 
 /* ── DISCARDING ONE DRAFT: THE ROUTINE UNDO ── */
 console.log('\nA BAD DRAFT CAN BE THROWN AWAY WITHOUT A FULL RESET');

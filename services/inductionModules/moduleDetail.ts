@@ -10,6 +10,10 @@ import {
   type ModuleDeletion,
   type ModuleReset,
 } from '@/services/inductionModules/inductionModuleService';
+import {
+  moduleVideoStage,
+  type ModuleVideoStage,
+} from '@/services/inductionVideo/moduleVideoStage';
 import { moduleUsage, type ModuleUsage } from '@/services/inductionModules/moduleUsage';
 import { moduleStatus, type ModuleStatus } from '@/services/inductionModules/moduleStatus';
 import { describeRealm } from '@/services/inductionModules/moduleActor';
@@ -95,6 +99,13 @@ export interface ModuleDetail {
    */
   reset: ModuleReset;
   /**
+   * WHERE THIS MODULE'S VIDEO HAS GOT TO — one stage, one next action.
+   *
+   * The whole point of the redesign: the page shows this and nothing about assets,
+   * productions or revisions.
+   */
+  video: ModuleVideoStage;
+  /**
    * The open draft, if there is one, and what discarding it would mean. Separate
    * from `reset` because this is the ROUTINE undo — a draft has reached nobody, so
    * it needs no flag, no Director and no evidence check.
@@ -155,13 +166,14 @@ export async function moduleDetail(moduleId: string): Promise<ModuleDetail | nul
   const row = await getModule(moduleId);
   if (!row) return null;
 
-  const [usage, deletion, reset, asset] = await Promise.all([
+  const [usage, deletion, reset, video, asset] = await Promise.all([
     moduleUsage(moduleId),
     // Deliberately alongside usage rather than inside it: usage answers "who hears
     // this", deletion answers "may this go", and conflating them would make one
     // cache invalidate the other.
     moduleDeletion(moduleId),
     moduleReset(moduleId),
+    moduleVideoStage(moduleId),
     prisma.libraryAsset.findFirst({
       where: { moduleId, active: true },
       select: {
@@ -218,6 +230,7 @@ export async function moduleDetail(moduleId: string): Promise<ModuleDetail | nul
       : null,
     deletion,
     reset,
+    video,
     /*
      * Composed here rather than in the screen, like every other consequence on this
      * page, so the Platform and the Admin Centre cannot describe it differently.

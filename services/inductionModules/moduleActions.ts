@@ -116,6 +116,114 @@ export async function handleModuleAction(
       return r.ok ? ok(r.value) : refuse(r.error);
     }
     /*
+     * ── THE THREE VIDEO ACTIONS, ORCHESTRATED SO THE USER SEES ONE ─────────
+     *
+     * Each one composes several existing services and calls every one of them with
+     * the real actor, so no authority check is skipped — only unattended. The user's
+     * intention is a single step; the pipeline underneath is unchanged.
+     */
+    case 'generateNarration': {
+      const { ensureGeneratedAssetForModule, startCompanyVideo } = await import(
+        '@/services/inductionVideo/companyVideoService'
+      );
+      const { videoActorFromModuleActor } = await import(
+        '@/services/inductionVideo/videoActor'
+      );
+      const { approveScript } = await import(
+        '@/services/inductionVideo/inductionVideoService'
+      );
+      const { requestNarration } = await import('@/services/inductionVideo/narrationService');
+      const { prisma } = await import('@/lib/prisma');
+
+      const moduleId = str('moduleId');
+      // 1. The asset, provisioned if this is the first time. Bookkeeping, not a step.
+      const asset = await ensureGeneratedAssetForModule(actor, moduleId);
+      if (!asset.ok) return refuse(asset.error);
+
+      const vActor = videoActorFromModuleActor(actor);
+
+      /*
+       * 2. RESUME rather than start a second. A production already exists when
+       * narration failed and put it back to SCRIPT_APPROVED, when one was started
+       * under the old multi-page flow, or when the wording moved on and this is a
+       * re-generate. startCompanyVideo refuses a second in-flight production, so
+       * asking for one here would turn "try again" into a dead end.
+       */
+      const existing = await prisma.inductionVideo.findFirst({
+        where: { libraryAssetId: asset.assetId, publishedAt: null, supersededAt: null },
+        orderBy: { version: 'desc' },
+        select: { id: true, status: true },
+      });
+      let videoId = existing?.id ?? '';
+      if (!videoId) {
+        const started = await startCompanyVideo(vActor, asset.assetId);
+        if (!started.ok) return refuse(started.error);
+        videoId = started.value.videoId;
+      }
+
+      /*
+       * 3. Approve, when it still needs it. The script is the Director's own issued
+       * wording split into sentences — they approved those words one step ago, so a
+       * second approval screen decides nothing. See moduleVideoStage.ts.
+       */
+      const fresh = await prisma.inductionVideo.findUnique({
+        where: { id: videoId },
+        select: { status: true },
+      });
+      if (fresh?.status === 'SCRIPT_READY') {
+        const approved = await approveScript(vActor, videoId);
+        if (!approved.ok) return refuse(approved.error);
+      }
+
+      // 4. Queue the narration. The kicker starts it without waiting for the tick.
+      const queued = await requestNarration(vActor, videoId);
+      if (!queued.ok) return refuse(queued.error);
+      return ok({ videoId, scenes: queued.value.scenes });
+    }
+    case 'generateVideo': {
+      const { requestRender } = await import('@/services/inductionVideo/renderService');
+      const { videoActorFromModuleActor } = await import(
+        '@/services/inductionVideo/videoActor'
+      );
+      const r = await requestRender(videoActorFromModuleActor(actor), str('videoId'));
+      return r.ok ? ok(r.value) : refuse(r.error);
+    }
+    /*
+     * PUBLISH AND ISSUE AS ONE ACT. They were two, and a user read them as one: the
+     * production was "published to operatives" (it was not — it filed a DRAFT library
+     * revision) and then had to be issued from a different page, which nothing said.
+     * The issue NOTE is still captured, because it is the audit record of why this
+     * version went live and generating one would be inventing the record.
+     */
+    case 'publishAndIssue': {
+      const { publishCompanyVideoToLibrary } = await import(
+        '@/services/inductionVideo/companyVideoService'
+      );
+      const { videoActorFromModuleActor } = await import(
+        '@/services/inductionVideo/videoActor'
+      );
+      const { issueRevision } = await import('@/services/inductionVideo/libraryAssetService');
+
+      const note = str('issueNote').trim();
+      if (note.length < 5) return refuse('Say what this version of the video says.');
+
+      const published = await publishCompanyVideoToLibrary(
+        videoActorFromModuleActor(actor),
+        str('videoId'),
+      );
+      if (!published.ok) return refuse(published.error);
+
+      /*
+       * The revision is filed as a DRAFT by design, then issued here. If issuing
+       * fails the production IS published and the draft exists, so the module page's
+       * stage lands on Preview with the draft waiting — recoverable by pressing the
+       * same button again rather than stuck.
+       */
+      const issued = await issueRevision(actor, published.value.revisionId, note);
+      if (!issued.ok) return refuse(issued.error);
+      return ok({ version: issued.value.version, live: true });
+    }
+    /*
      * START AGAIN — the primary way to clear a module's content: the revisions and
      * everything generated from them go, the subject and its settings stay. Listed
      * before deleteModule deliberately, because deleting a permanent company

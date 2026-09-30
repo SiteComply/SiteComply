@@ -262,6 +262,9 @@ export function ModulesIndex({
                 Status
               </th>
               <th scope="col" className="px-4 py-2 text-left text-[11px] font-bold uppercase tracking-wider text-ink-subtle">
+                Video
+              </th>
+              <th scope="col" className="px-4 py-2 text-left text-[11px] font-bold uppercase tracking-wider text-ink-subtle">
                 Included
               </th>
               <th scope="col" className="px-4 py-2 text-left text-[11px] font-bold uppercase tracking-wider text-ink-subtle">
@@ -304,6 +307,27 @@ export function ModulesIndex({
                   >
                     {m.status.label}
                   </span>
+                </td>
+                {/*
+                  * HOW FAR THE VIDEO HAS GOT, as a step out of eight. The index said
+                  * nothing about video at all, so "which of these still needs
+                  * finishing?" could only be answered by opening every module in turn.
+                  * A step number rather than a status word on purpose: the question is
+                  * how much is left, which a word cannot answer.
+                  */}
+                <td className="px-4 py-3 text-sm">
+                  {m.video.live ? (
+                    <span className="font-semibold text-safe-700">Live</span>
+                  ) : (
+                    <>
+                      <span className="text-ink-muted">
+                        {m.video.step}/8 {m.video.label}
+                      </span>
+                      {m.video.working && (
+                        <span className="text-ink-subtle">…</span>
+                      )}
+                    </>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-sm text-ink-muted">
                   {m.mandatory

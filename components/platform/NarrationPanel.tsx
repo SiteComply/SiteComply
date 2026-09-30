@@ -169,7 +169,7 @@ export function NarrationPanel({
                     controls
                     preload="none"
                     className="ml-auto h-8 w-full max-w-[16rem]"
-                    src={`/api/platform/induction-video/${videoId}/audio/${s.id}`}
+                    src={`${endpoint}/audio/${s.id}`}
                   >
                     Your browser cannot play audio.
                   </audio>
@@ -181,7 +181,7 @@ export function NarrationPanel({
           <div className="mt-3 flex flex-wrap items-center gap-4 text-sm">
             {hasTranscript && (
               <a
-                href={`/api/platform/induction-video/${videoId}/transcript`}
+                href={`${endpoint}/transcript`}
                 className="font-semibold text-brand-700 hover:underline"
               >
                 Download the transcript
@@ -189,7 +189,7 @@ export function NarrationPanel({
             )}
             {hasCaptions && (
               <a
-                href={`/api/platform/induction-video/${videoId}/captions`}
+                href={`${endpoint}/captions`}
                 className="font-semibold text-brand-700 hover:underline"
               >
                 Subtitles (WebVTT)
