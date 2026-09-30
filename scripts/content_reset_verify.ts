@@ -257,6 +257,103 @@ const madeVideos: string[] = [];
       (await prisma.siteInductionModule.count({ where: { moduleId: decided.id } })) === 0);
 
     /* ─────────────────────────────────────────────────────────────────────── */
+    console.log('\nDISCARDING ONE DRAFT IS THE ROUTINE UNDO, NOT A SMALL RESET');
+    strict(); // no flag: a draft has reached nobody, so none is needed
+    const draftMod = await mkModule('draftundo', { issued: true });
+    // An issued revision in force, a draft on top of it, and a published video
+    // carrying the ISSUED wording — the exact state the owner described.
+    const liveRev = draftMod.revisions[0].id;
+    const newDraft = await prisma.inductionModuleRevision.create({
+      data: {
+        moduleId: draftMod.id, version: 2, status: 'DRAFT', heading: 'Reworded',
+        narration: 'y'.repeat(80), contentHash: 'h2', preparedByName: 'Test',
+      },
+      select: { id: true },
+    });
+    const dmAsset = await mkAsset('draftundoasset');
+    const dmVideo = await mkProduction(dmAsset.id, { published: true });
+    await prisma.inductionVideoScene.create({
+      data: {
+        videoId: dmVideo.id, sceneType: 'COMPANY_MODULE', order: 1,
+        heading: 'Live wording', narration: 'x'.repeat(50), moduleRevisionId: liveRev,
+      },
+    });
+
+    chk('a PROJECT MANAGER may not discard a draft',
+      (await modSvc.discardModuleDraft(
+        moduleActorFromPlatformViewer(
+          { id: 'crv-pm', name: 'Pat PM', role: 'PROJECT_MANAGER', siteIds: [] } as never),
+        draftMod.id, newDraft.id)).ok === false);
+    chk('a SITE MANAGER may — the same authority that wrote it',
+      (await modSvc.discardModuleDraft(manager, draftMod.id, newDraft.id)).ok === true,
+      'saveDraft has no author check, so refusing this would protect nothing');
+    chk('  the draft is gone',
+      (await prisma.inductionModuleRevision.findUnique({ where: { id: newDraft.id } })) === null);
+    chk('  THE ISSUED REVISION IS UNTOUCHED AND STILL IN FORCE', Boolean(
+      await prisma.inductionModuleRevision.findFirst({
+        where: { id: liveRev, status: 'ISSUED' } })),
+      'the whole promise of a per-draft discard');
+    chk('  THE PUBLISHED VIDEO IS UNTOUCHED', Boolean(
+      await prisma.inductionVideo.findUnique({ where: { id: dmVideo.id } })));
+    chk('  and its scene still carries the wording an operative heard',
+      (await prisma.inductionVideoScene.count({
+        where: { videoId: dmVideo.id, moduleRevisionId: liveRev } })) === 1);
+    chk('  and the module still resolves as LIVE',
+      (await prisma.inductionModuleRevision.count({
+        where: { moduleId: draftMod.id } })) === 1);
+
+    console.log('\nWHAT A DRAFT DISCARD REFUSES');
+    const issuedOnly = await mkModule('issuedonly', { issued: true });
+    const refuseIssued = await modSvc.discardModuleDraft(
+      director, issuedOnly.id, issuedOnly.revisions[0].id);
+    chk('an ISSUED revision cannot be discarded this way', refuseIssued.ok === false,
+      refuseIssued.error);
+    chk('  and it points at starting a new draft instead',
+      /start a\s+new draft/i.test(refuseIssued.error ?? ''));
+    const otherMod = await mkModule('othermod');
+    const crossedModule = await modSvc.discardModuleDraft(
+      director, otherMod.id, issuedOnly.revisions[0].id);
+    chk('a revision of another module is refused', crossedModule.ok === false,
+      crossedModule.error);
+    chk('  and it is still there', Boolean(
+      await prisma.inductionModuleRevision.findUnique({
+        where: { id: issuedOnly.revisions[0].id } })));
+
+    // The defensive path: a draft should be unreachable, so if one IS carried the
+    // service refuses rather than deleting the thing that proves the bug.
+    const oddMod = await mkModule('oddmod');
+    const oddAsset = await mkAsset('oddasset');
+    const oddVideo = await mkProduction(oddAsset.id, { status: 'SCRIPT_READY' });
+    await prisma.inductionVideoScene.create({
+      data: {
+        videoId: oddVideo.id, sceneType: 'COMPANY_MODULE', order: 1,
+        heading: 'Should not happen', narration: 'x'.repeat(50),
+        moduleRevisionId: oddMod.revisions[0].id,
+      },
+    });
+    const odd = await modSvc.discardModuleDraft(director, oddMod.id, oddMod.revisions[0].id);
+    chk('a draft that somehow reached a video is REFUSED, not deleted',
+      odd.ok === false, odd.error);
+    chk('  and says to report it', /[Rr]eport this/.test(odd.error ?? ''));
+
+    console.log('\nDISCARDING THE ONLY DRAFT LEAVES THE MODULE BLANK, AND SAYS SO');
+    const soleDraft = await mkModule('soledraft');
+    const sole = await modSvc.discardModuleDraft(
+      director, soleDraft.id, soleDraft.revisions[0].id);
+    chk('it is allowed', sole.ok === true, sole.ok ? '' : sole.error);
+    chk('  and reports that nothing is written now',
+      sole.ok === true && sole.value.leftNothingWritten === true,
+      'the page turns this into a sentence before the press');
+    chk('  THE MODULE ITSELF SURVIVED', Boolean(
+      await prisma.inductionModule.findUnique({ where: { id: soleDraft.id } })),
+      'discarding a draft is never a way to lose the subject');
+    // Version numbers are reused, so the history has no gap.
+    const reopened = await modSvc.startDraft(director, soleDraft.id);
+    chk('  and the next draft reuses version 1 rather than skipping to 2',
+      reopened.ok === true && reopened.value.version === 1,
+      reopened.ok ? '' : reopened.error);
+
+    /* ─────────────────────────────────────────────────────────────────────── */
     console.log('\nSTART AGAIN KEEPS THE SUBJECT — THE DISTINCTION THAT MATTERS');
     buildMode();
     const resetMod = await mkModule('resetme', { issued: true });

@@ -104,6 +104,18 @@ export async function handleModuleAction(
       return r.ok ? ok(r.value) : refuse(r.error);
     }
     /*
+     * DISCARD ONE DRAFT — the routine undo. Draft-only and `canDraft`, so it needs
+     * neither the build-phase flag nor a Director: a draft has reached nobody. Every
+     * condition lives in the service.
+     */
+    case 'discardDraft': {
+      const { discardModuleDraft } = await import(
+        '@/services/inductionModules/inductionModuleService'
+      );
+      const r = await discardModuleDraft(actor, str('moduleId'), str('revisionId'));
+      return r.ok ? ok(r.value) : refuse(r.error);
+    }
+    /*
      * START AGAIN — the primary way to clear a module's content: the revisions and
      * everything generated from them go, the subject and its settings stay. Listed
      * before deleteModule deliberately, because deleting a permanent company

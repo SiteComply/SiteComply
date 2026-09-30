@@ -615,6 +615,8 @@ const moduleFixture = (over: Record<string, unknown> = {}) => ({
     resettable: true, blockedReason: null, revisions: 2, productions: 1,
     siteDecisionsKept: 6, producedVideos: [], wouldLeaveSubjectSilent: true,
   },
+  // The fixture has an open draft (rev-2) over a live revision (rev-1).
+  draftDiscard: { revisionId: 'rev-2', version: 2, leavesNothingWritten: false },
   revisions: [
     { id: 'rev-2', version: 2, status: 'DRAFT', heading: 'What we expect of your PPE',
       narration: 'A reworded draft.', preparedByName: 'JC', preparedByRealm: 'Platform',
@@ -641,6 +643,28 @@ const renderModuleDetail = (over: Record<string, unknown> = {}, can = true) =>
 
 const detail = renderModuleDetail();
 chk('the detail page renders', detail.length > 800, `${detail.length} bytes`);
+
+/* ── DISCARDING ONE DRAFT: THE ROUTINE UNDO ── */
+console.log('\nA BAD DRAFT CAN BE THROWN AWAY WITHOUT A FULL RESET');
+chk('the draft offers its own discard', detail.includes('Discard this draft'),
+  'the gap that made "reset the whole module" the only way to undo an editing mistake');
+chk('  and it reassures that nothing live is affected',
+  /the issued revision stays in force/.test(detail) &&
+  /no generated video is affected/.test(detail),
+  'exactly the promise the owner asked for');
+chk('  it is separate from Start again',
+  detail.indexOf('Discard this draft') < detail.indexOf('Clear the content and start again'),
+  'the routine undo comes first; the big hammer is further down');
+const soleDraftPage = renderModuleDetail({
+  draftDiscard: { revisionId: 'rev-1', version: 1, leavesNothingWritten: true },
+});
+chk('a module with NO issued revision behind the draft says it will go blank',
+  soleDraftPage.includes('leaves this module with nothing written'),
+  'the consequence, before the press, as everywhere else on this page');
+chk('no draft, no control',
+  !renderModuleDetail({ draftDiscard: null }).includes('Discard this draft'));
+chk('a SITE MANAGER sees it — canDraft, not canIssue',
+  renderModuleDetail({}, true).includes('Discard this draft'));
 
 /* ── START AGAIN IS THE PRIMARY RESTART; DELETE IS A DISCLOSURE ── */
 console.log('\nRESET AND DELETE ARE DIFFERENT THINGS, AND THE PAGE LEADS WITH RESET');

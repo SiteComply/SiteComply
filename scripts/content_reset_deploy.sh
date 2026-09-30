@@ -1,4 +1,25 @@
 #!/usr/bin/env bash
+# A BAD DRAFT IS UNDONE WITHOUT RESETTING ANYTHING (owner's follow-up, 2026-09-30).
+#
+# The Library could discard a single revision; a module could not discard a single
+# draft, so the only way to undo an editing mistake was Start again - which clears
+# every revision and everything generated from them.
+#
+# WHAT MUST BE TRUE:
+#   DRAFT ONLY          discardModuleDraft refuses anything not DRAFT, so an issued
+#                       revision can never be removed by this path.
+#   NOTHING ELSE MOVES  it deletes ONE revision row: no module column, no per-site
+#                       decision, no video, no scene, no library asset.
+#   NO FLAG NEEDED      a draft is unreachable (resolveModulesForSite and
+#                       startCompanyVideo both require ISSUED), so this is not
+#                       gated on the build phase - it is ordinary editing.
+#   THE DRAFTER'S       canDraft, not canIssue: saveDraft has no author check, so a
+#                       Site Manager can already overwrite every word of it.
+#   DEFENSIVE, NOT BLIND if a draft ever IS carried by a video, it REFUSES rather
+#                       than deleting what proves the bug.
+#
+# (Inherited: the Library parity gate.)
+#
 # THE SAME START-AGAIN MODEL ON BOTH SIDES (owner's follow-up, 2026-09-30).
 #
 # The module page was fixed first, leaving the Library page still offering Delete as
@@ -276,6 +297,9 @@ BUILD_STRINGS=(
   "Keeps this video itself"
   "the company module it stands in for"
   "required on every project"
+  "Discard this draft"
+  "the issued revision stays in force"
+  "leaves this module with nothing written"
 )
 
 echo "[3/7] Asserting the source, the history and the database..."
@@ -697,6 +721,90 @@ grep -qF "will not appear in any" "$MDETAIL" \
 grep -qF "case 'resetModule'" services/inductionModules/moduleActions.ts \
   || fail "the dispatcher does not expose resetModule"
 echo "  ok   reset keeps the subject; delete is secondary and guarded on standard subjects"
+
+# ════════════════════════════════════════════════════════════════════════════
+# ONE DRAFT CAN BE DISCARDED WITHOUT RESETTING ANYTHING
+# ════════════════════════════════════════════════════════════════════════════
+grep -q "export async function discardModuleDraft" "$MODSVC" \
+  || fail "discardModuleDraft is gone - undoing a bad draft would need a full reset again"
+
+python3 - "$MODSVC" <<'PYDRAFT' || fail "discardModuleDraft touches more than the one draft, or lost a guard"
+import re, sys
+src = open(sys.argv[1]).read()
+src = re.sub(r'/\*[\s\S]*?\*/', '', src)
+src = re.sub(r'^\s*//.*$', '', src, flags=re.M)
+at = src.find('export async function discardModuleDraft(')
+if at < 0:
+    print('      discardModuleDraft not found')
+    sys.exit(1)
+rest = src[at:]
+nxt = rest.find('\nexport ', 1)
+body = rest[:nxt] if nxt > 0 else rest
+
+bad = []
+# DRAFT ONLY. Without this the path could remove an issued revision - the one thing
+# the whole lifecycle exists to keep.
+# THE EXACT CONDITION, not merely the presence of the enum. `DRAFT` also appears
+# further down in the `stillIssued` count, so a presence check passed while the guard
+# itself was neutralised to `if (false)` - the third time in this file that a
+# substring assert could not see disabled logic.
+if not re.search(
+    r'if \(revision\.status !== InductionModuleRevisionStatus\.DRAFT\) \{',
+    body,
+):
+    bad.append('the DRAFT-only guard is gone, neutralised or reworded')
+# The drafter's, not the issuer's.
+if 'actor.canDraft' not in body:
+    bad.append('it does not check canDraft')
+if 'actor.canIssue' in body:
+    bad.append('it checks canIssue - the drafter who wrote it may throw it away')
+# Ownership, or the endpoint discards any draft of any module by id.
+if "revision.moduleId !== moduleId" not in body:
+    bad.append('it does not verify the revision belongs to this module')
+# The defensive check that a draft has not somehow reached a video.
+if 'moduleRevisionId: revisionId' not in body or 'sourceModuleRevisionId: revisionId' not in body:
+    bad.append('it no longer checks both carriers before deleting')
+# EXACTLY ONE ROW GOES. Anything else here is a reset wearing a smaller label.
+if 'inductionModuleRevision.delete(' not in body:
+    bad.append('it does not delete the revision')
+for forbidden, why in (
+    ('inductionModuleRevision.deleteMany', 'deleteMany would take more than this draft'),
+    ('inductionModule.update', 'it writes the module row'),
+    ('inductionModule.delete', 'it deletes the module'),
+    ('siteInductionModule', 'it touches a per-project decision'),
+    ('inductionVideo.delete', 'it deletes a video'),
+    ('inductionVideoScene.update', 'it rewrites a scene'),
+    ('libraryAsset', 'it reaches a library asset'),
+    ('deleteMedia', 'it deletes media - a draft has none'),
+):
+    if forbidden in body:
+        bad.append(f'{why} ({forbidden})')
+# NOT gated on the build phase: a draft reached nobody, so this is ordinary editing.
+if 'contentResetEnabled' in body:
+    bad.append('it is gated on the build-phase flag - undoing a draft is ordinary editing')
+for x in bad:
+    print(f'      {x}')
+sys.exit(1 if bad else 0)
+PYDRAFT
+
+grep -qF "case 'discardDraft'" services/inductionModules/moduleActions.ts \
+  || fail "the dispatcher does not expose discardDraft"
+grep -qF "detail.draftDiscard" "$MDETAIL" \
+  || fail "the module page does not offer the per-draft discard"
+grep -qF "setEditing(false)" "$MDETAIL" \
+  || fail "the editor is not closed after a discard - the next save would post to a dead revision"
+# The routine undo must sit ABOVE the big hammer.
+python3 - "$MDETAIL" <<'PYDRAFTORDER' || fail "Start again is offered before the per-draft discard"
+import sys
+src = open(sys.argv[1]).read()
+d = src.find('Discard this draft')
+r = src.find('Clear the content and start again')
+if d < 0 or r < 0:
+    print('      one of the two controls is missing')
+    sys.exit(1)
+sys.exit(0 if d < r else 1)
+PYDRAFTORDER
+echo "  ok   a bad draft is undone on its own, and nothing live moves"
 
 # --- ONE PAGE PER ASSET, SHARED ---
 for P in "$PP" "$AP"; do

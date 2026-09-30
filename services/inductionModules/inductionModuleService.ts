@@ -1269,3 +1269,109 @@ export async function resetModule(
     },
   };
 }
+
+/**
+ * Throw away one draft revision, leaving everything else exactly as it was.
+ *
+ * ── WHY THIS IS NOT A SMALL START-AGAIN ───────────────────────────────────
+ *
+ * Start again is for a module whose whole content lifecycle should restart: it
+ * clears every revision and everything generated from them. That is far too big a
+ * hammer for the ordinary case of writing a draft, reading it back and deciding the
+ * wording is wrong — which happens several times per module while content is being
+ * written, and which should cost nothing.
+ *
+ * ── A DRAFT IS UNREACHABLE, SO THERE IS NOTHING TO PROTECT ────────────────
+ *
+ * Only an ISSUED revision is ever inherited: `resolveModulesForSite` filters
+ * `status: ISSUED` before a site sees anything, and `startCompanyVideo` refuses a
+ * module with no issued revision. So a draft has never been spoken to anybody, has
+ * never been rendered, and cannot be carried by a video. That is why this needs no
+ * consumption check and no build-phase flag — unlike the Library's revision
+ * discard, which can also reach ISSUED footage and is therefore a Director's.
+ *
+ * It is asserted rather than assumed, all the same: if a draft ever DID reach a
+ * video, that would be a bug in the resolver, and the right response is to refuse
+ * rather than to compound it by deleting the thing that proves it.
+ *
+ * ── AND IT IS THE DRAFTER'S, NOT THE ISSUER'S ─────────────────────────────
+ *
+ * `canDraft`, i.e. a Director or a Site Manager — the same authority that created
+ * the draft. `saveDraft` has no author check, so a Site Manager can already replace
+ * every word of a Director's draft; refusing them the discard would protect
+ * nothing, and would make "silently overwrite it" the only way to get rid of
+ * wording somebody thought better of. Issuing remains a Director's alone, which is
+ * the decision that actually reaches operatives.
+ */
+export async function discardModuleDraft(
+  actor: ModuleActor,
+  moduleId: string,
+  revisionId: string,
+): Promise<ModuleResult<{ discarded: true; version: number; leftNothingWritten: boolean }>> {
+  if (!actor.canDraft) {
+    return {
+      ok: false,
+      error: 'Only a Director or Site Manager may discard an induction module draft.',
+    };
+  }
+
+  const revision = await prisma.inductionModuleRevision.findUnique({
+    where: { id: revisionId },
+    select: { id: true, moduleId: true, version: true, status: true },
+  });
+  /*
+   * OWNERSHIP CHECKED HERE, not left to the caller: without it this endpoint would
+   * discard any draft of any module by id. The same reason the Library's revision
+   * discard re-checks the revision belongs to the asset it was reached through.
+   */
+  if (!revision || revision.moduleId !== moduleId) {
+    return { ok: false, error: 'That draft does not belong to this module.' };
+  }
+  if (revision.status !== InductionModuleRevisionStatus.DRAFT) {
+    return {
+      ok: false,
+      error:
+        'Only a draft can be discarded. An issued revision is kept as history — start a ' +
+        'new draft to change what this module says.',
+    };
+  }
+
+  /*
+   * THE DEFENSIVE CHECK DESCRIBED ABOVE. Both carriers, because both reference a
+   * revision by plain id with no foreign key: a scene in an induction script, and a
+   * company video produced from the module. Unreachable for a draft today; if that
+   * ever changes this refuses instead of quietly removing the evidence.
+   */
+  const [carriedByScene, producedFrom] = await Promise.all([
+    prisma.inductionVideoScene.count({ where: { moduleRevisionId: revisionId } }),
+    prisma.inductionVideo.count({ where: { sourceModuleRevisionId: revisionId } }),
+  ]);
+  if (carriedByScene > 0 || producedFrom > 0) {
+    return {
+      ok: false,
+      error:
+        'This draft has somehow been used in a video, so it is kept. Report this — a draft ' +
+        'should never reach one.',
+    };
+  }
+
+  /*
+   * Its own events cascade with it. Nothing else is touched: the issued revision in
+   * force stays in force, every generated video keeps its wording, and the module's
+   * settings and per-project decisions are not part of this at all. `startDraft`
+   * will reuse this version number, so discarding leaves no gap in the history.
+   */
+  const stillIssued = await prisma.inductionModuleRevision.count({
+    where: { moduleId, status: { not: InductionModuleRevisionStatus.DRAFT } },
+  });
+  await prisma.inductionModuleRevision.delete({ where: { id: revisionId } });
+
+  return {
+    ok: true,
+    value: {
+      discarded: true,
+      version: revision.version,
+      leftNothingWritten: stillIssued === 0,
+    },
+  };
+}

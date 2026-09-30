@@ -348,6 +348,57 @@ export function ModuleDetail({
             )}
           </div>
         )}
+
+        {/*
+          ── DISCARD THIS DRAFT: THE ROUTINE UNDO ──
+          Sits with the draft, because this is where somebody is standing when they
+          read their own wording back and decide against it. Deliberately NOT part
+          of Start again: that clears every revision and everything generated from
+          them, which is far too big a hammer for an editing mistake, and it is the
+          gap that made "reset the whole module" the only way to undo a bad draft.
+
+          `canDraft`, not `canIssue` — the same authority that wrote it, and the
+          same authority that can already overwrite every word of it.
+        */}
+        {canDraft && detail.draftDiscard && !editing && (
+          <div className="mt-3 border-t border-line pt-3">
+            <p className="text-xs text-ink-muted">
+              {detail.draftDiscard.leavesNothingWritten
+                ? `Discarding draft revision ${detail.draftDiscard.version} leaves this module with nothing written, so it reaches no induction until something is issued.`
+                : `Discarding draft revision ${detail.draftDiscard.version} changes nothing anybody hears — the issued revision stays in force, and no generated video is affected.`}
+            </p>
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    `Discard draft revision ${detail.draftDiscard?.version}? The wording in ` +
+                      'it is deleted. Issued revisions are not affected. This cannot be undone.',
+                  )
+                ) {
+                  return;
+                }
+                const done = await call(
+                  {
+                    action: 'discardDraft',
+                    moduleId: detail.id,
+                    revisionId: detail.draftDiscard?.revisionId,
+                  },
+                  'discardDraft',
+                );
+                /*
+                 * Close the editor on success: it holds this revisionId, and leaving
+                 * it open would let the next save post to a revision that is gone.
+                 */
+                if (done) setEditing(false);
+              }}
+              className="mt-2 rounded-lg border border-danger-300 bg-surface px-3 py-1.5 text-xs font-semibold text-danger-700 hover:bg-danger-50 disabled:opacity-50"
+            >
+              {busy === 'discardDraft' ? 'Discarding…' : 'Discard this draft'}
+            </button>
+          </div>
+        )}
       </section>
 
       {/* ── THE HISTORY. Every revision, and what each one was for. ── */}

@@ -95,6 +95,17 @@ export interface ModuleDetail {
    */
   reset: ModuleReset;
   /**
+   * The open draft, if there is one, and what discarding it would mean. Separate
+   * from `reset` because this is the ROUTINE undo — a draft has reached nobody, so
+   * it needs no flag, no Director and no evidence check.
+   */
+  draftDiscard: {
+    revisionId: string;
+    version: number;
+    /** True when no issued revision sits behind it, so the module goes blank. */
+    leavesNothingWritten: boolean;
+  } | null;
+  /**
    * The build-phase sentence, or null when the platform is running the strict
    * lifecycle. Carried on the detail rather than passed down from each page so the
    * two tiers cannot describe the capability differently — and so no page has to be
@@ -207,6 +218,17 @@ export async function moduleDetail(moduleId: string): Promise<ModuleDetail | nul
       : null,
     deletion,
     reset,
+    /*
+     * Composed here rather than in the screen, like every other consequence on this
+     * page, so the Platform and the Admin Centre cannot describe it differently.
+     */
+    draftDiscard: draft
+      ? {
+          revisionId: draft.id,
+          version: draft.version,
+          leavesNothingWritten: !issued,
+        }
+      : null,
     buildPhaseNotice: contentResetEnabled() ? BUILD_PHASE_NOTICE : null,
     revisions: row.revisions.map((r) => ({
       id: r.id,
