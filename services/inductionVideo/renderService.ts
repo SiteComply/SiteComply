@@ -64,6 +64,26 @@ export function resolveVideoRenderer(): VideoRenderer | null {
   return bin ? new FfmpegVideoRenderer(bin) : null;
 }
 
+/**
+ * The customer's logo as a PNG buffer, or null.
+ *
+ * Swallows every failure on purpose. A missing or unreadable logo must never fail a
+ * render that is otherwise fine — the frame simply carries the bundled mark.
+ */
+async function companyLogoForVideo(): Promise<Buffer | null> {
+  try {
+    const config = await prisma.companyConfig.findFirst({
+      select: { logoBlobPath: true },
+    });
+    if (!config?.logoBlobPath) return null;
+    // readMedia returns the blob plus its metadata; the renderer wants the bytes.
+    const media = await readMedia(config.logoBlobPath);
+    return media?.bytes ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function renderingConfigured(): boolean {
   return resolveVideoRenderer() !== null;
 }
@@ -248,10 +268,19 @@ async function renderVideo(videoId: string, renderer: VideoRenderer): Promise<st
     throw new Error('That version is no longer waiting to be rendered.');
   }
 
+  /*
+   * THE COMPANY'S OWN MARK. Stored already — the construction phase plan's PDF uses
+   * it — and until now the video ignored it and stamped the vendor's logo on every
+   * frame instead. A failure to read it is not a reason to abandon a render: the
+   * bundled mark stands in, which is also what a company with no logo uploaded gets.
+   */
+  const brandLogo = await companyLogoForVideo();
+
   const request: RenderRequest = {
     siteName: videoDisplayName(video),
     version: video.version,
     scenes: [],
+    ...(brandLogo ? { brandLogo } : {}),
   };
   for (const scene of video.scenes) {
     /*

@@ -40,7 +40,10 @@ export interface VisualPalette {
   background: string;
   heading: string;
   body: string;
+  /** The ACCENT: a bar or a rule. Strong by design, and never used for text. */
   rule: string;
+  /** The quiet label at the foot of the frame. Muted, but readable. */
+  footer: string;
 }
 
 /** The SiteComply palette, from app/globals.css. */
@@ -62,6 +65,13 @@ const PALETTES: Record<VisualTone, VisualPalette> = {
     heading: COLOURS.paper,
     body: COLOURS.mutedOnDark,
     rule: COLOURS.brandBlue,
+    /*
+     * THE FOOTER USED TO BE DRAWN IN `rule`, the ACCENT colour — bright red on a dark
+     * maroon ground for an emergency scene — and on a real rendered frame it was
+     * barely readable. It is a quiet label, not an accent: it wants a muted version of
+     * the BODY colour, which is chosen to sit on this background in the first place.
+     */
+    footer: '#8FA8BE',
   },
   // Emergencies and the high-risk scenes. Red is reserved for these, so it keeps
   // meaning something when it appears.
@@ -70,6 +80,7 @@ const PALETTES: Record<VisualTone, VisualPalette> = {
     heading: COLOURS.paper,
     body: '#FFD9D9',
     rule: COLOURS.danger,
+    footer: '#C99A9A',
   },
   // Where to go and who to find: the green that already means "compliant".
   SAFE: {
@@ -77,12 +88,14 @@ const PALETTES: Record<VisualTone, VisualPalette> = {
     heading: COLOURS.paper,
     body: '#D7F5DC',
     rule: COLOURS.safeGreen,
+    footer: '#93B79A',
   },
   NEUTRAL: {
     background: COLOURS.ink,
     heading: COLOURS.paper,
     body: '#D8DEE9',
     rule: COLOURS.brandBlue,
+    footer: '#98A3B3',
   },
 };
 
@@ -122,6 +135,15 @@ export interface SceneVisual {
   heading: string;
   /** Whole sentences that fit, already wrapped for the screen. */
   lines: string[];
+  /**
+   * Which SENTENCE each line belongs to, parallel to `lines`.
+   *
+   * The staggered reveal used to step once per wrapped line, so a two-line sentence
+   * arrived in halves — "Leave by the nearest" … "marked exit." That reads as a fault
+   * rather than as a briefing. Grouping by sentence means a sentence lands whole and
+   * the NEXT one follows, which is how somebody speaking would deliver it.
+   */
+  lineGroups: number[];
   tone: VisualTone;
   palette: VisualPalette;
   /** True when the narration says more than the frame shows. */
@@ -141,7 +163,12 @@ export interface SceneVisual {
  * limit, and the reason both live next to VIDEO_FORMAT rather than being
  * guessed twice.
  */
-const BODY_CHARS_PER_LINE = 34;
+/*
+ * SHORTER LINES, AND MORE OF THEM. Thirty-four characters at the old size left the
+ * lower half of a portrait frame empty; twenty-six at the larger size fills it, and a
+ * short measure is easier to read on a phone held at arm's length at a site gate.
+ */
+const BODY_CHARS_PER_LINE = 26;
 /*
  * FIVE LINES, NOT EIGHT. Eight lines of thirty-four characters is a wall of text
  * on a phone held at a site gate - it is a paragraph, and a paragraph on screen
@@ -150,7 +177,7 @@ const BODY_CHARS_PER_LINE = 34;
  * sentence no longer fits, which is the point: it stays with the voice and the
  * captions rather than filling the frame.
  */
-const MAX_BODY_LINES = 5;
+const MAX_BODY_LINES = 7;
 /** At most three sentences: past that nobody reads the frame at all. */
 const MAX_SENTENCES = 3;
 
@@ -198,6 +225,7 @@ export function sceneVisual(scene: {
   const tone = toneForScene(scene.sceneType);
   const sentences = sentencesOf(scene.narration);
   const lines: string[] = [];
+  const lineGroups: number[] = [];
   let shown = 0;
 
   for (const sentence of sentences) {
@@ -206,7 +234,10 @@ export function sceneVisual(scene: {
     if (remaining <= 0) break;
     const wrapped = wrapWhole(sentence, remaining);
     if (!wrapped) continue; // too long for the frame: left to the voice
-    lines.push(...wrapped);
+    for (const line of wrapped) {
+      lines.push(line);
+      lineGroups.push(shown);
+    }
     shown++;
   }
 
@@ -220,6 +251,7 @@ export function sceneVisual(scene: {
     sceneType: scene.sceneType,
     heading: scene.heading,
     lines,
+    lineGroups,
     tone,
     palette: PALETTES[tone],
     textMotion: template.textMotion,

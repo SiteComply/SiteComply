@@ -131,9 +131,26 @@ function main() {
       .filter((l) => l.startsWith('Dialogue:'))
       .every((l) => !l.replace('Dialogue: ', '').split(',')[8]?.startsWith(',')),
     doc.split('\n').filter((l) => l.startsWith('Dialogue:')));
+  /*
+   * FIELD NINE ONWARDS IS THE TEXT — which now begins with libass override tags,
+   * because the motion layer was added after this assertion was written and it went
+   * on expecting a bare heading. It failed silently from then on, because this suite
+   * was not in any deploy gate. It is now.
+   *
+   * What matters is unchanged: exactly eight commas before the text, and the heading
+   * itself present at the end of the field rather than mangled into a style name.
+   */
   ok('  and the heading really is the ninth field onwards',
-    doc.includes('Dialogue: 0,0:00:00.00,0:00:04.00,Heading,,0,0,0,WHERE TO GO'),
-    doc.split('\n').find((l) => l.includes('Heading,,')));
+    (() => {
+      const line = doc
+        .split('\n')
+        .find((l: string) => l.startsWith('Dialogue:') && l.includes(',Heading,,'));
+      if (!line) return false;
+      const fields = line.replace('Dialogue: ', '').split(',');
+      const text = fields.slice(8).join(',');
+      return text.endsWith('WHERE TO GO');
+    })(),
+    doc.split('\n').find((l: string) => l.includes('Heading,,')));
   ok('an injected style block reaches the frame as words, not styling',
     sceneAss(
       sceneVisual({ sceneType: 'WELCOME', heading: 'Welcome', narration: '{\\an5}{\\fs300}Gone.' }),

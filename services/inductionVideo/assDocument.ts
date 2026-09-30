@@ -87,9 +87,18 @@ export function visualFont(): string {
   return process.env.INDUCTION_VIDEO_FONT || 'DejaVu Sans';
 }
 
-const HEADING_SIZE = 72;
-const BODY_SIZE = 50;
-const FOOTER_SIZE = 34;
+/*
+ * ── SIZES, RAISED ─────────────────────────────────────────────────────────
+ *
+ * This is a 1080x1920 frame watched on a phone, often outdoors, often by somebody
+ * who would rather be inside. A rendered frame showed the old sizes leaving roughly
+ * two thirds of the picture empty below the text, which read as an unfinished slide.
+ * Bigger type fills the frame AND is easier to read at arm's length — the same change
+ * serves both.
+ */
+const HEADING_SIZE = 84;
+const BODY_SIZE = 60;
+const FOOTER_SIZE = 32;
 
 /**
  * One scene's text layer, covering the whole scene.
@@ -116,8 +125,23 @@ const HEADING_SETTLE_TO = 262;
  * anchor, with a clear gap. Staggered lines step down from the same origin so the two
  * paths cannot disagree about where the text block begins.
  */
-const BODY_TOP = 470;
-const BODY_LINE_STEP = 76;
+/*
+ * ── ONE BLOCK, NOT TWO ────────────────────────────────────────────────────
+ *
+ * The body was first moved to the optical centre of the frame to use the empty space.
+ * Rendered and compared side by side, that was worse: heading and body drifted apart
+ * into two floating blocks and read MORE like a slide, not less. They belong together
+ * — the heading names the scene and the words continue it — so the body sits a fixed,
+ * comfortable gap below the heading and the frame is filled by giving the text more
+ * room instead (shorter lines, more of them, larger type).
+ */
+const BODY_TOP = 480;
+const BODY_LINE_STEP = 96;
+
+/** Where this scene's body block starts. Constant: it belongs under the heading. */
+export function bodyTopFor(_lineCount: number): number {
+  return BODY_TOP;
+}
 
 export function sceneAss(
   visual: SceneVisual,
@@ -125,6 +149,7 @@ export function sceneAss(
   footer?: string,
 ): string {
   const box = textBox();
+  const bodyTop = bodyTopFor(visual.lines.length);
   const font = visualFont();
   const end = assTime(Math.max(1_000, durationMs));
 
@@ -143,8 +168,8 @@ export function sceneAss(
      * in between. Five lines at this size run to about 1,120px, comfortably inside the
      * bottom safe area.
      */
-    `Style: Body,${font},${BODY_SIZE},${assColour(visual.palette.body)},${assColour(visual.palette.body)},${assColour(visual.palette.background)},${assColour(visual.palette.background)},0,0,0,0,100,100,0,0,1,0,0,7,${box.left},${box.right},${BODY_TOP},1`,
-    `Style: Footer,${font},${FOOTER_SIZE},${assColour(visual.palette.rule)},${assColour(visual.palette.rule)},${assColour(visual.palette.background)},${assColour(visual.palette.background)},0,0,0,0,100,100,0,0,1,0,0,2,${box.left},${box.right},${Math.round(box.bottom / 2)},1`,
+    `Style: Body,${font},${BODY_SIZE},${assColour(visual.palette.body)},${assColour(visual.palette.body)},${assColour(visual.palette.background)},${assColour(visual.palette.background)},0,0,0,0,100,100,0,0,1,0,0,7,${box.left},${box.right},${bodyTop},1`,
+    `Style: Footer,${font},${FOOTER_SIZE},${assColour(visual.palette.footer)},${assColour(visual.palette.footer)},${assColour(visual.palette.background)},${assColour(visual.palette.background)},0,0,0,0,100,100,0,0,1,0,0,2,${box.left},${box.right},${Math.round(box.bottom / 2)},1`,
   ];
 
   /*
@@ -201,11 +226,19 @@ export function sceneAss(
        * Each line is its own event, positioned by its index so they stack in place
        * rather than reflowing as siblings appear.
        */
-      const step = Math.min(420, Math.floor((span * 0.45) / visual.lines.length));
+      /*
+       * ONE SENTENCE AT A TIME. The step used to be per LINE, so a sentence that
+       * wrapped arrived in halves — "Leave by the nearest" then "marked exit" — which
+       * reads as a stutter rather than a briefing. Lines carry the sentence they
+       * belong to, so every line of a sentence shares its arrival.
+       */
+      const groups = visual.lineGroups ?? visual.lines.map((_, i) => i);
+      const groupCount = Math.max(1, new Set(groups).size);
+      const step = Math.min(520, Math.floor((span * 0.5) / groupCount));
       visual.lines.forEach((line, i) => {
-        const at = assTime(i * step);
+        const at = assTime((groups[i] ?? i) * step);
         events.push(
-          `Dialogue: 0,${at},${end},Body,,0,0,${BODY_TOP + i * BODY_LINE_STEP},` +
+          `Dialogue: 0,${at},${end},Body,,0,0,${bodyTop + i * BODY_LINE_STEP},` +
             `{\\fad(${ms(260)},${ms(200)})}${assText(line)}`,
         );
       });

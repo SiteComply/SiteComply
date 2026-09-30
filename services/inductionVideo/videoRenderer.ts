@@ -44,6 +44,18 @@ export interface RenderRequest {
   siteName: string;
   version: number;
   scenes: RenderScene[];
+  /**
+   * THE CUSTOMER'S OWN LOGO, as a PNG.
+   *
+   * The renderer used to hard-code `public/sitecomply-logo.png`, so every operative
+   * on every site watched an induction badged with the SOFTWARE VENDOR's mark rather
+   * than their employer's — while `CompanyConfig.logoBlobPath` sat in storage, already
+   * used by the construction phase plan's PDF.
+   *
+   * Absent means fall back to the bundled mark, which is right for a company that has
+   * not uploaded one yet: a frame with no mark at all looks broken.
+   */
+  brandLogo?: Buffer;
 }
 
 export interface RenderOutput {

@@ -1078,6 +1078,60 @@ grep -qF "video.stage !== 'PREVIEW'" "$CARD" \
   || fail "the generic action block renders at PREVIEW too - the publish button would appear twice"
 echo "  ok   folded panels look foldable, and the action stays above the fold"
 
+# ════════════════════════════════════════════════════════════════════════════
+# THE GENERATED VIDEO IS THE CUSTOMER'S, AND LEGIBLE
+# ════════════════════════════════════════════════════════════════════════════
+VIS=services/inductionVideo/sceneVisual.ts
+ASS=services/inductionVideo/assDocument.ts
+
+# --- THE CUSTOMER'S LOGO, NOT THE VENDOR'S ---
+# Every operative on every site watched an induction badged with the SOFTWARE
+# VENDOR's mark while CompanyConfig.logoBlobPath sat in storage, already used by the
+# CPP's PDF.
+grep -qF "brandLogo" services/inductionVideo/videoRenderer.ts \
+  || fail "RenderRequest no longer carries the customer's logo"
+grep -qF "request.brandLogo" services/inductionVideo/ffmpegRenderer.ts \
+  || fail "the renderer ignores the customer's logo again"
+grep -qF "companyLogoForVideo" services/inductionVideo/renderService.ts \
+  || fail "renderService no longer fetches the company logo"
+
+# --- THE FOOTER IS READABLE ---
+# It was drawn in `rule`, the ACCENT colour: bright red on dark maroon, and on a real
+# rendered frame it was barely there. Every palette carries its own muted footer now.
+grep -qF "palette.footer" "$ASS" \
+  || fail "the footer is drawn in the accent colour again - it was unreadable"
+[ "$(grep -c 'footer:' "$VIS")" -ge 4 ] \
+  || fail "a palette lost its footer colour"
+
+# --- A SENTENCE ARRIVES WHOLE ---
+# The staggered reveal stepped per WRAPPED LINE, so a sentence landed in halves.
+grep -qF "lineGroups" "$VIS" || fail "sentence grouping is gone from the visual"
+grep -qF "visual.lineGroups" "$ASS" \
+  || fail "the stagger is back to stepping per wrapped line, splitting sentences"
+
+# --- THE FRAME IS FILLED, AND BIG ENOUGH TO READ AT A GATE ---
+python3 - "$ASS" "$VIS" <<'PYSIZES' || fail "the video type is back to the small, sparse sizes"
+import re, sys
+ass, vis = open(sys.argv[1]).read(), open(sys.argv[2]).read()
+def num(src, name):
+    m = re.search(rf'const {name} = (\d+);', src)
+    return int(m.group(1)) if m else -1
+bad = []
+for src, name, floor in ((ass,'HEADING_SIZE',80),(ass,'BODY_SIZE',56),(ass,'BODY_LINE_STEP',88)):
+    v = num(src, name)
+    if v < floor:
+        bad.append(f'{name} is {v}, below {floor}')
+chars = num(vis, 'BODY_CHARS_PER_LINE')
+if chars > 28:
+    bad.append(f'BODY_CHARS_PER_LINE is {chars}: long lines leave the frame empty')
+lines = num(vis, 'MAX_BODY_LINES')
+if lines < 6:
+    bad.append(f'MAX_BODY_LINES is {lines}: too few to fill a portrait frame')
+for b in bad: print(f'      {b}')
+sys.exit(1 if bad else 0)
+PYSIZES
+echo "  ok   the video carries the customer's mark, and the frame is legible"
+
 # --- ONE PAGE PER ASSET, SHARED ---
 for P in "$PP" "$AP"; do
   grep -q "<LibraryAssetDetail" "$P" || fail "$P does not render the shared asset component"
@@ -1714,7 +1768,7 @@ export FFMPEG_PATH="$PWD/vendor/ffmpeg/ffmpeg"
 # source or calls a service, and that gap cost twice in one day: a function prop that
 # threw before rendering, and a page whose whole new structure was gated on having
 # assets so an empty library looked untouched. Both passed every string assertion.
-for S in module_video_flow_verify content_reset_verify inductionvideo_delete_verify module_catalogue_reduction_verify attention_summary_verify module_master_detail_verify video_progress_verify library_production_visibility_verify cscs_enforcement_verify cscs_access_gate_verify cscs_exempt_verify brand_motion_verify company_video_verify library_render_verify library_ia_verify library_pipeline_verify library_audiospec_verify \
+for S in module_video_flow_verify inductionvideo_render_verify content_reset_verify inductionvideo_delete_verify module_catalogue_reduction_verify attention_summary_verify module_master_detail_verify video_progress_verify library_production_visibility_verify cscs_enforcement_verify cscs_access_gate_verify cscs_exempt_verify brand_motion_verify company_video_verify library_render_verify library_ia_verify library_pipeline_verify library_audiospec_verify \
          inductionvideo_library_verify inductionvideo_verify inductionvideo_e2e_verify \
          setup_video_readiness_verify cpp_completion_verify site_rules_verify \
          induction_modules_verify induction_modules_phaseb_verify \

@@ -158,7 +158,13 @@ export class FfmpegVideoRenderer implements VideoRenderer {
     const logo = logoPath();
 
     try {
-      if (logo) await writeFile(join(work, 'logo.png'), await readFile(logo));
+      /*
+       * The customer's mark when they have one, the bundled SiteComply mark when they
+       * do not. Written to the same filename either way, so the filter graph below
+       * does not need to know which it got.
+       */
+      if (request.brandLogo) await writeFile(join(work, 'logo.png'), request.brandLogo);
+      else if (logo) await writeFile(join(work, 'logo.png'), await readFile(logo));
 
       /*
        * ── THE RUNNING ORDER COMES FROM timeline.ts, NOT FROM HERE ─────────
