@@ -33,7 +33,35 @@ export function VideoStepper({
   failed?: boolean;
 }) {
   return (
-    <ol className="flex flex-wrap gap-x-1 gap-y-2" aria-label="Video progress">
+    <>
+      {/*
+        ── NARROW: A BAR, NOT EIGHT LABELS ──
+        Eight labels wrap to four lines on a phone, which pushes the one thing that
+        matters — the next action — below the fold. The stage is named in words
+        directly above this by the card, so the bar carries only "how far", and the
+        text is not duplicated.
+      */}
+      <div className="sm:hidden" aria-hidden>
+        <div className="flex gap-1">
+          {VIDEO_STEPS.map((label, i) => (
+            <span
+              key={label}
+              className={[
+                'h-1.5 flex-1 rounded-full',
+                i + 1 < step
+                  ? 'bg-safe-500'
+                  : i + 1 === step
+                    ? failed
+                      ? 'bg-danger-500'
+                      : 'bg-brand-600'
+                    : 'bg-line',
+              ].join(' ')}
+            />
+          ))}
+        </div>
+      </div>
+
+      <ol className="hidden flex-wrap gap-x-1 gap-y-2 sm:flex" aria-label="Video progress">
       {VIDEO_STEPS.map((label, i) => {
         const n = i + 1;
         const done = n < step;
@@ -75,6 +103,7 @@ export function VideoStepper({
           </li>
         );
       })}
-    </ol>
+      </ol>
+    </>
   );
 }

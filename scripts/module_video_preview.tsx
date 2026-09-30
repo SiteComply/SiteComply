@@ -37,8 +37,8 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
 const { renderToStaticMarkup } = require('react-dom/server');
 const { writeFileSync, readFileSync } = require('fs');
 const {
-  ModuleVideoPanel,
-} = require('../components/inductionModules/ModuleVideoPanel');
+  ModuleWorkflowCard,
+} = require('../components/inductionModules/ModuleWorkflowCard');
 
 const out = process.argv[2] ?? 'module-video-stages.html';
 
@@ -151,9 +151,14 @@ const STAGES: { note: string; video: Record<string, unknown> }[] = [
 
 const blocks = STAGES.map((s, i) => {
   const html = renderToStaticMarkup(
-    React.createElement(ModuleVideoPanel, {
+    React.createElement(ModuleWorkflowCard, {
       moduleId: 'm1',
       moduleTitle: 'Company Introduction',
+      subtitle: 'COMPANY_INTRODUCTION · SAFETY · every site',
+      statusLabel: s.video.live ? 'Live' : 'Live',
+      statusTone: 'bg-safe-50 text-safe-700 border-safe-200',
+      statusDetail: 'Revision 1 is what operatives hear.',
+      standsInFor: null,
       video: s.video,
       // The last case is the Site Manager view.
       canIssue: i !== STAGES.length - 1,
@@ -200,7 +205,7 @@ const doc = `<!doctype html>
 <body class="p-6">
   <h1 class="mb-1 text-lg font-bold text-ink">Company Module video — the panel at every stage</h1>
   <p class="mb-6 max-w-2xl text-sm text-ink-muted">
-    The real <code>ModuleVideoPanel</code> component, server-rendered. Every stage a
+    The real <code>ModuleWorkflowCard</code> component, server-rendered. Every stage a
     Director can land on, in order, plus a failure and the Site Manager view. Controls
     are inert here: this is the markup the page produces, not a live app.
   </p>

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ModuleVideoPanel } from '@/components/inductionModules/ModuleVideoPanel';
+import { ModuleWorkflowCard } from '@/components/inductionModules/ModuleWorkflowCard';
 import type { ModuleDetail as Detail } from '@/services/inductionModules/moduleDetail';
 
 /**
@@ -105,49 +105,63 @@ export function ModuleDetail({
 
   const s = detail.status;
 
+  /*
+   * ── THE PAGE'S TWO WEIGHTS ────────────────────────────────────────────────
+   *
+   * One primary card (bordered, padded, first) and everything else in this quieter
+   * shell. Previously all nine sections shared one class, which is the same as having
+   * no hierarchy: the eye had nothing to land on and the workflow sat fifth.
+   */
+  const SECONDARY = 'rounded-xl border border-line bg-surface shadow-card';
+
+  /*
+   * THE WORDING IS PRIMARY ONLY WHILE IT IS THE JOB. At steps 1 and 2 it is what the
+   * user came to do, so it is open. From step 3 the wording is settled and the video
+   * is the work, so it folds away to one line — still one click, never hidden. Open
+   * while editing regardless, or the editor would collapse under the person using it.
+   */
+  const wordingIsPrimary = detail.video.step <= 2 || editing;
+
   return (
     <div className="space-y-4">
       <Link href={backHref} className="text-xs font-semibold text-brand-700 hover:underline">
         ← All company modules
       </Link>
 
-      {/* ── WHAT THIS IS, AND WHETHER IT REACHES ANYBODY ── */}
-      <header className="rounded-xl border border-line bg-surface p-4 shadow-card">
-        <div className="flex flex-wrap items-start gap-2">
-          <div className="min-w-0">
-            <h2 className="text-base font-bold text-ink">{detail.title}</h2>
-            <p className="mt-0.5 text-xs text-ink-subtle">
-              {detail.slug} · {detail.category} ·{' '}
-              {detail.mandatory
-                ? 'every site'
-                : detail.defaultIncluded
-                  ? 'on by default'
-                  : 'off by default'}
-            </p>
-          </div>
-          <span
-            className={`ml-auto rounded-full border px-2.5 py-1 text-xs font-semibold ${TONE[s.tone]}`}
-          >
-            {s.label}
-          </span>
-        </div>
-        <p className="mt-2 text-sm text-ink-muted">{s.detail}</p>
-
-        {detail.standsInFor && (
-          <p className="mt-3 rounded-lg border border-hivis-500/40 bg-hivis-400/10 px-3 py-2 text-xs text-ink">
-            <span className="font-semibold">A library video stands in for this module.</span>{' '}
-            {detail.standsInFor.hasIssuedRevision
-              ? `Projects are shown “${detail.standsInFor.title}” instead of this wording, so an operative is not told the same thing twice.`
-              : `“${detail.standsInFor.title}” is set to replace this, but it has no issued revision yet — so this wording is still what projects hear.`}{' '}
-            <Link
-              href={`${libraryBasePath}/${detail.standsInFor.assetId}`}
-              className="font-semibold underline"
-            >
-              Open that library video
-            </Link>
-          </p>
-        )}
-      </header>
+      {/*
+        ── THE PRIMARY CARD: IDENTITY, STAGE, NEXT ACTION ──
+        First on the page, and the only thing on it with a two-pixel border. It used to
+        be two cards — a header here and the workflow FIFTH, below the usage statistics
+        and the wording — so the question a user lands with ("what do I do?") was
+        answered below the fold.
+      */}
+      <ModuleWorkflowCard
+        moduleId={detail.id}
+        moduleTitle={detail.title}
+        subtitle={`${detail.slug} · ${detail.category} · ${
+          detail.mandatory
+            ? 'every site'
+            : detail.defaultIncluded
+              ? 'on by default'
+              : 'off by default'
+        }`}
+        statusLabel={s.label}
+        statusTone={TONE[s.tone]}
+        statusDetail={s.detail}
+        standsInFor={
+          detail.standsInFor
+            ? {
+                title: detail.standsInFor.title,
+                href: `${libraryBasePath}/${detail.standsInFor.assetId}`,
+                hasIssuedRevision: detail.standsInFor.hasIssuedRevision,
+              }
+            : null
+        }
+        video={detail.video}
+        canIssue={canIssue}
+        endpoint={endpoint}
+        videoApiBase={videoApiBase}
+      />
 
       {error && (
         <p role="alert" className="rounded-lg border border-danger-500/40 bg-danger-50 px-3 py-2 text-sm text-danger-700">
@@ -155,52 +169,15 @@ export function ModuleDetail({
         </p>
       )}
 
-      {/* ── WHERE IT IS USED. Counted with the same predicate that builds a real
-             induction, so the figure cannot disagree with what a site gets. ── */}
-      <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
-        <h3 className="text-sm font-bold text-ink">Where this module is used</h3>
-        <dl className="mt-3 grid gap-3 sm:grid-cols-3">
-          <div>
-            <dt className="text-xs text-ink-subtle">Projects including it</dt>
-            <dd className="text-lg font-bold text-ink">
-              {detail.usage.onProjects}
-              <span className="text-sm font-normal text-ink-subtle">
-                {' '}
-                of {detail.usage.totalProjects}
-              </span>
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs text-ink-subtle">Revisions</dt>
-            <dd className="text-lg font-bold text-ink">{detail.revisions.length}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-ink-subtle">Own wording recorded by</dt>
-            <dd className="text-lg font-bold text-ink">{detail.usage.overriddenBy.length}</dd>
-          </div>
-        </dl>
-        {detail.usage.excludedBy.length > 0 && (
-          <p className="mt-3 text-xs text-ink-muted">
-            <span className="font-semibold">Left out by:</span>{' '}
-            {detail.usage.excludedBy.map((x) => x.siteName).join(', ')}
-          </p>
-        )}
-        {detail.usage.overriddenBy.length > 0 && (
-          <p className="mt-1 text-xs text-ink-muted">
-            <span className="font-semibold">Own wording recorded by:</span>{' '}
-            {detail.usage.overriddenBy.map((x) => x.siteName).join(', ')}
-          </p>
-        )}
-        {detail.mandatory && (
-          <p className="mt-3 text-xs text-ink-muted">
-            This module is mandatory, so no project may leave it out.
-          </p>
-        )}
-      </section>
 
-      {/* ── WHAT IT SAYS. The reason this page exists. ── */}
-      <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
-        <div className="flex flex-wrap items-center gap-2">
+      {/*
+        ── WHAT IT SAYS ──
+        A native <details>, so progressive disclosure costs no JavaScript and the
+        browser remembers nothing we have to manage. `open` is derived from the stage:
+        see `wordingIsPrimary`.
+      */}
+      <details open={wordingIsPrimary} className={`${SECONDARY} p-4`}>
+        <summary className="flex cursor-pointer flex-wrap items-center gap-2">
           <h3 className="text-sm font-bold text-ink">
             {detail.inForce?.isDraft ? 'What it will say' : 'What it says'}
           </h3>
@@ -210,7 +187,15 @@ export function ModuleDetail({
               {detail.inForce.isDraft ? ' · draft, not live' : ' · live'}
             </span>
           )}
-          {canDraft && !editing && (
+        </summary>
+
+        {/*
+          THE EDIT BUTTON IS OUTSIDE THE SUMMARY. A <button> inside one toggles the
+          <details> as well as firing, so "Edit the wording" would have closed the very
+          panel it opens the editor in.
+        */}
+        {canDraft && !editing && (
+          <div className="mt-3 flex">
             <button
               type="button"
               disabled={busy !== null}
@@ -223,8 +208,8 @@ export function ModuleDetail({
                   ? 'Continue the draft'
                   : 'Edit the wording'}
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {!editing ? (
           <>
@@ -403,27 +388,70 @@ export function ModuleDetail({
             </button>
           </div>
         )}
-      </section>
+      </details>
 
       {/*
-        ── THE VIDEO, RIGHT AFTER THE WORDING IT IS MADE FROM ──
-        Steps 1 and 2 of the eight are the wording above; the remaining six live here.
-        Placed between the wording and the history deliberately: it is the next thing
-        you do, and the old flow's whole problem was that nothing on this page said so.
+        ── WHERE IT IS USED ──
+        Moved below the wording and folded away. It is a figure somebody checks, not
+        something they act on, and it was sitting between the title and the work.
       */}
-      <ModuleVideoPanel
-        moduleId={detail.id}
-        moduleTitle={detail.title}
-        video={detail.video}
-        canIssue={canIssue}
-        endpoint={endpoint}
-        videoApiBase={videoApiBase}
-      />
+      <details className={`${SECONDARY} p-4`}>
+        <summary className="flex cursor-pointer flex-wrap items-baseline gap-2">
+          <h3 className="text-sm font-bold text-ink">Where this module is used</h3>
+          <span className="text-xs text-ink-subtle">
+            {detail.usage.onProjects} of {detail.usage.totalProjects} projects
+          </span>
+        </summary>
+        <dl className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div>
+            <dt className="text-xs text-ink-subtle">Projects including it</dt>
+            <dd className="text-lg font-bold text-ink">
+              {detail.usage.onProjects}
+              <span className="text-sm font-normal text-ink-subtle">
+                {' '}
+                of {detail.usage.totalProjects}
+              </span>
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-ink-subtle">Revisions</dt>
+            <dd className="text-lg font-bold text-ink">{detail.revisions.length}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-ink-subtle">Own wording recorded by</dt>
+            <dd className="text-lg font-bold text-ink">{detail.usage.overriddenBy.length}</dd>
+          </div>
+        </dl>
+        {detail.usage.excludedBy.length > 0 && (
+          <p className="mt-3 text-xs text-ink-muted">
+            <span className="font-semibold">Left out by:</span>{' '}
+            {detail.usage.excludedBy.map((x) => x.siteName).join(', ')}
+          </p>
+        )}
+        {detail.usage.overriddenBy.length > 0 && (
+          <p className="mt-1 text-xs text-ink-muted">
+            <span className="font-semibold">Own wording recorded by:</span>{' '}
+            {detail.usage.overriddenBy.map((x) => x.siteName).join(', ')}
+          </p>
+        )}
+        {detail.mandatory && (
+          <p className="mt-3 text-xs text-ink-muted">
+            This module is mandatory, so no project may leave it out.
+          </p>
+        )}
+      </details>
 
-      {/* ── THE HISTORY. Every revision, and what each one was for. ── */}
-      <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
-        <h3 className="text-sm font-bold text-ink">Revisions</h3>
-        <p className="mt-0.5 text-xs text-ink-subtle">
+      {/* ── THE HISTORY. One line until somebody wants it. ── */}
+      <details className={`${SECONDARY} p-4`}>
+        <summary className="flex cursor-pointer flex-wrap items-baseline gap-2">
+          <h3 className="text-sm font-bold text-ink">Revisions</h3>
+          <span className="text-xs text-ink-subtle">
+            {detail.revisions.length === 1
+              ? '1 kept'
+              : `${detail.revisions.length} kept`}
+          </span>
+        </summary>
+        <p className="mt-2 text-xs text-ink-subtle">
           Previous revisions are kept so you can show exactly what an operative was told.
         </p>
         <ul className="mt-3 divide-y divide-line">
@@ -491,12 +519,14 @@ export function ModuleDetail({
             </li>
           ))}
         </ul>
-      </section>
+      </details>
 
-      {/* ── SETTINGS. Where it is used, not what it says. ── */}
+      {/* ── SETTINGS. Folded: changed rarely, and never the reason you came here. ── */}
       {canIssue && (
-        <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
-          <h3 className="text-sm font-bold text-ink">Settings</h3>
+        <details className={`${SECONDARY} p-4`}>
+          <summary className="cursor-pointer text-sm font-bold text-ink">
+            Settings
+          </summary>
           <div className="mt-3 flex flex-wrap gap-4 text-xs">
             <label className="flex items-center gap-2 font-semibold text-ink">
               <input
@@ -546,7 +576,7 @@ export function ModuleDetail({
               {detail.active ? 'Retire this module' : 'Bring it back'}
             </button>
           </div>
-        </section>
+        </details>
       )}
 
       {/*
@@ -565,7 +595,7 @@ export function ModuleDetail({
         permanent company subject, which is the wrong verb for the intent.
       */}
       {canIssue && (
-        <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
+        <section className={`${SECONDARY} p-4`}>
           <h3 className="text-sm font-bold text-ink">Start again</h3>
           {detail.buildPhaseNotice && (
             <p className="mt-1 rounded-lg bg-surface-sunken px-2 py-1.5 text-xs text-ink-muted">
@@ -659,7 +689,7 @@ export function ModuleDetail({
         mechanism, because the wrong reason to press it is "I want to start again".
       */}
       {canIssue && (
-        <details className="rounded-xl border border-line bg-surface p-4 shadow-card">
+        <details className={`${SECONDARY} p-4`}>
           <summary className="cursor-pointer text-sm font-semibold text-ink-muted">
             This subject is no longer wanted
           </summary>

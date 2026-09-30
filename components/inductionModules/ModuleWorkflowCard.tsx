@@ -7,7 +7,18 @@ import { RefreshWhileWorking } from '@/components/inductionVideo/RefreshWhileWor
 import type { ModuleVideoStage } from '@/services/inductionVideo/videoStageShape';
 
 /**
- * THE WHOLE VIDEO WORKFLOW, ON THE MODULE'S OWN PAGE.
+ * THE MODULE'S PRIMARY CARD: WHAT IT IS, WHERE IT HAS GOT TO, WHAT TO DO NEXT.
+ *
+ * ── WHY IDENTITY AND WORKFLOW ARE ONE CARD, AT THE TOP ────────────────────
+ *
+ * They were two, and the workflow one was FIFTH on the page, below the header, the
+ * usage statistics and a two-hundred-line wording panel. Every section wore the same
+ * card chrome, so nothing looked more important than anything else and the one thing a
+ * user needs on landing — what stage am I at, what do I press — was the thing they had
+ * to scroll for.
+ *
+ * So the title, the stage and the action are one block now, and it is the first thing
+ * on the page. Everything else moved below it and most of it is folded away.
  *
  * ── WHAT THIS REPLACES ────────────────────────────────────────────────────
  *
@@ -36,9 +47,14 @@ import type { ModuleVideoStage } from '@/services/inductionVideo/videoStageShape
  * `stage.next.directorOnly` is answered by the service. A Site Manager sees the stage
  * and the reason, not a control that fails. The services re-check regardless.
  */
-export function ModuleVideoPanel({
+export function ModuleWorkflowCard({
   moduleId,
   moduleTitle,
+  subtitle,
+  statusLabel,
+  statusTone,
+  statusDetail,
+  standsInFor,
   video,
   canIssue,
   endpoint,
@@ -46,6 +62,23 @@ export function ModuleVideoPanel({
 }: {
   moduleId: string;
   moduleTitle: string;
+  /** Slug · subject · how it is included. One quiet line under the title. */
+  subtitle: string;
+  /** The MODULE's own derived status, e.g. "Live". Distinct from the video's stage. */
+  statusLabel: string;
+  statusTone: string;
+  /**
+   * The module's state in a sentence, e.g. "Revision 1 is what operatives hear".
+   * Kept when the old header was folded into this card: the chip alone says "Live",
+   * which does not distinguish live from live-with-a-draft-waiting. One line, not a
+   * panel — the clutter was nine equal cards, not this sentence.
+   */
+  statusDetail: string;
+  /**
+   * A library video that plays INSTEAD of this wording. Kept in the primary card
+   * because it changes what the module DOES, which is not a detail.
+   */
+  standsInFor: { title: string; href: string; hasIssuedRevision: boolean } | null;
   video: ModuleVideoStage;
   /** A Director, or an Admin Centre owner/admin. */
   canIssue: boolean;
@@ -99,28 +132,44 @@ export function ModuleVideoPanel({
   }
 
   return (
+    /*
+     * HEAVIER THAN EVERYTHING BELOW IT, on purpose: a two-pixel brand edge and more
+     * padding. Nine identically-bordered cards is the same as no hierarchy at all.
+     */
     <section
       className={[
-        'rounded-xl border bg-surface p-4 shadow-card',
-        video.live ? 'border-safe-500/40' : 'border-brand-200',
+        'rounded-xl border-2 bg-surface p-5 shadow-card',
+        video.live ? 'border-safe-500/50' : 'border-brand-200',
       ].join(' ')}
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-bold text-ink">Video</h3>
-        <span className="text-xs font-semibold text-ink-muted">
-          Step {video.step} of 8 · {video.label}
+      {/* ── WHAT THIS IS ── */}
+      <div className="flex flex-wrap items-start gap-2">
+        <div className="min-w-0">
+          <h2 className="text-lg font-bold leading-tight text-ink">{moduleTitle}</h2>
+          <p className="mt-1 text-xs text-ink-subtle">{subtitle}</p>
+        </div>
+        <span
+          className={`ml-auto shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone}`}
+        >
+          {statusLabel}
         </span>
       </div>
+      <p className="mt-2 text-sm text-ink-muted">{statusDetail}</p>
 
-      <div className="mt-3 overflow-x-auto">
-        <VideoStepper
-          step={video.step}
-          working={video.working}
-          failed={video.stage === 'FAILED'}
-        />
+      {/* ── WHERE IT HAS GOT TO ── */}
+      <div className="mt-5 border-t border-line pt-4">
+        <p className="text-xs font-bold uppercase tracking-wider text-ink-subtle">
+          Step {video.step} of 8 · {video.label}
+        </p>
+        <div className="mt-2 overflow-x-auto">
+          <VideoStepper
+            step={video.step}
+            working={video.working}
+            failed={video.stage === 'FAILED'}
+          />
+        </div>
+        <p className="mt-3 text-sm text-ink-muted">{video.detail}</p>
       </div>
-
-      <p className="mt-3 text-sm text-ink-muted">{video.detail}</p>
 
       {done && (
         <p
@@ -272,6 +321,18 @@ export function ModuleVideoPanel({
             </p>
           )}
         </div>
+      )}
+
+      {standsInFor && (
+        <p className="mt-4 rounded-lg border border-hivis-500/40 bg-hivis-400/10 px-3 py-2 text-xs text-ink">
+          <span className="font-semibold">A library video stands in for this module.</span>{' '}
+          {standsInFor.hasIssuedRevision
+            ? `Projects are shown “${standsInFor.title}” instead of this wording, so an operative is not told the same thing twice.`
+            : `“${standsInFor.title}” is set to replace this, but it has nothing issued yet — so this wording is still what projects hear.`}{' '}
+          <a href={standsInFor.href} className="font-semibold underline">
+            Open it
+          </a>
+        </p>
       )}
     </section>
   );

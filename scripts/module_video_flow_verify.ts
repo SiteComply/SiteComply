@@ -292,7 +292,7 @@ const made: string[] = [];
      * hidden is not the same as showing them — so a plain grep flagged its own
      * rationale. The same trap cost a build earlier in this work.
      */
-    const panelText = read('components/inductionModules/ModuleVideoPanel.tsx')
+    const panelText = read('components/inductionModules/ModuleWorkflowCard.tsx')
       .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/^\s*\/\/.*$/gm, '');

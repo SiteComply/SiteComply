@@ -670,6 +670,42 @@ const renderModuleDetail = (over: Record<string, unknown> = {}, can = true) =>
 const detail = renderModuleDetail();
 chk('the detail page renders', detail.length > 800, `${detail.length} bytes`);
 
+/* ── THE PAGE'S HIERARCHY ── */
+console.log('\nTHE WORKFLOW IS FIRST, AND EVERYTHING ELSE IS FOLDED');
+chk('the workflow card comes BEFORE the wording',
+  detail.indexOf('Step 3 of 8') < detail.indexOf('What it says'),
+  'it used to be fifth, below the header, the usage figures and 200 lines of wording');
+chk('  and before the revision history',
+  detail.indexOf('Step 3 of 8') < detail.indexOf('Revisions</h3>'));
+chk('  and before the usage figures',
+  detail.indexOf('Step 3 of 8') < detail.indexOf('Where this module is used'));
+chk('EXACTLY ONE card is visually primary',
+  (detail.match(/border-2/g) ?? []).length === 1,
+  'nine identically-bordered cards is the same as no hierarchy');
+chk('the module’s own state is still stated in words, not only a chip',
+  detail.includes('is what operatives hear'));
+
+// Progressive disclosure, driven by the stage rather than by a preference.
+const earlyStage = renderModuleDetail({
+  video: {
+    stage: 'WORDING_DRAFT', step: 2, label: 'Issue wording',
+    detail: 'Draft revision 1 is written but not issued, so there is nothing to narrate yet.',
+    working: false,
+    next: { label: 'Issue the wording', action: null, directorOnly: true, estimate: null },
+    videoId: null, assetId: null, live: false,
+  },
+});
+chk('at step 2 the WORDING is open — it is the job',
+  /<details open=""[^>]*>\s*<summary[^>]*>\s*<h3[^>]*>\s*What it/.test(earlyStage) ||
+  earlyStage.includes('<details open=""'),
+  'writing and issuing the wording IS steps 1 and 2');
+chk('at step 3 the wording is folded away',
+  !detail.includes('<details open=""') || detail.indexOf('<details open=""') === -1,
+  'the wording is settled by then; the video is the work');
+chk('usage, revisions and settings are all collapsed',
+  (detail.match(/<details/g) ?? []).length >= 4,
+  'four folded panels instead of four competing cards');
+
 /* ── THE VIDEO WORKFLOW IS ON THE MODULE PAGE ── */
 console.log('\nTHE MODULE PAGE NOW CARRIES THE WHOLE VIDEO WORKFLOW');
 chk('the video panel is on the module page', detail.includes('Step 3 of 8'),

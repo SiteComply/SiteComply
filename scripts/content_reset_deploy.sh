@@ -1,4 +1,25 @@
 #!/usr/bin/env bash
+# THE MODULE PAGE LEADS WITH THE WORKFLOW (owner's layout redesign, 2026-09-30).
+#
+# The stepper shipped FIFTH on the page: below the header, the usage figures and a
+# 200-line wording panel, with all nine sections wearing identical card chrome. The one
+# question a user lands with - what stage am I at, what do I press - was answered below
+# the fold.
+#
+# WHAT MUST BE TRUE:
+#   THE WORKFLOW IS FIRST     identity, stage and next action are ONE card, before the
+#                             wording, the history and the usage figures.
+#   ONE PRIMARY WEIGHT        exactly one card carries border-2. Nine equal cards is
+#                             the same as no hierarchy.
+#   PROGRESSIVE DISCLOSURE    wording open at steps 1-2 (it is the job), folded from 3;
+#                             usage, revisions and settings folded always. Native
+#                             <details>, so it costs no JavaScript.
+#   NOTHING LOST TO TIDINESS  the module's own state is still a sentence, not just a chip.
+#   READABLE ON A PHONE       eight labels become a bar under sm; the action stays above
+#                             the fold.
+#
+# (Inherited: the module-anchored workflow gate.)
+#
 # A COMPANY MODULE VIDEO IS MADE FROM THE MODULE PAGE (owner's redesign, 2026-09-30).
 #
 # BEFORE: five pages, three objects the user had no reason to know about, and a flow
@@ -330,6 +351,7 @@ BUILD_STRINGS=(
   "Review narration"
   "Preview video"
   "Publish into the Library"
+  "Where this module is used"
 )
 
 echo "[3/7] Asserting the source, the history and the database..."
@@ -841,7 +863,7 @@ echo "  ok   a bad draft is undone on its own, and nothing live moves"
 # ════════════════════════════════════════════════════════════════════════════
 STAGE=services/inductionVideo/moduleVideoStage.ts
 SHAPE=services/inductionVideo/videoStageShape.ts
-PANEL=components/inductionModules/ModuleVideoPanel.tsx
+PANEL=components/inductionModules/ModuleWorkflowCard.tsx
 STEPPER=components/inductionVideo/VideoStepper.tsx
 
 for f in "$STAGE" "$SHAPE" "$PANEL" "$STEPPER"; do test -f "$f" || fail "missing: $f"; done
@@ -955,7 +977,7 @@ for A in generateNarration generateVideo publishAndIssue; do
   grep -qF "case '$A'" services/inductionModules/moduleActions.ts \
     || fail "the dispatcher does not expose $A"
 done
-grep -qF "<ModuleVideoPanel" "$MDETAIL" || fail "the module page does not mount the video panel"
+grep -qF "<ModuleWorkflowCard" "$MDETAIL" || fail "the module page does not mount the video panel"
 grep -qF "detail.video" "$MDETAIL" || fail "the module page does not pass the derived stage"
 grep -qF "m.video.step" components/inductionModules/ModulesIndex.tsx \
   || fail "the index lost its Video column - the workflow state is invisible from the list"
@@ -974,6 +996,69 @@ grep -qF "isCompany" components/platform/RenderPanel.tsx \
 grep -qF "Publish into the Library" components/platform/RenderPanel.tsx \
   || fail "the company publish label is gone"
 echo "  ok   the module page owns the workflow, and the blocker stays fixed"
+
+# ════════════════════════════════════════════════════════════════════════════
+# THE PAGE LEADS WITH THE WORKFLOW
+# ════════════════════════════════════════════════════════════════════════════
+CARD=components/inductionModules/ModuleWorkflowCard.tsx
+test -f "$CARD" || fail "missing: $CARD"
+
+# --- ORDER: the workflow card is rendered before every other section ---
+python3 - "$MDETAIL" <<'PYORDER2' || fail "the workflow is no longer first on the module page"
+import re, sys
+src = open(sys.argv[1]).read()
+card = src.find('<ModuleWorkflowCard')
+if card < 0:
+    print('      the workflow card is not mounted')
+    sys.exit(1)
+bad = []
+for label, needle in (
+    ('the wording', 'What it will say'),
+    ('the usage figures', 'Where this module is used'),
+    ('the revision history', '>Revisions<'),
+):
+    at = src.find(needle)
+    if at < 0:
+        continue
+    if at < card:
+        bad.append(f'{label} is rendered before the workflow card')
+for b in bad:
+    print(f'      {b}')
+sys.exit(1 if bad else 0)
+PYORDER2
+
+# --- ONE PRIMARY WEIGHT ---
+# `border-2` is a SUBSTRING of `border-200`, which every quiet card uses
+# (border-brand-200, border-safe-200, border-danger-200) - so a plain grep found the
+# secondary cards and called them primary. Matched with a boundary instead.
+grep -qE '\bborder-2( |"|\x27)' "$CARD" \
+  || fail "the workflow card is no longer visually primary"
+grep -qE '\bborder-2( |"|\x27)' "$MDETAIL" \
+  && fail "a second card on the module page claims primary weight"
+# One shell for everything secondary, rather than the class repeated per section.
+grep -qF "const SECONDARY =" "$MDETAIL" \
+  || fail "the secondary shell is back to being spelled out per section"
+grep -qF 'rounded-xl border border-line bg-surface p-4 shadow-card' "$MDETAIL" \
+  && fail "a section still hard-codes the old identical chrome"
+
+# --- PROGRESSIVE DISCLOSURE, DRIVEN BY THE STAGE ---
+grep -qF "const wordingIsPrimary" "$MDETAIL" \
+  || fail "the wording no longer opens and closes with the stage"
+grep -qF "detail.video.step <= 2" "$MDETAIL" \
+  || fail "the wording's open state is not derived from the step any more"
+[ "$(grep -c '<details' "$MDETAIL")" -ge 4 ] \
+  || fail "the secondary sections are not folded - they compete with the workflow again"
+
+# --- NOTHING LOST TO TIDINESS ---
+grep -qF "statusDetail" "$CARD" \
+  || fail "the module's own state is a chip again - 'Live' does not distinguish live-with-a-draft"
+
+# --- READABLE ON A PHONE ---
+grep -qF "sm:hidden" components/inductionVideo/VideoStepper.tsx \
+  || fail "the stepper has no narrow form - eight labels push the action below the fold"
+grep -qF "hidden flex-wrap" components/inductionVideo/VideoStepper.tsx \
+  || fail "the labelled stepper is no longer the wide-screen form"
+echo "  ok   the workflow leads the page, and everything else is folded behind it"
 
 # --- ONE PAGE PER ASSET, SHARED ---
 for P in "$PP" "$AP"; do
