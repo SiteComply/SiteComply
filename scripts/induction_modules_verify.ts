@@ -224,6 +224,22 @@ const engineer = moduleActorFromPlatformViewer(engineerViewer as never);
     fails++;
   } finally {
     await prisma.inductionModule.deleteMany({ where: { slug: { in: slugs } } });
+    /*
+     * PUT THE CATALOGUE BACK. This suite needs a clean slate, so it owns and deletes
+     * the catalogue slugs — which used to leave the local database with NO standard
+     * modules once it finished. Harmless while nothing ran it; now that it is in the
+     * deploy gate, every deploy emptied the local catalogue and the next person to
+     * open the app locally found Company Modules blank.
+     *
+     * Re-seeding leaves the drafts the seed creates, which is the state a fresh
+     * database is in anyway. Failures are swallowed: this is tidying up after a test
+     * run, and it must never turn a green suite red.
+     */
+    try {
+      await svc.seedModuleCatalogue(director);
+    } catch {
+      // Nothing to do: the suite's result stands either way.
+    }
     await prisma.$disconnect();
     console.log(`\n  ${fails} failed`);
     process.exit(fails ? 1 : 0);
