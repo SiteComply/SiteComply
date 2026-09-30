@@ -40,7 +40,10 @@ export default async function AdminInductionModulesPage() {
   if (!session) redirect('/admin/login');
 
   const manages = adminCanManage(session.role);
-  const [rows, attention] = await Promise.all([moduleRowsForIndex(), attentionItems()]);
+  const [{ rows, retired }, attention] = await Promise.all([
+    moduleRowsForIndex(),
+    attentionItems(),
+  ]);
 
   return (
     <AdminInductionVideoWorkspace active="modules">
@@ -62,6 +65,7 @@ export default async function AdminInductionModulesPage() {
       />
       <ModulesIndex
         modules={rows}
+        retired={retired}
         canDraft={manages}
         canIssue={manages}
         endpoint="/api/admin/induction-modules"

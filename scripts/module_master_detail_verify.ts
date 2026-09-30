@@ -212,9 +212,24 @@ async function issueWording(moduleId: string, heading: string, narration: string
       'resolveModulesForSite filters on active before the predicate ever runs');
 
     console.log('\nTHE LIST CARRIES NO WORDING AT ALL');
-    const list = await rows.moduleRowsForIndex();
+    /*
+     * The loader returns { rows, retired } now: the primary page gets ACTIVE rows only,
+     * and only the COUNT and SLUGS of what is archived. A retired module cannot be
+     * rendered there by mistake because it is not in the payload.
+     */
+    const index = await rows.moduleRowsForIndex();
+    const list = index.rows;
     const mine = list.filter((r: { slug: string }) => r.slug.startsWith(TAG));
-    chk('every module is in the list', mine.length === 5, `${mine.length}`);
+    chk('the four ACTIVE modules are in the list', mine.length === 4, `${mine.length}`);
+    chk('  and the retired one is NOT', !mine.some((r: { slug: string }) => r.slug.endsWith('_RET')),
+      'Company Modules is the active catalogue; retired content lives in the archive');
+    chk('  but its slug is reported so it is not mistaken for missing',
+      index.retired.slugs.some((x: string) => x.endsWith('_RET')) &&
+        index.retired.count >= 1,
+      `${index.retired.count} archived`);
+    const archived = await rows.retiredModuleRows();
+    chk('the archive loader returns it', archived.some((r: { slug: string }) => r.slug.endsWith('_RET')));
+    chk('  and returns nothing active', archived.every((r: { active: boolean }) => !r.active));
     const row = mine.find((r: { id: string }) => r.id === mMandatory);
     chk('a row has no narration field', !('narration' in row),
       // THE regression. 2,400 words on the landing page is what this removes.
@@ -228,8 +243,10 @@ async function issueWording(moduleId: string, heading: string, narration: string
       row.usage.totalProjects === totals);
     chk('a draft-only row says it reaches nobody',
       mine.find((r: { id: string }) => r.id === mDraft).status.reachesOperatives === false);
-    chk('a retired row is still listed, for the "show retired" filter',
-      mine.some((r: { id: string; active: boolean }) => r.id === mRetired && !r.active));
+    chk('a retired row is in the ARCHIVE, not the list',
+      archived.some((r: { id: string }) => r.id === mRetired) &&
+        !list.some((r: { id: string }) => r.id === mRetired),
+      'the "Show retired" checkbox is gone by the owner\'s decision');
 
     console.log('\nA VIDEO THAT STANDS IN FOR A MODULE IS DECLARED ON THE ROW');
     const asset = await prisma.libraryAsset.create({
@@ -240,7 +257,7 @@ async function issueWording(moduleId: string, heading: string, narration: string
       select: { id: true },
     });
     madeAssets.push(asset.id);
-    const relisted = await rows.moduleRowsForIndex();
+    const relisted = (await rows.moduleRowsForIndex()).rows;
     const withStandIn = relisted.find((r: { id: string }) => r.id === mMandatory);
     chk('the row names the video that replaces it',
       withStandIn.standsInFor?.title === 'Filmed PPE briefing',

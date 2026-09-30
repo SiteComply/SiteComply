@@ -148,6 +148,29 @@ const made: string[] = [];
     chk(`the company band is ~${secs}s of narration, not ~179s`, secs < 100,
       `${standardWords} words across ${cat.MODULE_CATALOGUE.length} modules`);
 
+    console.log('\nNO RETIRED MODULE IS STILL FLAGGED MANDATORY');
+    /*
+     * setModuleActive REFUSES to retire a mandatory module - "Make it optional before
+     * retiring it" - precisely because restoring one would put it back on every site at
+     * once. A direct SQL retirement bypasses that guard, which is exactly what the
+     * production reduction script did, so the invariant is asserted here rather than
+     * trusted to whoever writes the next data change.
+     */
+    const badly = await prisma.inductionModule.findMany({
+      where: { active: false, mandatory: true },
+      select: { slug: true },
+    });
+    chk('no module is retired AND mandatory',
+      badly.length === 0,
+      badly.map((m: { slug: string }) => m.slug).join(', ') ||
+        'restoring one would force it onto every site');
+    const guard = await svc.setModuleActive(director, (await prisma.inductionModule.findFirst({
+      where: { mandatory: true, active: true }, select: { id: true },
+    }))?.id ?? 'none', false);
+    chk('  and the service still refuses to create that state',
+      guard.ok === false && /make it optional/i.test(guard.error ?? ''),
+      guard.error ?? 'a mandatory module was retired through the service');
+
     console.log('\nA MODULE OUTSIDE THE STANDARD SET CAN STILL BE CREATED');
     chk('a Site Manager may not add one',
       (await svc.addCatalogueModule(manager, 'MANUAL_HANDLING')).ok === false,

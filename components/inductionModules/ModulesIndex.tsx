@@ -52,6 +52,7 @@ export function ModulesIndex({
   canDraft,
   canIssue,
   endpoint,
+  retired,
   basePath,
   libraryBasePath,
 }: {
@@ -64,6 +65,12 @@ export function ModulesIndex({
    * the realm the caller is authenticated in differs.
    */
   endpoint: string;
+  /**
+   * Retired modules are NOT in `modules` - they live in the archive. Their count and
+   * slugs come through so this page can link to the archive and, crucially, so a
+   * retired STANDARD module is not reported as "missing" and offered for creation.
+   */
+  retired: { count: number; slugs: string[] };
   /** This tier's module pages, e.g. /platform/dashboard/induction-videos/modules. */
   basePath: string;
   /** This tier's library asset pages, for the video that stands in for a module. */
@@ -73,7 +80,6 @@ export function ModulesIndex({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
-  const [showRetired, setShowRetired] = useState(false);
   const [onlyNeedsWork, setOnlyNeedsWork] = useState(false);
 
   async function call(body: Record<string, unknown>, key: string) {
@@ -101,18 +107,16 @@ export function ModulesIndex({
     }
   }
 
-  const retiredCount = modules.filter((m) => !m.active).length;
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return modules.filter((m) => {
-      if (!m.active && !showRetired) return false;
       if (onlyNeedsWork && m.status.reachesOperatives) return false;
       if (!needle) return true;
       return (
         m.title.toLowerCase().includes(needle) || m.slug.toLowerCase().includes(needle)
       );
     });
-  }, [modules, q, showRetired, onlyNeedsWork]);
+  }, [modules, q, onlyNeedsWork]);
 
   /*
    * ── A CATALOGUE THAT GREW AFTER YOU SEEDED IT ─────────────────────────────
@@ -127,7 +131,12 @@ export function ModulesIndex({
    * Offering it at any time is safe: it matches on slug, skips what exists and never
    * touches wording somebody has written.
    */
-  const missing = MODULE_CATALOGUE.filter((c) => !modules.some((m) => m.slug === c.slug));
+  const missing = MODULE_CATALOGUE.filter(
+    (c) =>
+      !modules.some((m) => m.slug === c.slug) &&
+      // Archived, not absent. Offering to "add" it would quietly un-retire it.
+      !retired.slugs.includes(c.slug),
+  );
   /*
    * AVAILABLE, NOT MISSING. Optional modules are never counted as a gap - a company
    * that declines manual handling must not be nagged about it forever - but a module
@@ -240,16 +249,7 @@ export function ModulesIndex({
             />
             Not live only
           </label>
-          {retiredCount > 0 && (
-            <label className="flex items-center gap-2 text-xs font-semibold text-ink">
-              <input
-                type="checkbox"
-                checked={showRetired}
-                onChange={(e) => setShowRetired(e.target.checked)}
-              />
-              Show retired ({retiredCount})
-            </label>
-          )}
+
         </div>
 
         <table className="w-full border-collapse">
@@ -337,9 +337,18 @@ export function ModulesIndex({
             No module matches what you are looking for.
           </p>
         )}
-        <div className="border-t border-line px-4 py-2 text-xs text-ink-subtle">
-          {shown.length} of {modules.length} shown
-          {!canDraft && ' · your role can read these but not change them'}
+        <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2 text-xs text-ink-subtle">
+          <span>
+            {shown.length} of {modules.length} shown
+            {!canDraft && ' · your role can read these but not change them'}
+          </span>
+          {/* Retired content is kept and reachable, just not mixed into the working
+              catalogue — the archive is one click away, not a checkbox. */}
+          {retired.count > 0 && (
+            <Link href={`${basePath}/archive`} className="ml-auto font-semibold text-brand-700 hover:underline">
+              {retired.count} retired {retired.count === 1 ? 'module' : 'modules'} in the archive →
+            </Link>
+          )}
         </div>
         {available.length > 0 && canIssue && (
           <div className="flex flex-wrap items-center gap-2 border-t border-line bg-surface-sunken px-4 py-2 text-xs">

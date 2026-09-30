@@ -59,7 +59,29 @@ export interface ModuleRow {
   replacesSceneType: string | null;
 }
 
-export async function moduleRowsForIndex(): Promise<ModuleRow[]> {
+/**
+ * WHAT THE PRIMARY MODULES PAGE GETS.
+ *
+ * ── RETIRED MODULES ARE NOT IN IT ─────────────────────────────────────────
+ *
+ * They used to be, hidden behind a "Show retired" checkbox. By the owner's decision
+ * Company Modules is the ACTIVE catalogue - the content that can actually reach a new
+ * induction - and retired content lives in its own archive. So this returns active
+ * rows only, and the page cannot show a retired module even by mistake, because the
+ * data is not there. A component-level filter would have left the rows one boolean
+ * away from being rendered.
+ *
+ * What it still needs to KNOW about retired modules, without showing them:
+ *   the COUNT, so it can link to the archive honestly;
+ *   the SLUGS, so a retired standard module does not read as "missing" and get
+ *   offered for creation - it exists, it is just archived.
+ */
+export interface ModuleIndex {
+  rows: ModuleRow[];
+  retired: { count: number; slugs: string[] };
+}
+
+export async function moduleRowsForIndex(): Promise<ModuleIndex> {
   const [summaries, usage, libraryAssets] = await Promise.all([
     listModules(),
     moduleUsageSummaries(),
@@ -71,7 +93,8 @@ export async function moduleRowsForIndex(): Promise<ModuleRow[]> {
   ]);
   const byModule = new Map(libraryAssets.map((a) => [a.moduleId as string, a]));
 
-  return summaries.map((m) => {
+  const retired = summaries.filter((m) => !m.active);
+  const toRow = (m: (typeof summaries)[number]): ModuleRow => {
     const asset = byModule.get(m.id);
     return {
       id: m.id,
@@ -104,5 +127,73 @@ export async function moduleRowsForIndex(): Promise<ModuleRow[]> {
       standsInFor: asset ? { assetId: asset.id, title: asset.title } : null,
       replacesSceneType: m.replacesSceneType,
     };
-  });
+  };
+
+  return {
+    rows: summaries.filter((m) => m.active).map(toRow),
+    retired: { count: retired.length, slugs: retired.map((m) => m.slug) },
+  };
+}
+
+/**
+ * THE ARCHIVE: modules that have been retired.
+ *
+ * The same row shape, so the archive can show the same facts without a second
+ * assembly to keep in step. Usage figures are included and will read zero, which is
+ * the honest answer - a retired module reaches nobody, and saying so beats hiding the
+ * column.
+ *
+ * There is no "retired on" date, deliberately: `setModuleActive` records no event, so
+ * any date here would be `updatedAt` - which moves when somebody changes a setting -
+ * dressed up as a retirement date. Better to show nothing than something wrong.
+ */
+export async function retiredModuleRows(): Promise<ModuleRow[]> {
+  const index = await moduleRowsForIndexAll();
+  return index.filter((m) => !m.active);
+}
+
+/** Every module as a row, active or not. Used by the archive and by nothing else. */
+async function moduleRowsForIndexAll(): Promise<ModuleRow[]> {
+  const [summaries, usage, libraryAssets] = await Promise.all([
+    listModules(),
+    moduleUsageSummaries(),
+    prisma.libraryAsset.findMany({
+      where: { moduleId: { not: null }, active: true },
+      select: { id: true, title: true, moduleId: true },
+    }),
+  ]);
+  const byModule = new Map(libraryAssets.map((a) => [a.moduleId as string, a]));
+  return summaries.map((m) => ({
+    id: m.id,
+    slug: m.slug,
+    title: m.title,
+    category: m.category,
+    mandatory: m.mandatory,
+    defaultIncluded: m.defaultIncluded,
+    active: m.active,
+    status: moduleStatus({
+      active: m.active,
+      issued: m.issued ? { version: m.issued.version } : null,
+      draft: m.draft ? { version: m.draft.version } : null,
+    }),
+    issued: m.issued
+      ? {
+          version: m.issued.version,
+          issuedOn: formatDateUK(m.issued.issuedAt),
+          issuedByName: m.issued.issuedByName,
+          issuedByRealm: describeRealm(m.issued.issuedByRealm),
+        }
+      : null,
+    draft: m.draft,
+    revisionCount: m.revisionCount,
+    usage: {
+      onProjects: usage.get(m.id)?.onProjects ?? 0,
+      totalProjects: usage.get(m.id)?.totalProjects ?? 0,
+      excludedBy: usage.get(m.id)?.excludedBy.length ?? 0,
+    },
+    standsInFor: byModule.get(m.id)
+      ? { assetId: byModule.get(m.id)!.id, title: byModule.get(m.id)!.title }
+      : null,
+    replacesSceneType: m.replacesSceneType,
+  }));
 }

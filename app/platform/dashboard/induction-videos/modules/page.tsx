@@ -40,7 +40,10 @@ export default async function InductionModulesPage() {
   // administration.
   if (!canViewInductionModules(viewer.role)) redirect('/platform/dashboard');
 
-  const [rows, attention] = await Promise.all([moduleRowsForIndex(), attentionItems()]);
+  const [{ rows, retired }, attention] = await Promise.all([
+    moduleRowsForIndex(),
+    attentionItems(),
+  ]);
 
   return (
     <PlatformShell>
@@ -69,6 +72,7 @@ export default async function InductionModulesPage() {
         />
         <ModulesIndex
           modules={rows}
+          retired={retired}
           canDraft={canDraftInductionModule(viewer.role)}
           canIssue={canIssueInductionModule(viewer.role)}
           endpoint="/api/platform/induction-modules"

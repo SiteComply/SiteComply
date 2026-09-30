@@ -148,11 +148,14 @@ const asModule = (
     ...over,
   };
 };
+let retiredMeta: { count: number; slugs: string[] } = { count: 0, slugs: [] };
 const renderModules = (mods: unknown[]) =>
   renderToStaticMarkup(
     React.createElement(ModulesIndex, {
       modules: mods, canDraft: true, canIssue: true,
       endpoint: '/api/platform/induction-modules',
+      // Retired modules are not in `modules` any more — they are in the archive.
+      retired: retiredMeta,
       basePath: '/platform/dashboard/induction-videos/modules',
       libraryBasePath: '/platform/dashboard/induction-videos/library',
     }),
@@ -412,9 +415,14 @@ const listRows = [
     { issued: { version: 1 }, mandatory: true,
       standsInFor: { assetId: 'a1', title: 'PPE — site footage' } }),
   asModule({ slug: 'HOUSEKEEPING', title: 'Housekeeping' }, { issued: { version: 2 } }),
-  asModule({ slug: 'OLD_ONE', title: 'Retired subject' },
-    { issued: { version: 1 }, active: false }),
 ];
+/*
+ * NO RETIRED ROW IN THE FIXTURE, because the page is never given one: the loader
+ * returns active rows plus the COUNT and SLUGS of what is archived. That is stronger
+ * than a component filter - a retired module cannot be rendered by mistake because it
+ * is not in the payload.
+ */
+retiredMeta = { count: 2, slugs: ['OLD_ONE', 'PPE_EXPECTATIONS'] };
 const list = renderModules(listRows);
 chk('the list renders', list.length > 500, `${list.length} bytes`);
 chk('every module is named', ['Company introduction', 'PPE expectations', 'Housekeeping']
@@ -444,9 +452,27 @@ chk('usage is on the row', list.includes('6 of 6 projects'));
 chk('a video standing in for a module is declared',
   list.includes('A library video stands in for this'),
   'otherwise a module reads as reaching six projects when a film is what plays');
-chk('a retired module is hidden by default', !list.includes('Retired subject'),
-  'it reaches nobody, so it is not in the working list');
-chk('  but the page says it can be shown', list.includes('Show retired'));
+chk('THERE IS NO "SHOW RETIRED" CONTROL AT ALL', !list.includes('Show retired'),
+  // The owner's decision: Company Modules is the active catalogue. A first-time user
+  // should not have to work out which rows count.
+  'retired content is a place, not a checkbox');
+chk('  and the archive is linked, with its count',
+  /2 retired modules in the archive/.test(list) &&
+    list.includes('/platform/dashboard/induction-videos/modules/archive'),
+  'kept and reachable, just not mixed into the working catalogue');
+chk('  with no link when nothing is retired',
+  !(() => { retiredMeta = { count: 0, slugs: [] };
+            const q = renderModules(listRows); retiredMeta = { count: 2, slugs: ['OLD_ONE', 'PPE_EXPECTATIONS'] };
+            return q; })().includes('in the archive'),
+  'an empty archive is not worth a line');
+chk('an ARCHIVED standard module is not reported as missing',
+  (() => { retiredMeta = { count: 1, slugs: ['ACCIDENT_REPORTING'] };
+           const q = renderModules(
+             MODULE_CATALOGUE.filter((c: { slug: string }) => c.slug !== 'ACCIDENT_REPORTING')
+               .map((c: { slug: string; title: string }) => asModule(c, { issued: { version: 1 } })));
+           retiredMeta = { count: 2, slugs: ['OLD_ONE', 'PPE_EXPECTATIONS'] };
+           return !/standard module is missing/.test(q); })(),
+  'offering to "add" it would quietly un-retire it');
 chk('mandatory and default inclusion are distinguished',
   list.includes('Every site') && list.includes('On by default'));
 
@@ -578,6 +604,56 @@ chk('notes alone do not claim anything needs action', /Worth knowing/.test(noteO
   'crying wolf over a note is how a strip loses its meaning');
 chk('  and a note links to its asset',
   noteOnly.includes('/platform/dashboard/induction-videos/library/a1'));
+
+
+
+console.log('\nTHE ARCHIVE IS A PLACE, AND IT SAYS WHAT RESTORING WOULD DO');
+const { ModulesArchive } = require('../components/inductionModules/ModulesArchive');
+const renderArchive = (mods: unknown[]) =>
+  renderToStaticMarkup(
+    React.createElement(ModulesArchive, {
+      modules: mods,
+      backHref: '/platform/dashboard/induction-videos/modules',
+      basePath: '/platform/dashboard/induction-videos/modules',
+    }),
+  ) as string;
+
+const emptyArchive = renderArchive([]);
+chk('an empty archive says so plainly', /Nothing is retired/.test(emptyArchive));
+chk('  and does not draw a table', !emptyArchive.includes('<table'));
+
+const arch = renderArchive([
+  asModule({ slug: 'PPE_EXPECTATIONS', title: 'PPE expectations' },
+    { issued: { version: 1 }, active: false, mandatory: true }),
+  asModule({ slug: 'HOUSEKEEPING', title: 'Housekeeping' }, { active: false }),
+]);
+chk('the archive lists retired modules', arch.includes('PPE expectations') &&
+  arch.includes('Housekeeping'));
+chk('  linking each to its own page',
+  arch.includes('/platform/dashboard/induction-videos/modules/PPE_EXPECTATIONS'));
+chk('  and back to the active catalogue',
+  /Company modules<\/a>/.test(arch) || arch.includes('← Company modules'));
+chk('it says nothing an operative was told has changed',
+  /holds the wording it was approved with/.test(arch),
+  'retiring is not rewriting history');
+chk('it shows what each kept', arch.includes('Revision 1, issued') &&
+  /Nothing was ever written|never issued/.test(arch));
+chk('NO INVENTED RETIREMENT DATE',
+  !/Retired on|retired \d/.test(arch),
+  // setModuleActive records no event; updatedAt moves when any setting changes.
+  'a date that is wrong half the time is worse than no date');
+chk('A MODULE RETIRED WHILE STILL MANDATORY IS FLAGGED',
+  /Every site, immediately/.test(arch),
+  // Exactly the state a raw SQL retirement can create, bypassing the service guard.
+  'restoring it would put it back on every site at once');
+chk('  and an optional one says what it would actually do',
+  /On by default for new projects|Off until a project opts in/.test(arch));
+chk('the archive ships no JavaScript',
+  !readFileSync('components/inductionModules/ModulesArchive.tsx', 'utf8').includes("'use client'"),
+  'it has no state and no handlers');
+chk('  and does not offer restore inline',
+  !/Bring it back/.test(arch),
+  'restoring belongs on the page that states the consequence');
 
 
 console.log(`\n${fails} failed\n`);
