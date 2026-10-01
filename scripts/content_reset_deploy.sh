@@ -1132,6 +1132,21 @@ sys.exit(1 if bad else 0)
 PYSIZES
 echo "  ok   the video carries the customer's mark, and the frame is legible"
 
+# --- NOTHING IN A SCENE IS SIMPLY PRESENT: IT ARRIVES ---
+# The complaint was "narrated slides". Motion is what answers it, and it is nearly
+# free: an animated accent measured 2.72s CPU against 2.77s for the static one.
+grep -qF "const ENTRANCE_TRAVEL" "$ASS" \
+  || fail "body lines no longer travel as they arrive"
+grep -qF "\\\\move(" "$ASS" || fail "the entrance animation is gone from the text layer"
+grep -qF "Style: Counter" "$ASS" \
+  || fail "the step counter is gone - a list gives no sense of how much is left"
+grep -qF "function wipe(" services/inductionVideo/ffmpegRenderer.ts \
+  || fail "accents are painted complete on frame one again"
+# The reveal must track the scene, not finish in its first second.
+grep -qF "span * 0.62" "$ASS" \
+  || fail "the reveal is back to a fixed cap - it would complete while the voice is on sentence one"
+echo "  ok   scenes assemble themselves rather than appearing"
+
 # --- ONE PAGE PER ASSET, SHARED ---
 for P in "$PP" "$AP"; do
   grep -q "<LibraryAssetDetail" "$P" || fail "$P does not render the shared asset component"

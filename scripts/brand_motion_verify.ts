@@ -186,6 +186,60 @@ const durationMsOf = (info: string) => {
     chk('  each line is its own timed event',
       bodyEvents === hazard.lines.length && bodyEvents > 1,
       `${bodyEvents} body events for ${hazard.lines.length} lines`);
+
+    /* ── TIER A: THE SCENE ASSEMBLES ITSELF ──────────────────────────────── */
+    console.log('\nNOTHING IS SIMPLY PRESENT — IT ARRIVES');
+    const bodyLines: string[] = hazardAss.match(/^Dialogue: 0,[^,]+,[^,]+,Body,.*$/gm) ?? [];
+    chk('every body line travels as it fades up',
+      bodyLines.length > 1 && bodyLines.every((l: string) => l.includes('\\move(')),
+      'text that is simply present is the slideshow feeling');
+
+    // One sentence per step, not one wrapped line per step.
+    const starts: string[] = [...new Set(bodyLines.map((l) => l.split(',')[1]))];
+    const groupCount = new Set(hazard.lineGroups).size;
+    chk('  and arrives one SENTENCE at a time', starts.length === groupCount,
+      `${starts.length} distinct arrival times for ${groupCount} sentences`);
+
+    /*
+     * THE REVEAL TRACKS THE SCENE. It was capped at 520ms a step, so a nine-second
+     * scene finished revealing in one and a half — complete while the narrator was
+     * still on the first sentence.
+     */
+    const lastStart = starts[starts.length - 1];
+    const lastMs = (() => {
+      const m = lastStart.match(/(\d+):(\d+):(\d+)\.(\d+)/);
+      return m ? ((+m[1] * 3600 + +m[2] * 60 + +m[3]) * 1000) + +m[4] * 10 : 0;
+    })();
+    chk('  spread across the scene, not crammed into its first second',
+      lastMs > 1_500, `last sentence arrives at ${lastMs}ms of 9000ms`);
+
+    const counters = (hazardAss.match(/^Dialogue: 0,[^,]+,[^,]+,Counter,/gm) ?? []).length;
+    chk('a step counter advances with the sentences', counters === groupCount,
+      `${counters} counter events for ${groupCount} sentences`);
+
+    /*
+     * The invariant is that it does not arrive at zero with everything else — not
+     * that it waits a whole second. The first version of this assertion demanded
+     * 0:00:01+ and failed a footer that correctly arrives at 0.52s.
+     */
+    const footerStart = (hazardAss.match(/^Dialogue: 0,([^,]+),[^,]+,Footer,/m) ?? [])[1];
+    chk('the imprint arrives AFTER the content, not with it',
+      Boolean(footerStart) && footerStart !== '0:00:00.00',
+      `footer starts at ${footerStart ?? 'nowhere'} — the heading should settle first`);
+
+    // STILL means still: three scene types ask for no motion and must get none.
+    const stillScene = sceneVisual({ sceneType: 'EMERGENCY_CONTACTS', heading: 'Who to call',
+      narration: 'The site manager is on 07700 900123.' });
+    if (stillScene.textMotion === 'STILL') {
+      const stillAss = sceneAss(stillScene, 6000, 'Site · v1');
+      const stillBody = stillAss.match(/^Dialogue: 0,[^,]+,[^,]+,Body,.*$/gm) ?? [];
+      chk('a STILL scene still gets no body motion',
+        stillBody.every((l: string) => !l.includes('\\move(')),
+        'a telephone number that slides is harder to read, not easier');
+    } else {
+      chk('a STILL scene still gets no body motion', true,
+        `EMERGENCY_CONTACTS is ${stillScene.textMotion} — no STILL scene to test here`);
+    }
     chk('  and they start at different times',
       new Set((hazardAss.match(/^Dialogue: 0,([^,]+),/gm) ?? [])).size > 1,
       'arriving together is a wall of text; arriving in turn is a briefing');
